@@ -10,7 +10,7 @@
 
 #include <cmath>
 
-Entity &alloc_drop(Simulation *sim, PetalID::T drop_id) {
+Entity &alloc_drop(Simulation *sim, PetalID::T drop_id, EntityID const team) {
     DEBUG_ONLY(assert(drop_id < PetalID::kNumPetals);)
     PetalTracker::add_petal(sim, drop_id);
     Entity &drop = sim->alloc_ent();
@@ -20,13 +20,30 @@ Entity &alloc_drop(Simulation *sim, PetalID::T drop_id) {
     drop.friction = 0.25;
 
     drop.add_component(kRelations);
-    drop.set_team(NULL_ENTITY);
+    drop.set_team(team);
 
     drop.add_component(kDrop);
     drop.set_drop_id(drop_id);
     entity_set_despawn_tick(drop, 10 * (2 + PETAL_DATA[drop_id].rarity) * TPS);
     drop.immunity_ticks = TPS / 3;
     return drop;
+}
+
+Entity &alloc_corpse(Simulation *sim, EntityID const team, float x, float y, std::string const &name) {
+    Entity &corpse = sim->alloc_ent();
+    corpse.add_component(kPhysics);
+    corpse.set_radius(BASE_FLOWER_RADIUS);
+    corpse.set_x(x);
+    corpse.set_y(y);
+    corpse.mass = 10000;
+    corpse.friction = 1;
+    corpse.add_component(kRelations);
+    corpse.set_team(team);
+    BitMath::set(corpse.flags, EntityFlags::kNoFriendlyCollision);
+    corpse.add_component(kName);
+    corpse.set_name(name + " [DOWN]");
+    corpse.set_nametag_visible(1);
+    return corpse;
 }
 
 static Entity &__alloc_mob(
@@ -221,14 +238,10 @@ Entity &alloc_cpu_camera(Simulation *sim, EntityID const team) {
     return ent;
 }
 
-void player_spawn(Simulation *sim, Entity &camera, Entity &player) {
+static void _finish_player_spawn(Simulation *sim, Entity &camera, Entity &player, float spawn_x, float spawn_y) {
     camera.set_player(player.id);
     player.set_parent(camera.id);
     player.set_color(camera.get_color());
-    uint32_t power = Map::difficulty_at_level(camera.get_respawn_level());
-    ZoneDefinition const &zone = MAP_DATA[Map::get_suitable_difficulty_zone(power)];
-    float spawn_x = lerp(zone.left, zone.right, frand());
-    float spawn_y = lerp(zone.top, zone.bottom, frand());
     camera.set_camera_x(spawn_x);
     camera.set_camera_y(spawn_y);
     player.set_x(spawn_x);
@@ -250,4 +263,17 @@ void player_spawn(Simulation *sim, Entity &camera, Entity &player) {
     //peaceful transfer, no petal tracking needed
     for (uint32_t i = 0; i < MAX_SLOT_COUNT * 2; ++i)
         camera.set_inventory(i, PetalID::kNone);
+}
+
+void player_spawn(Simulation *sim, Entity &camera, Entity &player) {
+    uint32_t power = Map::difficulty_at_level(camera.get_respawn_level());
+    ZoneDefinition const &zone = map_zones(sim->map_id)[
+        Map::get_suitable_difficulty_zone(sim->map_id, power)];
+    float spawn_x = lerp(zone.left, zone.right, frand());
+    float spawn_y = lerp(zone.top, zone.bottom, frand());
+    _finish_player_spawn(sim, camera, player, spawn_x, spawn_y);
+}
+
+void player_spawn_at(Simulation *sim, Entity &camera, Entity &player, float x, float y) {
+    _finish_player_spawn(sim, camera, player, x, y);
 }

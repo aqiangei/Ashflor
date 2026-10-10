@@ -19,9 +19,10 @@ class Simulation {
     StaticArray<EntityID::id_type, ENTITY_CAP> active_entities;
 public:
     SERVER_ONLY(std::array<uint32_t, PetalID::kNumPetals> petal_count_tracker;)
-    SERVER_ONLY(std::array<uint32_t, MAP_DATA.size()> zone_mob_counts;)
+    SERVER_ONLY(std::array<uint32_t, MAX_ZONES_PER_MAP> zone_mob_counts;)
     SERVER_ONLY(SpatialHash spatial_hash;)
     Arena arena_info;
+    uint8_t map_id = MapID::kGarden;
     Simulation();
     void reset();
     Entity &alloc_ent();

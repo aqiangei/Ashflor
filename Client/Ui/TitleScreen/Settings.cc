@@ -2,44 +2,52 @@
 
 #include <Client/Ui/Button.hh>
 #include <Client/Ui/Container.hh>
+#include <Client/Ui/DynamicText.hh>
 #include <Client/Ui/Extern.hh>
 #include <Client/Ui/StaticText.hh>
 
 #include <Client/Game.hh>
+#include <Client/I18n.hh>
 #include <Client/Input.hh>
 
 using namespace Ui;
 
 Element *Ui::make_settings_panel() {
     Element *elt = new Ui::VContainer({
-        new Ui::StaticText(25, "Settings"),
+        new Ui::DynamicText(25, [](){ return I18n::tr(I18n::kSettings); }),
+        new Ui::HContainer({
+            new Ui::ToggleButton(30, &I18n::use_chinese),
+            new Ui::DynamicText(16, [](){ return I18n::tr(I18n::kLanguage); })
+        }, 0, 10, {.h_justify = Style::Left }),
         new Ui::HContainer({
             new Ui::ToggleButton(30, &Input::keyboard_movement),
-            new Ui::StaticText(16, "Keyboard movement")
+            new Ui::DynamicText(16, [](){ return I18n::tr(I18n::kKeyboardMovement); })
         }, 0, 10, {.h_justify = Style::Left }),
         new Ui::HContainer({
             new Ui::ToggleButton(30, &Input::movement_helper),
-            new Ui::StaticText(16, "Movement helper")
+            new Ui::DynamicText(16, [](){ return I18n::tr(I18n::kMovementHelper); })
         }, 0, 10, {.h_justify = Style::Left }),
         new Ui::HContainer({
             new Ui::ToggleButton(30, &Game::show_debug),
-            new Ui::StaticText(16, "Debug stats")
+            new Ui::DynamicText(16, [](){ return I18n::tr(I18n::kDebugStats); })
         }, 0, 10, {.h_justify = Style::Left }),
-        new Ui::StaticText(12, "Made by bismuth (trigonal-bacon)"),
-        new Ui::StaticText(12, "Asset credits: M28 and affiliates")
+        new Ui::DynamicText(12, [](){ return I18n::tr(I18n::kMadeBy); }),
+        new Ui::DynamicText(12, [](){ return I18n::tr(I18n::kAssetCredits); })
     }, 20, 10, { 
         .fill = 0xff5a9fdb,
         .line_width = 7,
-        .round_radius = 3,
+        .round_radius = 6,
         .animate = [](Element *elt, Renderer &ctx){
-            ctx.translate(0, (1 - elt->animation) * 2 * elt->height);
+            ctx.translate(0, (elt->animation - 1) * elt->height);
         },
         .should_render = [](){
             return Ui::panel_open == Panel::kSettings && Game::should_render_title_ui();
         },
         .h_justify = Style::Left,
-        .v_justify = Style::Bottom
+        .v_justify = Style::Top
     });
+    elt->x = 12;
+    elt->y = 68;
     Ui::Panel::settings = elt;
     return elt;
 }

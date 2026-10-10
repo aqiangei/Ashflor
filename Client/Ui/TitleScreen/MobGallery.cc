@@ -1,11 +1,13 @@
 #include <Client/Ui/TitleScreen/TitleScreen.hh>
 
 #include <Client/Ui/Container.hh>
+#include <Client/Ui/DynamicText.hh>
 #include <Client/Ui/StaticText.hh>
 #include <Client/Ui/Extern.hh>
 
 #include <Client/Assets/Assets.hh>
 #include <Client/Game.hh>
+#include <Client/I18n.hh>
 #include <Client/StaticData.hh>
 
 #include <algorithm>
@@ -63,21 +65,21 @@ static Element *make_mob_stat_container(MobID::T id) {
     struct MobData const &mob_data = MOB_DATA[id];
     struct MobAttributes const &attrs = mob_data.attributes;
     stats.push_back(new Ui::HContainer({
-        new Ui::StaticText(12, "Health:", { .fill = 0xff77ff77 }),
+        new Ui::DynamicText(12, [](){ return I18n::tr(I18n::kHealth); }, { .fill = 0xff77ff77 }),
         new Ui::StaticText(12, mob_data.health.to_string())
     }, 0, 5, { .h_justify = Style::Left }));
     stats.push_back(new Ui::HContainer({
-        new Ui::StaticText(12, "Damage:", { .fill = 0xffff7777 }),
+        new Ui::DynamicText(12, [](){ return I18n::tr(I18n::kDamage); }, { .fill = 0xffff7777 }),
         new Ui::StaticText(12, format_number(mob_data.damage))
     }, 0, 5, { .h_justify = Style::Left }));
     if (attrs.poison_damage.damage > 0) {
         stats.push_back(new Ui::HContainer({
-            new Ui::StaticText(12, "Poison:", { .fill = 0xffce76db }),
+            new Ui::DynamicText(12, [](){ return I18n::tr(I18n::kPoison); }, { .fill = 0xffce76db }),
             new Ui::StaticText(12, format_number(attrs.poison_damage.damage * attrs.poison_damage.time) + " (" + format_number(attrs.poison_damage.damage) + "/s)")
         }, 0, 5, { .h_justify = Style::Left }));
     }
     stats.push_back(new Ui::HContainer({
-        new Ui::StaticText(12, "XP:", { .fill = 0xff7777ff }),
+        new Ui::DynamicText(12, [](){ return I18n::tr(I18n::kXp); }, { .fill = 0xff7777ff }),
         new Ui::StaticText(12, format_score(mob_data.xp))
     }, 0, 5, { .h_justify = Style::Left }));
     return new Ui::VContainer(stats, 0, 2, { .h_justify = Style::Left });
@@ -88,10 +90,10 @@ static Element *make_mob_card(MobID::T id) {
         new Ui::Element(300,0),
         new Ui::HFlexContainer(
             new Ui::VContainer({
-                new Ui::StaticText(18, MOB_DATA[id].name, { .fill = 0xffffffff, .h_justify = Style::Left }),
-                new Ui::StaticText(14, RARITY_NAMES[MOB_DATA[id].rarity], { .fill = RARITY_COLORS[MOB_DATA[id].rarity], .h_justify = Style::Left }),
+                new Ui::DynamicText(18, [id](){ return I18n::mob_name(id); }, { .fill = 0xffffffff, .h_justify = Style::Left }),
+                new Ui::DynamicText(14, [id](){ return I18n::rarity_name(MOB_DATA[id].rarity); }, { .fill = RARITY_COLORS[MOB_DATA[id].rarity], .h_justify = Style::Left }),
                 new Ui::Element(0,2),
-                new Ui::StaticParagraph(220, 14, MOB_DATA[id].description, { .h_justify = Style::Left })
+                new Ui::DynamicText(14, [id](){ return I18n::mob_desc(id); }, { .fill = 0xffffffff, .h_justify = Style::Left })
             }, 0, 5),
             new GalleryMob(id, 60),
             10, 10
@@ -134,21 +136,29 @@ static Element *make_scroll() {
 
 Element *Ui::make_mob_gallery() {
     Element *elt = new Ui::VContainer({
-        new Ui::StaticText(25, "Mob Gallery"),
+        new Ui::DynamicText(25, [](){ return I18n::tr(I18n::kMobGallery); }),
         make_scroll()
     }, 15, 10, { 
         .fill = 0xff5a9fdb,
         .line_width = 7,
-        .round_radius = 3,
+        .round_radius = 6,
         .animate = [](Element *elt, Renderer &ctx){
-            ctx.translate(0, (1 - elt->animation) * 2 * elt->height);
+            elt->y = Game::alive() ? 170.f : 68.f;
+            ctx.translate(0, (elt->animation - 1) * elt->height);
         },
         .should_render = [](){
-            return Ui::panel_open == Panel::kMobs && Game::should_render_title_ui();
+            if (Ui::panel_open != Panel::kMobs) return false;
+            return Game::should_render_title_ui()
+                || (Game::should_render_game_ui() && Game::alive());
         },
         .h_justify = Style::Left,
-        .v_justify = Style::Bottom
+        .v_justify = Style::Top
     });
-    Ui::Panel::mob_gallery = elt;
+    elt->x = 12;
+    elt->y = 68;
+    if (Ui::Panel::mob_gallery == nullptr)
+        Ui::Panel::mob_gallery = elt;
+    else
+        Ui::Panel::mob_gallery_alt = elt;
     return elt;
 }

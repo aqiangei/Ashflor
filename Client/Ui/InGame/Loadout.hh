@@ -36,6 +36,8 @@ namespace Ui {
     public:
         LerpFloat reload;
         uint32_t persistent_touch_id;
+        float press_x;
+        float press_y;
         uint8_t static_pos;
         uint8_t curr_pos;
         uint8_t no_change_ticks;
@@ -65,4 +67,10 @@ namespace Ui {
     void backward_secondary_select();
     void ui_delete_petal(uint8_t);
     void ui_swap_petals(uint8_t, uint8_t);
+    // Click primary↔paired secondary (equip out / retract)
+    void ui_toggle_petal_slot(uint8_t static_pos);
+    // Returns dynamic loadout slot index under (x,y), or 0xFF if none
+    uint8_t find_loadout_drop_target(float x, float y);
+    uint8_t loadout_dynamic_to_static(uint8_t dynamic_pos);
+    void begin_petal_drag(uint8_t static_pos, uint32_t touch_id);
 }

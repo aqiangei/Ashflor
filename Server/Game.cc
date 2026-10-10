@@ -1,6 +1,8 @@
 #include <Server/Game.hh>
 
+#include <Server/AccountStore.hh>
 #include <Server/Client.hh>
+#include <Server/Party.hh>
 #include <Server/PetalTracker.hh>
 #include <Server/Server.hh>
 #include <Server/Spawn.hh>
@@ -8,6 +10,8 @@
 #include <Shared/Binary.hh>
 #include <Shared/Entity.hh>
 #include <Shared/Map.hh>
+
+#include <array>
 
 static void _update_client(Simulation *sim, Client *client) {
     if (client == nullptr) return;
@@ -58,9 +62,24 @@ static void _update_client(Simulation *sim, Client *client) {
     client->send_packet(writer.packet, writer.at - writer.packet);
 }
 
+static void _teardown_camera(GameInstance *game, Client *client) {
+    if (!game->simulation.ent_exists(client->camera)) return;
+    Entity &c = game->simulation.get_ent(client->camera);
+    if (game->simulation.ent_exists(c.get_team()))
+        --game->simulation.get_ent(c.get_team()).player_count;
+    if (game->simulation.ent_exists(c.get_player()))
+        game->simulation.request_delete(c.get_player());
+    for (uint32_t i = 0; i < 2 * MAX_SLOT_COUNT; ++i)
+        PetalTracker::remove_petal(&game->simulation, c.get_inventory(i));
+    game->simulation.request_delete(client->camera);
+}
+
 GameInstance::GameInstance() : simulation(), clients(), team_manager(&simulation) {}
 
-void GameInstance::init() {
+void GameInstance::init(uint8_t id) {
+    map_id = id;
+    simulation.map_id = id;
+    simulation.arena_info.set_map_id(id);
     for (uint32_t i = 0; i < ENTITY_CAP / 2; ++i)
         Map::spawn_random_mob(&simulation, frand() * ARENA_WIDTH, frand() * ARENA_HEIGHT);
     #ifdef GAMEMODE_TDM
@@ -71,9 +90,17 @@ void GameInstance::init() {
 
 void GameInstance::tick() {
     simulation.tick();
+    Party::tick(this);
     for (Client *client : clients)
         _update_client(&simulation, client);
     simulation.post_tick();
+}
+
+void GameInstance::broadcast(uint8_t const *packet, size_t size) {
+    for (Client *client : clients) {
+        if (client != nullptr && client->verified)
+            client->send_packet(packet, size);
+    }
 }
 
 void GameInstance::add_client(Client *client) {
@@ -99,26 +126,81 @@ void GameInstance::add_client(Client *client) {
     ent.set_respawn_level(1);
     for (uint32_t i = 0; i < loadout_slots_at_level(ent.get_respawn_level()); ++i)
         ent.set_inventory(i, PetalID::kBasic);
+    // Starter specials: Accelerator, Antennae, Magnet
+    if (loadout_slots_at_level(ent.get_respawn_level()) > 1)
+        ent.set_inventory(1, PetalID::kAccelerator);
+    if (loadout_slots_at_level(ent.get_respawn_level()) > 2)
+        ent.set_inventory(2, PetalID::kAntennae);
+    if (loadout_slots_at_level(ent.get_respawn_level()) > 3)
+        ent.set_inventory(3, PetalID::kMagnet);
     if (frand() < 0.001 && PetalTracker::get_count(&simulation, PetalID::kUniqueBasic) == 0)
         ent.set_inventory(0, PetalID::kUniqueBasic);
     for (uint32_t i = 0; i < loadout_slots_at_level(ent.get_respawn_level()); ++i)
         PetalTracker::add_petal(&simulation, ent.get_inventory(i));
     client->camera = ent.id;
     client->seen_arena = 0;
+    client->in_view.clear();
+}
+
+Client *GameInstance::client_by_camera(EntityID const &id) {
+    for (Client *client : clients) {
+        if (client != nullptr && client->camera == id) return client;
+    }
+    return nullptr;
 }
 
 void GameInstance::remove_client(Client *client) {
     DEBUG_ONLY(assert(client->game == this);)
+    AccountStore::capture(client);
+    AccountStore::logout(client);
+    Party::leave(client);
     clients.erase(client);
-    if (simulation.ent_exists(client->camera)) {
-        Entity &c = simulation.get_ent(client->camera);
-        if (simulation.ent_exists(c.get_team()))
-            --simulation.get_ent(c.get_team()).player_count;
-        if (simulation.ent_exists(c.get_player()))
-            simulation.request_delete(c.get_player());
-        for (uint32_t i = 0; i < 2 * MAX_SLOT_COUNT; ++i)
-            PetalTracker::remove_petal(&simulation, c.get_inventory(i));
-        simulation.request_delete(client->camera);
-    }
+    _teardown_camera(this, client);
     client->game = nullptr;
+    client->in_view.clear();
+}
+
+void GameInstance::transfer_client(Client *client, GameInstance *dest) {
+    if (client == nullptr || dest == nullptr || client->game == dest) return;
+    DEBUG_ONLY(assert(client->game == this);)
+    AccountStore::capture(client);
+    Account *acc = client->account_name.empty()
+        ? nullptr
+        : AccountStore::find(client->account_name);
+
+    // Snapshot camera progress so guests keep loadout across map switches
+    uint8_t snap_level = 1;
+    std::array<PetalID::T, 2 * MAX_SLOT_COUNT> snap_petals{};
+    snap_petals.fill(PetalID::kNone);
+    if (simulation.ent_exists(client->camera)) {
+        Entity &cam = simulation.get_ent(client->camera);
+        snap_level = cam.get_respawn_level();
+        if (snap_level < 1) snap_level = 1;
+        for (uint32_t i = 0; i < 2 * MAX_SLOT_COUNT; ++i)
+            snap_petals[i] = cam.get_inventory(i);
+    }
+
+    Party::leave(client);
+    clients.erase(client);
+    _teardown_camera(this, client);
+    client->game = nullptr;
+    client->in_view.clear();
+
+    // add_client without going through remove_client (game is null)
+    dest->add_client(client);
+    if (!dest->simulation.ent_exists(client->camera)) return;
+    Entity &new_cam = dest->simulation.get_ent(client->camera);
+    if (acc != nullptr) {
+        AccountStore::apply_to_camera(&dest->simulation, new_cam, *acc);
+    } else {
+        for (uint32_t i = 0; i < 2 * MAX_SLOT_COUNT; ++i)
+            PetalTracker::remove_petal(&dest->simulation, new_cam.get_inventory(i));
+        new_cam.set_respawn_level(snap_level);
+        for (uint32_t i = 0; i < 2 * MAX_SLOT_COUNT; ++i) {
+            PetalID::T id = snap_petals[i];
+            if (id >= PetalID::kNumPetals) id = PetalID::kNone;
+            new_cam.set_inventory(i, id);
+            PetalTracker::add_petal(&dest->simulation, id);
+        }
+    }
 }

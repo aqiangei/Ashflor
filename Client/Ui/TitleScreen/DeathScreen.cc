@@ -1,12 +1,11 @@
 #include <Client/Ui/TitleScreen/TitleScreen.hh>
 
 #include <Client/Game.hh>
+#include <Client/I18n.hh>
 #include <Client/Ui/Button.hh>
 #include <Client/Ui/DynamicText.hh>
 #include <Client/Ui/Container.hh>
 #include <Client/Ui/StaticText.hh>
-
-#include <Client/Game.hh>
 
 #include <Client/Assets/Assets.hh>
 
@@ -63,23 +62,35 @@ Element *Ui::make_death_main_screen() {
     Ui::Element *continue_button = new Ui::Button(
         145,
         40,
-        new Ui::StaticText(28, "Continue"),
+        new Ui::DynamicText(28, [](){ return I18n::tr(I18n::kContinue); }),
         [](Element *elt, uint8_t e){ if (e == Ui::kClick && Game::on_game_screen) Game::on_game_screen = 0; },
         [](){ return !Game::in_game(); },
         {.fill = 0xff1dd129, .line_width = 5, .round_radius = 3 }
     );
     Ui::Element *container = new Ui::VContainer({
-        new Ui::StaticText(25, "You were killed by"),
+        new Ui::DynamicText(25, [](){ return I18n::tr(I18n::kKilledBy); }),
         new Ui::DynamicText(30, [](){
             if (!Game::simulation.ent_exists(Game::camera_id))
                 return std::string{""};
             if (Game::simulation.get_ent(Game::camera_id).get_killed_by() == "") 
-                return std::string{"a mysterious entity"};
+                return std::string{I18n::tr(I18n::kMysteriousEntity)};
             return Game::simulation.get_ent(Game::camera_id).get_killed_by();
         }),
         new Ui::DeadFlowerIcon(125),
+        new Ui::DynamicText(14, [](){ return I18n::tr(I18n::kReviveHint); }, {
+            .fill = 0xff88ff88,
+            .should_render = [](){ return Game::awaiting_party_revive != 0; }
+        }),
+        new Ui::DynamicText(16, [](){
+            return I18n::format_revive_progress(Game::revive_progress);
+        }, {
+            .fill = 0xffffff66,
+            .should_render = [](){
+                return Game::awaiting_party_revive && Game::revive_progress > 0;
+            }
+        }),
         continue_button,
-        new Ui::StaticText(14, "(or press ENTER to continue)")
+        new Ui::DynamicText(14, [](){ return I18n::tr(I18n::kOrPressEnterContinue); })
     }, 0, 10, { .animate = [](Element *elt, Renderer &ctx) {
         ctx.translate(0, (elt->animation - 1) * ctx.height * 0.6);
     }, .should_render = [](){ return !Game::alive() && Game::should_render_game_ui(); } });

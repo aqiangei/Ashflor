@@ -6,6 +6,7 @@
 #include <Client/Ui/DynamicText.hh>
 #include <Client/Assets/Assets.hh>
 #include <Client/Game.hh>
+#include <Client/I18n.hh>
 
 #include <format>
 #include <string>
@@ -82,12 +83,12 @@ void TitlePetalSlot::on_event(uint8_t event) {
 
 Element *Ui::make_stat_screen() {
     Element *elt = new Ui::VContainer({
-        new Ui::StaticText(25, "Stats", { .fill = 0xffffffff, .h_justify = Style::Left }),
+        new Ui::DynamicText(25, [](){ return I18n::tr(I18n::kStats); }, { .fill = 0xffffffff, .h_justify = Style::Left }),
         new Ui::DynamicText(16, [](){
-            return std::format("Score: {}", format_score(Game::score));
+            return I18n::format_score_line(format_score(Game::score));
         }, { .fill = 0xffffffff, .h_justify = Style::Left }),
         new Ui::DynamicText(16, [](){
-            return std::format("Level: {}", score_to_level(Game::score));
+            return I18n::format_level_line(score_to_level(Game::score));
         }, { .fill = 0xffffffff, .h_justify = Style::Left }),
         new Ui::HContainer(
             Ui::make_range(0, 2 * MAX_SLOT_COUNT, [](uint32_t i){ return (Ui::Element *) new StatPetalSlot(i); })

@@ -13,9 +13,13 @@ CLIENT_ONLY(typedef LerpFloat Float;)
 
 #define FIELDS_Arena \
     SINGLE(player_count, uint32_t) \
+    SINGLE(map_id, uint8_t) \
     MULTIPLE(scores, Float, LEADERBOARD_SIZE) \
     MULTIPLE(names, std::string, LEADERBOARD_SIZE) \
-    MULTIPLE(colors, uint8_t, LEADERBOARD_SIZE)
+    MULTIPLE(colors, uint8_t, LEADERBOARD_SIZE) \
+    MULTIPLE(minimap_x, Float, MINIMAP_PLAYER_CAP) \
+    MULTIPLE(minimap_y, Float, MINIMAP_PLAYER_CAP) \
+    MULTIPLE(minimap_colors, uint8_t, MINIMAP_PLAYER_CAP)
 
 class Arena {
     enum Fields {

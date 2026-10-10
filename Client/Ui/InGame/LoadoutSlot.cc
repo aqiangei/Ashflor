@@ -1,6 +1,7 @@
 #include <Client/Ui/InGame/Loadout.hh>
 
 #include <Client/Game.hh>
+#include <Client/I18n.hh>
 #include <Client/Input.hh>
 #include <Shared/Entity.hh>
 
@@ -12,9 +13,13 @@ UiLoadoutSlot::UiLoadoutSlot(uint8_t pos) : Element(70, 70, { .fill = 0xffeeeeee
     if (pos >= MAX_SLOT_COUNT) width = height = 50;
     style.line_width = width / 12;
     style.round_radius = width / 20;
+    // Primary and secondary are 1:1 (both show loadout_count slots)
     style.should_render = [=](){
-        if (pos >= MAX_SLOT_COUNT || pos < Game::loadout_count) return true;
-        return false;
+        if (pos < MAX_SLOT_COUNT)
+            return pos < Game::loadout_count;
+        if (pos < 2 * MAX_SLOT_COUNT)
+            return (pos - MAX_SLOT_COUNT) < Game::loadout_count;
+        return true; // delete slot
     };
     position = pos;
     Ui::UiLoadout::petal_backgrounds[pos] = this;
@@ -49,7 +54,7 @@ void UiDeleteSlot::on_render(Renderer &ctx) {
     UiLoadoutSlot::on_render(ctx);
     if ((float) delete_text_opacity > 0.01) {
         ctx.set_global_alpha((float) delete_text_opacity);
-        ctx.draw_text("Delete", { .size = height / 4});
+        ctx.draw_text(I18n::tr(I18n::kDelete), { .size = height / 4});
     }
 }
 

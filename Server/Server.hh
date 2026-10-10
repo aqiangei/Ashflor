@@ -2,6 +2,9 @@
 
 #include <Server/Game.hh>
 
+#include <Shared/StaticDefinitions.hh>
+
+#include <array>
 #include <set>
 
 class Client;
@@ -20,9 +23,11 @@ typedef uWS::App WebSocketServer;
 
 namespace Server {
     extern uint8_t OUTGOING_PACKET[MAX_PACKET_LEN];
-    extern GameInstance game;
+    extern std::array<GameInstance, MapID::kNumMaps> games;
     extern WebSocketServer server;
     extern void init();
     extern void run();
     extern void tick();
+    extern GameInstance *game_for(Simulation *);
+    extern Client *client_by_camera(Simulation *, EntityID const &);
 };

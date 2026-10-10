@@ -1,5 +1,6 @@
 #include <Client/Assets/Assets.hh>
 
+#include <Client/I18n.hh>
 #include <Client/StaticData.hh>
 
 #include <cmath>
@@ -247,6 +248,63 @@ void draw_static_petal_single(PetalID::T id, Renderer &ctx) {
             ctx.qcurve_to(-5, -2.5, -5, 12.5);
             ctx.fill();
             ctx.stroke();
+            break;
+        }
+        case PetalID::kAccelerator: {
+            ctx.round_line_cap();
+            ctx.round_line_join();
+            // Twin boost fins + flame trail
+            ctx.set_fill(0xff3ecf8e);
+            ctx.set_stroke(0xff2a8f62);
+            ctx.set_line_width(2.5f);
+            ctx.begin_path();
+            ctx.move_to(-10, -2);
+            ctx.line_to(-2, -10);
+            ctx.line_to(4, -2);
+            ctx.line_to(-2, 2);
+            ctx.close_path();
+            ctx.fill();
+            ctx.stroke();
+            ctx.begin_path();
+            ctx.move_to(10, -2);
+            ctx.line_to(2, -10);
+            ctx.line_to(-4, -2);
+            ctx.line_to(2, 2);
+            ctx.close_path();
+            ctx.fill();
+            ctx.stroke();
+            ctx.set_fill(0xffffb347);
+            ctx.set_stroke(0xffcc7a20);
+            ctx.begin_path();
+            ctx.move_to(-3, 2);
+            ctx.line_to(0, 12);
+            ctx.line_to(3, 2);
+            ctx.close_path();
+            ctx.fill();
+            ctx.stroke();
+            break;
+        }
+        case PetalID::kMagnet: {
+            ctx.round_line_cap();
+            ctx.round_line_join();
+            ctx.set_line_width(4.5f);
+            ctx.set_stroke(0xffd94a4a);
+            ctx.begin_path();
+            ctx.move_to(-10, 8);
+            ctx.line_to(-10, -2);
+            ctx.qcurve_to(-10, -12, 0, -12);
+            ctx.stroke();
+            ctx.set_stroke(0xff4a7fd9);
+            ctx.begin_path();
+            ctx.move_to(10, 8);
+            ctx.line_to(10, -2);
+            ctx.qcurve_to(10, -12, 0, -12);
+            ctx.stroke();
+            ctx.set_fill(0xffeeeeee);
+            ctx.begin_path();
+            ctx.rect(-13, 6, 6, 8);
+            ctx.rect(7, 6, 6, 8);
+            ctx.fill();
             break;
         }
         case PetalID::kObserver: {
@@ -957,9 +1015,10 @@ void draw_loadout_background(Renderer &ctx, uint8_t id, float reload) {
         if (PETAL_DATA[id].radius > 20) ctx.scale(20 / PETAL_DATA[id].radius);
         draw_static_petal(id, ctx);
     }
-    float text_width = 12 * Renderer::get_ascii_text_size(PETAL_DATA[id].name);
+    char const *pname = I18n::petal_name(id);
+    float text_width = 12 * Renderer::get_ascii_text_size(pname);
     if (text_width < 50) text_width = 12;
     else text_width = 12 * 50 / text_width;
     ctx.translate(0, 20);
-    ctx.draw_text(PETAL_DATA[id].name, { .size = text_width });
+    ctx.draw_text(pname, { .size = text_width });
 }

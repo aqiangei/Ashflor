@@ -1,23 +1,29 @@
 #include <Client/Ui/InGame/GameInfo.hh>
 
 #include <Client/Ui/Container.hh>
+#include <Client/Ui/DynamicText.hh>
+#include <Client/Ui/Extern.hh>
 
 #include <Client/Game.hh>
+#include <Client/I18n.hh>
+#include <Client/StaticData.hh>
 
+#include <Helpers/Math.hh>
+#include <Shared/StaticData.hh>
+
+#include <format>
 #include <string>
-
-#include <iostream>
 
 using namespace Ui;
 
-static float const LEADERBOARD_WIDTH = 180;
+static float const LEADERBOARD_WIDTH = 220;
 
-LeaderboardSlot::LeaderboardSlot(uint8_t p) : Element(LEADERBOARD_WIDTH, 18) , pos(p) {
+LeaderboardSlot::LeaderboardSlot(uint8_t p) : Element(LEADERBOARD_WIDTH, 20) , pos(p) {
     ratio.set(1);
     style.animate = [&](Element *, Renderer &){
         if (pos >= Game::simulation.arena_info.player_count) return;
         float r = 1;
-        if (((float) Game::simulation.arena_info.scores[0]) != 0) 
+        if (((float) Game::simulation.arena_info.scores[0]) != 0)
             r = (float) Game::simulation.arena_info.scores[pos] / (float) Game::simulation.arena_info.scores[0];
         ratio.set(r);
         ratio.step(Ui::lerp_amount);
@@ -25,7 +31,6 @@ LeaderboardSlot::LeaderboardSlot(uint8_t p) : Element(LEADERBOARD_WIDTH, 18) , p
 }
 
 void LeaderboardSlot::on_render(Renderer &ctx) {
-    //we do not hide it though
     if (pos >= Game::simulation.arena_info.player_count) return;
     ctx.set_stroke(0xff222222);
     ctx.set_line_width(height);
@@ -40,8 +45,8 @@ void LeaderboardSlot::on_render(Renderer &ctx) {
     ctx.move_to(-(width-height)/2,0);
     ctx.line_to(-(width-height)/2+(width-height)*((float) ratio),0);
     ctx.stroke();
-    std::string format_string = std::format("{} - {}", 
-        Game::simulation.arena_info.names[pos].size() == 0 ? "Unnamed" : Game::simulation.arena_info.names[pos],
+    std::string format_string = std::format("{} - {}",
+        Game::simulation.arena_info.names[pos].size() == 0 ? I18n::tr(I18n::kUnnamed) : Game::simulation.arena_info.names[pos],
         format_score((float) Game::simulation.arena_info.scores[pos]));
     ctx.set_fill(0xffffffff);
     ctx.set_stroke(0xff222222);
@@ -54,30 +59,42 @@ void LeaderboardSlot::on_render(Renderer &ctx) {
 }
 
 Element *Ui::make_leaderboard() {
-    Container *lb_header = new Ui::Container({
-        new Ui::DynamicText(18, [](){
-            std::string format_string{"1 Flower"};
-            if (Game::simulation.arena_info.player_count != 1) 
-                format_string = std::format("{} Flowers", Game::simulation.arena_info.player_count);
-            return format_string;
-        })
-    }, LEADERBOARD_WIDTH + 20, 48, { .fill = 0xff55bb55, .line_width = 6, .round_radius = 7 });
-
-    Element *leaderboard = new Ui::VContainer({
-        lb_header,
+    Element *elt = new Ui::VContainer({
+        new Ui::DynamicText(22, [](){ return I18n::tr(I18n::kLeaderboardTitle); }, {
+            .fill = 0xffffffff,
+            .h_justify = Style::Left
+        }),
+        new Ui::DynamicText(13, [](){
+            uint32_t n = Game::simulation.arena_info.player_count;
+            if (I18n::use_chinese)
+                return n == 0 ? std::string{"暂无数据"} : std::format("在线 {} 人", n);
+            return n == 0 ? std::string{"No data"} : std::format("{} online", n);
+        }, { .fill = 0xffdddddd, .h_justify = Style::Left }),
         new Ui::VContainer(
             Ui::make_range(0, LEADERBOARD_SIZE, [](uint32_t i){ return (Element *) (new Ui::LeaderboardSlot(i)); })
-        , 10, 4, {})
-    }, 0, 0, { 
-        .fill = 0xff555555,
-        .line_width = 6,
-        .round_radius = 7,
-        .should_render = [](){ return Game::should_render_game_ui(); },
-        .no_polling = 1
+        , 8, 4, { .h_justify = Style::Left })
+    }, 16, 8, {
+        .fill = 0xc0c04040,
+        .line_width = 5,
+        .round_radius = 6,
+        .animate = [](Element *elt, Renderer &ctx){
+            elt->y = Game::alive() ? 170.f : 68.f;
+            ctx.translate(0, (elt->animation - 1) * elt->height);
+        },
+        .should_render = [](){
+            if (Ui::panel_open != Panel::kLeaderboard) return false;
+            return Game::should_render_title_ui()
+                || (Game::should_render_game_ui() && Game::alive());
+        },
+        .h_justify = Style::Left,
+        .v_justify = Style::Top
     });
-    leaderboard->style.h_justify = Style::Right;
-    leaderboard->style.v_justify = Style::Top;
-    leaderboard->x = -20;
-    leaderboard->y = 20;
-    return leaderboard;
+    elt->x = 12;
+    elt->y = 68;
+    // Title copy first; in-game copy tracked as alt for click-outside hit tests
+    if (Ui::Panel::leaderboard == nullptr)
+        Ui::Panel::leaderboard = elt;
+    else
+        Ui::Panel::leaderboard_alt = elt;
+    return elt;
 }

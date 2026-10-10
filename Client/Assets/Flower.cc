@@ -119,4 +119,18 @@ void draw_static_flower(Renderer &ctx, FlowerRenderAttributes attributes) {
         ctx.translate(0, -35);
         draw_static_petal(PetalID::kAntennae, ctx);
     }
+    if (BitMath::at(attributes.equip_flags, EquipmentFlags::kAccelerator))
+    {
+        RenderContext g(&ctx);
+        ctx.translate(0, 28);
+        ctx.scale(0.85f);
+        draw_static_petal(PetalID::kAccelerator, ctx);
+    }
+    if (BitMath::at(attributes.equip_flags, EquipmentFlags::kMagnet))
+    {
+        RenderContext g(&ctx);
+        ctx.translate(32, 8);
+        ctx.scale(0.7f);
+        draw_static_petal(PetalID::kMagnet, ctx);
+    }
 }

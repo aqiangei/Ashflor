@@ -2,7 +2,9 @@
 
 #include <Shared/Binary.hh>
 #include <Shared/EntityDef.hh>
+#include <Shared/StaticDefinitions.hh>
 
+#include <array>
 #include <cstdint>
 #include <set>
 #include <string>
@@ -25,6 +27,18 @@ public:
     WebSocket *ws;
     uint8_t verified = 0;
     uint8_t seen_arena = 0;
+    std::string account_name;
+    std::array<uint32_t, RarityID::kNumRarities> craft_bank = {};
+    uint32_t coins = 0;
+    uint64_t last_chat_ms = 0;
+    uint32_t party_id = 0;
+    uint8_t party_leader = 0;
+    uint8_t awaiting_revive = 0;
+    float corpse_x = 0;
+    float corpse_y = 0;
+    uint32_t corpse_ttl = 0;
+    uint32_t revive_progress = 0;
+    EntityID corpse_id = NULL_ENTITY;
     Client();
     void init();
     void remove();
@@ -39,6 +53,10 @@ public:
     static void on_message(WebSocket *, std::string_view, uint64_t);
     static void on_disconnect(WebSocket *, int, std::string_view);
 };
+
+// Award mob-kill coins and sync craft/coin bank to the client
+void client_award_coins(Client *, uint32_t amount);
+void client_sync_craft(Client *);
 
 #ifdef WASM_SERVER
 class WebSocket {

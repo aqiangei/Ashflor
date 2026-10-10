@@ -2,8 +2,10 @@
 
 #include <Client/Ui/Container.hh>
 #include <Client/Ui/Extern.hh>
+#include <Client/Ui/DynamicText.hh>
 #include <Client/Ui/StaticText.hh>
 #include <Client/Game.hh>
+#include <Client/I18n.hh>
 #include <Client/Input.hh>
 
 #include <cmath>
@@ -15,11 +17,11 @@ static void opacity_animate(Element *elt, Renderer &ctx) {
 }
 
 InputFreeze::InputFreeze() : Container({
-        new Ui::VContainer({new Ui::StaticText(14, "Move mouse here to disable movement")}, 10, 0, { 
+        new Ui::VContainer({new Ui::DynamicText(14, [](){ return I18n::tr(I18n::kMoveMouseDisable); })}, 10, 0, { 
             .animate = opacity_animate,
             .should_render = [](){ return !Input::freeze_input; }
         }),
-        new Ui::VContainer({new Ui::StaticText(14, "You can also use [Q] and [E] to cycle secondaries")}, 10, 0, { 
+        new Ui::VContainer({new Ui::DynamicText(14, [](){ return I18n::tr(I18n::kCycleSecondaries); })}, 10, 0, { 
             .animate = opacity_animate,
             .should_render = [](){ return Input::freeze_input; }
         }),

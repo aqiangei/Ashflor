@@ -1,0 +1,155 @@
+#pragma once
+
+#include <Shared/StaticData.hh>
+
+#include <cstdint>
+#include <string>
+
+namespace I18n {
+    // 1 = Chinese (default), 0 = English
+    extern uint8_t use_chinese;
+
+    enum Str : uint8_t {
+        kConnecting,
+        kFlowerNamePrompt,
+        kSpawn,
+        kOrPressEnterSpawn,
+        kSubtitle,
+        kHowToPlay,
+        kMouseMove,
+        kLeftAttack,
+        kRightDefend,
+        kWasdMove,
+        kSpaceAttack,
+        kShiftDefend,
+        kRespawnAtLevel,
+        kWith,
+        kSettings,
+        kPetals,
+        kMobs,
+        kChangelog,
+        kKeyboardMovement,
+        kMovementHelper,
+        kDebugStats,
+        kMadeBy,
+        kAssetCredits,
+        kLanguage,
+        kStats,
+        kScore,
+        kLevel,
+        kPetalGallery,
+        kMobGallery,
+        kLeaderboardTitle,
+        kContinue,
+        kKilledBy,
+        kMysteriousEntity,
+        kOrPressEnterContinue,
+        kHealth,
+        kDamage,
+        kPoison,
+        kXp,
+        kArmor,
+        kDamageReflection,
+        kHeal,
+        kFlowerHealth,
+        kBodyDamage,
+        kPoisonArmor,
+        kRotationSpeed,
+        kContents,
+        kSpawns,
+        kExtraVision,
+        kAttackRange,
+        kExtraDamage,
+        kExtraReload,
+        kMoveSpeed,
+        kMinimap,
+        kMoveRight,
+        kOverleveled,
+        kUnableAttack,
+        kDelete,
+        kLvlFlower,
+        kExtraSlotAt,
+        kUnnamed,
+        kMoveMouseDisable,
+        kCycleSecondaries,
+        kDebugFail,
+        kTickStats,
+        kFrameStats,
+        kDisconnectedCode,
+        kDisconnectedCodeReason,
+        kOlderChangelog,
+        kPauseMenu,
+        kResume,
+        kEscHint,
+        kUsername,
+        kPassword,
+        kLogin,
+        kRegister,
+        kAuthOk,
+        kAuthInvalidUser,
+        kAuthInvalidPass,
+        kAuthExists,
+        kAuthNotFound,
+        kAuthWrongPass,
+        kAuthAlreadyIn,
+        kAuthNeedConnect,
+        kLoggedInAs,
+        kGuestHint,
+        kChatPrompt,
+        kLeaveConfirm,
+        kLeaveYes,
+        kLeaveNo,
+        kPartyInviteNear,
+        kPartyLeave,
+        kPartyTitle,
+        kPartyEmpty,
+        kReviveHint,
+        kReviveProgress,
+        kChatNearby,
+        kChatParty,
+        kChatGuild,
+        kChatInviteParty,
+        kChatWhisper,
+        kPanelInventoryBtn,
+        kPanelTalentsBtn,
+        kPanelCraftBtn,
+        kPanelSpecialBtn,
+        kPanelInventory,
+        kPanelTalents,
+        kPanelCraft,
+        kPanelSpecial,
+        kPanelInventoryHint,
+        kPanelTalentsHint,
+        kPanelCraftHint,
+        kPanelSpecialHint,
+        kCraftGambleBtn,
+        kCraftExchangeBtn,
+        kCraftSelect,
+        kCraftChance,
+        kCraftExchangeCost,
+        kCraftNoMats,
+        kCraftMiss,
+        kCraftWin,
+        kCraftExchanged,
+        kCraftBankHint,
+        kCount
+    };
+
+    char const *tr(Str);
+    char const *petal_name(PetalID::T);
+    char const *petal_desc(PetalID::T);
+    char const *mob_name(MobID::T);
+    char const *mob_desc(MobID::T);
+    char const *rarity_name(uint8_t);
+    char const *zone_name(uint32_t zone_index);
+    char const *map_name(uint8_t map_id);
+
+    std::string format_respawn_level(uint32_t level);
+    std::string format_score_line(std::string const &score);
+    std::string format_level_line(uint32_t level);
+    std::string format_lvl_flower(uint32_t level);
+    std::string format_extra_slot(uint32_t level);
+    std::string format_disconnected(uint32_t code, char const *reason);
+    std::string format_logged_in(std::string const &user, uint32_t level);
+    std::string format_revive_progress(uint8_t pct);
+};

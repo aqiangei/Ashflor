@@ -711,6 +711,34 @@ std::array<struct PetalData, PetalID::kNumPetals> const PETAL_DATA = {{
             .icon_angle = -1
         }
     },
+    {
+        .name = "Accelerator",
+        .description = "Strap it on and your flower zooms like it's flying",
+        .health = 0.0,
+        .damage = 0.0,
+        .radius = 12.0,
+        .reload = 0.0,
+        .count = 0,
+        .rarity = RarityID::kUnusual,
+        .attributes = {
+            .move_speed_factor = 1.65f,
+            .equipment = EquipmentFlags::kAccelerator
+        }
+    },
+    {
+        .name = "Magnet",
+        .description = "Pulls nearby petal drops toward your flower",
+        .health = 0.0,
+        .damage = 0.0,
+        .radius = 12.0,
+        .reload = 0.0,
+        .count = 0,
+        .rarity = RarityID::kUnusual,
+        .attributes = {
+            .magnet_radius = 1800.f,
+            .equipment = EquipmentFlags::kMagnet
+        }
+    },
 }};
 
 std::array<struct MobData, MobID::kNumMobs> const MOB_DATA = {{
@@ -1064,36 +1092,44 @@ std::array<struct MobData, MobID::kNumMobs> const MOB_DATA = {{
     },
 }};
 
+// Relative rarity weights for guaranteed single-drop rolls.
+// Per-mob: only rarities present in that mob's drop table are kept, then renormalized to 1.0.
+static float const DROP_RARITY_WEIGHT[RarityID::kNumRarities] = {
+    55.0f, // Common
+    25.0f, // Unusual
+    12.0f, // Rare
+     5.5f, // Epic
+     2.0f, // Legendary
+     0.45f,// Mythic
+     0.05f // Unique
+};
+
 std::array<StaticArray<float, MAX_DROPS_PER_MOB>, MobID::kNumMobs> const MOB_DROP_CHANCES = [](){
     std::array<StaticArray<float, MAX_DROPS_PER_MOB>, MobID::kNumMobs> ret;
-    double const RARITY_MULT[RarityID::kNumRarities] = {50000,15000,2500,100,10,2.5,1};
-    double MOB_SPAWN_RATES[MobID::kNumMobs] = {0};
-    double PETAL_AGGREGATE_DROPS[PetalID::kNumPetals] = {0};
-    for (struct ZoneDefinition const &zone : MAP_DATA) {
-        double total = 0;
-        for (SpawnChance const &s : zone.spawns) total += s.chance;
-        for (SpawnChance const &s : zone.spawns) {
-            double base_chance = (s.chance * zone.drop_multiplier / total);
-            MOB_SPAWN_RATES[s.id] += base_chance;
-            if (s.id == MobID::kAntHole) {
-                MOB_SPAWN_RATES[MobID::kDigger] += DIGGER_SPAWN_CHANCE * base_chance;
-                for (auto const &spawn_wave : ANTHOLE_SPAWNS)
-                    for (MobID::T spawn : spawn_wave)
-                        MOB_SPAWN_RATES[spawn] += base_chance;
-            }
-        }
-    }
-
-    for (MobID::T id = 0; id < MobID::kNumMobs; ++id)
-        for (PetalID::T const drop_id : MOB_DATA[id].drops) PETAL_AGGREGATE_DROPS[drop_id]++;
-
-    double const BASE_NUM = MOB_SPAWN_RATES[MobID::kSquare];
-    if (BASE_NUM <= 0) assert(!"Square mob must spawn in at least one zone");
-
     for (MobID::T id = 0; id < MobID::kNumMobs; ++id) {
-        for (PetalID::T const drop_id : MOB_DATA[id].drops) {
-            float chance = fclamp((BASE_NUM * RARITY_MULT[PETAL_DATA[drop_id].rarity]) / (PETAL_AGGREGATE_DROPS[drop_id] * MOB_SPAWN_RATES[id] * MOB_DATA[id].attributes.segments), 0, 1);
-            ret[id].push(chance);
+        auto const &drops = MOB_DATA[id].drops;
+        float rarity_w[RarityID::kNumRarities] = {};
+        uint32_t rarity_n[RarityID::kNumRarities] = {};
+        float total_w = 0.f;
+        for (PetalID::T drop_id : drops) {
+            uint8_t r = PETAL_DATA[drop_id].rarity;
+            if (r >= RarityID::kNumRarities) continue;
+            if (rarity_n[r] == 0) {
+                rarity_w[r] = DROP_RARITY_WEIGHT[r];
+                total_w += DROP_RARITY_WEIGHT[r];
+            }
+            rarity_n[r]++;
+        }
+        if (total_w <= 0.f || drops.size() == 0) {
+            for (uint32_t i = 0; i < drops.size(); ++i)
+                ret[id].push(drops.size() ? 1.f / drops.size() : 0.f);
+            continue;
+        }
+        // Each petal's display chance = (rarity share / petals of that rarity); sums to 100%
+        for (PetalID::T drop_id : drops) {
+            uint8_t r = PETAL_DATA[drop_id].rarity;
+            float share = (rarity_w[r] / total_w) / (float) rarity_n[r];
+            ret[id].push(share);
         }
     }
     return ret;

@@ -1,12 +1,29 @@
-<!DOCTYPE html>
-<html>
+﻿<!DOCTYPE html>
+<html lang="zh-CN">
     <head>
-        <link href="https://fonts.googleapis.com/css?family=Ubuntu:700" rel="stylesheet" type="text/css">
+        <meta charset="utf-8">
+        <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+        <meta http-equiv="Pragma" content="no-cache">
+        <meta http-equiv="Expires" content="0">
+        <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;700&family=Ubuntu:wght@700&display=swap" rel="stylesheet" type="text/css">
         <style>
             * {
                 margin: 0px;
                 padding: 0px;
                 overflow: hidden;
+            }
+            html, body {
+                width: 100%;
+                height: 100%;
+                background: #000000;
+            }
+            /* Font probe only 鈥?must never show as a "loading page" */
+            #font-loader {
+                position: absolute;
+                left: -9999px;
+                top: -9999px;
+                visibility: hidden;
+                pointer-events: none;
             }
             #canvas {
                 position: absolute;
@@ -17,6 +34,8 @@
                 width: 100%;
                 height: 100%;
                 cursor: default;
+                z-index: 1;
+                background: #000000;
             }
             #loading-bar {
                 position: absolute;
@@ -25,31 +44,154 @@
                 width: 100%;
                 height: 100%;
                 background-color: #000000;
+                z-index: 10;
             }
             #loading {
                 position: absolute;
                 top: 50%;
                 left: 50%;
                 font-size: 48pt;
-                font-family: sans-serif;
+                font-family: "Noto Sans SC", "Microsoft YaHei", sans-serif;
                 transform: translate(-50%, -50%);
                 color: #ffffff;
                 font-weight: bold;
+                white-space: nowrap;
+            }
+            #loading .dots {
+                display: inline-block;
+                width: 1.35em;
+                text-align: left;
+            }
+            #loading .dots span {
+                opacity: 0.15;
+                animation: loading-dot 1.2s ease-in-out infinite;
+            }
+            #loading .dots span:nth-child(1) { animation-delay: 0s; }
+            #loading .dots span:nth-child(2) { animation-delay: 0.2s; }
+            #loading .dots span:nth-child(3) { animation-delay: 0.4s; }
+            @keyframes loading-dot {
+                0%, 80%, 100% { opacity: 0.15; }
+                40% { opacity: 1; }
+            }
+            #landscape-btn {
+                display: none;
+                position: absolute;
+                right: max(16px, env(safe-area-inset-right));
+                bottom: max(16px, env(safe-area-inset-bottom));
+                z-index: 20;
+                border: 3px solid #ffffff;
+                border-radius: 14px;
+                background: #1dd129;
+                color: #ffffff;
+                font-family: "Noto Sans SC", "Microsoft YaHei", sans-serif;
+                font-size: 15px;
+                font-weight: 700;
+                padding: 12px 16px;
+                box-shadow: 0 4px 16px rgba(0,0,0,0.35);
+                -webkit-tap-highlight-color: transparent;
+                animation: landscape-blink 0.7s ease-in-out infinite;
+                transition: opacity 0.45s ease;
+            }
+            #landscape-btn.hide {
+                opacity: 0;
+                pointer-events: none;
+            }
+            @keyframes landscape-blink {
+                0%, 100% { opacity: 1; transform: scale(1); }
+                50% { opacity: 0.45; transform: scale(1.06); }
             }
         </style>
         <meta name="viewport" content="user-scalable=no, width=device-width, height=device-height, initial-scale=1, shrink-to-fit=no, viewport-fit=cover">
+        <meta name="mobile-web-app-capable" content="yes">
+        <meta name="apple-mobile-web-app-capable" content="yes">
+        <title>ashflor.io</title>
     </head>
     <body>
     <div id="loading-bar">
-        <span id="loading">Loading</span>
+        <span id="loading">鍔犺浇涓?span class="dots" aria-hidden="true"><span>.</span><span>.</span><span>.</span></span></span>
+        <button id="landscape-btn" type="button">妯睆娓哥帺</button>
     </div>
-    <div id="font-loader" style="font-family: Ubuntu;">hello!</div>
+    <div id="font-loader" style="font-family: 'Noto Sans SC', 'Microsoft YaHei', Ubuntu;">鍔犺浇涓?浣犲ソ hello!</div>
     <canvas id="canvas" width="0" height="0"></canvas>
     <script>
+        (function () {
+            const isMobile = /iPhone|iPad|iPod|Android|BlackBerry/i.test(navigator.userAgent)
+                || (navigator.maxTouchPoints > 1 && window.matchMedia("(pointer: coarse)").matches);
+            const btn = document.getElementById("landscape-btn");
+            if (!isMobile || !btn) return;
+
+            btn.style.display = "block";
+
+            async function goLandscape() {
+                try {
+                    const el = document.documentElement;
+                    if (el.requestFullscreen) await el.requestFullscreen();
+                    else if (el.webkitRequestFullscreen) await el.webkitRequestFullscreen();
+                } catch (e) {}
+                try {
+                    if (screen.orientation && screen.orientation.lock)
+                        await screen.orientation.lock("landscape");
+                } catch (e) {}
+            }
+
+            btn.addEventListener("click", goLandscape, { passive: true });
+            btn.addEventListener("touchend", function (e) {
+                e.preventDefault();
+                goLandscape();
+            }, { passive: false });
+
+            // Blink ~3s then fade away
+            setTimeout(function () {
+                btn.classList.add("hide");
+                setTimeout(function () {
+                    btn.style.display = "none";
+                    btn.style.animation = "none";
+                }, 500);
+            }, 3200);
+        })();
+
         document.addEventListener("DOMContentLoaded", () => {
+            // Bust CDN/browser cache when VERSION_HASH changes
+            var cacheV = '21352';
+            var hidden = false;
+            var loadingEl = document.getElementById("loading");
+            function showLoadError(msg) {
+                if (loadingEl) loadingEl.textContent = msg;
+            }
+            function hideLoading() {
+                if (hidden) return;
+                // Only hide once wasm actually started (canvas ready)
+                if (!window.Module || !window.Module.canvas) return;
+                hidden = true;
+                var bar = document.getElementById("loading-bar");
+                if (bar) bar.style.display = "none";
+            }
+            var Module = window.Module = window.Module || {};
+            Module.locateFile = function (path) {
+                return path + '?v=' + cacheV;
+            };
+            Module.onRuntimeInitialized = function () {
+                hideLoading();
+            };
+            Module.postRun = [function () { hideLoading(); }];
+            Module.onAbort = function (what) {
+                showLoadError("鍔犺浇澶辫触: " + String(what).slice(0, 80));
+            };
+            // FRP 涓?wasm ~13MB锛屽嬁鍦ㄨ剼鏈?onload 鍚庤繃鏃╁叧閬僵锛堝惁鍒欑櫧灞忛湶鍑?font-loader锛?            setTimeout(function () {
+                if (!hidden) showLoadError("鍔犺浇杈冩參锛屼粛鍦ㄤ笅杞藉鎴风鈥?);
+            }, 8000);
+            setTimeout(function () {
+                if (!hidden) {
+                    if (window.Module && window.Module.canvas) hideLoading();
+                    else showLoadError("鍔犺浇瓒呮椂锛岃鍒锋柊鎴栨鏌ョ綉缁?);
+                }
+            }, 60000);
             const script = document.createElement('script');
-            script.src = 'gardn-client.js';
+            script.src = 'gardn-client.js?v=' + cacheV;
             script.async = true;
+            script.onerror = function () {
+                showLoadError("鍔犺浇澶辫触锛氭棤娉曚笅杞藉鎴风鑴氭湰");
+            };
             document.body.appendChild(script);
         });
     </script>

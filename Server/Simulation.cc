@@ -22,11 +22,23 @@ static void calculate_leaderboard(Simulation *sim) {
     });
     uint32_t num = players.size();
     sim->arena_info.set_player_count(num);
-    num = std::min(num, LEADERBOARD_SIZE);
-    for (uint32_t i = 0; i < num; ++i) {
+    uint32_t lb = std::min(num, LEADERBOARD_SIZE);
+    for (uint32_t i = 0; i < lb; ++i) {
         sim->arena_info.set_names(i, players[i]->get_name());
         sim->arena_info.set_scores(i, players[i]->get_score());
         sim->arena_info.set_colors(i, players[i]->get_color());
+    }
+    uint32_t map_n = std::min(num, MINIMAP_PLAYER_CAP);
+    for (uint32_t i = 0; i < MINIMAP_PLAYER_CAP; ++i) {
+        if (i < map_n) {
+            sim->arena_info.set_minimap_x(i, players[i]->get_x());
+            sim->arena_info.set_minimap_y(i, players[i]->get_y());
+            sim->arena_info.set_minimap_colors(i, players[i]->get_color());
+        } else {
+            sim->arena_info.set_minimap_x(i, -1.f);
+            sim->arena_info.set_minimap_y(i, -1.f);
+            sim->arena_info.set_minimap_colors(i, 0);
+        }
     }
 }
 
@@ -46,6 +58,10 @@ void Simulation::on_tick() {
             BitMath::set(ent.flags, EntityFlags::kIsCulled);
     });
     for_each<kCamera>(tick_culling_behavior);
+    // Magnet pulls rewrite drop acceleration each tick
+    for_each<kDrop>([](Simulation *, Entity &drop) {
+        drop.acceleration.set(0, 0);
+    });
     for_each<kFlower>(tick_player_behavior);
     for_each<kMob>(tick_ai_behavior);
     for_each<kCamera>(tick_player_ai_behavior);

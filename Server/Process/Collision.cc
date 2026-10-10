@@ -1,7 +1,13 @@
 #include <Server/EntityFunctions.hh>
+#include <Server/AccountStore.hh>
+#include <Server/Client.hh>
+#include <Server/Game.hh>
+#include <Server/Server.hh>
 
 #include <Shared/Simulation.hh>
 #include <Shared/Entity.hh>
+#include <Shared/StaticData.hh>
+#include <Shared/Binary.hh>
 
 #include <cmath>
 #include <iostream>
@@ -10,6 +16,10 @@ static bool _should_interact(Entity const &ent1, Entity const &ent2) {
     //if (ent1.has_component(kFlower) || ent2.has_component(kFlower)) return false;
     //if (ent1.has_component(kPetal) || ent2.has_component(kPetal)) return false;
     if (ent1.pending_delete || ent2.pending_delete) return false;
+    // Drops must collide with flowers so pickup can run (team/immunity checked in _pickup_drop)
+    if ((ent1.has_component(kDrop) && ent2.has_component(kFlower))
+        || (ent2.has_component(kDrop) && ent1.has_component(kFlower)))
+        return true;
     if (!(ent1.get_team() == ent2.get_team())) return true;
     if (BitMath::at((ent1.flags | ent2.flags), EntityFlags::kNoFriendlyCollision)) return false;
     //if (ent1.has_component(kPetal) || ent2.has_component(kPetal)) return false;
@@ -17,20 +27,49 @@ static bool _should_interact(Entity const &ent1, Entity const &ent2) {
     return false;
 }
 
+static void _add_to_craft_bank(Client *client, PetalID::T id) {
+    if (client == nullptr || id == PetalID::kNone || id >= PetalID::kNumPetals) return;
+    uint8_t rarity = PETAL_DATA[id].rarity;
+    if (rarity >= RarityID::kNumRarities) return;
+    if (client->craft_bank[rarity] < 1000000)
+        client->craft_bank[rarity] += 1;
+    if (!client->account_name.empty()) {
+        Account *acc = AccountStore::find(client->account_name);
+        if (acc != nullptr) {
+            acc->craft_bank = client->craft_bank;
+            acc->coins = client->coins;
+            AccountStore::save();
+        }
+    }
+    client_sync_craft(client);
+}
+
 static void _pickup_drop(Simulation *sim, Entity &player, Entity &drop) {
     if (!sim->ent_alive(player.get_parent())) return;
-    if (drop.immunity_ticks > 0) return;
+    // During immunity, only same-team (party) can pick — shared party loot
+    if (drop.immunity_ticks > 0) {
+        if (drop.get_team() == NULL_ENTITY) return;
+        if (!(drop.get_team() == player.get_team())) return;
+    }
 
+    PetalID::T drop_id = drop.get_drop_id();
     for (uint32_t i = 0; i <  player.get_loadout_count() + MAX_SLOT_COUNT; ++i) {
         if (player.get_loadout_ids(i) != PetalID::kNone) continue;
-        player.set_loadout_ids(i, drop.get_drop_id());
+        player.set_loadout_ids(i, drop_id);
         drop.set_x(player.get_x());
         drop.set_y(player.get_y());
         BitMath::unset(drop.flags, EntityFlags::kIsDespawning);
         sim->request_delete(drop.id);
-        //peaceful transfer, no petal tracking needed
         return;
     }
+    // Inventory full → craft material bank (always despawn the drop)
+    Client *client = Server::client_by_camera(sim, player.get_parent());
+    if (client != nullptr)
+        _add_to_craft_bank(client, drop_id);
+    drop.set_x(player.get_x());
+    drop.set_y(player.get_y());
+    BitMath::unset(drop.flags, EntityFlags::kIsDespawning);
+    sim->request_delete(drop.id);
 }
 
 #define NO(component) (!ent1.has_component(component) && !ent2.has_component(component))

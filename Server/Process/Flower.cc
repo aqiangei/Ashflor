@@ -13,6 +13,8 @@ struct PlayerBuffs {
     float extra_range = 0;
     float heal = 0;
     float vision_factor = 1;
+    float move_speed_factor = 1;
+    float magnet_radius = 0;
     float extra_health = 0;
     float extra_damage = 0;
     float damage_factor = 1;
@@ -42,6 +44,8 @@ static struct PlayerBuffs _get_petal_passive_buffs(Simulation *sim, Entity &play
         if (attrs.equipment != EquipmentFlags::kNone)
             player.set_equip_flags(player.get_equip_flags() | (1 << attrs.equipment));
         buffs.vision_factor = std::min(buffs.vision_factor, attrs.vision_factor);
+        buffs.move_speed_factor *= attrs.move_speed_factor;
+        buffs.magnet_radius = std::fmax(buffs.magnet_radius, attrs.magnet_radius);
         buffs.extra_range = std::fmax(attrs.extra_range, buffs.extra_range);
         buffs.extra_damage = std::fmax(buffs.extra_damage, attrs.extra_body_damage);
         buffs.damage_factor *= attrs.extra_damage_factor;
@@ -130,6 +134,44 @@ void tick_player_behavior(Simulation *sim, Entity &player) {
     if (sim->ent_alive(player.get_parent())) {
         Entity &camera = sim->get_ent(player.get_parent());
         camera.set_fov(BASE_FOV * buffs.vision_factor);
+    }
+    if (buffs.move_speed_factor != 1.f &&
+        (player.acceleration.x != 0.f || player.acceleration.y != 0.f))
+        player.acceleration *= buffs.move_speed_factor;
+    if (buffs.magnet_radius > 0.f) {
+        float r2 = buffs.magnet_radius * buffs.magnet_radius;
+        float pickup_r = player.get_radius() + 25.f + 8.f;
+        float pickup_r2 = pickup_r * pickup_r;
+        sim->for_each<kDrop>([&](Simulation *, Entity &drop) {
+            if (drop.pending_delete) return;
+            if (drop.immunity_ticks > 0 && !(drop.get_team() == player.get_team())) return;
+            float dx = player.get_x() - drop.get_x();
+            float dy = player.get_y() - drop.get_y();
+            float d2 = dx * dx + dy * dy;
+            if (d2 > r2) return;
+            // Already overlapping flower — pick up immediately (avoids magnet orbit)
+            if (d2 <= pickup_r2) {
+                drop.velocity.set(0, 0);
+                drop.acceleration.set(0, 0);
+                drop.collision_velocity.set(0, 0);
+                on_collide(sim, player, drop);
+                return;
+            }
+            if (d2 <= 1.f) return;
+            float dist = std::sqrt(d2);
+            // Pull harder at range, ease off near the flower so drops don't slingshot
+            float t = dist / buffs.magnet_radius;
+            float pull = PLAYER_ACCELERATION * (3.f + 5.f * t);
+            drop.acceleration.set(dx / dist * pull, dy / dist * pull);
+            // Kill excess tangential speed so loot doesn't orbit
+            float vx = drop.velocity.x;
+            float vy = drop.velocity.y;
+            float radial = (vx * dx + vy * dy) / dist;
+            float tx = vx - dx / dist * radial;
+            float ty = vy - dy / dist * radial;
+            drop.velocity.x -= tx * 0.35f;
+            drop.velocity.y -= ty * 0.35f;
+        });
     }
 
     DEBUG_ONLY(assert(player.get_loadout_count() <= MAX_SLOT_COUNT);)

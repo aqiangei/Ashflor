@@ -7,7 +7,11 @@
 #include <vector>
 
 enum Clientbound {
-    kClientUpdate
+    kClientUpdate,
+    kAccountResult,
+    kChatMessage,
+    kPartyUpdate,
+    kCraftUpdate
 };
 
 enum Serverbound {
@@ -15,13 +19,60 @@ enum Serverbound {
     kClientInput,
     kClientSpawn,
     kPetalSwap,
-    kPetalDelete
+    kPetalDelete,
+    kAccountAuth,
+    kChat,
+    kPartyInvite,
+    kPartyLeave,
+    kPetalCraft,
+    kGuestProgress
+};
+
+enum CraftMode : uint8_t {
+    kCraftGamble = 0,
+    kCraftExchange = 1,
+    kCraftBuyRarity = 2,  // arg = rarity → random petal of that rarity
+    kCraftBuySpecial = 3  // arg = PetalID special
+};
+
+enum CraftResultCode : uint8_t {
+    kCraftBankSync = 0,
+    kCraftNoMats = 1,
+    kCraftMiss = 2,
+    kCraftWin = 3,
+    kCraftExchanged = 4,
+    kCraftNoCoins = 5,
+    kCraftBought = 6,
+    kCraftInvFull = 7
+};
+
+enum AccountAuthMode {
+    kAccountLogin = 0,
+    kAccountRegister = 1
+};
+
+enum AccountResultCode {
+    kAccountOk = 0,
+    kAccountInvalidUser = 1,
+    kAccountInvalidPass = 2,
+    kAccountExists = 3,
+    kAccountNotFound = 4,
+    kAccountWrongPass = 5,
+    kAccountAlreadyIn = 6
 };
 
 enum CloseReason {
     kServer = 4001,
     kProtocol = 4002,
     kOutdated = 4003
+};
+
+enum ChatChannel : uint8_t {
+    kChatNearby = 0,
+    kChatParty = 1,
+    kChatGuild = 2,
+    kChatWhisper = 3,
+    kChatSystem = 4
 };
 
 class Writer {

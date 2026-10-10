@@ -5,6 +5,8 @@
 #include <Client/Ui/StaticText.hh>
 
 #include <Client/Game.hh>
+#include <Client/I18n.hh>
+#include <Client/Ui/DynamicText.hh>
 
 using namespace Ui;
 
@@ -94,28 +96,30 @@ static Element *make_changelog_contents() {
             "Added spawner petals"
         }),
         make_divider(),
-        new Ui::StaticText(14, "Older changelog entries not available")
+        new Ui::DynamicText(14, [](){ return I18n::tr(I18n::kOlderChangelog); })
     }, 0, 10, {});
     return new Ui::ScrollContainer(elt, 300);
 }
 
 Element *Ui::make_changelog() {
     Element *elt = new Ui::VContainer({
-        new Ui::StaticText(25, "Changelog"),
+        new Ui::DynamicText(25, [](){ return I18n::tr(I18n::kChangelog); }),
         make_changelog_contents()
     }, 15, 10, { 
         .fill = 0xff5a9fdb,
         .line_width = 7,
-        .round_radius = 3,
+        .round_radius = 6,
         .animate = [](Element *elt, Renderer &ctx){
-            ctx.translate(0, (1 - elt->animation) * 2 * elt->height);
+            ctx.translate(0, (elt->animation - 1) * elt->height);
         },
         .should_render = [](){
             return Ui::panel_open == Panel::kChangelog && Game::should_render_title_ui();
         },
         .h_justify = Style::Left,
-        .v_justify = Style::Bottom
+        .v_justify = Style::Top
     });
+    elt->x = 12;
+    elt->y = 68;
     Ui::Panel::changelog = elt;
     return elt;
 }

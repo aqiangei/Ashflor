@@ -1,9 +1,11 @@
 #include <Client/Ui/InGame/Loadout.hh>
 
 #include <Client/Ui/Container.hh>
+#include <Client/Ui/DynamicText.hh>
 #include <Client/Ui/StaticText.hh>
 
 #include <Client/StaticData.hh>
+#include <Client/I18n.hh>
 
 #include <Client/Game.hh>
 
@@ -39,13 +41,13 @@ static Ui::Element *make_petal_stat_container(PetalID::T id) {
     struct PetalAttributes const &attrs = petal_data.attributes;
     if (petal_data.health > 0) {
         stats.push_back(new Ui::HContainer({
-            new Ui::StaticText(12, "Health:", { .fill = 0xff77ff77 }),
+            new Ui::DynamicText(12, [](){ return I18n::tr(I18n::kHealth); }, { .fill = 0xff77ff77 }),
             new Ui::StaticText(12, format_number(petal_data.health))
         }, 0, 5, { .h_justify = Style::Left }));
     }
     if (petal_data.damage > 0) {
         stats.push_back(new Ui::HContainer({
-            new Ui::StaticText(12, "Damage:", { .fill = 0xffff7777 }),
+            new Ui::DynamicText(12, [](){ return I18n::tr(I18n::kDamage); }, { .fill = 0xffff7777 }),
             new Ui::DynamicText(12, [&](){
                 return format_number(petal_data.damage * get_damage_factor());
             })
@@ -53,91 +55,109 @@ static Ui::Element *make_petal_stat_container(PetalID::T id) {
     }
     if (attrs.armor > 0) {
         stats.push_back(new Ui::HContainer({
-            new Ui::StaticText(12, "Armor:", { .fill = 0xff777777 }),
+            new Ui::DynamicText(12, [](){ return I18n::tr(I18n::kArmor); }, { .fill = 0xff777777 }),
             new Ui::StaticText(12, format_number(attrs.armor))
         }, 0, 5, { .h_justify = Style::Left }));
     }
     if (attrs.damage_reflection > 0) {
         stats.push_back(new Ui::HContainer({
-            new Ui::StaticText(12, "Damage Reflection:", { .fill = 0xff777777 }),
+            new Ui::DynamicText(12, [](){ return I18n::tr(I18n::kDamageReflection); }, { .fill = 0xff777777 }),
             new Ui::StaticText(12, format_pct(attrs.damage_reflection * 100))
         }, 0, 5, { .h_justify = Style::Left }));
     }
     if (attrs.constant_heal > 0) {
         stats.push_back(new Ui::HContainer({
-            new Ui::StaticText(12, "Heal:", { .fill = 0xffff96cb }),
+            new Ui::DynamicText(12, [](){ return I18n::tr(I18n::kHeal); }, { .fill = 0xffff96cb }),
             new Ui::StaticText(12, format_number(attrs.constant_heal) + "/s")
         }, 0, 5, { .h_justify = Style::Left }));
     }
     if (attrs.burst_heal > 0) {
         stats.push_back(new Ui::HContainer({
-            new Ui::StaticText(12, "Heal:", { .fill = 0xffff96cb }),
+            new Ui::DynamicText(12, [](){ return I18n::tr(I18n::kHeal); }, { .fill = 0xffff96cb }),
             new Ui::StaticText(12, format_number(attrs.burst_heal))
         }, 0, 5, { .h_justify = Style::Left }));
     }
     if (attrs.poison_damage.damage > 0) {
         stats.push_back(new Ui::HContainer({
-            new Ui::StaticText(12, "Poison:", { .fill = 0xffce76db }),
+            new Ui::DynamicText(12, [](){ return I18n::tr(I18n::kPoison); }, { .fill = 0xffce76db }),
             new Ui::StaticText(12, format_number(attrs.poison_damage.time * attrs.poison_damage.damage) + " (" + format_number(attrs.poison_damage.damage) + "/s)")
         }, 0, 5, { .h_justify = Style::Left }));
     }
     if (attrs.extra_health > 0) {
         stats.push_back(new Ui::HContainer({
-            new Ui::StaticText(12, "Flower Health:", { .fill = 0xff77ff77 }),
+            new Ui::DynamicText(12, [](){ return I18n::tr(I18n::kFlowerHealth); }, { .fill = 0xff77ff77 }),
             new Ui::StaticText(12, format_number(attrs.extra_health))
         }, 0, 5, { .h_justify = Style::Left }));
     }
     if (attrs.extra_body_damage > 0) {
         stats.push_back(new Ui::HContainer({
-            new Ui::StaticText(12, "Body Damage:", { .fill = 0xffff7777 }),
+            new Ui::DynamicText(12, [](){ return I18n::tr(I18n::kBodyDamage); }, { .fill = 0xffff7777 }),
             new Ui::StaticText(12, format_number(attrs.extra_body_damage))
         }, 0, 5, { .h_justify = Style::Left }));
     }
     if (attrs.poison_armor > 0) {
         stats.push_back(new Ui::HContainer({
-            new Ui::StaticText(12, "Poison Armor:", { .fill = 0xffce76db }),
+            new Ui::DynamicText(12, [](){ return I18n::tr(I18n::kPoisonArmor); }, { .fill = 0xffce76db }),
             new Ui::StaticText(12, format_number(attrs.poison_armor) + "/s")
         }, 0, 5, { .h_justify = Style::Left }));
     }
     if (attrs.extra_rotation_speed > 0) {
         stats.push_back(new Ui::HContainer({
-            new Ui::StaticText(12, "Rotation Speed:", { .fill = 0xffcde23b }),
+            new Ui::DynamicText(12, [](){ return I18n::tr(I18n::kRotationSpeed); }, { .fill = 0xffcde23b }),
             new Ui::StaticText(12, "+" + format_number(attrs.extra_rotation_speed) + " rad/s")
         }, 0, 5, { .h_justify = Style::Left }));
     }
     if (attrs.spawns != MobID::kNumMobs && attrs.spawn_count == 0) {
         stats.push_back(new Ui::HContainer({
-            new Ui::StaticText(12, "Contents:", { .fill = 0xffd2eb34 }),
-            new Ui::StaticText(12, (petal_data.count > 1 ? format_number(petal_data.count) + "x " : "") + (MOB_DATA[attrs.spawns].name))
+            new Ui::DynamicText(12, [](){ return I18n::tr(I18n::kContents); }, { .fill = 0xffd2eb34 }),
+            new Ui::DynamicText(12, [=](){
+                return (petal_data.count > 1 ? format_number(petal_data.count) + "x " : "") + I18n::mob_name(attrs.spawns);
+            })
         }, 0, 5, { .h_justify = Style::Left }));
     }
     if (attrs.spawns != MobID::kNumMobs && attrs.spawn_count > 0) {
         stats.push_back(new Ui::HContainer({
-            new Ui::StaticText(12, "Spawns:", { .fill = 0xffd2eb34 }),
-            new Ui::StaticText(12, format_number(attrs.spawn_count) + "x " + (MOB_DATA[attrs.spawns].name))
+            new Ui::DynamicText(12, [](){ return I18n::tr(I18n::kSpawns); }, { .fill = 0xffd2eb34 }),
+            new Ui::DynamicText(12, [=](){
+                return format_number(attrs.spawn_count) + "x " + I18n::mob_name(attrs.spawns);
+            })
         }, 0, 5, { .h_justify = Style::Left }));
     }
     if (attrs.vision_factor < 1) {
         stats.push_back(new Ui::HContainer({
-            new Ui::StaticText(12, "Extra Vision:", { .fill = 0xffcde23b }),
+            new Ui::DynamicText(12, [](){ return I18n::tr(I18n::kExtraVision); }, { .fill = 0xffcde23b }),
             new Ui::StaticText(12, format_pct(100 / attrs.vision_factor))
+        }, 0, 5, { .h_justify = Style::Left }));
+    }
+    if (attrs.move_speed_factor != 1) {
+        stats.push_back(new Ui::HContainer({
+            new Ui::DynamicText(12, [](){ return I18n::tr(I18n::kMoveSpeed); }, { .fill = 0xff3ecf8e }),
+            new Ui::StaticText(12, format_pct(attrs.move_speed_factor * 100))
+        }, 0, 5, { .h_justify = Style::Left }));
+    }
+    if (attrs.magnet_radius > 0) {
+        stats.push_back(new Ui::HContainer({
+            new Ui::DynamicText(12, [](){
+                return I18n::use_chinese ? "磁力范围：" : "Magnet Range:";
+            }, { .fill = 0xff4a7fd9 }),
+            new Ui::StaticText(12, format_number(attrs.magnet_radius))
         }, 0, 5, { .h_justify = Style::Left }));
     }
     if (attrs.extra_range > 0) {
         stats.push_back(new Ui::HContainer({
-            new Ui::StaticText(12, "Attack Range:", { .fill = 0xffcde23b }),
+            new Ui::DynamicText(12, [](){ return I18n::tr(I18n::kAttackRange); }, { .fill = 0xffcde23b }),
             new Ui::StaticText(12, "+" + format_number(attrs.extra_range))
         }, 0, 5, { .h_justify = Style::Left }));
     }
     if (attrs.extra_damage_factor > 1) {
         stats.push_back(new Ui::HContainer({
-            new Ui::StaticText(12, "Extra Damage:", { .fill = 0xffff7777 }),
+            new Ui::DynamicText(12, [](){ return I18n::tr(I18n::kExtraDamage); }, { .fill = 0xffff7777 }),
             new Ui::StaticText(12, "+"+format_pct(100 * (attrs.extra_damage_factor - 1)))
         }, 0, 5, { .h_justify = Style::Left }));
     }
     if (attrs.extra_reload_factor > 1) {
         stats.push_back(new Ui::HContainer({
-            new Ui::StaticText(12, "Extra Reload:", { .fill = 0xff7777ff }),
+            new Ui::DynamicText(12, [](){ return I18n::tr(I18n::kExtraReload); }, { .fill = 0xff7777ff }),
             new Ui::StaticText(12, "+"+format_pct(100 * (attrs.extra_reload_factor - 1)))
         }, 0, 5, { .h_justify = Style::Left }));
     }
@@ -148,7 +168,7 @@ static void make_petal_tooltip(PetalID::T id) {
     Element *tooltip = new Ui::VContainer({
         #ifdef DEBUG
         new Ui::HFlexContainer(
-            new Ui::StaticText(20, PETAL_DATA[id].name, { .fill = 0xffffffff, .h_justify = Style::Left }),
+            new Ui::DynamicText(20, [id](){ return I18n::petal_name(id); }, { .fill = 0xffffffff, .h_justify = Style::Left }),
             new Ui::DynamicText(16, [=](){
                 float reload = PETAL_DATA[id].reload * get_reload_factor();
                 std::string rld_str = reload == 0 ? "" :
@@ -159,11 +179,11 @@ static void make_petal_tooltip(PetalID::T id) {
             5, 10, {}
         ),
         #else
-        new Ui::StaticText(20, PETAL_DATA[id].name, { .fill = 0xffffffff, .h_justify = Style::Left }),
+        new Ui::DynamicText(20, [id](){ return I18n::petal_name(id); }, { .fill = 0xffffffff, .h_justify = Style::Left }),
         #endif
-        new Ui::StaticText(14, RARITY_NAMES[PETAL_DATA[id].rarity], { .fill = RARITY_COLORS[PETAL_DATA[id].rarity], .h_justify = Style::Left }),
+        new Ui::DynamicText(14, [id](){ return I18n::rarity_name(PETAL_DATA[id].rarity); }, { .fill = RARITY_COLORS[PETAL_DATA[id].rarity], .h_justify = Style::Left }),
         new Ui::Element(0,8),
-        new Ui::StaticText(12, PETAL_DATA[id].description, { .fill = 0xffffffff, .h_justify = Style::Left }),
+        new Ui::DynamicText(12, [id](){ return I18n::petal_desc(id); }, { .fill = 0xffffffff, .h_justify = Style::Left }),
         DEBUG_ONLY(make_petal_stat_container(id))
     }, 5, 2);
     tooltip->style.fill = 0x80000000;

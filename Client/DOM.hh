@@ -11,4 +11,6 @@ namespace DOM {
     std::string retrieve_text(char const *, uint32_t);
     void update_text(char const *, std::string const &, uint32_t);
     void open_page(char const *);
+    void focus_element(char const *);
+    void blur_active();
 }

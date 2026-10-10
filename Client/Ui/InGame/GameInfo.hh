@@ -11,6 +11,14 @@ namespace Ui {
         virtual void on_render(Renderer &) override;
     };
 
+    class HealthBar final : public Element {
+    public:
+        LerpFloat ratio;
+        LerpFloat lag;
+        HealthBar();
+        virtual void on_render(Renderer &) override;
+    };
+
     class LeaderboardSlot final : public Element {
     public:
         uint8_t pos;
@@ -24,6 +32,7 @@ namespace Ui {
     public:
         Minimap(float);
         virtual void on_render(Renderer &) override;
+        virtual void refactor() override;
     };
 
     class OverlevelTimer final : public Element {
@@ -46,9 +55,22 @@ namespace Ui {
 
     Element *make_leaderboard();
     Element *make_level_bar();
+    Element *make_health_bar();
     Element *make_minimap();
     Element *make_overlevel_indicator();
     Element *make_mobile_attack_button();
     Element *make_mobile_defend_button();
     Element *make_mobile_joystick();
+    Element *make_pause_menu();
+    Element *make_game_topbar();
+    Element *make_leave_confirm();
+    Element *make_chat_panel();
+    Element *make_chat_context_menu();
+    Element *make_game_side_buttons();
+    Element *make_inventory_panel();
+    Element *make_talents_panel();
+    Element *make_craft_panel();
+    Element *make_special_craft_panel();
+    class TextInput;
+    TextInput *chat_text_input();
 }

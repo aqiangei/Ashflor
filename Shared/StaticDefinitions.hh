@@ -11,9 +11,21 @@ inline uint32_t const ARENA_HEIGHT = 4000;
 inline uint32_t const MAX_SLOT_COUNT = 8;
 inline uint32_t const LEVELS_PER_EXTRA_SLOT = 15;
 inline uint32_t const LEADERBOARD_SIZE = 10;
+inline uint32_t const MINIMAP_PLAYER_CAP = 48;
 inline uint32_t const MAX_PETALS_IN_CLUMP = 4;
 inline uint32_t const MAX_DIFFICULTY = 3;
 inline uint32_t const MAX_DROPS_PER_MOB = 6;
+inline uint32_t const MAX_ZONES_PER_MAP = 8;
+
+namespace MapID {
+    enum : uint8_t {
+        kGarden = 0,
+        kDesert,
+        kOcean,
+        kPolar,
+        kNumMaps
+    };
+}
 
 namespace DamageType {
     enum : uint8_t {
@@ -76,6 +88,8 @@ namespace PetalID {
         kYucca,
         kCorn,
         kGoldenLeaf,
+        kAccelerator,
+        kMagnet,
         kNumPetals
     };
 };
@@ -174,6 +188,8 @@ namespace EquipmentFlags {
         kAntennae,
         kObserver,
         kCutter,
+        kAccelerator,
+        kMagnet,
         kNone
     };
 };
@@ -213,6 +229,8 @@ struct PetalAttributes {
     float damage_reflection = 0;
     float extra_damage_factor = 1;
     float extra_reload_factor = 1;
+    float move_speed_factor = 1; // multiplies flower acceleration when equipped
+    float magnet_radius = 0; // attracts drops within this range when equipped
     struct PoisonDamage poison_damage;
     uint8_t defend_only = 0;
     float icon_angle = 0;

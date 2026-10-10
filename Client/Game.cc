@@ -5,10 +5,19 @@
 #include <Client/Particle.hh>
 #include <Client/Setup.hh>
 #include <Client/Storage.hh>
+#include <Client/Ui/Extern.hh>
+#include <Client/Ui/InGame/GameInfo.hh>
+#include <Client/Ui/TextInput.hh>
 
+#include <Shared/Binary.hh>
 #include <Shared/Config.hh>
+#include <Shared/StaticData.hh>
 
 #include <cmath>
+#include <cstdlib>
+#include <string>
+
+#include <emscripten.h>
 
 static double g_last_time = 0;
 float const MAX_TRANSITION_CIRCLE = 2500;
@@ -27,6 +36,11 @@ namespace Game {
     EntityID camera_id;
     EntityID player_id;
     std::string nickname;
+    std::string username;
+    std::string password;
+    std::string account_status;
+    uint8_t account_logged_in = 0;
+    uint8_t auth_panel = 0;
     std::string disconnect_message;
     std::array<uint8_t, PetalID::kNumPetals> seen_petals;
     std::array<uint8_t, MobID::kNumMobs> seen_mobs;
@@ -46,6 +60,33 @@ namespace Game {
     uint8_t simulation_ready = 0;
     uint8_t on_game_screen = 0;
     uint8_t show_debug = 0;
+    uint8_t selected_map = MapID::kGarden;
+    uint8_t minimap_expanded = 0;
+    uint8_t pause_menu_open = 0;
+    uint8_t leave_confirm_open = 0;
+    uint8_t game_panel = 0;
+    uint8_t chat_open = 0;
+    uint8_t chat_channel = ChatChannel::kChatNearby;
+    std::string chat_whisper_to;
+    std::string chat_draft;
+    std::vector<ChatLine> chat_lines;
+    uint8_t chat_menu_open = 0;
+    std::string chat_menu_name;
+    float chat_menu_x = 0;
+    float chat_menu_y = 0;
+    std::string party_status;
+    uint8_t party_member_count = 0;
+    uint8_t revive_progress = 0;
+    uint8_t awaiting_party_revive = 0;
+    std::array<uint32_t, RarityID::kNumRarities> craft_bank = {};
+    uint32_t coins = 0;
+    uint8_t guest_save_valid = 0;
+    uint8_t guest_level = 1;
+    std::array<PetalID::T, 2 * MAX_SLOT_COUNT> guest_petals = {PetalID::kNone};
+    std::array<uint32_t, RarityID::kNumRarities> guest_craft_bank = {};
+    uint32_t guest_coins = 0;
+    uint8_t craft_selected_rarity = 0;
+    std::string craft_status;
 }
 
 using namespace Game;
@@ -56,7 +97,7 @@ void Game::init() {
     reset();
     title_ui_window.add_child(
         [](){ 
-            Ui::Element *elt = new Ui::StaticText(60, "the gardn project");
+            Ui::Element *elt = new Ui::StaticText(60, "ashflor.io");
             elt->x = 0;
             elt->y = -270;
             return elt;
@@ -84,6 +125,9 @@ void Game::init() {
         Ui::make_changelog()
     );
     title_ui_window.add_child(
+        Ui::make_leaderboard()
+    );
+    title_ui_window.add_child(
         Ui::make_github_link_button()
     );
     game_ui_window.add_child(
@@ -91,6 +135,9 @@ void Game::init() {
     );
     game_ui_window.add_child(
         Ui::make_level_bar()
+    );
+    game_ui_window.add_child(
+        Ui::make_health_bar()
     );
     game_ui_window.add_child(
         Ui::make_minimap()
@@ -109,18 +156,47 @@ void Game::init() {
     );
     for (uint8_t i = 0; i < MAX_SLOT_COUNT * 2; ++i) game_ui_window.add_child(new Ui::UiLoadoutPetal(i));
     game_ui_window.add_child(
-        Ui::make_leaderboard()
-    );
-    game_ui_window.add_child(
         Ui::make_overlevel_indicator()
     );
     game_ui_window.add_child(
         Ui::make_stat_screen()
     );
     game_ui_window.add_child(
-        new Ui::HContainer({
-            new Ui::StaticText(20, "the gardn project")
-        }, 20, 0, { .h_justify = Ui::Style::Left, .v_justify = Ui::Style::Top })
+        Ui::make_game_topbar()
+    );
+    // In-game copies of title panels (title window is skipped while playing)
+    game_ui_window.add_child(
+        Ui::make_leaderboard()
+    );
+    game_ui_window.add_child(
+        Ui::make_mob_gallery()
+    );
+    game_ui_window.add_child(
+        Ui::make_pause_menu()
+    );
+    game_ui_window.add_child(
+        Ui::make_leave_confirm()
+    );
+    game_ui_window.add_child(
+        Ui::make_chat_panel()
+    );
+    game_ui_window.add_child(
+        Ui::make_chat_context_menu()
+    );
+    game_ui_window.add_child(
+        Ui::make_game_side_buttons()
+    );
+    game_ui_window.add_child(
+        Ui::make_inventory_panel()
+    );
+    game_ui_window.add_child(
+        Ui::make_talents_panel()
+    );
+    game_ui_window.add_child(
+        Ui::make_craft_panel()
+    );
+    game_ui_window.add_child(
+        Ui::make_special_craft_panel()
     );
     Ui::make_petal_tooltips();
     other_ui_window.add_child(
@@ -143,22 +219,214 @@ void Game::init() {
         }()
     );
     other_ui_window.style.no_polling = 1;
-    socket.connect(WS_URL);
+    // Follow page host so FRP / remote access works (ws/wss + host:port)
+    char *dyn_url = (char *) EM_ASM_PTR({
+        var proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+        return stringToNewUTF8(proto + '//' + location.host);
+    });
+    std::string ws_url = dyn_url ? dyn_url : WS_URL;
+    free(dyn_url);
+    socket.connect(ws_url);
 }
 
 void Game::reset() {
     simulation_ready = 0;
     on_game_screen = 0;
+    pause_menu_open = 0;
+    leave_confirm_open = 0;
+    game_panel = 0;
+    chat_open = 0;
+    chat_channel = ChatChannel::kChatNearby;
+    chat_whisper_to.clear();
+    chat_draft.clear();
+    chat_lines.clear();
+    chat_menu_open = 0;
+    chat_menu_name.clear();
+    party_status.clear();
+    party_member_count = 0;
+    revive_progress = 0;
+    awaiting_party_revive = 0;
+    account_logged_in = 0;
+    auth_panel = 0;
     score = 0;
     overlevel_timer = 0;
     slot_indicator_opacity = 0;
     transition_circle = 0;
-    respawn_level = 1;
+    respawn_level = guest_save_valid ? guest_level : 1;
     loadout_count = 5;
     camera_id = player_id = NULL_ENTITY;
     for (uint32_t i = 0; i < 2 * MAX_SLOT_COUNT; ++i)
         cached_loadout[i] = PetalID::kNone;
+    if (guest_save_valid) {
+        craft_bank = guest_craft_bank;
+        coins = guest_coins;
+    } else {
+        craft_bank = {};
+        coins = 0;
+    }
     simulation.reset();
+}
+
+void Game::send_guest_progress() {
+    if (!socket.ready || account_logged_in) return;
+    Writer writer(static_cast<uint8_t *>(OUTGOING_PACKET));
+    writer.write<uint8_t>(Serverbound::kGuestProgress);
+    writer.write<uint8_t>(guest_save_valid ? 1 : 0);
+    if (!guest_save_valid) {
+        socket.send(writer.packet, writer.at - writer.packet);
+        return;
+    }
+    writer.write<uint8_t>(guest_level < 1 ? 1 : guest_level);
+    for (uint32_t i = 0; i < 2 * MAX_SLOT_COUNT; ++i)
+        writer.write<uint8_t>(guest_petals[i]);
+    for (uint32_t i = 0; i < RarityID::kNumRarities; ++i)
+        writer.write<uint32_t>(guest_craft_bank[i]);
+    writer.write<uint32_t>(guest_coins);
+    socket.send(writer.packet, writer.at - writer.packet);
+}
+
+void Game::sync_guest_progress() {
+    if (account_logged_in) return;
+    guest_craft_bank = craft_bank;
+    guest_coins = coins;
+    if (alive()) {
+        guest_level = (uint8_t) std::min<uint32_t>(score_to_level(score), 255);
+        if (guest_level < 1) guest_level = 1;
+        for (uint32_t i = 0; i < 2 * MAX_SLOT_COUNT; ++i)
+            guest_petals[i] = cached_loadout[i];
+        guest_save_valid = 1;
+    } else if (simulation.ent_exists(camera_id)) {
+        // Dead: camera inventory preserves slot layout (primary + backpack).
+        Entity const &camera = simulation.get_ent(camera_id);
+        guest_level = camera.get_respawn_level();
+        if (guest_level < 1) guest_level = 1;
+        for (uint32_t i = 0; i < 2 * MAX_SLOT_COUNT; ++i)
+            guest_petals[i] = camera.get_inventory(i);
+        guest_save_valid = 1;
+    }
+}
+
+void Game::close_game_panel() {
+    game_panel = kPanelNone;
+}
+
+uint8_t Game::game_panel_blocking() {
+    return game_panel != kPanelNone;
+}
+
+void Game::toggle_game_panel(uint8_t panel) {
+    if (!alive() || leave_confirm_open) return;
+    if (chat_open) close_chat();
+    if (pause_menu_open) pause_menu_open = 0;
+    if (game_panel == panel) {
+        game_panel = kPanelNone;
+        return;
+    }
+    game_panel = panel;
+    Input::keys_held.clear();
+    Input::game_inputs.x = 0;
+    Input::game_inputs.y = 0;
+    Input::game_inputs.flags = 0;
+}
+
+void Game::open_chat() {
+    if (!alive() || pause_menu_open || leave_confirm_open) return;
+    close_game_panel();
+    chat_open = 1;
+    Input::keys_held.clear();
+    Input::game_inputs.x = 0;
+    Input::game_inputs.y = 0;
+    Input::game_inputs.flags = 0;
+    if (Ui::TextInput *input = Ui::chat_text_input())
+        input->focus();
+}
+
+void Game::close_chat() {
+    if (!chat_open) return;
+    chat_open = 0;
+    chat_draft.clear();
+    close_chat_menu();
+    if (Ui::TextInput *input = Ui::chat_text_input())
+        input->blur();
+}
+
+void Game::push_chat_line(uint8_t channel, std::string const &sender, std::string const &text) {
+    if (text.empty() && sender.empty()) return;
+    chat_lines.push_back({ channel, sender, text, timestamp + 12000 });
+    while (chat_lines.size() > CHAT_HISTORY)
+        chat_lines.erase(chat_lines.begin());
+}
+
+void Game::cycle_chat_channel() {
+    if (!chat_open) return;
+    if (chat_channel == ChatChannel::kChatNearby)
+        chat_channel = ChatChannel::kChatParty;
+    else if (chat_channel == ChatChannel::kChatParty)
+        chat_channel = ChatChannel::kChatGuild;
+    else if (chat_channel == ChatChannel::kChatGuild) {
+        if (!chat_whisper_to.empty())
+            chat_channel = ChatChannel::kChatWhisper;
+        else
+            chat_channel = ChatChannel::kChatNearby;
+    } else
+        chat_channel = ChatChannel::kChatNearby;
+}
+
+void Game::open_chat_menu(std::string const &name, float x, float y) {
+    if (name.empty()) return;
+    chat_menu_open = 1;
+    chat_menu_name = name;
+    chat_menu_x = x;
+    chat_menu_y = y;
+}
+
+void Game::close_chat_menu() {
+    chat_menu_open = 0;
+    chat_menu_name.clear();
+}
+
+void Game::chat_menu_invite() {
+    if (chat_menu_name.empty()) return;
+    std::string name = chat_menu_name;
+    close_chat_menu();
+    party_invite_name(name);
+}
+
+void Game::chat_menu_whisper() {
+    if (chat_menu_name.empty()) return;
+    chat_whisper_to = chat_menu_name;
+    chat_channel = ChatChannel::kChatWhisper;
+    close_chat_menu();
+    if (!chat_open) open_chat();
+}
+
+void Game::toggle_pause() {
+    if (!alive()) return;
+    if (leave_confirm_open) {
+        leave_confirm_open = 0;
+        return;
+    }
+    if (chat_open) close_chat();
+    if (game_panel != kPanelNone) {
+        close_game_panel();
+        return;
+    }
+    pause_menu_open = !pause_menu_open;
+    if (pause_menu_open) {
+        Input::keys_held.clear();
+        Input::game_inputs.x = 0;
+        Input::game_inputs.y = 0;
+        Input::game_inputs.flags = 0;
+    }
+}
+
+void Game::return_to_title() {
+    close_game_panel();
+    close_chat();
+    pause_menu_open = 0;
+    leave_confirm_open = 0;
+    on_game_screen = 0;
+    socket.disconnect();
 }
 
 uint8_t Game::alive() {
@@ -223,7 +491,13 @@ void Game::tick(double time) {
     } else {
         player_id = NULL_ENTITY;
         overlevel_timer = 0;
+        pause_menu_open = 0;
+        leave_confirm_open = 0;
+        if (chat_open) close_chat();
     }
+
+    while (!chat_lines.empty() && chat_lines.front().expires_at <= timestamp)
+        chat_lines.erase(chat_lines.begin());
 
     //event poll
     if (Input::is_mobile) {
@@ -270,34 +544,37 @@ void Game::tick(double time) {
         renderer.set_global_alpha(0.85);
         renderer.translate(renderer.width/2,renderer.height/2);
         renderer.draw_image(game_ui_renderer);
-        //process keybind petal switches
-        if (Input::keys_held_this_tick.contains('X'))
-            Game::swap_all_petals();
-        else if (Input::keys_held_this_tick.contains('E')) 
-            Ui::forward_secondary_select();
-        else if (Input::keys_held_this_tick.contains('Q')) 
-            Ui::backward_secondary_select();
-        else if (Ui::UiLoadout::selected_with_keys == MAX_SLOT_COUNT) {
-            for (uint8_t i = 0; i < Game::loadout_count; ++i) {
-                if (Input::keys_held_this_tick.contains(SLOT_KEYBINDS[i])) {
-                    Ui::forward_secondary_select();
-                    break;
-                }
-            }
-        } else if (Game::cached_loadout[Game::loadout_count + Ui::UiLoadout::selected_with_keys] == PetalID::kNone)
-            Ui::UiLoadout::selected_with_keys = MAX_SLOT_COUNT;
-        if (Ui::UiLoadout::selected_with_keys < MAX_SLOT_COUNT 
-            && Game::cached_loadout[Game::loadout_count + Ui::UiLoadout::selected_with_keys] != PetalID::kNone) {
-            if (Input::keys_held_this_tick.contains('T')) {
-                Ui::ui_delete_petal(Ui::UiLoadout::selected_with_keys + Game::loadout_count);
+        //process keybind petal switches (disabled while pause/chat/panels open)
+        if (!Game::pause_menu_open && !Game::chat_open && !Game::leave_confirm_open
+            && !Game::game_panel_blocking()) {
+            if (Input::keys_held_this_tick.contains('X'))
+                Game::swap_all_petals();
+            else if (Input::keys_held_this_tick.contains('E')) 
                 Ui::forward_secondary_select();
-            } else {
+            else if (Input::keys_held_this_tick.contains('Q')) 
+                Ui::backward_secondary_select();
+            else if (Ui::UiLoadout::selected_with_keys == MAX_SLOT_COUNT) {
                 for (uint8_t i = 0; i < Game::loadout_count; ++i) {
                     if (Input::keys_held_this_tick.contains(SLOT_KEYBINDS[i])) {
-                        Ui::ui_swap_petals(i, Ui::UiLoadout::selected_with_keys + Game::loadout_count);
-                        if (Game::cached_loadout[Game::loadout_count + Ui::UiLoadout::selected_with_keys] == PetalID::kNone)
-                            Ui::forward_secondary_select();
+                        Ui::forward_secondary_select();
                         break;
+                    }
+                }
+            } else if (Game::cached_loadout[Game::loadout_count + Ui::UiLoadout::selected_with_keys] == PetalID::kNone)
+                Ui::UiLoadout::selected_with_keys = MAX_SLOT_COUNT;
+            if (Ui::UiLoadout::selected_with_keys < MAX_SLOT_COUNT 
+                && Game::cached_loadout[Game::loadout_count + Ui::UiLoadout::selected_with_keys] != PetalID::kNone) {
+                if (Input::keys_held_this_tick.contains('T')) {
+                    Ui::ui_delete_petal(Ui::UiLoadout::selected_with_keys + Game::loadout_count);
+                    Ui::forward_secondary_select();
+                } else {
+                    for (uint8_t i = 0; i < Game::loadout_count; ++i) {
+                        if (Input::keys_held_this_tick.contains(SLOT_KEYBINDS[i])) {
+                            Ui::ui_swap_petals(i, Ui::UiLoadout::selected_with_keys + Game::loadout_count);
+                            if (Game::cached_loadout[Game::loadout_count + Ui::UiLoadout::selected_with_keys] == PetalID::kNone)
+                                Ui::forward_secondary_select();
+                            break;
+                        }
                     }
                 }
             }
@@ -323,7 +600,8 @@ void Game::tick(double time) {
            Input::game_inputs.y = (Input::mouse_y - renderer.height / 2) / Ui::scale;
         }
         uint8_t attack = Input::keys_held.contains(' ') || BitMath::at(Input::mouse_buttons_state, Input::LeftMouse);
-        uint8_t defend = Input::keys_held.contains('\x10') || BitMath::at(Input::mouse_buttons_state, Input::RightMouse);
+        uint8_t defend = (Input::keys_held.contains('\x10') || BitMath::at(Input::mouse_buttons_state, Input::RightMouse))
+            && !chat_menu_open && !chat_open;
         Input::game_inputs.flags = (attack << InputFlags::kAttacking) | (defend << InputFlags::kDefending);
     }
 
@@ -331,11 +609,49 @@ void Game::tick(double time) {
 
     if (Input::keys_held_this_tick.contains(';'))
         show_debug = !show_debug;
-    if (Input::keys_held_this_tick.contains('\r') && !Game::alive())
-        Game::spawn_in();
+    if (Input::keys_held_this_tick.contains('M') && alive() && !chat_open && !leave_confirm_open)
+        minimap_expanded = !minimap_expanded;
+    if (Input::keys_held_this_tick.contains(9) && chat_open)
+        cycle_chat_channel();
+    if (chat_menu_open && BitMath::at(Input::mouse_buttons_released, Input::LeftMouse))
+        close_chat_menu();
+    // Click outside chat input while typing → blur / cancel
+    if (chat_open && BitMath::at(Input::mouse_buttons_pressed, Input::LeftMouse) && !chat_menu_open) {
+        Ui::TextInput *input = Ui::chat_text_input();
+        if (input == nullptr || !input->contains_screen_point(Input::mouse_x, Input::mouse_y))
+            close_chat();
+    }
+    // Click outside any open popup / drawer → close it
+    Ui::try_close_popups_outside_click();
+    if (Input::keys_held_this_tick.contains(27) && Game::alive()) {
+        if (chat_menu_open) close_chat_menu();
+        else if (leave_confirm_open) leave_confirm_open = 0;
+        else if (chat_open) close_chat();
+        else if (game_panel != kPanelNone) close_game_panel();
+        else toggle_pause();
+    }
+    if (Game::alive() && !chat_open && !leave_confirm_open) {
+        if (Input::keys_held_this_tick.contains('B'))
+            toggle_game_panel(kPanelInventory);
+        else if (Input::keys_held_this_tick.contains('Z'))
+            toggle_game_panel(kPanelTalents);
+        else if (Input::keys_held_this_tick.contains('C'))
+            toggle_game_panel(kPanelCraft);
+        else if (Input::keys_held_this_tick.contains('V'))
+            toggle_game_panel(kPanelSpecial);
+    }
+    if (Input::keys_held_this_tick.contains('\r')) {
+        if (Game::alive()) {
+            if (chat_open) send_chat();
+            else if (!pause_menu_open && !leave_confirm_open) open_chat();
+        } else {
+            Game::spawn_in();
+        }
+    }
 
     //clearing operations
     simulation.post_tick();
+    sync_guest_progress();
     Storage::set();
     Input::reset();
     Debug::frame_times.push_back(Ui::dt);

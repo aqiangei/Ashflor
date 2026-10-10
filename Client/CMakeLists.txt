@@ -21,6 +21,7 @@ set(SRCS
     Debug.cc
     DOM.cc
     Game.cc
+    I18n.cc
     Input.cc
     Main.cc
     Network.cc
@@ -39,6 +40,9 @@ set(SRCS
     Ui/InGame/Map.cc
     Ui/InGame/Mobile.cc
     Ui/InGame/OverlevelTimer.cc
+    Ui/InGame/PauseMenu.cc
+    Ui/InGame/Chat.cc
+    Ui/InGame/GamePanels.cc
     Ui/InGame/Tooltip.cc
     Ui/TitleScreen/Changelog.cc
     Ui/TitleScreen/DeathScreen.cc
@@ -64,6 +68,7 @@ set(SRCS
     ../Shared/Arena.cc
     ../Shared/Binary.cc
     ../Shared/Config.cc
+    ../Shared/Craft.cc
     ../Shared/Entity.cc
     ../Shared/EntityDef.cc
     ../Shared/Map.cc

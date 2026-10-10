@@ -1,11 +1,14 @@
 #include <Client/Ui/InGame/GameInfo.hh>
 
 #include <Client/Ui/Container.hh>
+#include <Client/Ui/DynamicText.hh>
 #include <Client/Ui/StaticText.hh>
 
 #include <Client/Game.hh>
+#include <Client/I18n.hh>
 
 #include <Shared/Map.hh>
+#include <Shared/StaticData.hh>
 
 using namespace Ui;
 
@@ -28,9 +31,9 @@ void OverlevelTimer::on_render(Renderer &ctx) {
 Element *Ui::make_overlevel_indicator() {
     Element *elt = new Ui::HContainer({
         new Ui::VContainer({
-            new Ui::StaticText(18, "MOVE RIGHT →", { .fill = 0xffea7f80, .h_justify = Style::Left }),
-            new Ui::StaticText(14, "You are overleveled for this zone", { .fill = 0xffffffff, .h_justify = Style::Left }),
-            new Ui::StaticText(14, "You will be unable to attack", { .fill = 0xffffffff, .h_justify = Style::Left }),
+            new Ui::DynamicText(18, [](){ return I18n::tr(I18n::kMoveRight); }, { .fill = 0xffea7f80, .h_justify = Style::Left }),
+            new Ui::DynamicText(14, [](){ return I18n::tr(I18n::kOverleveled); }, { .fill = 0xffffffff, .h_justify = Style::Left }),
+            new Ui::DynamicText(14, [](){ return I18n::tr(I18n::kUnableAttack); }, { .fill = 0xffffffff, .h_justify = Style::Left }),
         }, 0, 3),
         new OverlevelTimer(50)
     }, 10, 20, {
@@ -42,7 +45,9 @@ Element *Ui::make_overlevel_indicator() {
         .should_render = [](){
             if (!Game::alive()) return false;
             Entity const &player = Game::simulation.get_ent(Game::player_id);
-            return MAP_DATA[Map::get_zone_from_pos(player.get_x(), player.get_y())].difficulty < Map::difficulty_at_level(score_to_level(Game::score))
+            uint8_t mid = Game::simulation.arena_info.map_id;
+            uint32_t zid = Map::get_zone_from_pos(mid, player.get_x(), player.get_y());
+            return map_zones(mid)[zid].difficulty < Map::difficulty_at_level(score_to_level(Game::score))
             && Game::overlevel_timer > 0;
         }
     });

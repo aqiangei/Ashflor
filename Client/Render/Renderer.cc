@@ -126,7 +126,7 @@ void Renderer::set_line_width(float v) {
 
 void Renderer::set_text_size(float v) {
     EM_ASM({
-    Module.ctxs[$0].font = $1 + "px Ubuntu";
+    Module.ctxs[$0].font = $1 + "px \"Noto Sans SC\", \"Microsoft YaHei\", Ubuntu, sans-serif";
     }, id, v);
 }
 

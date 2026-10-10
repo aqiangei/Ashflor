@@ -97,13 +97,17 @@ extern "C" {
 int setup_inputs() {
     EM_ASM({
         window.addEventListener("keydown", (e) => {
-            //e.preventDefault();
+            const typing = e.target && (e.target.tagName === "INPUT" || e.target.tagName === "TEXTAREA");
+            if (typing && e.code !== "Escape" && e.code !== "Enter" && e.code !== "Tab") return;
+            if (typing && (e.code === "Escape" || e.code === "Enter" || e.code === "Tab")) e.preventDefault();
             !e.repeat && _key_event(stringToNewUTF8(e.code), 0);
         });
         window.addEventListener("keyup", (e) => {
-            //e.preventDefault();
+            const typing = e.target && (e.target.tagName === "INPUT" || e.target.tagName === "TEXTAREA");
+            if (typing && e.code !== "Escape" && e.code !== "Enter" && e.code !== "Tab") return;
             !e.repeat && _key_event(stringToNewUTF8(e.code), 1);
         });
+        window.addEventListener("contextmenu", (e) => { e.preventDefault(); });
         window.addEventListener("mousedown", (e) => {
             //e.preventDefault();
             _mouse_event(e.clientX * devicePixelRatio, e.clientY * devicePixelRatio, 0, +!!e.button);

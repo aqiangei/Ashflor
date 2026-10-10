@@ -1,6 +1,7 @@
 #include <Client/Storage.hh>
 
 #include <Client/Game.hh>
+#include <Client/I18n.hh>
 #include <Client/Input.hh>
 
 #include <Shared/Config.hh>
@@ -126,7 +127,14 @@ public:
     X(1, Game::seen_mobs) \
     X(2, Game::seen_petals) \
     X(3, Input::keyboard_movement) \
-    X(4, Input::movement_helper)
+    X(4, Input::movement_helper) \
+    X(5, I18n::use_chinese) \
+    X(6, Game::username) \
+    X(7, Game::guest_save_valid) \
+    X(8, Game::guest_level) \
+    X(9, Game::guest_petals) \
+    X(10, Game::guest_craft_bank) \
+    X(11, Game::guest_coins)
 
 #define X(ct, name) static auto checker_##ct = MutationObserver(name);
 STORED
@@ -161,6 +169,11 @@ void Storage::retrieve() {
             uint8_t opts = reader.read<uint8_t>();
             Input::movement_helper = BitMath::at(opts, 0);
             Input::keyboard_movement = BitMath::at(opts, 1);
+            // bit3 marks language as explicitly saved; otherwise keep Chinese default
+            if (BitMath::at(opts, 3))
+                I18n::use_chinese = BitMath::at(opts, 2);
+            else
+                I18n::use_chinese = 1;
         }
     }
     {
@@ -168,6 +181,38 @@ void Storage::retrieve() {
         if (len > 0 && len <= sizeof(uint32_t) * MAX_NAME_LENGTH + 4) {
             Decoder reader(&StorageProtocol::buffer[0]);
             Game::nickname = reader.read<std::string>();
+        }
+    }
+    {
+        uint32_t len = StorageProtocol::retrieve("username", sizeof(uint32_t) * MAX_USERNAME_LENGTH + 4);
+        if (len > 0 && len <= sizeof(uint32_t) * MAX_USERNAME_LENGTH + 4) {
+            Decoder reader(&StorageProtocol::buffer[0]);
+            Game::username = reader.read<std::string>();
+        }
+    }
+    {
+        uint32_t len = StorageProtocol::retrieve("guest", 256);
+        if (len >= 2 + 2 * MAX_SLOT_COUNT) {
+            Decoder reader(&StorageProtocol::buffer[0]);
+            Game::guest_save_valid = reader.read<uint8_t>() ? 1 : 0;
+            Game::guest_level = reader.read<uint8_t>();
+            if (Game::guest_level < 1) Game::guest_level = 1;
+            for (uint32_t i = 0; i < 2 * MAX_SLOT_COUNT; ++i) {
+                PetalID::T id = reader.read<uint8_t>();
+                if (id >= PetalID::kNumPetals) id = PetalID::kNone;
+                Game::guest_petals[i] = id;
+                if (id != PetalID::kNone) Game::seen_petals[id] = 1;
+            }
+            for (uint32_t i = 0; i < RarityID::kNumRarities; ++i) {
+                if (reader.at >= StorageProtocol::buffer + len) break;
+                Game::guest_craft_bank[i] = reader.read<uint32_t>();
+            }
+            if (reader.at < StorageProtocol::buffer + len)
+                Game::guest_coins = reader.read<uint32_t>();
+            if (Game::guest_save_valid) {
+                Game::craft_bank = Game::guest_craft_bank;
+                Game::coins = Game::guest_coins;
+            }
         }
     }
     #ifdef DEBUG
@@ -201,9 +246,28 @@ void Storage::set() {
     }
     {
         Encoder writer(&StorageProtocol::buffer[0]);
+        writer.write<std::string>(Game::username);
+        StorageProtocol::store("username", writer.at - writer.base);
+    }
+    {
+        Encoder writer(&StorageProtocol::buffer[0]);
         writer.write<uint8_t>(
-            Input::movement_helper | (Input::keyboard_movement << 1)
+            Input::movement_helper
+            | (Input::keyboard_movement << 1)
+            | (I18n::use_chinese << 2)
+            | (1 << 3)
         );
         StorageProtocol::store("settings", writer.at - writer.base);
+    }
+    {
+        Encoder writer(&StorageProtocol::buffer[0]);
+        writer.write<uint8_t>(Game::guest_save_valid);
+        writer.write<uint8_t>(Game::guest_level);
+        for (uint32_t i = 0; i < 2 * MAX_SLOT_COUNT; ++i)
+            writer.write<uint8_t>(Game::guest_petals[i]);
+        for (uint32_t i = 0; i < RarityID::kNumRarities; ++i)
+            writer.write<uint32_t>(Game::guest_craft_bank[i]);
+        writer.write<uint32_t>(Game::guest_coins);
+        StorageProtocol::store("guest", writer.at - writer.base);
     }
 }

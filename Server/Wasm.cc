@@ -53,13 +53,15 @@ WebSocketServer::WebSocketServer() {
         const http = require("http");
         const fs = require("fs");
         const server = http.createServer(function(req, res) {
-            let encodeType = "text/html";
+            let encodeType = "text/html; charset=utf-8";
             let file = "index.html";
-            switch (req.url) {
+            // Strip ?query so cache-busting URLs still resolve
+            const path = (req.url || "/").split("?")[0];
+            switch (path) {
                 case "/":
                     break;
                 case "/gardn-client.js":
-                    encodeType = "application/javascript";
+                    encodeType = "application/javascript; charset=utf-8";
                     file = "gardn-client.js";
                     break;
                 case "/gardn-client.wasm":
@@ -70,13 +72,16 @@ WebSocketServer::WebSocketServer() {
                     file = "";
                     break;
             }
-            if (fs.existsSync(file)) {            
-                res.writeHead(200, {"Content-Type": encodeType});
+            if (file && fs.existsSync(file)) {
+                res.writeHead(200, {
+                    "Content-Type": encodeType,
+                    "Cache-Control": "no-cache"
+                });
                 res.end(fs.readFileSync(file));
                 return;
             }
-            res.writeHead(404, {"Content-Type": encodeType});
-            res.end();
+            res.writeHead(404, {"Content-Type": "text/plain; charset=utf-8"});
+            res.end("Not Found");
         });
 
         server.listen($0, function() {

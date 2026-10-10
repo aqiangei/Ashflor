@@ -15,20 +15,22 @@ uint32_t Map::difficulty_at_level(uint32_t level) {
     return level / LEVELS_PER_EXTRA_SLOT;
 }
 
-uint32_t Map::get_zone_from_pos(float x, float y) {
+uint32_t Map::get_zone_from_pos(uint8_t map_id, float x, float y) {
+    MapZones const &zones = map_zones(map_id);
     uint32_t ret = 0;
-    for (uint32_t i = 1; i < MAP_DATA.size(); ++i) {
-        struct ZoneDefinition const &zone = MAP_DATA[i];
+    for (uint32_t i = 1; i < zones.size(); ++i) {
+        struct ZoneDefinition const &zone = zones[i];
         if (fclamp(x, zone.left, zone.right) == x && fclamp(y, zone.top, zone.bottom) == y)
             ret = i;
     }
     return ret;
 }
 
-uint32_t Map::get_suitable_difficulty_zone(uint32_t power) {
+uint32_t Map::get_suitable_difficulty_zone(uint8_t map_id, uint32_t power) {
+    MapZones const &zones = map_zones(map_id);
     std::vector<uint32_t> possible_zones;
-    for (uint32_t i = 0; i < MAP_DATA.size(); ++i)
-        if (MAP_DATA[i].difficulty == power) possible_zones.push_back(i);
+    for (uint32_t i = 0; i < zones.size(); ++i)
+        if (zones[i].difficulty == power) possible_zones.push_back(i);
     if (possible_zones.size() == 0) return 0;
     return possible_zones[frand() * possible_zones.size()];
 }
@@ -36,13 +38,13 @@ uint32_t Map::get_suitable_difficulty_zone(uint32_t power) {
 #ifdef SERVERSIDE
 #include <Shared/Simulation.hh>
 void Map::remove_mob(Simulation *sim, uint32_t zone) {
-    DEBUG_ONLY(assert(zone < MAP_DATA.size());)
+    DEBUG_ONLY(assert(zone < map_zones(sim->map_id).size());)
     --sim->zone_mob_counts[zone];
 }
 
 void Map::spawn_random_mob(Simulation *sim, float x, float y) {
-    uint32_t zone_id = Map::get_zone_from_pos(x, y);
-    struct ZoneDefinition const &zone = MAP_DATA[zone_id];
+    uint32_t zone_id = Map::get_zone_from_pos(sim->map_id, x, y);
+    struct ZoneDefinition const &zone = map_zones(sim->map_id)[zone_id];
     if (zone.density * (zone.right - zone.left) * (zone.bottom - zone.top) / (500 * 500) < sim->zone_mob_counts[zone_id]) return;
     float sum = 0;
     for (SpawnChance const &s : zone.spawns)

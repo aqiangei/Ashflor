@@ -3,6 +3,8 @@
 #include <Client/Ui/Extern.hh>
 #include <Client/DOM.hh>
 
+#include <cmath>
+
 using namespace Ui;
 
 static std::string _gen_nonce() {
@@ -16,6 +18,28 @@ TextInput::TextInput(std::string &r, float w, float h, uint32_t m, Style s) :
     DOM::create_text_input(name.c_str(), max);
     DOM::update_text(name.c_str(), r, max);
 }
+
+void TextInput::focus() {
+    DOM::element_show(name.c_str());
+    DOM::update_text(name.c_str(), ref, max);
+    DOM::focus_element(name.c_str());
+}
+
+void TextInput::blur() {
+    DOM::blur_active();
+    DOM::element_hide(name.c_str());
+}
+
+void TextInput::sync_from_dom() {
+    ref = DOM::retrieve_text(name.c_str(), max);
+}
+
+uint8_t TextInput::contains_screen_point(float x, float y) const {
+    return std::abs(x - screen_x) <= width * Ui::scale / 2
+        && std::abs(y - screen_y) <= height * Ui::scale / 2;
+}
+
+void TextInput::on_event(uint8_t) {}
 
 void TextInput::on_render(Renderer &ctx) {
     DOM::element_show(name.c_str());

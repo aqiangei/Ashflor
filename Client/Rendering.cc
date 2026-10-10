@@ -54,7 +54,8 @@ void Game::render_game() {
     }
     {
         RenderContext context(&renderer);
-        for (ZoneDefinition const &def : MAP_DATA) {
+        MapZones const &zones = map_zones(Game::simulation.arena_info.map_id);
+        for (ZoneDefinition const &def : zones) {
             renderer.set_fill(def.color);
             renderer.fill_rect(def.left, def.top, def.right - def.left, def.bottom - def.top);
             if (Map::difficulty_at_level(score_to_level(Game::score)) > def.difficulty) {
@@ -85,35 +86,41 @@ void Game::render_game() {
         renderer.stroke();
     }
 
-    if (alive() && Input::movement_helper && !Input::keyboard_movement && !Input::is_mobile) {
+    // Antenna / FOV helper — thin ray toward cursor (default on)
+    if (alive() && Input::movement_helper && !Input::is_mobile) {
         Entity const &player = simulation.get_ent(player_id);
-        float norm_mouse_x = (Input::mouse_x - renderer.width / 2) / Ui::scale;
-        float norm_mouse_y = (Input::mouse_y - renderer.height / 2) / Ui::scale;
-        Vector delta{norm_mouse_x, norm_mouse_y};
-        float dist = delta.magnitude();
-        if (dist >= player.get_radius() + 80) {
+        float mx = (Input::mouse_x - renderer.width / 2) / Ui::scale;
+        float my = (Input::mouse_y - renderer.height / 2) / Ui::scale;
+        Vector tip{mx, my};
+        float dist = tip.magnitude();
+        float start_r = player.get_radius() + 8;
+        if (dist > start_r + 4) {
             RenderContext context(&renderer);
             renderer.reset_transform();
-            renderer.translate(renderer.width/2,renderer.height/2);
+            renderer.translate(renderer.width / 2, renderer.height / 2);
             renderer.scale(Ui::scale);
-            uint8_t alpha = (uint8_t) (fclamp((dist - player.get_radius() - 80) / 80, 0, 1) * 255 * 0.15);
-            delta.set_magnitude(player.get_radius() + 40);
-            renderer.set_line_width(18);
-            renderer.round_line_cap();
-            renderer.round_line_join();
-            renderer.set_stroke(alpha << 24);
-            renderer.begin_path();
-            renderer.move_to(delta.x,delta.y);
-            renderer.line_to(norm_mouse_x,norm_mouse_y);
-            renderer.translate(norm_mouse_x,norm_mouse_y);
-            renderer.rotate(delta.angle());
-            renderer.rotate(2.5);
-            renderer.move_to(0,0);
-            renderer.line_to(40,0);
-            renderer.rotate(-5);
-            renderer.move_to(0,0);
-            renderer.line_to(40,0);
-            renderer.stroke();
+            Vector start = tip;
+            start.set_magnitude(start_r);
+            float ang = tip.angle();
+            float c = cosf(ang), s = sinf(ang);
+            auto draw_antenna = [&](uint32_t color, float lw, float head) {
+                renderer.set_stroke(color);
+                renderer.set_line_width(lw);
+                renderer.round_line_cap();
+                renderer.round_line_join();
+                renderer.begin_path();
+                renderer.move_to(start.x, start.y);
+                renderer.line_to(mx, my);
+                float bx = mx - c * head, by = my - s * head;
+                float px = -s * head * 0.55f, py = c * head * 0.55f;
+                renderer.move_to(mx, my);
+                renderer.line_to(bx + px, by + py);
+                renderer.move_to(mx, my);
+                renderer.line_to(bx - px, by - py);
+                renderer.stroke();
+            };
+            draw_antenna(0x99000000, 3.5f, 16);
+            draw_antenna(0xbbcccccc, 2.2f, 14);
         }
     }
 

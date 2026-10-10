@@ -92,3 +92,19 @@ void DOM::open_page(char const *url) {
         } catch(e) {}
     }, url);
 }
+
+void DOM::focus_element(char const *name) {
+    EM_ASM({
+        const elem = document.getElementById(UTF8ToString($0));
+        if (!elem) return;
+        elem.focus();
+        try { elem.setSelectionRange(elem.value.length, elem.value.length); } catch (e) {}
+    }, name);
+}
+
+void DOM::blur_active() {
+    EM_ASM({
+        if (document.activeElement && document.activeElement.blur)
+            document.activeElement.blur();
+    });
+}

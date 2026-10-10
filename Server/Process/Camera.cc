@@ -1,5 +1,8 @@
 #include <Server/Process.hh>
 
+#include <Server/Client.hh>
+#include <Server/Server.hh>
+
 #include <Shared/Entity.hh>
 #include <Shared/Map.hh>
 #include <Shared/Simulation.hh>
@@ -15,7 +18,8 @@ void tick_camera_behavior(Simulation *sim, Entity &ent) {
             player.set_angle(player.acceleration.angle());
 
         ent.last_damaged_by = player.last_damaged_by;
-        struct ZoneDefinition const &zone = MAP_DATA[Map::get_zone_from_pos(player.get_x(), player.get_y())];
+        uint32_t zid = Map::get_zone_from_pos(sim->map_id, player.get_x(), player.get_y());
+        struct ZoneDefinition const &zone = map_zones(sim->map_id)[zid];
         if (zone.difficulty < Map::difficulty_at_level(score_to_level(player.get_score()))) {
             if (player.get_overlevel_timer() < PETAL_DISABLE_DELAY * TPS)
                 player.set_overlevel_timer(player.get_overlevel_timer() + 1);
@@ -32,6 +36,13 @@ void tick_camera_behavior(Simulation *sim, Entity &ent) {
         }
         ent.set_player(NULL_ENTITY);
         ent.set_fov(BASE_FOV * 0.9);
+        if (Client *owner = Server::client_by_camera(sim, ent.id)) {
+            if (owner->awaiting_revive) {
+                ent.set_camera_x(owner->corpse_x);
+                ent.set_camera_y(owner->corpse_y);
+                return;
+            }
+        }
         if (sim->ent_exists(ent.last_damaged_by)){
             Entity &spectating = sim->get_ent(ent.last_damaged_by);
             ent.set_camera_x(spectating.get_x());
