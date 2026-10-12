@@ -39,6 +39,12 @@ public:
     uint64_t last_chat_ms = 0;
     uint32_t party_id = 0;
     uint8_t party_leader = 0;
+    std::string pending_party_from;
+    uint32_t pending_party_ttl = 0;
+    std::string guild_name;
+    uint8_t guild_leader = 0;
+    std::string pending_guild_from;
+    uint32_t pending_guild_ttl = 0;
     uint8_t awaiting_revive = 0;
     float corpse_x = 0;
     float corpse_y = 0;

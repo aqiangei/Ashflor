@@ -3,6 +3,7 @@
 #include <Server/AccountStore.hh>
 #include <Server/LeaderboardStore.hh>
 #include <Server/Client.hh>
+#include <Server/Guild.hh>
 #include <Server/Party.hh>
 #include <Server/PetalTracker.hh>
 #include <Server/Server.hh>
@@ -92,6 +93,7 @@ void GameInstance::init(uint8_t id) {
 void GameInstance::tick() {
     simulation.tick();
     Party::tick(this);
+    Guild::tick(this);
     for (Client *client : clients)
         _update_client(&simulation, client);
     simulation.post_tick();
@@ -164,6 +166,7 @@ void GameInstance::remove_client(Client *client) {
     AccountStore::capture(client);
     AccountStore::logout(client);
     Party::leave(client);
+    Guild::leave(client);
     clients.erase(client);
     _teardown_camera(this, client);
     client->game = nullptr;

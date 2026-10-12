@@ -43,6 +43,7 @@ set(SRCS
     Ui/InGame/OverlevelTimer.cc
     Ui/InGame/PauseMenu.cc
     Ui/InGame/Chat.cc
+    Ui/InGame/Social.cc
     Ui/InGame/GamePanels.cc
     Ui/InGame/Tooltip.cc
     Ui/TitleScreen/Changelog.cc

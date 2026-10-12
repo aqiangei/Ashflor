@@ -126,6 +126,7 @@ public:
 
 #define STORED \
     X(0, Game::nickname) \
+    X(18, Game::guest_id) \
     X(1, Game::seen_mobs) \
     X(2, Game::seen_petals) \
     X(3, Input::keyboard_movement) \
@@ -182,8 +183,17 @@ void Storage::retrieve() {
                 I18n::use_chinese = BitMath::at(opts, 2);
             else
                 I18n::use_chinese = 1;
-            Input::invert_attack = BitMath::at(opts, 4);
-            Input::invert_defend = BitMath::at(opts, 5);
+            // Either bit from older clients ⇒ swapped; keep both flags equal
+            uint8_t swapped = BitMath::at(opts, 4) | BitMath::at(opts, 5);
+            Input::invert_attack = swapped;
+            Input::invert_defend = swapped;
+        }
+    }
+    {
+        uint32_t len = StorageProtocol::retrieve("guest_id", sizeof(uint32_t) * MAX_NAME_LENGTH + 4);
+        if (len > 0 && len <= sizeof(uint32_t) * MAX_NAME_LENGTH + 4) {
+            Decoder reader(&StorageProtocol::buffer[0]);
+            Game::guest_id = reader.read<std::string>();
         }
     }
     {
@@ -193,6 +203,11 @@ void Storage::retrieve() {
             Game::nickname = reader.read<std::string>();
         }
     }
+    // Migrate old free-form nicknames: only keep if already a valid guest id
+    if (Game::guest_id.empty() && Game::nickname.size() == 8
+        && Game::nickname[0] == 'G' && Game::nickname[1] == '#')
+        Game::guest_id = Game::nickname;
+    Game::ensure_guest_id();
     {
         uint32_t len = StorageProtocol::retrieve("username", sizeof(uint32_t) * MAX_USERNAME_LENGTH + 4);
         if (len > 0 && len <= sizeof(uint32_t) * MAX_USERNAME_LENGTH + 4) {
@@ -284,6 +299,11 @@ void Storage::set() {
         for (MobID::T id = 0; id < MobID::kNumMobs; ++id)
             if (Game::seen_mobs[id]) writer.write<uint8_t>(id);
         StorageProtocol::store("mobs", writer.at - writer.base);
+    }
+    {
+        Encoder writer(&StorageProtocol::buffer[0]);
+        writer.write<std::string>(Game::guest_id);
+        StorageProtocol::store("guest_id", writer.at - writer.base);
     }
     {
         Encoder writer(&StorageProtocol::buffer[0]);

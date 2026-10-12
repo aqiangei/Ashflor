@@ -39,8 +39,9 @@ namespace Input {
     extern uint8_t freeze_input;
     extern uint8_t movement_helper;
     extern uint8_t keyboard_movement;
-    extern uint8_t invert_attack;  // use default defend inputs for attack
-    extern uint8_t invert_defend;  // use default attack inputs for defend
+    // Either flag means full swap: attack↔defend bindings (kept in sync in Game.cc)
+    extern uint8_t invert_attack;
+    extern uint8_t invert_defend;
     extern uint8_t is_mobile;
     //use these for game inputs that can be held down
     extern std::unordered_set<char> keys_held;

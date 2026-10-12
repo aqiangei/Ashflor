@@ -72,12 +72,48 @@ WebSocketServer::WebSocketServer() {
                     encodeType = "application/javascript; charset=utf-8";
                     file = "sw.js";
                     break;
+                case "/favicon.svg":
+                    encodeType = "image/svg+xml";
+                    file = "favicon.svg";
+                    break;
+                case "/favicon.ico":
+                    encodeType = "image/png";
+                    file = "favicon-32.png";
+                    break;
+                case "/favicon-32.png":
+                    encodeType = "image/png";
+                    file = "favicon-32.png";
+                    break;
+                case "/favicon-48.png":
+                    encodeType = "image/png";
+                    file = "favicon-48.png";
+                    break;
+                case "/favicon-96.png":
+                    encodeType = "image/png";
+                    file = "favicon-96.png";
+                    break;
+                case "/favicon-192.png":
+                    encodeType = "image/png";
+                    file = "favicon-192.png";
+                    break;
+                case "/favicon-512.png":
+                    encodeType = "image/png";
+                    file = "favicon-512.png";
+                    break;
+                case "/apple-touch-icon.png":
+                    encodeType = "image/png";
+                    file = "apple-touch-icon.png";
+                    break;
+                case "/site.webmanifest":
+                    encodeType = "application/manifest+json";
+                    file = "site.webmanifest";
+                    break;
                 default:
                     file = "";
                     break;
             }
             if (file && fs.existsSync(file)) {
-                // HTML/SW: revalidate. JS/WASM: long-cache (URLs already bust with ?v=)
+                // HTML/SW: revalidate. Icons + JS/WASM: long-cache
                 const cacheCtl = (file === "index.html" || file === "sw.js")
                     ? "no-cache"
                     : "public, max-age=31536000, immutable";
@@ -127,6 +163,15 @@ WebSocketServer::WebSocketServer() {
         const wss = new WSS.Server({ "server": server });
         Module.ws_connections = {};
         let curr_id = 0;
+        // Protocol ping keeps nginx / mobile NATs from dropping "idle" sockets
+        setInterval(function() {
+            const map = Module.ws_connections || {};
+            for (const id in map) {
+                const ws = map[id];
+                if (!ws || ws.readyState !== 1) continue;
+                try { ws.ping(); } catch (e) {}
+            }
+        }, 15000);
         wss.on("connection", function(ws, req) {
             const ws_id = curr_id;
             Module.ws_connections[ws_id] = ws;
@@ -143,6 +188,7 @@ WebSocketServer::WebSocketServer() {
                 _on_disconnect(ws_id, reason);
                 delete Module.ws_connections[ws_id];
             });
+            ws.on("error", function() {});
         })
     }, SERVER_PORT, INCOMING_BUFFER, MAX_BUFFER_LEN);
 }
@@ -163,9 +209,12 @@ WebSocket::WebSocket(int id) : ws_id(id) {
 }
 
 void WebSocket::send(uint8_t const *packet, size_t size) {
+    // Skip when client is frozen in background — flooding → OS kills with 1006
     EM_ASM({
         if (!Module.ws_connections || !Module.ws_connections[$0]) return;
         const ws = Module.ws_connections[$0];
+        if (ws.readyState !== 1) return;
+        if (ws.bufferedAmount > 256 * 1024) return;
         ws.send(HEAPU8.subarray($1,$1+$2));
     }, ws_id, packet, size);
 }

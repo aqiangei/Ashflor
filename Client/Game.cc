@@ -4,6 +4,7 @@
 #include <Client/Input.hh>
 #include <Client/Particle.hh>
 #include <Client/Setup.hh>
+#include <Client/Socket.hh>
 #include <Client/Storage.hh>
 #include <Client/Ui/Extern.hh>
 #include <Client/Ui/InGame/GameInfo.hh>
@@ -36,6 +37,7 @@ namespace Game {
     EntityID camera_id;
     EntityID player_id;
     std::string nickname;
+    std::string guest_id;
     std::string username;
     std::string password;
     std::string account_status;
@@ -82,6 +84,14 @@ namespace Game {
     uint8_t party_member_count = 0;
     uint8_t revive_progress = 0;
     uint8_t awaiting_party_revive = 0;
+    uint8_t invite_open = 0;
+    uint8_t invite_type = 0;
+    std::string invite_from;
+    std::string guild_name;
+    std::string guild_status;
+    uint8_t guild_member_count = 0;
+    uint8_t guild_panel_open = 0;
+    std::string guild_create_draft;
     std::array<uint32_t, PetalID::kNumPetals> craft_bank = {};
     uint32_t coins = 0;
     uint8_t guest_save_valid = 0;
@@ -99,6 +109,43 @@ namespace Game {
 }
 
 using namespace Game;
+
+static uint8_t guest_id_char_ok(char c) {
+    if (c >= 'A' && c <= 'Z') return (c != 'I' && c != 'O') ? 1 : 0;
+    if (c >= '2' && c <= '9') return 1;
+    return 0;
+}
+
+static uint8_t guest_id_valid(std::string const &id) {
+    if (id.size() != 8) return 0; // G# + 6
+    if (id[0] != 'G' || id[1] != '#') return 0;
+    for (size_t i = 2; i < id.size(); ++i)
+        if (!guest_id_char_ok(id[i])) return 0;
+    return 1;
+}
+
+static std::string make_guest_id() {
+    static char const alphabet[] = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+    constexpr uint32_t n = sizeof(alphabet) - 1;
+    std::string id = "G#";
+    for (int i = 0; i < 6; ++i) {
+        uint32_t r = (uint32_t) EM_ASM_INT({ return (Math.random() * 0x7fffffff) | 0; });
+        id.push_back(alphabet[r % n]);
+    }
+    return id;
+}
+
+void Game::ensure_guest_id() {
+    if (!guest_id_valid(guest_id))
+        guest_id = make_guest_id();
+    if (!account_logged_in)
+        nickname = guest_id;
+}
+
+std::string const &Game::guest_play_name() {
+    ensure_guest_id();
+    return guest_id;
+}
 
 void Game::init() {
     Input::is_mobile = check_mobile();
@@ -193,6 +240,12 @@ void Game::init() {
         Ui::make_chat_context_menu()
     );
     game_ui_window.add_child(
+        Ui::make_invite_toast()
+    );
+    game_ui_window.add_child(
+        Ui::make_guild_panel()
+    );
+    game_ui_window.add_child(
         Ui::make_game_side_buttons()
     );
     game_ui_window.add_child(
@@ -255,6 +308,14 @@ void Game::reset() {
     party_member_count = 0;
     revive_progress = 0;
     awaiting_party_revive = 0;
+    invite_open = 0;
+    invite_type = 0;
+    invite_from.clear();
+    guild_name.clear();
+    guild_status.clear();
+    guild_member_count = 0;
+    guild_panel_open = 0;
+    guild_create_draft.clear();
     account_logged_in = 0;
     pending_auto_login = 0;
     account_status.clear();
@@ -410,12 +471,70 @@ void Game::chat_menu_invite() {
     party_invite_name(name);
 }
 
+void Game::chat_menu_invite_guild() {
+    if (chat_menu_name.empty()) return;
+    std::string name = chat_menu_name;
+    close_chat_menu();
+    guild_invite_name(name);
+}
+
 void Game::chat_menu_whisper() {
     if (chat_menu_name.empty()) return;
     chat_whisper_to = chat_menu_name;
     chat_channel = ChatChannel::kChatWhisper;
     close_chat_menu();
     if (!chat_open) open_chat();
+}
+
+void Game::invite_respond(uint8_t accept) {
+    if (!invite_open || invite_from.empty()) return;
+    if (!socket.ready) return;
+    Writer writer(static_cast<uint8_t *>(OUTGOING_PACKET));
+    writer.write<uint8_t>(Serverbound::kInviteRespond);
+    writer.write<uint8_t>(invite_type);
+    writer.write<uint8_t>(accept ? 1 : 0);
+    writer.write<std::string>(invite_from);
+    socket.send(writer.packet, writer.at - writer.packet);
+    invite_open = 0;
+    invite_from.clear();
+}
+
+void Game::toggle_guild_panel() {
+    if (!alive()) return;
+    guild_panel_open = !guild_panel_open;
+    if (guild_panel_open) {
+        pause_menu_open = 0;
+        close_game_panel();
+        close_chat_menu();
+    }
+}
+
+void Game::close_guild_panel() {
+    guild_panel_open = 0;
+}
+
+void Game::guild_create() {
+    if (!socket.ready || !alive()) return;
+    if (guild_create_draft.empty()) return;
+    Writer writer(static_cast<uint8_t *>(OUTGOING_PACKET));
+    writer.write<uint8_t>(Serverbound::kGuildCreate);
+    writer.write<std::string>(guild_create_draft);
+    socket.send(writer.packet, writer.at - writer.packet);
+}
+
+void Game::guild_invite_name(std::string const &name) {
+    if (!socket.ready || !alive()) return;
+    Writer writer(static_cast<uint8_t *>(OUTGOING_PACKET));
+    writer.write<uint8_t>(Serverbound::kGuildInvite);
+    writer.write<std::string>(name);
+    socket.send(writer.packet, writer.at - writer.packet);
+}
+
+void Game::guild_leave() {
+    if (!socket.ready) return;
+    Writer writer(static_cast<uint8_t *>(OUTGOING_PACKET));
+    writer.write<uint8_t>(Serverbound::kGuildLeave);
+    socket.send(writer.packet, writer.at - writer.packet);
 }
 
 void Game::toggle_pause() {
@@ -425,6 +544,10 @@ void Game::toggle_pause() {
         return;
     }
     if (chat_open) close_chat();
+    if (guild_panel_open) {
+        close_guild_panel();
+        return;
+    }
     if (game_panel != kPanelNone) {
         close_game_panel();
         return;
@@ -440,7 +563,10 @@ void Game::toggle_pause() {
 
 void Game::return_to_title() {
     close_game_panel();
+    close_guild_panel();
     close_chat();
+    invite_open = 0;
+    invite_from.clear();
     pause_menu_open = 0;
     leave_confirm_open = 0;
     on_game_screen = 0;
@@ -618,13 +744,19 @@ void Game::tick(double time) {
            Input::game_inputs.x = (Input::mouse_x - renderer.width / 2) / Ui::scale;
            Input::game_inputs.y = (Input::mouse_y - renderer.height / 2) / Ui::scale;
         }
+        // primary = Space / LMB; secondary = Shift / RMB (RMB suppressed while chat RMB menu open)
         uint8_t primary = Input::keys_held.contains(' ')
             || BitMath::at(Input::mouse_buttons_state, Input::LeftMouse);
-        uint8_t secondary = (Input::keys_held.contains('\x10')
-            || BitMath::at(Input::mouse_buttons_state, Input::RightMouse))
-            && !chat_menu_open && !chat_open;
-        uint8_t attack = Input::invert_attack ? secondary : primary;
-        uint8_t defend = Input::invert_defend ? primary : secondary;
+        uint8_t secondary = Input::keys_held.contains('\x10')
+            || (BitMath::at(Input::mouse_buttons_state, Input::RightMouse) && !chat_menu_open);
+        // Two toggles used to remap independently and could map BOTH actions onto
+        // the same key; server prefers attack so defend looked "broken", and with
+        // only invert_attack on, LMB did nothing. Treat either flag as full swap.
+        uint8_t swapped = Input::invert_attack | Input::invert_defend;
+        Input::invert_attack = swapped;
+        Input::invert_defend = swapped;
+        uint8_t attack = swapped ? secondary : primary;
+        uint8_t defend = swapped ? primary : secondary;
         Input::game_inputs.flags = (attack << InputFlags::kAttacking) | (defend << InputFlags::kDefending);
     }
 

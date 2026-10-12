@@ -183,6 +183,14 @@ Element *Ui::make_chat_context_menu() {
             { .fill = 0xff5a9fdb, .line_width = 3, .round_radius = 3 }
         ),
         new Ui::Button(150, 28,
+            new Ui::DynamicText(13, [](){ return I18n::tr(I18n::kChatInviteGuild); }),
+            [](Element *, uint8_t e){
+                if (e == Ui::kClick) Game::chat_menu_invite_guild();
+            },
+            nullptr,
+            { .fill = 0xff3d8bfd, .line_width = 3, .round_radius = 3 }
+        ),
+        new Ui::Button(150, 28,
             new Ui::DynamicText(13, [](){ return I18n::tr(I18n::kChatWhisper); }),
             [](Element *, uint8_t e){
                 if (e == Ui::kClick) Game::chat_menu_whisper();

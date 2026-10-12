@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="ashflor">
+  <!-- soft green tile so tab icon reads on light/dark chrome -->
+  <rect width="64" height="64" rx="14" fill="#1b4332"/>
+  <!-- five petals -->
+  <g transform="translate(32 32)">
+    <ellipse cx="0" cy="-18" rx="9" ry="14" fill="#ff6b6b" transform="rotate(0)"/>
+    <ellipse cx="0" cy="-18" rx="9" ry="14" fill="#ffd93d" transform="rotate(72)"/>
+    <ellipse cx="0" cy="-18" rx="9" ry="14" fill="#6bcb77" transform="rotate(144)"/>
+    <ellipse cx="0" cy="-18" rx="9" ry="14" fill="#4d96ff" transform="rotate(216)"/>
+    <ellipse cx="0" cy="-18" rx="9" ry="14" fill="#c77dff" transform="rotate(288)"/>
+    <!-- flower face -->
+    <circle r="14" fill="#ffe763"/>
+    <circle r="12.5" fill="#ffe763" stroke="#cfbb50" stroke-width="1.5"/>
+    <ellipse cx="-5" cy="-2.5" rx="2.4" ry="4.2" fill="#222"/>
+    <ellipse cx="5" cy="-2.5" rx="2.4" ry="4.2" fill="#222"/>
+    <circle cx="-3.8" cy="-2.5" r="1.1" fill="#fff"/>
+    <circle cx="6.2" cy="-2.5" r="1.1" fill="#fff"/>
+    <path d="M -4.5 5.5 Q 0 9 4.5 5.5" fill="none" stroke="#222" stroke-width="1.6" stroke-linecap="round"/>
+  </g>
+</svg>

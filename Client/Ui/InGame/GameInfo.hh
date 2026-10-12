@@ -66,6 +66,9 @@ namespace Ui {
     Element *make_leave_confirm();
     Element *make_chat_panel();
     Element *make_chat_context_menu();
+    Element *make_invite_toast();
+    Element *make_guild_panel();
+    Element *make_guild_top_button();
     Element *make_game_side_buttons();
     Element *make_inventory_panel();
     Element *make_talents_panel();

@@ -2,6 +2,7 @@
 
 #include <Server/Client.hh>
 #include <Server/Game.hh>
+#include <Server/Guild.hh>
 #include <Server/Party.hh>
 #include <Server/Server.hh>
 
@@ -105,11 +106,11 @@ void Chat::handle(Client *client, uint8_t channel, std::string const &target, st
     }
 
     if (channel == ChatChannel::kChatGuild) {
-        // Guild system not implemented yet: treat as server-wide channel
-        for (Client *c : client->game->clients) {
-            if (c != nullptr && c->verified)
-                send_to(c, ChatChannel::kChatGuild, name, text);
+        if (client->guild_name.empty()) {
+            send_to(client, ChatChannel::kChatSystem, "", "你还没有公会。");
+            return;
         }
+        Guild::broadcast_chat(client, name, text);
         return;
     }
 

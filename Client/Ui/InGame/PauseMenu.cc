@@ -64,7 +64,6 @@ Element *Ui::make_pause_menu() {
         pause_toggle_row(&Input::keyboard_movement, I18n::kKeyboardMovement),
         pause_toggle_row(&Input::movement_helper, I18n::kMovementHelper),
         pause_toggle_row(&Input::invert_attack, I18n::kInvertAttack),
-        pause_toggle_row(&Input::invert_defend, I18n::kInvertDefend),
         new Ui::DynamicText(18, [](){ return I18n::tr(I18n::kEscHint); }, {
             .fill = 0xffdddddd,
             .h_justify = Style::Left
@@ -236,8 +235,11 @@ Element *Ui::make_game_topbar() {
         { .fill = 0xffe03a3a, .line_width = 4, .round_radius = 8 }
     );
 
+    Element *guild_btn = Ui::make_guild_top_button();
+
     Element *elt = new Ui::HContainer({
         gear,
+        guild_btn,
         mob_btn,
         trophy_btn,
         changelog_btn,

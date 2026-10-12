@@ -4,6 +4,7 @@
 #include <Server/Chat.hh>
 #include <Server/Game.hh>
 #include <Server/LeaderboardStore.hh>
+#include <Server/Guild.hh>
 #include <Server/Party.hh>
 #include <Server/PetalTracker.hh>
 #include <Server/Server.hh>
@@ -98,6 +99,50 @@ static void bank_petal(Client *client, PetalID::T id) {
     send_craft_update(client, CraftResultCode::kCraftBankSync, PetalID::kNone);
 }
 
+// Secondary + pure bag slots (not primary): [loadout, loadout+MAX)
+static uint32_t count_bag_mats(Client *client, PetalID::T id) {
+    if (!client->alive() || id == PetalID::kNone || id >= PetalID::kNumPetals) return 0;
+    Simulation *simulation = &client->game->simulation;
+    Entity &camera = simulation->get_ent(client->camera);
+    Entity &player = simulation->get_ent(camera.get_player());
+    uint32_t loadout = player.get_loadout_count();
+    uint32_t end = loadout + MAX_SLOT_COUNT;
+    uint32_t n = 0;
+    for (uint32_t i = loadout; i < end; ++i)
+        if (player.get_loadout_ids(i) == id) ++n;
+    return n;
+}
+
+static uint32_t craft_owned(Client *client, PetalID::T id) {
+    if (id == PetalID::kNone || id >= PetalID::kNumPetals) return 0;
+    return client->craft_bank[id] + count_bag_mats(client, id);
+}
+
+// Consume from craft_bank first, then secondary/pure-bag slots (high index first).
+static uint8_t consume_craft_mats(Client *client, PetalID::T id, uint32_t amount) {
+    if (amount == 0) return 1;
+    if (id == PetalID::kNone || id >= PetalID::kNumPetals) return 0;
+    if (craft_owned(client, id) < amount) return 0;
+    uint32_t from_bank = amount;
+    if (from_bank > client->craft_bank[id]) from_bank = client->craft_bank[id];
+    client->craft_bank[id] -= from_bank;
+    amount -= from_bank;
+    if (amount == 0) return 1;
+    if (!client->alive()) return 0;
+    Simulation *simulation = &client->game->simulation;
+    Entity &camera = simulation->get_ent(client->camera);
+    Entity &player = simulation->get_ent(camera.get_player());
+    uint32_t loadout = player.get_loadout_count();
+    uint32_t end = loadout + MAX_SLOT_COUNT;
+    for (uint32_t i = end; i-- > loadout && amount > 0;) {
+        if (player.get_loadout_ids(i) != id) continue;
+        player.set_loadout_ids(i, PetalID::kNone);
+        PetalTracker::remove_petal(simulation, id);
+        --amount;
+    }
+    return amount == 0 ? 1 : 0;
+}
+
 // Prefer empty backpack slots, then empty primary; track uniques
 static uint8_t try_give_petal(Client *client, PetalID::T id) {
     if (!client->alive()) {
@@ -168,14 +213,10 @@ void Client::on_message(WebSocket *ws, std::string_view message, uint64_t code) 
         }
         {
             uint64_t got = reader.read<uint64_t>();
-            // Temporarily accept recent hashes so cached tabs can get in;
-            // new deploys still ship VERSION_HASH and cache-busted assets.
+            // Accept current hash, plus a recent window so cached tabs / SW
+            // survive rapid deploys (not a reverse-proxy issue).
             uint8_t ok = (got == VERSION_HASH)
-                || (got == 19235684321350ull)
-                || (got == 19235684321333ull)
-                || (got == 19235684321332ull)
-                || (got == 19235684321331ull)
-                || (got == 19235684321330ull);
+                || (got < VERSION_HASH && VERSION_HASH - got <= 300ull);
             if (!ok) {
                 std::printf("outdated client hash=%llu expect=%llu\n",
                     (unsigned long long) got, (unsigned long long) VERSION_HASH);
@@ -238,7 +279,37 @@ void Client::on_message(WebSocket *ws, std::string_view message, uint64_t code) 
             if (client->check_invalid(UTF8Parser::is_valid_utf8(name))) return;
             uint8_t map_id = reader.read<uint8_t>();
             if (map_id >= MapID::kNumMaps) map_id = MapID::kGarden;
-            if (!client->account_name.empty()) name = client->account_name;
+            if (!client->account_name.empty()) {
+                name = client->account_name;
+            } else {
+                // Guests: fixed G#XXXXXX only — ignore free-form names
+                auto guest_tag_ok = [](std::string const &s) -> uint8_t {
+                    if (s.size() != 8 || s[0] != 'G' || s[1] != '#') return 0;
+                    for (size_t i = 2; i < s.size(); ++i) {
+                        char c = s[i];
+                        if (c >= 'A' && c <= 'Z' && c != 'I' && c != 'O') continue;
+                        if (c >= '2' && c <= '9') continue;
+                        return 0;
+                    }
+                    return 1;
+                };
+                if (!guest_tag_ok(name)) {
+                    // Assign a unique server guest id (does not occupy account names)
+                    static uint32_t next_guest = 100000;
+                    char buf[16];
+                    static char const alphabet[] = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+                    do {
+                        uint32_t n = next_guest++;
+                        buf[0] = 'G'; buf[1] = '#';
+                        for (int i = 0; i < 6; ++i) {
+                            buf[2 + i] = alphabet[n % 32];
+                            n /= 32;
+                        }
+                        buf[8] = 0;
+                        name = buf;
+                    } while (LeaderboardStore::name_taken(name, client));
+                }
+            }
             if (client->account_name.empty() && AccountStore::name_reserved_for_guest(name)) {
                 Writer writer(Server::OUTGOING_PACKET);
                 writer.write<uint8_t>(Clientbound::kSpawnResult);
@@ -246,7 +317,7 @@ void Client::on_message(WebSocket *ws, std::string_view message, uint64_t code) 
                 client->send_packet(writer.packet, writer.at - writer.packet);
                 break;
             }
-            // Unique play names across all maps (empty / unnamed allowed)
+            // Unique play names across all maps
             if (!name.empty() && LeaderboardStore::name_taken(name, client)) {
                 Writer writer(Server::OUTGOING_PACKET);
                 writer.write<uint8_t>(Clientbound::kSpawnResult);
@@ -275,6 +346,7 @@ void Client::on_message(WebSocket *ws, std::string_view message, uint64_t code) 
                 LeaderboardStore::record(name, player.get_score(), player.get_color());
             Party::apply_team(client);
             Party::send_update(client);
+            Guild::send_update(client);
             break;
         }
         case Serverbound::kAccountAuth: {
@@ -416,11 +488,10 @@ void Client::on_message(WebSocket *ws, std::string_view message, uint64_t code) 
             uint8_t rarity = PETAL_DATA[from].rarity;
             if (mode == CraftMode::kCraftExchange) {
                 uint32_t cost = Craft::exchange_cost(rarity);
-                if (client->craft_bank[from] < cost) {
+                if (!consume_craft_mats(client, from, cost)) {
                     send_craft_update(client, CraftResultCode::kCraftNoMats, PetalID::kNone);
                     break;
                 }
-                client->craft_bank[from] -= cost;
                 if (client->craft_attempts < 4000000000u)
                     ++client->craft_attempts;
                 PetalID::T got = Craft::craft_result(from);
@@ -433,8 +504,8 @@ void Client::on_message(WebSocket *ws, std::string_view message, uint64_t code) 
             uint32_t done = 0;
             uint32_t wins = 0;
             PetalID::T last_got = PetalID::kNone;
-            while (done < max_batches && client->craft_bank[from] >= Craft::kCraftBatch) {
-                client->craft_bank[from] -= Craft::kCraftBatch;
+            while (done < max_batches && craft_owned(client, from) >= Craft::kCraftBatch) {
+                if (!consume_craft_mats(client, from, Craft::kCraftBatch)) break;
                 ++done;
                 if (client->craft_attempts < 4000000000u)
                     ++client->craft_attempts;
@@ -498,6 +569,43 @@ void Client::on_message(WebSocket *ws, std::string_view message, uint64_t code) 
             Party::leave(client);
             break;
         }
+        case Serverbound::kInviteRespond: {
+            if (!client->alive()) break;
+            if (client->check_invalid(
+                validator.validate_uint8() &&
+                validator.validate_uint8() &&
+                validator.validate_string(MAX_NAME_LENGTH)
+            )) return;
+            uint8_t type = reader.read<uint8_t>();
+            uint8_t accept = reader.read<uint8_t>();
+            std::string from_name;
+            reader.read<std::string>(from_name);
+            if (type == InviteType::kInviteGuild)
+                Guild::respond(client, from_name, accept ? 1 : 0);
+            else
+                Party::respond(client, from_name, accept ? 1 : 0);
+            break;
+        }
+        case Serverbound::kGuildCreate: {
+            if (!client->alive()) break;
+            if (client->check_invalid(validator.validate_string(Guild::kNameMax))) return;
+            std::string name;
+            reader.read<std::string>(name);
+            Guild::create(client, name);
+            break;
+        }
+        case Serverbound::kGuildInvite: {
+            if (!client->alive()) break;
+            if (client->check_invalid(validator.validate_string(MAX_NAME_LENGTH))) return;
+            std::string target;
+            reader.read<std::string>(target);
+            Guild::invite(client, target);
+            break;
+        }
+        case Serverbound::kGuildLeave: {
+            Guild::leave(client);
+            break;
+        }
         case Serverbound::kAccountLogout: {
             if (client->account_name.empty()) break;
             // Persist progress first; never delete the account row
@@ -512,6 +620,7 @@ void Client::on_message(WebSocket *ws, std::string_view message, uint64_t code) 
             client->coins = 0;
             client->craft_attempts = 0;
             Party::leave(client);
+            Guild::leave(client);
             Writer writer(Server::OUTGOING_PACKET);
             writer.write<uint8_t>(Clientbound::kAccountResult);
             writer.write<uint8_t>(AccountResultCode::kAccountLoggedOut);
@@ -569,6 +678,9 @@ void Client::on_message(WebSocket *ws, std::string_view message, uint64_t code) 
             send_talent_update(client);
             break;
         }
+        case Serverbound::kHeartbeat:
+            // Keepalive from background tabs (rAF frozen). No payload.
+            break;
     }
 }
 

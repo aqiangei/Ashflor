@@ -29,7 +29,6 @@
 #include <cstring>
 #include <format>
 #include <string>
-#include <unordered_map>
 #include <vector>
 
 #ifndef M_PI
@@ -369,49 +368,6 @@ static uint8_t shift_alt_held() {
     return Input::keys_held.contains('\x10') && Input::keys_held.contains((char) 18);
 }
 
-struct CraftFamilyRow {
-    char const *name = "";
-    PetalID::T by_rarity[RarityID::kNumRarities] = {};
-};
-
-static std::vector<CraftFamilyRow> const &craft_family_rows() {
-    static std::vector<CraftFamilyRow> rows;
-    static uint8_t inited = 0;
-    if (!inited) {
-        std::unordered_map<std::string, size_t> idx;
-        for (PetalID::T id = 1; id < PetalID::kNumPetals; ++id) {
-            char const *name = PETAL_DATA[id].name;
-            auto it = idx.find(name);
-            size_t i;
-            if (it == idx.end()) {
-                i = rows.size();
-                idx[name] = i;
-                CraftFamilyRow row;
-                row.name = name;
-                for (uint8_t r = 0; r < RarityID::kNumRarities; ++r)
-                    row.by_rarity[r] = PetalID::kNone;
-                rows.push_back(row);
-            } else {
-                i = it->second;
-            }
-            uint8_t rarity = PETAL_DATA[id].rarity;
-            if (rarity < RarityID::kNumRarities)
-                rows[i].by_rarity[rarity] = id;
-        }
-        std::stable_sort(rows.begin(), rows.end(), [](CraftFamilyRow const &a, CraftFamilyRow const &b){
-            uint8_t ra = 255, rb = 255;
-            for (uint8_t r = 0; r < RarityID::kNumRarities; ++r) {
-                if (a.by_rarity[r] != PetalID::kNone && ra == 255) ra = r;
-                if (b.by_rarity[r] != PetalID::kNone && rb == 255) rb = r;
-            }
-            if (ra != rb) return ra < rb;
-            return std::strcmp(a.name, b.name) < 0;
-        });
-        inited = 1;
-    }
-    return rows;
-}
-
 // Top pentagon tray
 class CraftTrayView final : public Element {
 public:
@@ -457,7 +413,16 @@ class CraftMatCell final : public Element {
     uint8_t holding = 0;
 public:
     CraftMatCell(PetalID::T id)
-        : Element(52, 58, { .no_animation = 1 }), petal_id(id) {
+        : Element(52, 58, {
+            // Only petals you actually own (bag stacks + material bank)
+            .should_render = [id](){
+                return Game::alive()
+                    && id != PetalID::kNone
+                    && id < PetalID::kNumPetals
+                    && Game::craft_owned(id) > 0;
+            },
+            .no_animation = 1
+        }), petal_id(id) {
         style.animate = [this](Element *, Renderer &){
             if (!holding) return;
             if (!(focus_state == kMouseDown)) {
@@ -486,6 +451,7 @@ public:
             ctx.fill();
             return;
         }
+        // Remaining not yet in tray (= bag + bank − tray)
         uint32_t shown = Game::craft_available(petal_id);
         uint8_t selected = (Game::craft_tray_id == petal_id);
         {
@@ -552,13 +518,33 @@ public:
 };
 
 static Element *make_craft_material_grid() {
-    auto const &rows = craft_family_rows();
+    // One cell per petal id; invisible when owned==0 so layout collapses to real inventory
+    std::vector<PetalID::T> ids;
+    for (PetalID::T id = 1; id < PetalID::kNumPetals; ++id)
+        ids.push_back(id);
+    std::stable_sort(ids.begin(), ids.end(), [](PetalID::T a, PetalID::T b){
+        uint8_t ra = PETAL_DATA[a].rarity, rb = PETAL_DATA[b].rarity;
+        if (ra != rb) return ra < rb;
+        return std::strcmp(PETAL_DATA[a].name, PETAL_DATA[b].name) < 0;
+    });
+    constexpr uint8_t kCols = 5;
     std::vector<Element *> vrows;
-    for (CraftFamilyRow const &row : rows) {
+    for (size_t i = 0; i < ids.size(); i += kCols) {
         std::vector<Element *> cells;
-        for (uint8_t r = 0; r < RarityID::kNumRarities; ++r)
-            cells.push_back(new CraftMatCell(row.by_rarity[r]));
-        vrows.push_back(new Ui::HContainer(cells, 0, 4, { .h_justify = Style::Left, .no_animation = 1 }));
+        std::vector<PetalID::T> row_ids;
+        for (uint8_t c = 0; c < kCols && i + c < ids.size(); ++c) {
+            row_ids.push_back(ids[i + c]);
+            cells.push_back(new CraftMatCell(ids[i + c]));
+        }
+        vrows.push_back(new Ui::HContainer(cells, 0, 4, {
+            .should_render = [row_ids](){
+                for (PetalID::T id : row_ids)
+                    if (Game::craft_owned(id) > 0) return true;
+                return false;
+            },
+            .h_justify = Style::Left,
+            .no_animation = 1
+        }));
     }
     Element *grid = new Ui::VContainer(vrows, 0, 4, { .h_justify = Style::Left, .no_animation = 1 });
     return new Ui::ScrollContainer(grid, 210);
@@ -732,12 +718,14 @@ Element *Ui::make_inventory_panel() {
         }, { .fill = 0xffffd24a }),
         make_bag_scroll(),
         new Ui::DynamicText(11, [](){
-            uint32_t n = 0;
-            for (PetalID::T id = 1; id < PetalID::kNumPetals; ++id)
-                n += Game::craft_bank[id];
+            uint32_t bank = 0, bag = 0;
+            for (PetalID::T id = 1; id < PetalID::kNumPetals; ++id) {
+                bank += Game::craft_bank[id];
+                bag += Game::craft_bag_count(id);
+            }
             return I18n::use_chinese
-                ? std::format("材料库花瓣 {}（合成面板 C）", n)
-                : std::format("{} banked petals (Craft C)", n);
+                ? std::format("材料库 {} · 可合成背包 {}（C）", bank, bag)
+                : std::format("bank {} · craftable bag {} (C)", bank, bag);
         }, { .fill = 0xffdddddd })
     }, 14, 8, {
         .fill = 0xe0286a9e,
@@ -894,8 +882,8 @@ Element *Ui::make_craft_panel() {
         }, 0, 12, { .h_justify = Style::Left }),
         new Ui::DynamicText(11, [](){
             return I18n::use_chinese
-                ? "将五个相同花瓣合成更高稀有度 · 连按加速 · Shift+Alt 全部放入"
-                : "5 identical → higher rarity · hold=faster · Shift+Alt=all";
+                ? "仅显示背包/材料库已有花瓣 · 五个相同合成更高一级 · Shift+Alt 放满"
+                : "Only owned petals (bag+bank) · 5→next rarity · Shift+Alt=all";
         }, { .fill = 0xff333333, .h_justify = Style::Left }),
         make_craft_material_grid(),
         new Ui::DynamicText(12, [](){ return Game::craft_status; }, {

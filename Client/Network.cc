@@ -43,6 +43,7 @@ void Game::on_message(uint8_t *ptr, uint32_t len) {
             if (account_logged_in) {
                 // In-game display name is always the account username (not editable)
                 nickname = username;
+                // Keep guest_id untouched so logout still has a fixed id
                 Game::respawn_level = level < 1 ? 1 : level;
                 auth_panel = 0;
                 for (uint32_t i = 0; i < 2 * MAX_SLOT_COUNT; ++i) {
@@ -72,6 +73,7 @@ void Game::on_message(uint8_t *ptr, uint32_t len) {
                 password.clear();
                 session_token = 0;
                 craft_tray_clear();
+                ensure_guest_id();
                 if (guest_save_valid) {
                     respawn_level = guest_level < 1 ? 1 : guest_level;
                     craft_bank = guest_craft_bank;
@@ -85,6 +87,7 @@ void Game::on_message(uint8_t *ptr, uint32_t len) {
                 send_guest_progress();
             } else if (was_auto && !account_logged_in) {
                 // Already online elsewhere or stale token → play as guest this connection
+                ensure_guest_id();
                 send_guest_progress();
             }
             break;
@@ -203,6 +206,29 @@ void Game::on_message(uint8_t *ptr, uint32_t len) {
             }
             break;
         }
+        case Clientbound::kInvitePrompt: {
+            invite_type = reader.read<uint8_t>();
+            reader.read<std::string>(invite_from);
+            invite_open = invite_from.empty() ? 0 : 1;
+            break;
+        }
+        case Clientbound::kGuildUpdate: {
+            reader.read<std::string>(guild_name);
+            uint8_t count = reader.read<uint8_t>();
+            guild_member_count = count;
+            guild_status.clear();
+            for (uint8_t i = 0; i < count; ++i) {
+                std::string name;
+                reader.read<std::string>(name);
+                uint8_t flags = reader.read<uint8_t>();
+                if (!guild_status.empty()) guild_status += ", ";
+                if (flags & 1) guild_status += "*";
+                guild_status += name;
+            }
+            if (count == 0)
+                guild_status = I18n::tr(I18n::kGuildEmpty);
+            break;
+        }
         default:
             break;
     }
@@ -270,7 +296,7 @@ void Game::spawn_in() {
     if (!account_logged_in && guest_save_valid)
         send_guest_progress();
     writer.write<uint8_t>(Serverbound::kClientSpawn);
-    std::string name = Game::account_logged_in ? Game::username : Game::nickname;
+    std::string name = Game::account_logged_in ? Game::username : Game::guest_play_name();
     writer.write<std::string>(name);
     uint8_t map_id = Game::selected_map;
     if (map_id >= MapID::kNumMaps) map_id = MapID::kGarden;

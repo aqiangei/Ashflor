@@ -137,27 +137,26 @@ Element *Ui::make_title_input_box() {
                         ? std::string{"游客模式 · 本机进度"}
                         : std::string{"Guest mode · local progress"};
                 }, { .fill = 0xfff4e9b3 }),
-                // Logged in: fixed account name. Guest: flower nickname input.
+                // Logged in: account name. Guest: fixed assigned id (no free-form name).
                 new Ui::Choose(
                     new Ui::VContainer({
-                        new Ui::DynamicText(20, [](){ return I18n::tr(I18n::kFlowerNamePrompt); }),
+                        new Ui::DynamicText(18, [](){
+                            return I18n::use_chinese
+                                ? std::string{"游客固定编号（不可自定义）"}
+                                : std::string{"Guest id (fixed, not editable)"};
+                        }, { .fill = 0xffdddddd }),
                         new Ui::HContainer({
-                            new Ui::TextInput(Game::nickname, 400, 50, MAX_NAME_LENGTH, {
-                                .line_width = 5,
-                                .round_radius = 5,
-                                .should_render = [](){
-                                    return !Game::account_logged_in
-                                        && !Game::in_game()
-                                        && Game::transition_circle <= 0;
-                                }
-                            }),
+                            new Ui::DynamicText(28, [](){
+                                Game::ensure_guest_id();
+                                return Game::guest_id;
+                            }, { .fill = 0xffffd24a }),
                             new Ui::Button(110, 36,
                                 new Ui::DynamicText(25, [](){ return I18n::tr(I18n::kSpawn); }),
                                 [](Element *, uint8_t e){ if (e == Ui::kClick) Game::spawn_in(); },
                                 [](){ return Game::in_game() != 0; },
                                 { .fill = 0xff1dd129, .line_width = 5, .round_radius = 3 }
                             )
-                        }, 0, 10, {})
+                        }, 0, 14, {})
                     }, 8, 8, { .no_animation = 1 }),
                     new Ui::VContainer({
                         new Ui::DynamicText(18, [](){

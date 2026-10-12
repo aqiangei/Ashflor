@@ -35,9 +35,9 @@ void LevelBar::on_render(Renderer &ctx) {
     float const bar_h = 32.f;
     float const bar_y = height / 2 - bar_h / 2; // bar sits in lower half
 
-    char const *display = Game::nickname.c_str();
-    if (Game::account_logged_in && !Game::username.empty())
-        display = Game::username.c_str();
+    char const *display = Game::account_logged_in && !Game::username.empty()
+        ? Game::username.c_str()
+        : Game::guest_play_name().c_str();
     ctx.translate(0, -height / 2 + 14);
     ctx.draw_text(display, { .size = 20 });
     ctx.translate(0, height / 2 - 14);

@@ -12,6 +12,8 @@
 #include <Shared/Simulation.hh>
 #include <Shared/StaticData.hh>
 
+#include <Helpers/UTF8.hh>
+
 #include <cmath>
 #include <vector>
 
@@ -216,15 +218,60 @@ uint8_t Party::invite(Client *from, std::string const &target_name) {
         notify(from, "[队伍] 队伍已满。");
         return 0;
     }
+    // Ensure inviter has a party shell so accept can join
     if (from->party_id == 0) {
         from->party_id = NEXT_PARTY_ID++;
         from->party_leader = 1;
         apply_team(from);
+        send_update(from);
+    }
+    target->pending_party_from = player_name(from);
+    target->pending_party_ttl = INVITE_TTL_TICKS;
+    Writer writer(Server::OUTGOING_PACKET);
+    writer.write<uint8_t>(Clientbound::kInvitePrompt);
+    writer.write<uint8_t>(InviteType::kInviteParty);
+    writer.write<std::string>(target->pending_party_from);
+    target->send_packet(writer.packet, writer.at - writer.packet);
+    notify(from, "[队伍] 已向 " + player_name(target) + " 发出组队邀请。");
+    notify(target, "[队伍] " + player_name(from) + " 邀请你组队。");
+    return 1;
+}
+
+uint8_t Party::respond(Client *target, std::string const &from_name, uint8_t accept) {
+    if (target == nullptr || !target->alive() || target->game == nullptr) return 0;
+    if (target->pending_party_from.empty() || target->pending_party_from != from_name) {
+        notify(target, "[队伍] 邀请已失效。");
+        return 0;
+    }
+    target->pending_party_from.clear();
+    target->pending_party_ttl = 0;
+    if (!accept) {
+        notify(target, "[队伍] 已拒绝组队邀请。");
+        Client *from = find_by_name(target->game, from_name);
+        if (from != nullptr)
+            notify(from, "[队伍] " + player_name(target) + " 拒绝了组队邀请。");
+        return 1;
+    }
+    if (target->party_id != 0) {
+        notify(target, "[队伍] 你已在队伍中。");
+        return 0;
+    }
+    Client *from = find_by_name(target->game, from_name);
+    if (from == nullptr || from->party_id == 0) {
+        notify(target, "[队伍] 邀请方已离队或不在线。");
+        return 0;
+    }
+    uint32_t count = 0;
+    for (Client *c : from->game->clients)
+        if (c != nullptr && c->party_id == from->party_id) ++count;
+    if (count >= MAX_SIZE) {
+        notify(target, "[队伍] 队伍已满。");
+        return 0;
     }
     target->party_id = from->party_id;
     target->party_leader = 0;
     apply_team(target);
-    std::string msg = "[队伍] " + player_name(from) + " 邀请了 " + player_name(target) + "。";
+    std::string msg = "[队伍] " + player_name(target) + " 加入了队伍。";
     for (Client *c : from->game->clients) {
         if (c != nullptr && c->party_id == from->party_id) {
             notify(c, msg);
@@ -284,6 +331,16 @@ static void do_revive(Client *dead) {
 void Party::tick(GameInstance *game) {
     if (game == nullptr) return;
     Simulation *sim = &game->simulation;
+    for (Client *c : game->clients) {
+        if (c == nullptr) continue;
+        if (c->pending_party_ttl > 0) {
+            --c->pending_party_ttl;
+            if (c->pending_party_ttl == 0 && !c->pending_party_from.empty()) {
+                notify(c, "[队伍] 组队邀请已过期。");
+                c->pending_party_from.clear();
+            }
+        }
+    }
     for (Client *dead : game->clients) {
         if (dead == nullptr || !dead->awaiting_revive) continue;
         if (dead->corpse_ttl > 0) --dead->corpse_ttl;

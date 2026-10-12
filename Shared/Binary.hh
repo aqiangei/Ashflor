@@ -13,7 +13,14 @@ enum Clientbound {
     kPartyUpdate,
     kCraftUpdate,
     kSpawnResult,
-    kTalentUpdate
+    kTalentUpdate,
+    kInvitePrompt, // type, from_name — pending party/guild invite toast
+    kGuildUpdate
+};
+
+enum InviteType : uint8_t {
+    kInviteParty = 0,
+    kInviteGuild = 1
 };
 
 enum SpawnResultCode : uint8_t {
@@ -34,7 +41,12 @@ enum Serverbound {
     kPetalCraft,
     kGuestProgress,
     kAccountLogout,
-    kTalentSpend
+    kTalentSpend,
+    kHeartbeat, // app-level keepalive (background tabs freeze rAF)
+    kInviteRespond, // type, accept(0/1), from_name
+    kGuildCreate,   // guild name
+    kGuildInvite,   // target player name
+    kGuildLeave
 };
 
 enum CraftMode : uint8_t {

@@ -12,10 +12,11 @@ uWS::App Server::server = uWS::App({
     /* Settings */
     .compression = uWS::DISABLED,
     .maxPayloadLength = 1024,
-    .idleTimeout = 15,
+    // 120s: background mobile tabs may pause JS for a while; pings keep proxies happy
+    .idleTimeout = 120,
     .maxBackpressure = 1024 * MAX_PACKET_LEN,
-    .closeOnBackpressureLimit = true,
-    .resetIdleTimeoutOnSend = false,
+    .closeOnBackpressureLimit = false,
+    .resetIdleTimeoutOnSend = true,
     .sendPingsAutomatically = true,
     /* Handlers */
     .upgrade = nullptr,

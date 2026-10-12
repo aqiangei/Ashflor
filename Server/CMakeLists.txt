@@ -28,6 +28,7 @@ set(SOURCES
     Game.cc
     LeaderboardStore.cc
     Main.cc
+    Guild.cc
     Party.cc
     PetalTracker.cc
     Server.cc

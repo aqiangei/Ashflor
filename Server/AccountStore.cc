@@ -121,6 +121,8 @@ uint64_t AccountStore::hash_password(std::string const &username, std::string co
 
 uint8_t AccountStore::valid_username(std::string const &s) {
     if (s.size() < 3 || s.size() > MAX_USERNAME_LENGTH) return 0;
+    // Guest ids (G#XXXXXX) are reserved — cannot register as account names
+    if (s.size() >= 2 && s[0] == 'G' && s[1] == '#') return 0;
     for (unsigned char c : s) {
         if (!(std::isalnum(c) || c == '_')) return 0;
     }

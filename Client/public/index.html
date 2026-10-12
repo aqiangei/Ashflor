@@ -240,6 +240,13 @@
         <meta name="viewport" content="user-scalable=no, width=device-width, height=device-height, initial-scale=1, shrink-to-fit=no, viewport-fit=cover">
         <meta name="mobile-web-app-capable" content="yes">
         <meta name="apple-mobile-web-app-capable" content="yes">
+        <meta name="theme-color" content="#1b4332">
+        <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+        <link rel="icon" href="/favicon-32.png" type="image/png" sizes="32x32">
+        <link rel="icon" href="/favicon-48.png" type="image/png" sizes="48x48">
+        <link rel="icon" href="/favicon-192.png" type="image/png" sizes="192x192">
+        <link rel="apple-touch-icon" href="/apple-touch-icon.png" sizes="180x180">
+        <link rel="manifest" href="/site.webmanifest">
         <title>ashflor.io</title>
     </head>
     <body>
@@ -321,7 +328,7 @@
         })();
 
         document.addEventListener("DOMContentLoaded", () => {
-            var cacheV = '21416';
+            var cacheV = '21475';
             var hidden = false;
             var loadingEl = document.getElementById("loading");
             var trackEl = document.getElementById("loading-track");
@@ -537,21 +544,70 @@
                     petals = [];
                 }
 
+                // Pending wait text if disconnect arrives before first paint
+                var pendingWaitMsg = null;
+                var waitDelayTimer = 0;
+                var everOnline = false; // after first good packet: redeploy/stop must show wait UI
+                // Short blips (tab switch) stay quiet; deploy kill is usually 1006 and <2s
+                var WAIT_DELAY_MS = 500;
+                var WAIT_DELAY_FIRST_MS = 1800; // never connected yet (first-load fail)
+
                 Module.showReconnectOverlay = function (msg) {
-                    if (!hidden) return; // still on first load screen
                     var text = msg || "连接断开，正在重连";
-                    if (msgEl) {
-                        msgEl.innerHTML = text +
-                            '<span class="dots"><span>.</span><span>.</span><span>.</span></span>';
+                    // Still loading assets: keep original loader, never mini-game
+                    if (!hidden) {
+                        pendingWaitMsg = text;
+                        setLoadingMessage(
+                            text.indexOf("Ctrl+F5") >= 0 ? text : "服务器暂不可用，正在重试",
+                            text.indexOf("Ctrl+F5") < 0
+                        );
+                        return;
                     }
-                    overlay.classList.add("show");
-                    overlay.setAttribute("aria-hidden", "false");
-                    startGame();
+                    pendingWaitMsg = null;
+                    // Instant: outdated tip, redeploy/stop copy, or already showing
+                    var immediate = text.indexOf("Ctrl+F5") >= 0 || text.indexOf("强制刷新") >= 0
+                        || text.indexOf("停服") >= 0 || text.indexOf("更新") >= 0
+                        || everOnline;
+                    if (waitDelayTimer) {
+                        clearTimeout(waitDelayTimer);
+                        waitDelayTimer = 0;
+                    }
+                    function reveal() {
+                        waitDelayTimer = 0;
+                        var showDots = text.indexOf("Ctrl+F5") < 0 && text.indexOf("强制刷新") < 0;
+                        if (msgEl) {
+                            msgEl.innerHTML = showDots
+                                ? (text + '<span class="dots"><span>.</span><span>.</span><span>.</span></span>')
+                                : text;
+                        }
+                        overlay.classList.add("show");
+                        overlay.setAttribute("aria-hidden", "false");
+                        startGame();
+                    }
+                    if (immediate || overlay.classList.contains("show")) {
+                        reveal();
+                    } else {
+                        waitDelayTimer = setTimeout(reveal, everOnline ? WAIT_DELAY_MS : WAIT_DELAY_FIRST_MS);
+                    }
                 };
                 Module.hideReconnectOverlay = function () {
+                    everOnline = true;
+                    pendingWaitMsg = null;
+                    if (waitDelayTimer) {
+                        clearTimeout(waitDelayTimer);
+                        waitDelayTimer = 0;
+                    }
                     overlay.classList.remove("show");
                     overlay.setAttribute("aria-hidden", "true");
                     stopGame();
+                };
+                // After first paint: if we were waiting on a dead server during load, promote
+                Module._ashflorPromoteWaitOverlay = function () {
+                    if (pendingWaitMsg) {
+                        var m = pendingWaitMsg;
+                        pendingWaitMsg = null;
+                        Module.showReconnectOverlay(m);
+                    }
                 };
                 window.addEventListener("resize", function () {
                     if (running) resizeMini();
@@ -560,6 +616,7 @@
 
             Module['onFirstFrame'] = function () {
                 hideLoading();
+                if (Module._ashflorPromoteWaitOverlay) Module._ashflorPromoteWaitOverlay();
                 console.info('Ashflor first frame: ' + Math.round(performance.now()) + ' ms after navigation');
             };
             Module.onRuntimeInitialized = function () {

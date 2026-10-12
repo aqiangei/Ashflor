@@ -38,7 +38,11 @@ namespace Game {
     extern Ui::Window other_ui_window;
     extern EntityID camera_id;
     extern EntityID player_id;
-    extern std::string nickname;
+    extern std::string nickname; // in-game display; guests always use guest_id
+    // Fixed guest id "G#XXXXXX" (localStorage). Guests cannot pick custom names.
+    extern std::string guest_id;
+    void ensure_guest_id();
+    std::string const &guest_play_name();
     extern std::string username;
     extern std::string password;
     extern std::string account_status;
@@ -92,6 +96,15 @@ namespace Game {
     extern uint8_t party_member_count;
     extern uint8_t revive_progress;
     extern uint8_t awaiting_party_revive;
+    // Pending invite toast (top-left); type = InviteType
+    extern uint8_t invite_open;
+    extern uint8_t invite_type;
+    extern std::string invite_from;
+    extern std::string guild_name;
+    extern std::string guild_status; // member list summary
+    extern uint8_t guild_member_count;
+    extern uint8_t guild_panel_open;
+    extern std::string guild_create_draft;
     extern std::array<uint32_t, PetalID::kNumPetals> craft_bank;
     extern uint32_t coins;
     extern uint8_t craft_selected_rarity; // shop / specials
@@ -129,7 +142,14 @@ namespace Game {
     void open_chat_menu(std::string const &name, float x, float y);
     void close_chat_menu();
     void chat_menu_invite();
+    void chat_menu_invite_guild();
     void chat_menu_whisper();
+    void invite_respond(uint8_t accept);
+    void toggle_guild_panel();
+    void close_guild_panel();
+    void guild_create();
+    void guild_invite_name(std::string const &);
+    void guild_leave();
     void toggle_pause();
     void toggle_game_panel(uint8_t panel);
     void close_game_panel();

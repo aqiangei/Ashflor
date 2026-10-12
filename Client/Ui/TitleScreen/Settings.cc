@@ -32,10 +32,6 @@ Element *Ui::make_settings_panel() {
             new Ui::DynamicText(16, [](){ return I18n::tr(I18n::kInvertAttack); })
         }, 0, 10, {.h_justify = Style::Left }),
         new Ui::HContainer({
-            new Ui::ToggleButton(30, &Input::invert_defend),
-            new Ui::DynamicText(16, [](){ return I18n::tr(I18n::kInvertDefend); })
-        }, 0, 10, {.h_justify = Style::Left }),
-        new Ui::HContainer({
             new Ui::ToggleButton(30, &Game::show_debug),
             new Ui::DynamicText(16, [](){ return I18n::tr(I18n::kDebugStats); })
         }, 0, 10, {.h_justify = Style::Left }),
