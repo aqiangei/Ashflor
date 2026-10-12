@@ -2,7 +2,12 @@
 
 自托管的多人 PvP florr 风格游戏，基于 [gardn](https://github.com/trigonal-bacon/gardn) fork，用 C++ 编写。
 
-安装与运行见 [INSTALLATION.md](./INSTALLATION.md)。
+## 游玩
+
+- **正式入口：** [https://ashflor.com/](https://ashflor.com/)（推荐）
+- **备用：** [http://ashflor.com/](http://ashflor.com/) · [http://www.ashflor.com/](http://www.ashflor.com/)
+
+自行开服见 [INSTALLATION.md](./INSTALLATION.md)。
 
 ---
 

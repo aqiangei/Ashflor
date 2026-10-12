@@ -43,7 +43,11 @@ cd build
 cmake ..
 make
 ```
-Then move the outputted ``wasm`` and ``js`` files into Client/public (or optionally ``Server/build`` if you're running the wasm server; make sure to move the ``html`` file as well).
+Build with `DEBUG=0` for deployment. When Node.js is installed, the release build also creates `.br` and `.gz` copies of the JS and WASM files. Move all six files into `Client/public` (or `Server/build` for the WASM server), together with `index.html` and `sw.js`. If compression files are missing, run `node Scripts/compress_client.js Client/public` from the repository root after copying the JS and WASM files.
+
+Increment `cacheV` in `Client/public/index.html` for each deployment that changes the JS or WASM. The WASM server serves Brotli or gzip copies when supported by the browser. With nginx or another static host, configure it to serve precompressed `.br`/`.gz` files with the original JS/WASM MIME type and `Content-Encoding`, and keep `index.html` and `sw.js` revalidated.
+
+For a quick browser measurement, append `?perf=1` to the game URL and inspect the console. It reports time to the first rendered frame and median/P95 main-thread frame work every 300 frames. Compare first visit and repeat visit in the same browser, then compare a crowded battle with a quiet scene.
 
 The server is served by default at ``localhost:9001``. You may change the port by modifying ``Shared/Config.cc``
 

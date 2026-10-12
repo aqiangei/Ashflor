@@ -5,8 +5,12 @@
 
 #include <cstdint>
 
-inline uint32_t const ARENA_WIDTH = 40000;
-inline uint32_t const ARENA_HEIGHT = 4000;
+// Large non-square arena — layouts generated per map_id (spirals / boxes / corridors)
+inline uint32_t const ARENA_WIDTH = 28000;
+inline uint32_t const ARENA_HEIGHT = 20000;
+// Fixed hub spawn (map center) — buffered by difficulty-0 zone
+inline float const MAP_SPAWN_X = ARENA_WIDTH * 0.5f;
+inline float const MAP_SPAWN_Y = ARENA_HEIGHT * 0.5f;
 
 inline uint32_t const MAX_SLOT_COUNT = 8;
 inline uint32_t const LEVELS_PER_EXTRA_SLOT = 15;
@@ -16,7 +20,8 @@ inline uint32_t const MAX_PETALS_IN_CLUMP = 4;
 inline uint32_t const MAX_DIFFICULTY = 3;
 inline uint32_t const MAX_DROPS_PER_MOB = 6;
 inline uint32_t const MAX_ZONES_PER_MAP = 8;
-inline uint32_t const MAX_TERRAIN_PER_MAP = 64;
+inline uint32_t const MAX_TERRAIN_PER_MAP = 96;
+inline uint32_t const TERRAIN_OUTLINE_MAX = 72;
 
 namespace MapID {
     enum : uint8_t {
@@ -38,8 +43,11 @@ namespace TerrainKind {
 
 namespace TerrainShape {
     enum : uint8_t {
-        kAABB = 0,
-        kEllipse
+        kAABB = 0,   // axis-aligned box (left,top,right,bottom)
+        kEllipse,    // center (left,top), radii (right,bottom)
+        kCircle,     // center (left,top), radius = right
+        kSpiral,     // center (left,top), outer_r = right, turns = bottom, arm half-width = param
+        kRiver       // start (left,top) → end (right,bottom), half-width = param, seed = meander
     };
 }
 
@@ -335,7 +343,8 @@ struct ZoneDefinition {
     char const *name;
 };
 
-// AABB: left/top/right/bottom. Ellipse: left/top = center, right/bottom = rx/ry.
+// Shape param packing — see TerrainShape. seed drives jagged edges / river meander.
+// param: jagged amplitude (box/ellipse/circle), arm/river half-width (spiral/river).
 struct TerrainFeature {
     uint8_t kind;
     uint8_t shape;
@@ -345,4 +354,6 @@ struct TerrainFeature {
     float right;
     float bottom;
     uint32_t color;
+    uint8_t seed = 0;
+    float param = 0.f;
 };

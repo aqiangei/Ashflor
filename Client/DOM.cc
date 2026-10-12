@@ -4,13 +4,13 @@
 
 #include <emscripten.h>
 
-void DOM::create_text_input(char const *name, uint32_t max_len) {
+void DOM::create_text_input(char const *name, uint32_t max_len, uint8_t password) {
     EM_ASM(
     {
         const name = UTF8ToString($0);
         const elem = document.createElement('input');
         elem.id = name;
-        elem.type = "text";
+        elem.type = $2 ? "password" : "text";
         elem.style.position = "absolute";
         // Above #canvas (z-index:1) so typed text is visible and clickable
         elem.style.zIndex = "5";
@@ -26,10 +26,21 @@ void DOM::create_text_input(char const *name, uint32_t max_len) {
         elem.style["padding-left"] = "5px";
         elem.maxLength = ($1).toString();
         elem.setAttribute("spellcheck", "false");
-        elem.setAttribute("autocomplete", "off");
+        elem.setAttribute("autocomplete", $2 ? "current-password" : "off");
         document.body.appendChild(elem);
     },
-    name, max_len * 2);
+    name, max_len * 2, (int) password);
+}
+
+void DOM::set_input_password(char const *name, uint8_t password) {
+    EM_ASM({
+        const elem = document.getElementById(UTF8ToString($0));
+        if (!elem) return;
+        const start = elem.selectionStart;
+        const end = elem.selectionEnd;
+        elem.type = $1 ? "password" : "text";
+        try { elem.setSelectionRange(start, end); } catch (e) {}
+    }, name, (int) password);
 }
 
 void DOM::element_show(char const *name)

@@ -18,8 +18,9 @@ CLIENT_ONLY(typedef LerpFloat Float;)
     MULTIPLE(scores, Float, LEADERBOARD_SIZE) \
     MULTIPLE(names, std::string, LEADERBOARD_SIZE) \
     MULTIPLE(colors, uint8_t, LEADERBOARD_SIZE) \
-    MULTIPLE(minimap_x, Float, MINIMAP_PLAYER_CAP) \
-    MULTIPLE(minimap_y, Float, MINIMAP_PLAYER_CAP) \
+    /* plain float: LerpFloat sticks at -1 for empty slots and never steps */ \
+    MULTIPLE(minimap_x, float, MINIMAP_PLAYER_CAP) \
+    MULTIPLE(minimap_y, float, MINIMAP_PLAYER_CAP) \
     MULTIPLE(minimap_colors, uint8_t, MINIMAP_PLAYER_CAP)
 
 class Arena {

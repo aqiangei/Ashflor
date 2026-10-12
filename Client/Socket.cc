@@ -18,6 +18,10 @@ extern "C" {
     void on_message(uint8_t type, uint32_t len, char *reason) {
         if (type == 0) {
             std::printf("Connected\n");
+            EM_ASM({
+                if (Module.hideReconnectOverlay) Module.hideReconnectOverlay();
+            });
+            Game::disconnect_message.clear();
             Writer w(OUTGOING_PACKET);
             w.write<uint8_t>(Serverbound::kVerify);
             w.write<uint64_t>(VERSION_HASH);
@@ -32,18 +36,36 @@ extern "C" {
             Game::socket.ready = 0;
             pending_guest_progress = 0;
             std::printf("Disconnected [%d](%s)\n", len, reason);
+            uint8_t intentional_leave =
+                (len == 1000 && reason && std::strcmp(reason, "leave") == 0) ? 1 : 0;
             if (std::strlen(reason))
                 Game::disconnect_message = I18n::format_disconnected(len, reason);
             else
                 Game::disconnect_message = I18n::format_disconnected(len, "");
+            if (!intentional_leave) {
+                // Redeploy / network drop → animated wait page + mini-game
+                char const *zh = (len == 1001 || len == 1006 || len == 1012)
+                    ? "服务器更新或断开，正在重连"
+                    : "连接断开，正在重连";
+                EM_ASM({
+                    if (Module.showReconnectOverlay)
+                        Module.showReconnectOverlay(UTF8ToString($0));
+                }, zh);
+            }
             free(reason);
         }
         else if (type == 1) {
             Game::socket.ready = 1;
-            // Send guest save after verify succeeded (first server packet)
+            EM_ASM({
+                if (Module.hideReconnectOverlay) Module.hideReconnectOverlay();
+            });
+            // After verify: resume browser session, else restore guest save
             if (pending_guest_progress) {
                 pending_guest_progress = 0;
-                Game::send_guest_progress();
+                if (Game::session_token != 0 && !Game::username.empty())
+                    Game::account_resume();
+                else
+                    Game::send_guest_progress();
             }
             Game::on_message(INCOMING_PACKET, len);
         }

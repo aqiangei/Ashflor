@@ -12,8 +12,55 @@
 
 #include <algorithm>
 #include <cmath>
+#include <memory>
+#include <vector>
 
 using namespace Ui;
+
+namespace {
+struct MinimapLayer {
+    uint8_t map_id;
+    float width;
+    std::unique_ptr<Renderer> canvas;
+};
+
+std::vector<MinimapLayer> minimap_layers;
+
+Renderer &static_minimap(uint8_t map_id, float width, float height) {
+    for (MinimapLayer &layer : minimap_layers) {
+        if (layer.map_id == map_id && layer.width == width)
+            return *layer.canvas;
+    }
+    if (minimap_layers.size() >= 8) minimap_layers.clear();
+    minimap_layers.push_back({map_id, width, std::make_unique<Renderer>()});
+    Renderer &canvas = *minimap_layers.back().canvas;
+    canvas.set_dimensions(width, height);
+    canvas.reset();
+    canvas.clear();
+    float const sx = width / (float)ARENA_WIDTH;
+    float const sy = height / (float)ARENA_HEIGHT;
+
+    for (ZoneDefinition const &def : map_zones(map_id)) {
+        canvas.set_fill(def.color);
+        canvas.fill_rect(def.left * sx, def.top * sy,
+                         (def.right - def.left) * sx, (def.bottom - def.top) * sy);
+    }
+    float oxs[TERRAIN_OUTLINE_MAX];
+    float oys[TERRAIN_OUTLINE_MAX];
+    for (TerrainFeature const &f : map_terrain(map_id)) {
+        uint32_t n = Map::terrain_outline(f, oxs, oys, TERRAIN_OUTLINE_MAX);
+        if (n < 3) continue;
+        canvas.set_fill(f.color);
+        canvas.begin_path();
+        canvas.move_to(oxs[0] * sx, oys[0] * sy);
+        for (uint32_t i = 1; i < n; ++i)
+            canvas.line_to(oxs[i] * sx, oys[i] * sy);
+        canvas.close_path();
+        canvas.fill();
+    }
+    return canvas;
+}
+} // namespace
 
 // Full-arena aspect (ARENA_WIDTH : ARENA_HEIGHT), always 1:1 world replica
 Minimap::Minimap(float w) : Element(w, w * ARENA_HEIGHT / (float)ARENA_WIDTH, {}) {}
@@ -53,36 +100,7 @@ void Minimap::on_render(Renderer &ctx) {
         uint8_t mid = Game::simulation.arena_info.map_id;
         if (mid >= MapID::kNumMaps) mid = MapID::kGarden;
 
-        MapZones const &zones = map_zones(mid);
-        for (uint32_t zi = 0; zi < zones.size(); ++zi) {
-            ZoneDefinition const &def = zones[zi];
-            float zl = (def.left - left) * sx;
-            float zt = (def.top - top) * sy;
-            float zw = (def.right - def.left) * sx;
-            float zh = (def.bottom - def.top) * sy;
-            ctx.set_fill(def.color);
-            ctx.fill_rect(zl, zt, zw, zh);
-        }
-
-        MapTerrain const &terrain = map_terrain(mid);
-        for (TerrainFeature const &f : terrain) {
-            ctx.set_fill(f.color);
-            if (f.shape == TerrainShape::kEllipse) {
-                float cx = (f.left - left) * sx;
-                float cy = (f.top - top) * sy;
-                float rx = std::max(f.right * sx, 1.2f);
-                float ry = std::max(f.bottom * sy, 1.2f);
-                ctx.begin_path();
-                ctx.ellipse(cx, cy, rx, ry);
-                ctx.fill();
-            } else {
-                float zl = (f.left - left) * sx;
-                float zt = (f.top - top) * sy;
-                float zw = std::max((f.right - f.left) * sx, 1.f);
-                float zh = std::max((f.bottom - f.top) * sy, 1.f);
-                ctx.fill_rect(zl, zt, zw, zh);
-            }
-        }
+        ctx.draw_image_at(static_minimap(mid, width, height), 0.f, 0.f);
 
         float self_x = -1.f;
         float self_y = -1.f;
@@ -98,23 +116,28 @@ void Minimap::on_render(Renderer &ctx) {
             }
         }
 
-        // All other players (arena sync — every living flower on this map)
-        float const pr_other = Game::minimap_expanded ? 3.2f : 2.8f;
+        // Other players (arena sync — every living flower on this map)
+        float const pr_other = Game::minimap_expanded ? 4.5f : 3.8f;
         for (uint32_t i = 0; i < MINIMAP_PLAYER_CAP; ++i) {
             float wx = Game::simulation.arena_info.minimap_x[i];
             float wy = Game::simulation.arena_info.minimap_y[i];
-            if (wx < 0.f || wy < 0.f) continue;
+            if (!(wx >= 0.f && wy >= 0.f)) continue;
             if (self_x >= 0.f &&
-                std::abs(wx - self_x) < 1.f && std::abs(wy - self_y) < 1.f)
+                std::abs(wx - self_x) < 40.f && std::abs(wy - self_y) < 40.f)
                 continue;
             float px = (wx - left) * sx;
             float py = (wy - top) * sy;
             uint8_t color = Game::simulation.arena_info.minimap_colors[i];
             if (color >= ColorID::kNumColors) color = 0;
             uint32_t fill = FLOWER_COLORS[color];
+            // White halo so dots stay visible on green/blue zones
+            ctx.set_fill(0xeeffffff);
+            ctx.begin_path();
+            ctx.arc(px, py, pr_other + 1.6f);
+            ctx.fill();
             ctx.set_fill(fill);
-            ctx.set_stroke(Renderer::HSV(fill, 0.7f));
-            ctx.set_line_width(1.1f);
+            ctx.set_stroke(0xff222222);
+            ctx.set_line_width(1.2f);
             ctx.begin_path();
             ctx.arc(px, py, pr_other);
             ctx.fill();
@@ -124,7 +147,7 @@ void Minimap::on_render(Renderer &ctx) {
         // FOV box + self (gold, on top)
         if (Game::simulation.ent_exists(Game::camera_id)) {
             Entity const &camera = Game::simulation.get_ent(Game::camera_id);
-            float scale = 1.f / (2.f * camera.get_fov() * (float)Ui::scale);
+            float scale = 1.f / (2.f * camera.get_fov() * Game::camera_zoom * (float)Ui::scale);
             float fov_w = (float)Ui::window_width * scale;
             float fov_h = (float)Ui::window_height * scale;
             float fl = (camera.get_camera_x() - fov_w * 0.5f - left) * sx;
@@ -138,10 +161,14 @@ void Minimap::on_render(Renderer &ctx) {
             if (self_x >= 0.f) {
                 float px = (self_x - left) * sx;
                 float py = (self_y - top) * sy;
-                float pr = Game::minimap_expanded ? 4.2f : 3.6f;
+                float pr = Game::minimap_expanded ? 5.2f : 4.4f;
+                ctx.set_fill(0xffffffff);
+                ctx.begin_path();
+                ctx.arc(px, py, pr + 1.8f);
+                ctx.fill();
                 ctx.set_fill(0xffffe763);
                 ctx.set_stroke(0xffccb84a);
-                ctx.set_line_width(1.4f);
+                ctx.set_line_width(1.5f);
                 ctx.begin_path();
                 ctx.arc(px, py, pr);
                 ctx.fill();

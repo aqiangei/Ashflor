@@ -42,6 +42,7 @@ namespace Ui {
         uint8_t curr_pos;
         uint8_t no_change_ticks;
         uint8_t selected;
+        uint8_t fly_hint; // bag click → slot fly animation
         PetalID::T petal_id;
         PetalID::T last_id;
         UiLoadoutPetal(uint8_t);
@@ -61,14 +62,19 @@ namespace Ui {
     };
 
     Element *make_loadout_backgrounds();
+    Element *make_rotation_wheel();
     void make_petal_tooltips();
 
     void forward_secondary_select();
     void backward_secondary_select();
     void ui_delete_petal(uint8_t);
     void ui_swap_petals(uint8_t, uint8_t);
+    // Bag click: primary L→R then secondary L→R; fly hint; 0 if full
+    uint8_t ui_auto_equip_from_bag(uint8_t bag_pos, float screen_x, float screen_y);
     // Click primary↔paired secondary (equip out / retract)
     void ui_toggle_petal_slot(uint8_t static_pos);
+    // Move equipped petal into first empty backpack slot (prefer paired)
+    uint8_t ui_unequip_to_backpack(uint8_t static_pos);
     // Returns dynamic loadout slot index under (x,y), or 0xFF if none
     uint8_t find_loadout_drop_target(float x, float y);
     uint8_t loadout_dynamic_to_static(uint8_t dynamic_pos);

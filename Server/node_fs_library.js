@@ -33,7 +33,8 @@ addToLibrary({
       var bytes = Buffer.from(HEAPU8.subarray(dataPtr, dataPtr + len));
       fs.writeFileSync(tmp, bytes);
       try {
-        if (fs.existsSync(p)) fs.copyFileSync(p, bak);
+        // Bracket access keeps this newer Node API name intact under Closure.
+        if (fs.existsSync(p)) fs['copyFileSync'](p, bak);
       } catch (e1) {}
       fs.renameSync(tmp, p);
       console.log('[node_fs_write_atomic]', p, 'bytes=' + len);
@@ -55,7 +56,7 @@ addToLibrary({
       if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
       var stamp = new Date().toISOString().replace(/[:.]/g, '-');
       var base = pathMod.basename(p).replace(/\.dat$/, '');
-      fs.copyFileSync(p, pathMod.join(dir, base + '-' + stamp + '.dat'));
+      fs['copyFileSync'](p, pathMod.join(dir, base + '-' + stamp + '.dat'));
       var files = fs.readdirSync(dir).filter(function (f) {
         return f.indexOf(base + '-') === 0 && f.slice(-4) === '.dat';
       }).sort();

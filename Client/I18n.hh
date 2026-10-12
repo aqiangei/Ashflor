@@ -135,6 +135,8 @@ namespace I18n {
         kCraftExchanged,
         kCraftBankHint,
         kSpawnNameTaken,
+        kInvertAttack,
+        kInvertDefend,
         kCount
     };
 

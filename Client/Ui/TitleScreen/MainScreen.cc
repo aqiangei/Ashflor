@@ -26,6 +26,8 @@
 
 using namespace Ui;
 
+static TextInput *auth_password_input = nullptr;
+
 static void select_map_garden(Element *, uint8_t e) {
     if (e == Ui::kClick) Game::selected_map = MapID::kGarden;
 }
@@ -59,51 +61,144 @@ static Element *make_map_select_button(
     );
 }
 
+static Element *make_title_how_to_play() {
+    return new Ui::Choose(
+        new Ui::VContainer({
+            new Ui::DynamicText(28, [](){ return I18n::tr(I18n::kHowToPlay); }),
+            new Ui::DynamicText(15, [](){ return I18n::tr(I18n::kMouseMove); }),
+            new Ui::DynamicText(15, [](){ return I18n::tr(I18n::kLeftAttack); }),
+            new Ui::DynamicText(15, [](){ return I18n::tr(I18n::kRightDefend); })
+        }, 8, 6, { .no_animation = 1 }),
+        new Ui::VContainer({
+            new Ui::DynamicText(28, [](){ return I18n::tr(I18n::kHowToPlay); }),
+            new Ui::DynamicText(15, [](){ return I18n::tr(I18n::kWasdMove); }),
+            new Ui::DynamicText(15, [](){ return I18n::tr(I18n::kSpaceAttack); }),
+            new Ui::DynamicText(15, [](){ return I18n::tr(I18n::kShiftDefend); }),
+            new Ui::DynamicText(13, [](){
+                return I18n::use_chinese
+                    ? "Esc 菜单可组队；队友共享掉落；尸体旁站 3 秒可复活"
+                    : "Esc menu: party up; share drops; stand 3s to revive";
+            })
+        }, 8, 6, { .no_animation = 1 }),
+        [](){ return Input::keyboard_movement; },
+        { .no_animation = 1, .no_polling = 1 }
+    );
+}
+
+static Element *make_title_respawn_preview() {
+    return new Ui::VContainer({
+        new Ui::HContainer({
+            new Ui::DynamicText(16, [](){
+                return I18n::format_respawn_level(Game::respawn_level);
+            }, { .fill = 0xffffffff, .no_animation = 1 }),
+            new Ui::DynamicText(16, [](){ return I18n::tr(I18n::kWith); }, {
+                .fill = 0xffffffff,
+                .should_render = [](){
+                    if (!Game::simulation.ent_exists(Game::camera_id)) return false;
+                    return Game::simulation.get_ent(Game::camera_id).get_inventory(0) > PetalID::kBasic;
+                }
+            })
+        }, 0, 6, { .h_justify = Style::Left }),
+        new Ui::HContainer(
+            Ui::make_range(0, MAX_SLOT_COUNT, [](uint32_t i){
+                return (Element *) (new Ui::TitlePetalSlot((uint8_t) i));
+            }),
+            0, 10, { .h_justify = Style::Left }
+        ),
+        new Ui::HContainer(
+            Ui::make_range(MAX_SLOT_COUNT, 2 * MAX_SLOT_COUNT, [](uint32_t i){
+                return (Element *) (new Ui::TitlePetalSlot((uint8_t) i));
+            }),
+            0, 10, { .h_justify = Style::Left }
+        )
+    }, 10, 10, {
+        .should_render = [](){ return Game::respawn_level > 1; },
+        .no_animation = 1
+    });
+}
+
 Element *Ui::make_title_input_box() {
+    // Single vertical flow — no fixed-y sibling that can overlap when auth grows
     Ui::Element *title = new Ui::VContainer({
-        new Ui::Element(0, 60),
+        new Ui::Element(0, 36),
         new Ui::Choose(
             new Ui::DynamicText(40, [](){ return I18n::tr(I18n::kConnecting); }),
             new Ui::VContainer({
-                new Ui::DynamicText(20, [](){ return I18n::tr(I18n::kFlowerNamePrompt); }),
-                new Ui::HContainer({
-                    new Ui::TextInput(Game::nickname, 400, 50, MAX_NAME_LENGTH, {
-                        .line_width = 5,
-                        .round_radius = 5,
-                        .animate = [](Element *elt, Renderer &ctx) { 
-                            ctx.translate(0, (elt->animation - 1) * ctx.height * 0.6);
-                        },
-                        .should_render = [](){
-                            return !Game::in_game() && Game::transition_circle <= 0;
-                        }
-                    }),
-                    new Ui::Button(110, 36, 
-                        new Ui::DynamicText(25, [](){ return I18n::tr(I18n::kSpawn); }), 
-                        [](Element *elt, uint8_t e){ if (e == Ui::kClick) Game::spawn_in(); },
-                        [](){ return Game::in_game() != 0; },
-                        { .fill = 0xff1dd129, .line_width = 5, .round_radius = 3 }
-                    )
-                }, 0, 10,{}),
+                new Ui::DynamicText(19, [](){
+                    if (Game::account_logged_in)
+                        return I18n::use_chinese
+                            ? std::string{"账号已登录："} + Game::username
+                            : std::string{"Signed in: "} + Game::username;
+                    if (Game::session_token != 0)
+                        return I18n::use_chinese
+                            ? std::string{"正在恢复账号："} + Game::username
+                            : std::string{"Restoring account: "} + Game::username;
+                    return I18n::use_chinese
+                        ? std::string{"游客模式 · 本机进度"}
+                        : std::string{"Guest mode · local progress"};
+                }, { .fill = 0xfff4e9b3 }),
+                // Logged in: fixed account name. Guest: flower nickname input.
+                new Ui::Choose(
+                    new Ui::VContainer({
+                        new Ui::DynamicText(20, [](){ return I18n::tr(I18n::kFlowerNamePrompt); }),
+                        new Ui::HContainer({
+                            new Ui::TextInput(Game::nickname, 400, 50, MAX_NAME_LENGTH, {
+                                .line_width = 5,
+                                .round_radius = 5,
+                                .should_render = [](){
+                                    return !Game::account_logged_in
+                                        && !Game::in_game()
+                                        && Game::transition_circle <= 0;
+                                }
+                            }),
+                            new Ui::Button(110, 36,
+                                new Ui::DynamicText(25, [](){ return I18n::tr(I18n::kSpawn); }),
+                                [](Element *, uint8_t e){ if (e == Ui::kClick) Game::spawn_in(); },
+                                [](){ return Game::in_game() != 0; },
+                                { .fill = 0xff1dd129, .line_width = 5, .round_radius = 3 }
+                            )
+                        }, 0, 10, {})
+                    }, 8, 8, { .no_animation = 1 }),
+                    new Ui::VContainer({
+                        new Ui::DynamicText(18, [](){
+                            return I18n::use_chinese
+                                ? std::string{"游戏名（账号）"}
+                                : std::string{"Game name (account)"};
+                        }, { .fill = 0xffdddddd }),
+                        new Ui::HContainer({
+                            new Ui::DynamicText(32, [](){ return Game::username; }, {
+                                .fill = 0xffffffff
+                            }),
+                            new Ui::Button(110, 36,
+                                new Ui::DynamicText(25, [](){ return I18n::tr(I18n::kSpawn); }),
+                                [](Element *, uint8_t e){ if (e == Ui::kClick) Game::spawn_in(); },
+                                [](){ return Game::in_game() != 0; },
+                                { .fill = 0xff1dd129, .line_width = 5, .round_radius = 3 }
+                            )
+                        }, 0, 14, {})
+                    }, 8, 8, { .no_animation = 1 }),
+                    [](){ return Game::account_logged_in != 0; }
+                ),
                 new Ui::DynamicText(14, [](){ return I18n::tr(I18n::kOrPressEnterSpawn); }),
-                new Ui::DynamicText(14, [](){
-                    return Game::account_status;
-                }, {
+                new Ui::DynamicText(14, [](){ return Game::account_status; }, {
                     .fill = 0xffff6666,
                     .should_render = [](){ return !Game::account_status.empty(); }
                 }),
+                new Ui::Element(0, 10),
                 new Ui::VContainer({
                     new Ui::HContainer({
                         make_map_select_button(MapID::kGarden, 0xff1ea761, select_map_garden, darken_map_garden),
                         make_map_select_button(MapID::kDesert, 0xffdecf7c, select_map_desert, darken_map_desert),
                         make_map_select_button(MapID::kOcean, 0xff2e86ab, select_map_ocean, darken_map_ocean)
-                    }, 0, 10, {}),
+                    }, 0, 12, {}),
                     make_map_select_button(MapID::kPolar, 0xff8ecae6, select_map_polar, darken_map_polar)
-                }, 8, 8, {}),
+                }, 10, 10, { .no_animation = 1 }),
+                new Ui::Element(0, 14),
                 new Ui::Choose(
                     new Ui::VContainer({
                         new Ui::Choose(
                             new Ui::HContainer({
-                                new Ui::Button(100, 32,
+                                new Ui::Button(100, 36,
                                     new Ui::DynamicText(16, [](){ return I18n::tr(I18n::kLogin); }),
                                     [](Element *, uint8_t e){
                                         if (e == Ui::kClick) {
@@ -114,7 +209,7 @@ Element *Ui::make_title_input_box() {
                                     nullptr,
                                     { .fill = 0xff5a9fdb, .line_width = 4, .round_radius = 3 }
                                 ),
-                                new Ui::Button(100, 32,
+                                new Ui::Button(100, 36,
                                     new Ui::DynamicText(16, [](){ return I18n::tr(I18n::kRegister); }),
                                     [](Element *, uint8_t e){
                                         if (e == Ui::kClick) {
@@ -125,9 +220,9 @@ Element *Ui::make_title_input_box() {
                                     nullptr,
                                     { .fill = 0xff1dd129, .line_width = 4, .round_radius = 3 }
                                 )
-                            }, 0, 10, {}),
+                            }, 0, 12, {}),
                             new Ui::HContainer({
-                                new Ui::Button(120, 32,
+                                new Ui::Button(120, 36,
                                     new Ui::DynamicText(16, [](){ return I18n::tr(I18n::kLogout); }),
                                     [](Element *, uint8_t e){
                                         if (e == Ui::kClick) Game::account_logout();
@@ -135,16 +230,19 @@ Element *Ui::make_title_input_box() {
                                     nullptr,
                                     { .fill = 0xffc44b4b, .line_width = 4, .round_radius = 3 }
                                 )
-                            }, 0, 10, {}),
+                            }, 0, 12, {}),
                             [](){ return Game::account_logged_in != 0; }
                         ),
+                        new Ui::Element(0, 6),
                         new Ui::DynamicText(13, [](){
                             if (Game::account_logged_in)
-                                return I18n::format_logged_in(Game::username, Game::respawn_level);
+                                return I18n::use_chinese
+                                    ? std::string{"账号进度自动保存"}
+                                    : std::string{"Account progress saved automatically"};
                             if (!Game::account_status.empty()) return Game::account_status;
                             return std::string{I18n::tr(I18n::kGuestHint)};
-                        })
-                    }, 10, 5, { .no_animation = 1 }),
+                        }, { .fill = 0xffdddddd })
+                    }, 10, 8, { .no_animation = 1 }),
                     new Ui::VContainer({
                         new Ui::DynamicText(16, [](){
                             return I18n::tr(Game::auth_panel == 2 ? I18n::kRegister : I18n::kLogin);
@@ -162,17 +260,31 @@ Element *Ui::make_title_input_box() {
                         }, 0, 8, {}),
                         new Ui::HContainer({
                             new Ui::DynamicText(14, [](){ return I18n::tr(I18n::kPassword); }),
-                            new Ui::TextInput(Game::password, 220, 32, MAX_PASSWORD_LENGTH, {
+                            (auth_password_input = new Ui::TextInput(Game::password, 188, 32, MAX_PASSWORD_LENGTH, {
                                 .line_width = 4,
                                 .round_radius = 4,
                                 .should_render = [](){
                                     return Game::auth_panel != 0
                                         && !Game::in_game() && Game::transition_circle <= 0;
                                 }
-                            })
-                        }, 0, 8, {}),
+                            }, 1 /* password masked */)),
+                            new Ui::Button(36, 32,
+                                new Ui::DynamicText(12, [](){
+                                    if (auth_password_input == nullptr || auth_password_input->password_is_masked())
+                                        return I18n::use_chinese ? std::string{"显"} : std::string{"Show"};
+                                    return I18n::use_chinese ? std::string{"隐"} : std::string{"Hide"};
+                                }),
+                                [](Element *, uint8_t e){
+                                    if (e != Ui::kClick || auth_password_input == nullptr) return;
+                                    auth_password_input->set_password_masked(
+                                        !auth_password_input->password_is_masked());
+                                },
+                                nullptr,
+                                { .fill = 0xff666666, .line_width = 3, .round_radius = 4 }
+                            )
+                        }, 0, 6, {}),
                         new Ui::HContainer({
-                            new Ui::Button(100, 32,
+                            new Ui::Button(100, 36,
                                 new Ui::DynamicText(16, [](){
                                     return I18n::tr(Game::auth_panel == 2 ? I18n::kRegister : I18n::kLogin);
                                 }),
@@ -183,7 +295,7 @@ Element *Ui::make_title_input_box() {
                                 nullptr,
                                 { .fill = 0xff1dd129, .line_width = 4, .round_radius = 3 }
                             ),
-                            new Ui::Button(100, 32,
+                            new Ui::Button(100, 36,
                                 new Ui::DynamicText(16, [](){ return I18n::tr(I18n::kLeaveNo); }),
                                 [](Element *, uint8_t e){
                                     if (e == Ui::kClick) Game::auth_panel = 0;
@@ -191,78 +303,39 @@ Element *Ui::make_title_input_box() {
                                 nullptr,
                                 { .fill = 0xff5a9fdb, .line_width = 4, .round_radius = 3 }
                             )
-                        }, 0, 10, {}),
+                        }, 0, 12, {}),
                         new Ui::DynamicText(13, [](){
                             if (!Game::account_status.empty()) return Game::account_status;
                             return std::string{};
+                        }, {
+                            .fill = 0xffff6666,
+                            .should_render = [](){ return !Game::account_status.empty(); }
                         })
-                    }, 10, 5, { .no_animation = 1 }),
+                    }, 10, 8, { .no_animation = 1 }),
                     [](){ return Game::auth_panel != 0; }
+                ),
+                new Ui::Element(0, 18),
+                // Respawn loadout OR how-to-play — in-flow, never fixed-y overlay
+                new Ui::Choose(
+                    make_title_how_to_play(),
+                    make_title_respawn_preview(),
+                    [](){ return Game::respawn_level > 1 ? 1 : 0; }
                 )
-            }, 10, 5, { .animate = [](Element *elt, Renderer &ctx) {
-                ctx.translate(0, (elt->animation - 1) * ctx.height);
-            } }),
+            }, 12, 10, { .no_animation = 1 }),
             [](){ return Game::socket.ready; }
         )
-    }, 0, 0, { .animate = [](Element *elt, Renderer &ctx){}, .should_render = [](){ return Game::should_render_title_ui(); } });
+    }, 0, 0, {
+        .should_render = [](){ return Game::should_render_title_ui(); },
+        .no_animation = 1
+    });
     return title;
 }
 
 Element *Ui::make_title_info_box() {
-    Element *elt = new Ui::Choose(
-        new Ui::Choose(
-            new Ui::VContainer({
-                new Ui::DynamicText(35, [](){ return I18n::tr(I18n::kHowToPlay); }),
-                new Ui::Element(0,5),
-                new Ui::DynamicText(16, [](){ return I18n::tr(I18n::kMouseMove); }),
-                new Ui::DynamicText(16, [](){ return I18n::tr(I18n::kLeftAttack); }),
-                new Ui::DynamicText(16, [](){ return I18n::tr(I18n::kRightDefend); })
-            }, 0, 5, { .no_animation = 1 }),
-            new Ui::VContainer({
-                new Ui::DynamicText(35, [](){ return I18n::tr(I18n::kHowToPlay); }),
-                new Ui::Element(0,5),
-                new Ui::DynamicText(16, [](){ return I18n::tr(I18n::kWasdMove); }),
-                new Ui::DynamicText(16, [](){ return I18n::tr(I18n::kSpaceAttack); }),
-                new Ui::DynamicText(16, [](){ return I18n::tr(I18n::kShiftDefend); }),
-                new Ui::DynamicText(14, [](){
-                    return I18n::use_chinese
-                        ? "Esc 菜单可组队；队友共享掉落；尸体旁站 3 秒可复活"
-                        : "Esc menu: party up; share drops; stand 3s to revive";
-                })
-            }, 0, 5, { .no_animation = 1 }),
-            [](){
-                return Input::keyboard_movement;
-            }, { .no_polling = 1 }
-        ),
-        new Ui::VContainer({
-            new Ui::HContainer({
-                new Ui::DynamicText(16, [](){
-                    return I18n::format_respawn_level(Game::respawn_level);
-                }, { .fill = 0xffffffff, .no_animation = 1 }),
-                new Ui::DynamicText(16, [](){ return I18n::tr(I18n::kWith); }, {
-                    .fill = 0xffffffff,
-                    .should_render = [](){
-                        if (!Game::simulation.ent_exists(Game::camera_id)) return false;
-                        return Game::simulation.get_ent(Game::camera_id).get_inventory(0) > PetalID::kBasic;
-                    }
-                })
-            }, 0, 0),
-            new Ui::HContainer(
-                Ui::make_range(0, MAX_SLOT_COUNT, [](uint32_t i){ return (Element *) (new Ui::TitlePetalSlot(i)); })
-            , 0, 10),
-            new Ui::HContainer({
-                Ui::make_range(MAX_SLOT_COUNT, 2*MAX_SLOT_COUNT, [](uint32_t i){ return (Element *) (new Ui::TitlePetalSlot(i)); })
-            }, 0, 10)
-        }, 0, 10, { .no_animation = 1 }),
-        [](){
-            return Game::respawn_level > 1 ? 1 : 0;
-        }
-    );
-    elt->style.animate = [](Element *elt, Renderer &) {
-        elt->x = 0;
-        elt->y = 200;
-    };
-    return elt;
+    // Content moved into make_title_input_box flow to prevent overlap
+    return new Ui::Element(0, 0, {
+        .should_render = [](){ return false; }
+    });
 }
 
 static void open_title_panel(uint8_t panel, Element *) {
@@ -494,7 +567,7 @@ Element *Ui::make_github_link_button() {
                 ctx.fill();
             }, 40, 40),
             [](Element *elt, uint8_t e){
-                if (e == Ui::kClick) DOM::open_page("https://github.com/trigonal-bacon/gardn/");
+                if (e == Ui::kClick) DOM::open_page("https://github.com/aqiangei/ashflor");
             },
             nullptr,
             { .fill = 0xff333333, .line_width = 4, .round_radius = 4 }

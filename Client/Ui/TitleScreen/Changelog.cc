@@ -44,6 +44,16 @@ static Element *make_changelog_contents() {
     Element *elt = new Ui::VContainer({
         make_date("2026年10月12日", "October 12th 2026"),
         make_entries({
+            {"断线/重部署等待页 + 接花瓣小游戏",
+             "Reconnect wait screen with petal-catch mini-game"},
+            {"地形锯齿岸线 / 弯曲河流 / 螺旋·方·圆占位（参考 florr_clone-web）",
+             "Jagged shores, meander rivers, spiral/box/circle terrain"},
+            {"地图改为大正方形，中心固定出生点，外围难度递增",
+             "Square arena, fixed center spawn, difficulty rises outward"},
+            {"出生区稀疏中立怪（石头 / 瓢虫），便于开局",
+             "Sparse neutrals (rocks / ladybugs) around the spawn hub"},
+            {"小地图随场地变为正方形",
+             "Minimap matches the square arena"},
             {"左下角侧栏改为 IconPark 图标（背包 / 天赋 / 合成 / 特殊）",
              "Side buttons use IconPark icons (bag / talent / craft / special)"},
             {"Nginx 反代：可用 http://IP/ 进入，无需 :9001",

@@ -16,24 +16,37 @@ Choose::Choose(Element *l, Element *r, std::function<uint8_t(void)> const &c, St
     r->showed = 1;
     l->refactor();
     r->refactor();
-    r->animation.set(0);
+    // Hide the inactive branch immediately (avoids layout/DOM overlap)
+    children[1 - choose_showing]->animation.set(0);
+    children[1 - choose_showing]->style.should_render = no_show;
+    children[choose_showing]->style.should_render = do_show;
+    children[choose_showing]->animation.set(1);
     refactor();
 }
 
 void Choose::on_render(Renderer &ctx) {
     DEBUG_ONLY(assert(choose_showing < children.size());)
-    Element *rendering = children[choose_showing];
-    rendering->render(ctx);
-    if (!rendering->visible)
-        children[1 - choose_showing]->render(ctx);
+    // Only one branch — never draw both (was causing login/register overlap)
+    children[choose_showing]->render(ctx);
+    // Still skip the inactive branch so TextInput DOM / children hide
+    children[1 - choose_showing]->on_render_skip(ctx);
 }
 
 void Choose::refactor() {
     uint8_t to_show = chooser();
-    children[to_show]->style.should_render = do_show;
-    children[1 - to_show]->style.should_render = no_show;
-    if (!children[choose_showing]->visible || !showed)
+    if (to_show != choose_showing) {
+        // Snap old branch out so TextInput DOM / layout cannot linger
+        children[choose_showing]->style.should_render = no_show;
+        children[choose_showing]->animation.set(0);
+        children[choose_showing]->visible = 0;
         choose_showing = to_show;
+        children[choose_showing]->style.should_render = do_show;
+        if (children[choose_showing]->style.no_animation)
+            children[choose_showing]->animation.set(1);
+    } else {
+        children[to_show]->style.should_render = do_show;
+        children[1 - to_show]->style.should_render = no_show;
+    }
     Element *rendering = children[choose_showing];
     rendering->refactor();
     width = rendering->width;
@@ -45,6 +58,6 @@ void Choose::poll_events(ScreenEvent const &event) {
     Element::poll_events(event);
     if (Ui::focused != this)
         return;
-    if (children[0]->visible) children[0]->poll_events(event);
-    if (children[1]->visible) children[1]->poll_events(event);
+    if (children[choose_showing]->visible)
+        children[choose_showing]->poll_events(event);
 }

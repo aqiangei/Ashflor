@@ -24,6 +24,13 @@ namespace Map {
     /* Push circle out of impassable terrain; returns whether a correction was applied */
     extern uint8_t resolve_circle_terrain(uint8_t map_id, float &x, float &y, float radius);
 
+    // Procedural outline / centerline (client fill + minimap). Returns point count.
+    extern float terrain_hash(uint32_t seed, uint32_t i);
+    extern void river_center_at(TerrainFeature const &, float t, float &x, float &y);
+    extern void spiral_center_at(TerrainFeature const &, float t, float &x, float &y);
+    extern float feature_half_width(TerrainFeature const &);
+    extern uint32_t terrain_outline(TerrainFeature const &, float *xs, float *ys, uint32_t cap);
+
     #ifdef SERVERSIDE
     extern void remove_mob(Simulation *, uint32_t);
     extern void spawn_random_mob(Simulation *, float, float);

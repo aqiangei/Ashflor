@@ -68,20 +68,52 @@ WebSocketServer::WebSocketServer() {
                     encodeType = "application/wasm";
                     file = "gardn-client.wasm";
                     break;
+                case "/sw.js":
+                    encodeType = "application/javascript; charset=utf-8";
+                    file = "sw.js";
+                    break;
                 default:
                     file = "";
                     break;
             }
             if (file && fs.existsSync(file)) {
-                // HTML: revalidate. JS/WASM: long-cache (URLs already bust with ?v=)
-                const cacheCtl = (file === "index.html")
+                // HTML/SW: revalidate. JS/WASM: long-cache (URLs already bust with ?v=)
+                const cacheCtl = (file === "index.html" || file === "sw.js")
                     ? "no-cache"
                     : "public, max-age=31536000, immutable";
-                res.writeHead(200, {
+                const headers = {
                     "Content-Type": encodeType,
                     "Cache-Control": cacheCtl
+                };
+                let servedFile = file;
+                if (file === "gardn-client.js" || file === "gardn-client.wasm") {
+                    const accepted = req.headers["accept-encoding"] || "";
+                    const accepts = encoding => accepted.split(",").some(part => {
+                        const fields = part.trim().split(";");
+                        return fields[0] === encoding
+                            && !fields.slice(1).some(option => Number(option.trim().split("=")[1]) === 0);
+                    });
+                    headers["Vary"] = "Accept-Encoding";
+                    if (accepts("br") && fs.existsSync(file + ".br")) {
+                        servedFile = file + ".br";
+                        headers["Content-Encoding"] = "br";
+                    } else if (accepts("gzip") && fs.existsSync(file + ".gz")) {
+                        servedFile = file + ".gz";
+                        headers["Content-Encoding"] = "gzip";
+                    }
+                }
+                if (file === "sw.js")
+                    headers["Service-Worker-Allowed"] = "/";
+                fs.readFile(servedFile, function(err, body) {
+                    if (err) {
+                        res.writeHead(500, {"Content-Type": "text/plain; charset=utf-8"});
+                        res.end("Read failed");
+                        return;
+                    }
+                    headers["Content-Length"] = body.length;
+                    res.writeHead(200, headers);
+                    res.end(body);
                 });
-                res.end(fs.readFileSync(file));
                 return;
             }
             res.writeHead(404, {"Content-Type": "text/plain; charset=utf-8"});

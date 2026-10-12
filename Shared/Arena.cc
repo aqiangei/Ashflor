@@ -15,6 +15,12 @@ void Arena::init() {
     FIELDS_Arena
     #undef SINGLE
     #undef MULTIPLE
+    // Empty minimap slots must be negative (0,0 is a valid map corner)
+    for (uint32_t i = 0; i < MINIMAP_PLAYER_CAP; ++i) {
+        minimap_x[i] = -1.f;
+        minimap_y[i] = -1.f;
+        minimap_colors[i] = 0;
+    }
 }
 
 void Arena::reset_protocol() {

@@ -12,6 +12,7 @@
 #include <Shared/Entity.hh>
 #include <Shared/Simulation.hh>
 #include <Shared/StaticData.hh>
+#include <Shared/Talent.hh>
 
 #include <cctype>
 #include <chrono>
@@ -25,8 +26,40 @@
 static char const *ACCOUNT_FILE = "accounts.dat";
 static std::unordered_map<std::string, Account> ACCOUNTS;
 static std::unordered_set<std::string> ACTIVE_SESSIONS;
+static std::unordered_map<std::string, uint64_t> SESSION_TOKENS;
 static std::chrono::steady_clock::time_point LAST_SNAPSHOT =
     std::chrono::steady_clock::now() - std::chrono::hours(1);
+
+static uint64_t issue_session_token(std::string const &username) {
+    uint64_t t = (uint64_t) std::chrono::high_resolution_clock::now().time_since_epoch().count();
+    t ^= AccountStore::hash_password(username, std::to_string(t ^ 0x9e3779b97f4a7c15ull));
+    t ^= (uint64_t) reinterpret_cast<uintptr_t>(&SESSION_TOKENS) << 13;
+    if (t == 0) t = 1;
+    SESSION_TOKENS[username] = t;
+    if (Account *acc = AccountStore::find(username)) {
+        acc->session_hash = AccountStore::hash_password(username, "session:" + std::to_string(t));
+        AccountStore::save();
+    }
+    return t;
+}
+
+static uint8_t bind_session(Client *client, std::string const &username, Account *acc) {
+    if (ACTIVE_SESSIONS.contains(username) && client->account_name != username)
+        return AccountResultCode::kAccountAlreadyIn;
+    if (!client->account_name.empty())
+        ACTIVE_SESSIONS.erase(client->account_name);
+    client->account_name = username;
+    client->craft_bank = acc->craft_bank;
+    client->coins = acc->coins;
+    client->craft_attempts = acc->craft_attempts;
+    uint8_t max_r = Talent::max_rank(acc->level);
+    client->talent_hp = acc->talent_hp > max_r ? max_r : acc->talent_hp;
+    client->talent_rot = acc->talent_rot > max_r ? max_r : acc->talent_rot;
+    ACTIVE_SESSIONS.insert(username);
+    if (client->game != nullptr && client->game->simulation.ent_exists(client->camera) && !client->alive())
+        AccountStore::apply_to_camera(&client->game->simulation, client->game->simulation.get_ent(client->camera), *acc);
+    return AccountResultCode::kAccountOk;
+}
 
 static std::string read_file(char const *path) {
 #ifdef WASM_SERVER
@@ -104,8 +137,27 @@ Account *AccountStore::find(std::string const &username) {
     return &it->second;
 }
 
+uint8_t AccountStore::name_reserved_for_guest(std::string const &name) {
+    if (name.empty()) return 0;
+    for (auto const &entry : ACCOUNTS) {
+        std::string const &registered = entry.first;
+        if (registered.size() != name.size()) continue;
+        bool same = true;
+        for (size_t i = 0; i < name.size(); ++i) {
+            if (std::tolower((unsigned char) name[i]) !=
+                std::tolower((unsigned char) registered[i])) {
+                same = false;
+                break;
+            }
+        }
+        if (same) return 1;
+    }
+    return 0;
+}
+
 void AccountStore::load() {
     ACCOUNTS.clear();
+    SESSION_TOKENS.clear();
     std::string raw = read_file(ACCOUNT_FILE);
     if (raw.empty()) return;
     std::istringstream in(raw);
@@ -122,6 +174,8 @@ void AccountStore::load() {
         acc.craft_bank.fill(0);
         acc.coins = 0;
         acc.craft_attempts = 0;
+        acc.talent_hp = 0;
+        acc.talent_rot = 0;
         for (uint32_t i = 0; i < 2 * MAX_SLOT_COUNT; ++i) {
             unsigned int v = PetalID::kNone;
             if (!(ls >> v)) break;
@@ -129,25 +183,31 @@ void AccountStore::load() {
             acc.petals[i] = (PetalID::T) v;
         }
         {
-            std::vector<unsigned int> rest;
-            unsigned int v = 0;
+            std::vector<uint64_t> rest;
+            uint64_t v = 0;
             while (ls >> v) rest.push_back(v);
             if (rest.size() >= PetalID::kNumPetals) {
                 for (uint32_t i = 0; i < PetalID::kNumPetals; ++i)
-                    acc.craft_bank[i] = rest[i];
+                    acc.craft_bank[i] = (uint32_t) rest[i];
                 if (rest.size() > PetalID::kNumPetals)
-                    acc.coins = rest[PetalID::kNumPetals];
+                    acc.coins = (uint32_t) rest[PetalID::kNumPetals];
                 if (rest.size() > PetalID::kNumPetals + 1)
-                    acc.craft_attempts = rest[PetalID::kNumPetals + 1];
+                    acc.craft_attempts = (uint32_t) rest[PetalID::kNumPetals + 1];
+                if (rest.size() > PetalID::kNumPetals + 2)
+                    acc.talent_hp = (uint8_t) std::min<uint64_t>(rest[PetalID::kNumPetals + 2], 99);
+                if (rest.size() > PetalID::kNumPetals + 3)
+                    acc.talent_rot = (uint8_t) std::min<uint64_t>(rest[PetalID::kNumPetals + 3], 99);
+                if (rest.size() > PetalID::kNumPetals + 4)
+                    acc.session_hash = rest[PetalID::kNumPetals + 4];
             } else if (rest.size() >= RarityID::kNumRarities) {
                 // Legacy rarity buckets → park counts on first petal of that rarity
                 for (uint8_t r = 0; r < RarityID::kNumRarities; ++r) {
                     PetalID::T id = Craft::first_petal_of_rarity(r);
                     if (id != PetalID::kNone)
-                        acc.craft_bank[id] = rest[r];
+                        acc.craft_bank[id] = (uint32_t) rest[r];
                 }
                 if (rest.size() > RarityID::kNumRarities)
-                    acc.coins = rest[RarityID::kNumRarities];
+                    acc.coins = (uint32_t) rest[RarityID::kNumRarities];
             }
         }
         ACCOUNTS[acc.username] = acc;
@@ -159,7 +219,7 @@ void AccountStore::load() {
 
 void AccountStore::save() {
     std::ostringstream out;
-    out << "# gardn accounts  fields: user hash level petals[16] craft_bank[N] coins craft_attempts\n";
+    out << "# ashflor accounts  fields: user hash level petals[16] craft_bank[N] coins craft_attempts talent_hp talent_rot session_hash\n";
     for (auto const &kv : ACCOUNTS) {
         Account const &acc = kv.second;
         out << acc.username << ' ' << acc.pass_hash << ' ' << (uint32_t) acc.level;
@@ -167,7 +227,9 @@ void AccountStore::save() {
             out << ' ' << (uint32_t) acc.petals[i];
         for (uint32_t i = 0; i < PetalID::kNumPetals; ++i)
             out << ' ' << acc.craft_bank[i];
-        out << ' ' << acc.coins << ' ' << acc.craft_attempts;
+        out << ' ' << acc.coins << ' ' << acc.craft_attempts
+            << ' ' << (uint32_t) acc.talent_hp << ' ' << (uint32_t) acc.talent_rot
+            << ' ' << acc.session_hash;
         out << '\n';
     }
     write_file_atomic(ACCOUNT_FILE, out.str());
@@ -216,12 +278,15 @@ static void copy_progress(Account &acc, Client *client) {
     acc.craft_bank = client->craft_bank;
     acc.coins = client->coins;
     acc.craft_attempts = client->craft_attempts;
+    uint8_t max_r = Talent::max_rank(acc.level);
+    acc.talent_hp = client->talent_hp > max_r ? max_r : client->talent_hp;
+    acc.talent_rot = client->talent_rot > max_r ? max_r : client->talent_rot;
 }
 
 uint8_t AccountStore::register_account(Client *client, std::string const &username, std::string const &password) {
     if (!valid_username(username)) return AccountResultCode::kAccountInvalidUser;
     if (!valid_password(password)) return AccountResultCode::kAccountInvalidPass;
-    if (find(username) != nullptr) return AccountResultCode::kAccountExists;
+    if (name_reserved_for_guest(username)) return AccountResultCode::kAccountExists;
     Account acc;
     acc.username = username;
     acc.pass_hash = hash_password(username, password);
@@ -256,22 +321,41 @@ uint8_t AccountStore::login(Client *client, std::string const &username, std::st
     if (acc == nullptr) return AccountResultCode::kAccountNotFound;
     if (acc->pass_hash != hash_password(username, password))
         return AccountResultCode::kAccountWrongPass;
-    if (ACTIVE_SESSIONS.contains(username) && client->account_name != username)
-        return AccountResultCode::kAccountAlreadyIn;
-    if (!client->account_name.empty())
-        ACTIVE_SESSIONS.erase(client->account_name);
-    client->account_name = username;
-    client->craft_bank = acc->craft_bank;
-    client->coins = acc->coins;
-    client->craft_attempts = acc->craft_attempts;
-    ACTIVE_SESSIONS.insert(username);
-    if (client->game != nullptr && client->game->simulation.ent_exists(client->camera) && !client->alive())
-        apply_to_camera(&client->game->simulation, client->game->simulation.get_ent(client->camera), *acc);
-    return AccountResultCode::kAccountOk;
+    uint8_t result = bind_session(client, username, acc);
+    if (result == AccountResultCode::kAccountOk)
+        issue_session_token(username);
+    return result;
 }
 
-void AccountStore::logout(Client *client) {
+uint8_t AccountStore::resume(Client *client, std::string const &username, uint64_t session_token) {
+    if (!valid_username(username)) return AccountResultCode::kAccountInvalidUser;
+    if (session_token == 0) return AccountResultCode::kAccountWrongPass;
+    Account *acc = find(username);
+    if (acc == nullptr) return AccountResultCode::kAccountNotFound;
+    if (acc->session_hash == 0 ||
+        acc->session_hash != hash_password(username, "session:" + std::to_string(session_token)))
+        return AccountResultCode::kAccountWrongPass;
+    uint8_t result = bind_session(client, username, acc);
+    if (result == AccountResultCode::kAccountOk)
+        SESSION_TOKENS[username] = session_token;
+    return result;
+}
+
+uint64_t AccountStore::current_session(std::string const &username) {
+    auto it = SESSION_TOKENS.find(username);
+    if (it == SESSION_TOKENS.end()) return 0;
+    return it->second;
+}
+
+void AccountStore::logout(Client *client, uint8_t revoke_session) {
     if (!client->account_name.empty()) {
+        if (revoke_session) {
+            SESSION_TOKENS.erase(client->account_name);
+            if (Account *acc = find(client->account_name)) {
+                acc->session_hash = 0;
+                save();
+            }
+        }
         ACTIVE_SESSIONS.erase(client->account_name);
         client->account_name.clear();
     }

@@ -5,7 +5,9 @@
 #include <Helpers/UTF8.hh>
 
 #include <cmath>
+#include <cstring>
 #include <iostream>
+#include <algorithm>
 #include <emscripten.h>
 
 std::vector<Renderer *> Renderer::renderers;
@@ -60,6 +62,8 @@ Renderer::Renderer() : context() {
 }
 
 Renderer::~Renderer() {
+    auto it = std::find(renderers.begin(), renderers.end(), this);
+    if (it != renderers.end()) renderers.erase(it);
     EM_ASM({
         if ($0 == 0)
             throw new Error('Tried to delete the main context');
@@ -83,6 +87,7 @@ uint32_t Renderer::MIX(uint32_t base, uint32_t mix, float v) {
 
 void Renderer::reset() {
     reset_transform();
+    set_global_alpha(1.f);
     round_line_cap();
     round_line_join();
     center_text_align();
@@ -90,7 +95,14 @@ void Renderer::reset() {
     context.reset();
 }
 
+void Renderer::clear() {
+    EM_ASM({
+        Module.ctxs[$0].clearRect(0, 0, $1, $2);
+    }, id, width, height);
+}
+
 void Renderer::set_dimensions(float w, float h) {
+    if (width == w && height == h) return;
     width = w;
     height = h;
     EM_ASM({
@@ -341,6 +353,12 @@ void Renderer::draw_image(Renderer &ctx) {
     EM_ASM({
         Module.ctxs[$0].drawImage(Module.ctxs[$1].canvas, $2, $3);
     }, id, ctx.id, -ctx.width / 2, -ctx.height / 2);
+}
+
+void Renderer::draw_image_at(Renderer &ctx, float x, float y) {
+    EM_ASM({
+        Module.ctxs[$0].drawImage(Module.ctxs[$1].canvas, $2, $3);
+    }, id, ctx.id, x, y);
 }
 
 void Renderer::fill_text(char const *text) {

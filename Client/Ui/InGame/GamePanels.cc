@@ -22,6 +22,7 @@
 #include <Shared/Craft.hh>
 #include <Shared/StaticData.hh>
 #include <Shared/StaticDefinitions.hh>
+#include <Shared/Talent.hh>
 
 #include <algorithm>
 #include <cmath>
@@ -44,29 +45,49 @@ static bool petal_equipped(PetalID::T id) {
     return false;
 }
 
-// Auto-equip bag petal into primary (paired secondary, else first Basic/empty)
-static void auto_equip_bag_petal(uint8_t bag_pos) {
-    if (!Game::alive()) return;
-    if (bag_pos < Game::loadout_count || bag_pos >= Game::loadout_count + MAX_SLOT_COUNT) return;
-    if (Game::cached_loadout[bag_pos] == PetalID::kNone) return;
-    uint8_t sec_i = (uint8_t) (bag_pos - Game::loadout_count);
-    if (sec_i < Game::loadout_count) {
-        ui_swap_petals(sec_i, bag_pos);
-        return;
+// Layout: primary [0,n) · secondary 副槽 [n, 2n) · pure bag [2n, n+MAX)
+// Bag panel only shows pure bag — never secondary.
+
+static uint8_t bag_pure_count() {
+    if (Game::loadout_count >= MAX_SLOT_COUNT) return 0;
+    return (uint8_t) (MAX_SLOT_COUNT - Game::loadout_count);
+}
+
+static uint8_t bag_slot_static(uint8_t bag_index) {
+    return (uint8_t) (2 * Game::loadout_count + bag_index);
+}
+
+static PetalID::T bag_slot_id(uint8_t bag_index) {
+    uint8_t sp = bag_slot_static(bag_index);
+    if (sp >= Game::loadout_count + MAX_SLOT_COUNT || sp >= 2 * MAX_SLOT_COUNT)
+        return PetalID::kNone;
+    return Game::cached_loadout[sp];
+}
+
+// Count identical petals in pure backpack only (exclude secondary)
+static uint32_t bag_stack_count(PetalID::T id) {
+    if (id == PetalID::kNone || id >= PetalID::kNumPetals) return 0;
+    uint32_t n = 0;
+    uint8_t count = bag_pure_count();
+    for (uint8_t i = 0; i < count; ++i) {
+        if (bag_slot_id(i) == id) ++n;
     }
-    for (uint8_t i = 0; i < Game::loadout_count; ++i) {
-        PetalID::T id = Game::cached_loadout[i];
-        if (id == PetalID::kNone || id == PetalID::kBasic) {
-            ui_swap_petals(i, bag_pos);
-            return;
-        }
+    return n;
+}
+
+// Only the first bag index of a stack is shown (duplicates collapse)
+static uint8_t bag_is_stack_head(uint8_t bag_index) {
+    PetalID::T id = bag_slot_id(bag_index);
+    if (id == PetalID::kNone) return 0;
+    for (uint8_t i = 0; i < bag_index; ++i) {
+        if (bag_slot_id(i) == id) return 0;
     }
-    ui_swap_petals(0, bag_pos);
+    return 1;
 }
 
 // Bag grid cell — click = equip to bottom bar; drag = drop onto bottom equip slots
 class InventoryBagSlot final : public Element {
-    uint8_t bag_index; // 0 .. MAX_SLOT_COUNT-1 → static loadout_count + bag_index
+    uint8_t bag_index; // 0 .. bag_pure_count()-1 → static 2*loadout_count + bag_index
     uint8_t dragging;
     uint32_t drag_touch;
     float press_x, press_y;
@@ -76,7 +97,7 @@ public:
           bag_index(idx), dragging(0), drag_touch((uint32_t)-1),
           press_x(0), press_y(0) {
         style.should_render = [idx](){
-            return Game::alive() && idx < MAX_SLOT_COUNT;
+            return Game::alive() && idx < bag_pure_count() && bag_is_stack_head(idx);
         };
         style.animate = [this](Element *, Renderer &) {
             if (!dragging) return;
@@ -91,8 +112,9 @@ public:
             } else {
                 released = BitMath::at(Input::mouse_buttons_released, Input::LeftMouse);
             }
-            uint8_t static_pos = (uint8_t) (Game::loadout_count + bag_index);
-            if (static_pos >= 2 * MAX_SLOT_COUNT) { dragging = 0; return; }
+            uint8_t static_pos = bag_slot_static(bag_index);
+            if (static_pos >= Game::loadout_count + MAX_SLOT_COUNT
+                || static_pos >= 2 * MAX_SLOT_COUNT) { dragging = 0; return; }
             UiLoadoutPetal *p = Ui::UiLoadout::petal_slots[static_pos];
             float dist = std::hypot(mx - press_x, my - press_y);
             constexpr float kClickSlop = 14.f;
@@ -106,7 +128,8 @@ public:
                         p->style.layer = 0;
                         p->persistent_touch_id = (uint32_t)-1;
                     }
-                    auto_equip_bag_petal(static_pos);
+                    // Primary L→R, then secondary L→R; fly if equipped, silent if full
+                    ui_auto_equip_from_bag(static_pos, screen_x, screen_y);
                     return;
                 }
                 if (p != nullptr && p->selected) {
@@ -145,20 +168,18 @@ public:
         height = 72.f;
     }
     uint8_t slot_static() const {
-        return (uint8_t) (Game::loadout_count + bag_index);
+        return bag_slot_static(bag_index);
     }
     PetalID::T id() const {
-        uint8_t sp = slot_static();
-        if (sp >= 2 * MAX_SLOT_COUNT) return PetalID::kNone;
-        return Game::cached_loadout[sp];
+        return bag_slot_id(bag_index);
     }
     void on_render(Renderer &ctx) override {
         PetalID::T pid = id();
         ctx.set_fill(0xff3ecf6e);
         ctx.set_stroke(0xff2a9a4a);
-        ctx.set_line_width(2);
+        ctx.set_line_width(1.5f);
         ctx.begin_path();
-        ctx.round_rect(-width / 2, -height / 2, width, height, 6);
+        ctx.round_rect(-width / 2, -height / 2, width, height, 4);
         ctx.fill();
         ctx.stroke();
         if (pid == PetalID::kNone || pid >= PetalID::kNumPetals) return;
@@ -166,13 +187,31 @@ public:
         {
             RenderContext c(&ctx);
             ctx.translate(0, -8);
+            // Half previous bag icon size (was 96/60)
             ctx.scale(48.f / 60.f);
             draw_loadout_background(ctx, pid);
         }
-        ctx.translate(0, height / 2 - 11);
+        uint32_t stack = bag_stack_count(pid);
+        if (stack > 1) {
+            std::string badge = std::format("x{}", stack);
+            float bx = width / 2 - 12;
+            float by = -height / 2 + 10;
+            ctx.set_fill(0xe0000000);
+            ctx.begin_path();
+            ctx.round_rect(bx - 11, by - 8, 22, 16, 4);
+            ctx.fill();
+            {
+                RenderContext c(&ctx);
+                ctx.translate(bx, by);
+                ctx.center_text_align();
+                ctx.center_text_baseline();
+                ctx.draw_text(badge.c_str(), { .fill = 0xffffffff, .size = 11, .stroke_scale = 0 });
+            }
+        }
+        ctx.translate(0, height / 2 - 10);
         ctx.set_fill(0xffffffff);
         ctx.draw_text(PETAL_DATA[pid].name, { .size = 10 });
-        ctx.translate(0, -(height / 2 - 11));
+        ctx.translate(0, -(height / 2 - 10));
     }
     void on_event(uint8_t event) override {
         PetalID::T pid = id();
@@ -261,13 +300,13 @@ static Element *make_drawer(std::vector<Element *> children, uint8_t panel_id) {
     return elt;
 }
 
-static constexpr float kBagPanelW = 310.f;
-static constexpr float kBagScrollH = 220.f;
+static constexpr float kBagPanelW = 420.f;
+static constexpr float kBagScrollH = 360.f;
 
 static Element *make_bag_scroll() {
-    // Build rows with children in ctor so HContainer applies Left justify
+    // Half-size cells → denser 5-col grid; wheel always scrolls while bag open
     std::vector<Element *> rows;
-    constexpr uint8_t kCols = 4;
+    constexpr uint8_t kCols = 5;
     uint8_t row_count = (MAX_SLOT_COUNT + kCols - 1) / kCols;
     for (uint8_t row = 0; row < row_count; ++row) {
         std::vector<Element *> cells;
@@ -279,7 +318,9 @@ static Element *make_bag_scroll() {
         rows.push_back(new Ui::HContainer(cells, 0, 6, { .no_animation = 1 }));
     }
     Element *grid = new Ui::VContainer(rows, 0, 6, { .no_animation = 1 });
-    return new Ui::ScrollContainer(grid, kBagScrollH);
+    auto *scroll = new Ui::ScrollContainer(grid, kBagScrollH);
+    scroll->always_capture_wheel = 1;
+    return scroll;
 }
 
 static void on_inventory_btn(Element *, uint8_t e) {
@@ -686,8 +727,8 @@ Element *Ui::make_inventory_panel() {
         ),
         new Ui::DynamicText(13, [](){
             return I18n::use_chinese
-                ? std::format("钱币 {}　点击装备 · 拖到下方装备栏", Game::coins)
-                : std::format("Coins {}  click=equip · drag→bottom bar", Game::coins);
+                ? std::format("钱币 {}　点击装备 · 同种堆叠 · 装备拖出回背包", Game::coins)
+                : std::format("Coins {}  click=equip · stacks · drag out unequips", Game::coins);
         }, { .fill = 0xffffd24a }),
         make_bag_scroll(),
         new Ui::DynamicText(11, [](){
@@ -721,19 +762,89 @@ Element *Ui::make_inventory_panel() {
     return body;
 }
 
+static uint32_t talent_player_level() {
+    if (Game::alive()) {
+        uint32_t lv = score_to_level(Game::score);
+        return lv < 1 ? 1 : lv;
+    }
+    return Game::respawn_level < 1 ? 1 : Game::respawn_level;
+}
+
+static void on_talent_hp(Element *, uint8_t e) {
+    if (e == Ui::kClick) Game::talent_spend(TalentID::kHealth);
+}
+static void on_talent_rot(Element *, uint8_t e) {
+    if (e == Ui::kClick) Game::talent_spend(TalentID::kRotSpeed);
+}
+
 Element *Ui::make_talents_panel() {
     return make_drawer({
         new Ui::DynamicText(20, [](){ return I18n::tr(I18n::kPanelTalents); }, {
             .fill = 0xffffffff, .h_justify = Style::Left
         }),
-        new Ui::DynamicText(13, [](){ return I18n::tr(I18n::kPanelTalentsHint); }, {
-            .fill = 0xffcccccc, .h_justify = Style::Left
-        }),
+        new Ui::DynamicText(13, [](){
+            uint32_t lv = talent_player_level();
+            uint32_t free = Talent::points_free(lv, Game::talent_hp, Game::talent_rot);
+            uint8_t slots = Talent::max_rank(lv);
+            return I18n::use_chinese
+                ? std::format("可用点数 {}　槽位上限 {}（每 10 级 +1）", free, slots)
+                : std::format("{} pts · max rank {} (unlock +1 / 10 lv)", free, slots);
+        }, { .fill = 0xfff0d878, .h_justify = Style::Left }),
         new Ui::DynamicText(12, [](){
             return I18n::use_chinese
-                ? "天赋系统即将开放。先用 V 面板的触角 / 加速器 / 磁铁。"
-                : "Talents coming soon. Use Antennae / Accelerator / Magnet (V).";
-        }, { .fill = 0xffdddddd, .h_justify = Style::Left })
+                ? "每级 +1 点，每 10 级额外 +10 点。点击加点。"
+                : "+1 pt/level, +10 pts every 10 levels. Click to invest.";
+        }, { .fill = 0xffbbbbbb, .h_justify = Style::Left }),
+        new Ui::HContainer({
+            new Ui::Button(150, 56,
+                new Ui::VContainer({
+                    new Ui::DynamicText(14, [](){
+                        return I18n::use_chinese ? "体魄" : "Vitality";
+                    }, { .fill = 0xffffffff }),
+                    new Ui::DynamicText(12, [](){
+                        return std::format("Lv{}  +{:.0f}HP",
+                            (int) Game::talent_hp,
+                            Talent::health_bonus(Game::talent_hp));
+                    }, { .fill = 0xffa8e6a8 })
+                }, 0, 2, {}),
+                on_talent_hp, nullptr,
+                { .fill = 0xff3a6b4a, .line_width = 3, .round_radius = 6 }),
+            new Ui::Button(150, 56,
+                new Ui::VContainer({
+                    new Ui::DynamicText(14, [](){
+                        return I18n::use_chinese ? "转速" : "Spin";
+                    }, { .fill = 0xffffffff }),
+                    new Ui::DynamicText(12, [](){
+                        return std::format("Lv{}  +{:.1f}rad/s",
+                            (int) Game::talent_rot,
+                            Talent::rot_bonus(Game::talent_rot));
+                    }, { .fill = 0xffa8d4e6 })
+                }, 0, 2, {}),
+                on_talent_rot, nullptr,
+                { .fill = 0xff3a5a7a, .line_width = 3, .round_radius = 6 })
+        }, 0, 10, {}),
+        new Ui::DynamicText(11, [](){
+            uint32_t lv = talent_player_level();
+            uint8_t nh = (uint8_t) (Game::talent_hp + 1);
+            uint8_t nr = (uint8_t) (Game::talent_rot + 1);
+            uint8_t max_r = Talent::max_rank(lv);
+            std::string a = Game::talent_hp >= max_r
+                ? (I18n::use_chinese ? "体魄已满" : "Vitality max")
+                : (I18n::use_chinese
+                    ? std::format("体魄下级需 {} 点", Talent::rank_cost(nh))
+                    : std::format("Vitality next: {} pts", Talent::rank_cost(nh)));
+            std::string b = Game::talent_rot >= max_r
+                ? (I18n::use_chinese ? "转速已满" : "Spin max")
+                : (I18n::use_chinese
+                    ? std::format("转速下级需 {} 点", Talent::rank_cost(nr))
+                    : std::format("Spin next: {} pts", Talent::rank_cost(nr)));
+            return a + "　·　" + b;
+        }, { .fill = 0xffcccccc, .h_justify = Style::Left }),
+        new Ui::DynamicText(11, [](){
+            return I18n::use_chinese
+                ? "局内用 Q / E 调转速圆轮（槽右侧）"
+                : "In-game: Q/E adjust the spin wheel (right of slots)";
+        }, { .fill = 0xff999999, .h_justify = Style::Left })
     }, Game::kPanelTalents);
 }
 

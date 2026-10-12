@@ -23,6 +23,7 @@ set(SRCS
     Game.cc
     I18n.cc
     Input.cc
+    MapChunkCache.cc
     Main.cc
     Network.cc
     Particle.cc
@@ -72,6 +73,7 @@ set(SRCS
     ../Shared/Entity.cc
     ../Shared/EntityDef.cc
     ../Shared/Map.cc
+    ../Shared/MapGen.cc
     ../Shared/Simulation.cc
     ../Shared/StaticData.cc
 )
@@ -93,3 +95,10 @@ add_link_options(-sEXPORTED_FUNCTIONS=_main,_key_event,_mouse_event,_touch_event
 
 add_executable(gardn-client ${SRCS})
 set(CMAKE_EXECUTABLE_SUFFIX ".js")
+
+find_program(NODE_EXECUTABLE node)
+if(NODE_EXECUTABLE AND NOT DEBUG)
+    add_custom_command(TARGET gardn-client POST_BUILD
+        COMMAND ${NODE_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/../Scripts/compress_client.js $<TARGET_FILE_DIR:gardn-client>
+        COMMENT "Compressing client JS and WASM for web delivery")
+endif()

@@ -32,9 +32,14 @@ void ScrollContainer::on_render(Renderer &ctx) {
     if (height < content->height) {
         scroll->height = height * height / content->height;
         float ratio = height == scroll->height ? 1 : (content->height - height) / (height - scroll->height);
-        if (std::abs(Input::mouse_x - screen_x) < width * Ui::scale / 2
-        && std::abs(Input::mouse_y - screen_y) < height * Ui::scale / 2)
+        uint8_t hovered = std::abs(Input::mouse_x - screen_x) < width * Ui::scale / 2
+            && std::abs(Input::mouse_y - screen_y) < height * Ui::scale / 2;
+        // always_capture_wheel: e.g. inventory open — wheel focuses this list
+        if ((hovered || always_capture_wheel) && visible && Input::wheel_delta != 0) {
+            // Map wheel to content pixels, then to scrollbar track
             lerp_scroll += Input::wheel_delta / ratio;
+            Input::wheel_delta = 0; // consume so camera zoom does not also fire
+        }
         if (scroll->style.layer) lerp_scroll += (Input::mouse_y - Input::prev_mouse_y);
         if (Input::is_mobile) {
             auto iter = Input::touches.find(touch_id);
@@ -46,7 +51,7 @@ void ScrollContainer::on_render(Renderer &ctx) {
         lerp_scroll = fclamp(lerp_scroll, 0, height - scroll->height);
         scroll->y = lerp(scroll->y, lerp_scroll, Ui::lerp_amount);
         content->y = lerp(content->y, -ratio * lerp_scroll, Ui::lerp_amount);
-    } else 
+    } else
         content->y = scroll->y = 0;
     RenderContext c(&ctx);
     ctx.clip_rect(0,0,width,height);

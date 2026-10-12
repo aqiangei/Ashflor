@@ -13,47 +13,66 @@
 #include <Helpers/Math.hh>
 
 #include <cmath>
+#include <string>
 
 using namespace Ui;
 
+static Element *pause_toggle_row(uint8_t *flag, I18n::Str label) {
+    return new Ui::HContainer({
+        new Ui::ToggleButton(40, flag),
+        new Ui::DynamicText(22, [label](){ return I18n::tr(label); }, {
+            .fill = 0xffffffff,
+            .h_justify = Style::Left
+        })
+    }, 0, 14, { .h_justify = Style::Left });
+}
+
 Element *Ui::make_pause_menu() {
+    // ~2x previous pause panel (was ~160px controls)
     Element *elt = new Ui::VContainer({
-        new Ui::DynamicText(22, [](){ return I18n::tr(I18n::kPauseMenu); }, {
+        new Ui::DynamicText(36, [](){ return I18n::tr(I18n::kPauseMenu); }, {
             .fill = 0xffffffff,
             .h_justify = Style::Left
         }),
-        new Ui::Button(160, 36,
-            new Ui::DynamicText(16, [](){ return I18n::tr(I18n::kResume); }),
+        new Ui::Button(320, 64,
+            new Ui::DynamicText(28, [](){ return I18n::tr(I18n::kResume); }),
             [](Element *, uint8_t e){
                 if (e == Ui::kClick) Game::pause_menu_open = 0;
             },
             nullptr,
-            { .fill = 0xff1dd129, .line_width = 4, .round_radius = 3 }
+            { .fill = 0xff1dd129, .line_width = 5, .round_radius = 6 }
         ),
-        new Ui::Button(160, 32,
-            new Ui::DynamicText(14, [](){ return I18n::tr(I18n::kPartyInviteNear); }),
+        new Ui::Button(320, 56,
+            new Ui::DynamicText(22, [](){ return I18n::tr(I18n::kPartyInviteNear); }),
             [](Element *, uint8_t e){
                 if (e == Ui::kClick) Game::party_invite_nearest();
             },
             nullptr,
-            { .fill = 0xff5a9fdb, .line_width = 4, .round_radius = 3 }
+            { .fill = 0xff5a9fdb, .line_width = 5, .round_radius = 6 }
         ),
-        new Ui::Button(160, 32,
-            new Ui::DynamicText(14, [](){ return I18n::tr(I18n::kPartyLeave); }),
+        new Ui::Button(320, 56,
+            new Ui::DynamicText(22, [](){ return I18n::tr(I18n::kPartyLeave); }),
             [](Element *, uint8_t e){
                 if (e == Ui::kClick) Game::party_leave();
             },
             [](){ return Game::party_member_count == 0; },
-            { .fill = 0xff888888, .line_width = 4, .round_radius = 3 }
+            { .fill = 0xff888888, .line_width = 5, .round_radius = 6 }
         ),
-        new Ui::DynamicText(12, [](){ return I18n::tr(I18n::kEscHint); }, {
+        new Ui::DynamicText(20, [](){
+            return I18n::use_chinese ? std::string{"—— 操作 ——"} : std::string{"— Controls —"};
+        }, { .fill = 0xffaaaaaa, .h_justify = Style::Left }),
+        pause_toggle_row(&Input::keyboard_movement, I18n::kKeyboardMovement),
+        pause_toggle_row(&Input::movement_helper, I18n::kMovementHelper),
+        pause_toggle_row(&Input::invert_attack, I18n::kInvertAttack),
+        pause_toggle_row(&Input::invert_defend, I18n::kInvertDefend),
+        new Ui::DynamicText(18, [](){ return I18n::tr(I18n::kEscHint); }, {
             .fill = 0xffdddddd,
             .h_justify = Style::Left
         })
-    }, 14, 10, {
+    }, 28, 16, {
         .fill = 0xc0222222,
-        .line_width = 4,
-        .round_radius = 6,
+        .line_width = 5,
+        .round_radius = 10,
         .should_render = [](){
             return Game::pause_menu_open && Game::alive() && Game::should_render_game_ui();
         },

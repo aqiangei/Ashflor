@@ -39,6 +39,8 @@ namespace Game {
     std::string username;
     std::string password;
     std::string account_status;
+    uint64_t session_token = 0;
+    uint8_t pending_auto_login = 0;
     uint8_t account_logged_in = 0;
     uint8_t auth_panel = 0;
     std::string disconnect_message;
@@ -62,6 +64,7 @@ namespace Game {
     uint8_t show_debug = 0;
     uint8_t selected_map = MapID::kGarden;
     uint8_t minimap_expanded = 0;
+    float camera_zoom = 1.f;
     uint8_t pause_menu_open = 0;
     uint8_t leave_confirm_open = 0;
     uint8_t game_panel = 0;
@@ -70,6 +73,7 @@ namespace Game {
     std::string chat_whisper_to;
     std::string chat_draft;
     std::vector<ChatLine> chat_lines;
+    std::unordered_map<std::string, SpeechBubble> speech_bubbles;
     uint8_t chat_menu_open = 0;
     std::string chat_menu_name;
     float chat_menu_x = 0;
@@ -85,6 +89,9 @@ namespace Game {
     std::array<PetalID::T, 2 * MAX_SLOT_COUNT> guest_petals = {PetalID::kNone};
     std::array<uint32_t, PetalID::kNumPetals> guest_craft_bank = {};
     uint32_t guest_coins = 0;
+    uint8_t talent_hp = 0;
+    uint8_t talent_rot = 0;
+    uint8_t rot_speed_setting = 7;
     uint8_t craft_selected_rarity = 0;
     PetalID::T craft_tray_id = PetalID::kNone;
     uint32_t craft_tray_count = 0;
@@ -249,6 +256,8 @@ void Game::reset() {
     revive_progress = 0;
     awaiting_party_revive = 0;
     account_logged_in = 0;
+    pending_auto_login = 0;
+    account_status.clear();
     auth_panel = 0;
     score = 0;
     overlevel_timer = 0;
@@ -286,6 +295,8 @@ void Game::send_guest_progress() {
     for (uint32_t i = 0; i < PetalID::kNumPetals; ++i)
         writer.write<uint32_t>(guest_craft_bank[i]);
     writer.write<uint32_t>(guest_coins);
+    writer.write<uint8_t>(talent_hp);
+    writer.write<uint8_t>(talent_rot);
     socket.send(writer.packet, writer.at - writer.packet);
 }
 
@@ -359,6 +370,9 @@ void Game::push_chat_line(uint8_t channel, std::string const &sender, std::strin
     chat_lines.push_back({ channel, sender, text, timestamp + 12000 });
     while (chat_lines.size() > CHAT_HISTORY)
         chat_lines.erase(chat_lines.begin());
+    // Overhead bubble above speaker (~5s); skip system lines
+    if (!sender.empty() && !text.empty() && channel != ChatChannel::kChatSystem)
+        speech_bubbles[sender] = { text, timestamp + 5000 };
 }
 
 void Game::cycle_chat_channel() {
@@ -430,6 +444,8 @@ void Game::return_to_title() {
     pause_menu_open = 0;
     leave_confirm_open = 0;
     on_game_screen = 0;
+    camera_zoom = 1.f;
+    speech_bubbles.clear();
     socket.disconnect();
 }
 
@@ -474,6 +490,7 @@ void Game::tick(double time) {
     renderer.reset();
     game_ui_renderer.set_dimensions(renderer.width, renderer.height);
     game_ui_renderer.reset();
+    game_ui_renderer.clear();
 
     Ui::window_width = renderer.width;
     Ui::window_height = renderer.height;
@@ -502,6 +519,12 @@ void Game::tick(double time) {
 
     while (!chat_lines.empty() && chat_lines.front().expires_at <= timestamp)
         chat_lines.erase(chat_lines.begin());
+    for (auto it = speech_bubbles.begin(); it != speech_bubbles.end(); ) {
+        if (it->second.expires_at <= timestamp)
+            it = speech_bubbles.erase(it);
+        else
+            ++it;
+    }
 
     //event poll
     if (Input::is_mobile) {
@@ -548,40 +571,31 @@ void Game::tick(double time) {
         renderer.set_global_alpha(0.85);
         renderer.translate(renderer.width/2,renderer.height/2);
         renderer.draw_image(game_ui_renderer);
-        //process keybind petal switches (disabled while pause/chat/panels open)
-        if (!Game::pause_menu_open && !Game::chat_open && !Game::leave_confirm_open
+    // Number keys: 1:1 swap primary[i] ↔ secondary[i]. R = swap all. T = trash. Q/E = spin rate.
+    if (!Game::pause_menu_open && !Game::chat_open && !Game::leave_confirm_open
             && !Game::game_panel_blocking()) {
-            // R = swap all primary ↔ secondary in one press
+            if (Input::keys_held_this_tick.contains('Q') && Game::rot_speed_setting > 0)
+                --Game::rot_speed_setting;
+            if (Input::keys_held_this_tick.contains('E') && Game::rot_speed_setting < 10)
+                ++Game::rot_speed_setting;
             if (Input::keys_held_this_tick.contains('R'))
                 Game::swap_all_petals();
-            else if (Input::keys_held_this_tick.contains('E')) 
-                Ui::forward_secondary_select();
-            else if (Input::keys_held_this_tick.contains('Q')) 
-                Ui::backward_secondary_select();
-            else if (Ui::UiLoadout::selected_with_keys == MAX_SLOT_COUNT) {
-                for (uint8_t i = 0; i < Game::loadout_count; ++i) {
-                    if (Input::keys_held_this_tick.contains(SLOT_KEYBINDS[i])) {
-                        Ui::forward_secondary_select();
-                        break;
-                    }
-                }
-            } else if (Game::cached_loadout[Game::loadout_count + Ui::UiLoadout::selected_with_keys] == PetalID::kNone)
+            for (uint8_t i = 0; i < Game::loadout_count; ++i) {
+                if (!Input::keys_held_this_tick.contains(SLOT_KEYBINDS[i])) continue;
+                uint8_t sec = (uint8_t) (Game::loadout_count + i);
+                // Skip no-op empty↔empty
+                if (Game::cached_loadout[i] == PetalID::kNone
+                    && Game::cached_loadout[sec] == PetalID::kNone)
+                    continue;
+                Ui::ui_swap_petals(i, sec);
+                break;
+            }
+            if (Input::keys_held_this_tick.contains('T')
+                && Ui::UiLoadout::selected_with_keys < MAX_SLOT_COUNT) {
+                uint8_t sec = (uint8_t) (Game::loadout_count + Ui::UiLoadout::selected_with_keys);
+                if (Game::cached_loadout[sec] != PetalID::kNone)
+                    Ui::ui_delete_petal(sec);
                 Ui::UiLoadout::selected_with_keys = MAX_SLOT_COUNT;
-            if (Ui::UiLoadout::selected_with_keys < MAX_SLOT_COUNT 
-                && Game::cached_loadout[Game::loadout_count + Ui::UiLoadout::selected_with_keys] != PetalID::kNone) {
-                if (Input::keys_held_this_tick.contains('T')) {
-                    Ui::ui_delete_petal(Ui::UiLoadout::selected_with_keys + Game::loadout_count);
-                    Ui::forward_secondary_select();
-                } else {
-                    for (uint8_t i = 0; i < Game::loadout_count; ++i) {
-                        if (Input::keys_held_this_tick.contains(SLOT_KEYBINDS[i])) {
-                            Ui::ui_swap_petals(i, Ui::UiLoadout::selected_with_keys + Game::loadout_count);
-                            if (Game::cached_loadout[Game::loadout_count + Ui::UiLoadout::selected_with_keys] == PetalID::kNone)
-                                Ui::forward_secondary_select();
-                            break;
-                        }
-                    }
-                }
             }
         }
     } else {
@@ -604,9 +618,13 @@ void Game::tick(double time) {
            Input::game_inputs.x = (Input::mouse_x - renderer.width / 2) / Ui::scale;
            Input::game_inputs.y = (Input::mouse_y - renderer.height / 2) / Ui::scale;
         }
-        uint8_t attack = Input::keys_held.contains(' ') || BitMath::at(Input::mouse_buttons_state, Input::LeftMouse);
-        uint8_t defend = (Input::keys_held.contains('\x10') || BitMath::at(Input::mouse_buttons_state, Input::RightMouse))
+        uint8_t primary = Input::keys_held.contains(' ')
+            || BitMath::at(Input::mouse_buttons_state, Input::LeftMouse);
+        uint8_t secondary = (Input::keys_held.contains('\x10')
+            || BitMath::at(Input::mouse_buttons_state, Input::RightMouse))
             && !chat_menu_open && !chat_open;
+        uint8_t attack = Input::invert_attack ? secondary : primary;
+        uint8_t defend = Input::invert_defend ? primary : secondary;
         Input::game_inputs.flags = (attack << InputFlags::kAttacking) | (defend << InputFlags::kDefending);
     }
 
@@ -652,6 +670,13 @@ void Game::tick(double time) {
         } else {
             Game::spawn_in();
         }
+    }
+
+    // Wheel zoom — disabled while a game panel (bag/craft/…) is open so scroll owns the wheel
+    if (alive() && !chat_open && game_panel == kPanelNone && Input::wheel_delta != 0) {
+        float factor = 1.f - Input::wheel_delta * 0.0012f;
+        camera_zoom = fclamp(camera_zoom * factor, 0.55f, 2.2f);
+        Input::wheel_delta = 0;
     }
 
     //clearing operations

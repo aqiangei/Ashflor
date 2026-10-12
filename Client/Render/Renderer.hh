@@ -47,6 +47,7 @@ public:
     static float get_ascii_text_size(char const *);
 
     void reset();
+    void clear();
 
     void set_dimensions(float, float);
 
@@ -91,6 +92,7 @@ public:
     void clip_rect(float, float, float, float);
 
     void draw_image(Renderer &);
+    void draw_image_at(Renderer &, float x, float y);
 
     void fill_text(char const *);
     void stroke_text(char const *);

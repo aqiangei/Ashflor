@@ -267,15 +267,23 @@ static void _finish_player_spawn(Simulation *sim, Entity &camera, Entity &player
 
 void player_spawn(Simulation *sim, Entity &camera, Entity &player) {
     uint32_t power = Map::difficulty_at_level(camera.get_respawn_level());
-    ZoneDefinition const &zone = map_zones(sim->map_id)[
-        Map::get_suitable_difficulty_zone(sim->map_id, power)];
-    float spawn_x = lerp(zone.left, zone.right, frand());
-    float spawn_y = lerp(zone.top, zone.bottom, frand());
-    for (uint32_t tries = 0; tries < 24; ++tries) {
-        if (!Map::circle_hits_impassable(sim->map_id, spawn_x, spawn_y, BASE_FLOWER_RADIUS + 8))
-            break;
+    float spawn_x = 0;
+    float spawn_y = 0;
+    if (power == 0) {
+        // New / low-level players: fixed hub spawn with tiny jitter
+        spawn_x = MAP_SPAWN_X + (frand() - 0.5f) * 240.f;
+        spawn_y = MAP_SPAWN_Y + (frand() - 0.5f) * 240.f;
+    } else {
+        ZoneDefinition const &zone = map_zones(sim->map_id)[
+            Map::get_suitable_difficulty_zone(sim->map_id, power)];
         spawn_x = lerp(zone.left, zone.right, frand());
         spawn_y = lerp(zone.top, zone.bottom, frand());
+        for (uint32_t tries = 0; tries < 24; ++tries) {
+            if (!Map::circle_hits_impassable(sim->map_id, spawn_x, spawn_y, BASE_FLOWER_RADIUS + 8))
+                break;
+            spawn_x = lerp(zone.left, zone.right, frand());
+            spawn_y = lerp(zone.top, zone.bottom, frand());
+        }
     }
     Map::resolve_circle_terrain(sim->map_id, spawn_x, spawn_y, BASE_FLOWER_RADIUS + 8);
     spawn_x = fclamp(spawn_x, BASE_FLOWER_RADIUS, ARENA_WIDTH - BASE_FLOWER_RADIUS);

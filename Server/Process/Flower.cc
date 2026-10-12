@@ -1,11 +1,14 @@
 #include <Server/Process.hh>
 
+#include <Server/Client.hh>
 #include <Server/EntityFunctions.hh>
+#include <Server/Server.hh>
 #include <Server/Spawn.hh>
 #include <Shared/Entity.hh>
 #include <Shared/Map.hh>
 #include <Shared/Simulation.hh>
 #include <Shared/StaticData.hh>
+#include <Shared/Talent.hh>
 
 #include <Helpers/Bits.hh>
 
@@ -118,9 +121,19 @@ void tick_player_behavior(Simulation *sim, Entity &player) {
     if (Map::in_no_attack_zone(sim->map_id, player.get_x(), player.get_y()))
         BitMath::unset(player.input, InputFlags::kAttacking);
     PlayerBuffs const buffs = _get_petal_passive_buffs(sim, player);
+    float talent_hp = 0;
+    float talent_rot = 0;
+    float rot_mult = Talent::rot_setting_mult(Talent::kRotSettingDefault);
+    if (!player.has_component(kMob)) {
+        if (Client *owner = Server::client_by_camera(sim, player.get_parent())) {
+            talent_hp = Talent::health_bonus(owner->talent_hp);
+            talent_rot = Talent::rot_bonus(owner->talent_rot);
+            rot_mult = Talent::rot_setting_mult(owner->rot_speed_setting);
+        }
+    }
     float health_ratio = player.health / player.max_health;
     if (!player.has_component(kMob)) {
-        player.max_health = hp_at_level(score_to_level(player.get_score())) + buffs.extra_health;
+        player.max_health = hp_at_level(score_to_level(player.get_score())) + buffs.extra_health + talent_hp;
         player.damage = BASE_BODY_DAMAGE + buffs.extra_damage;
     }
     player.health = health_ratio * player.max_health;
@@ -300,17 +313,18 @@ void tick_player_behavior(Simulation *sim, Entity &player) {
         player.set_face_flags(player.get_face_flags() | (1 << FaceFlags::kPoisoned));
     if (player.dandy_ticks > 0)
         player.set_face_flags(player.get_face_flags() | (1 << FaceFlags::kDandelioned));
+    float rot_speed = (BASE_PETAL_ROTATION_SPEED + buffs.extra_rot + talent_rot) * rot_mult;
     if (buffs.yinyang_count != MAX_SLOT_COUNT) {
         switch (buffs.yinyang_count % 3) {
             case 0:
-                player.heading_angle += (BASE_PETAL_ROTATION_SPEED + buffs.extra_rot) / TPS;
+                player.heading_angle += rot_speed / TPS;
                 break;
             case 1:
-                player.heading_angle -= (BASE_PETAL_ROTATION_SPEED + buffs.extra_rot) / TPS;
+                player.heading_angle -= rot_speed / TPS;
                 break;
             default:
                 break;
         }
-    } else 
-        player.heading_angle += 10 * (BASE_PETAL_ROTATION_SPEED + buffs.extra_rot) / TPS;
+    } else
+        player.heading_angle += 10 * rot_speed / TPS;
 }

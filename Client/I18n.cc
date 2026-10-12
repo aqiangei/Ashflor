@@ -47,8 +47,8 @@ static char const *const EN[I18n::kCount] = {
     "Keyboard movement",
     "Movement helper",
     "Debug stats",
-    "Made by bismuth (trigonal-bacon)",
-    "Asset credits: M28 and affiliates",
+    "Made by 灰烬 (aqiangei) · ashflor",
+    "Based on gardn / bismuth (trigonal-bacon) · Assets: M28 et al.",
     "Chinese UI",
     "Stats",
     "Score: {}",
@@ -150,7 +150,9 @@ static char const *const EN[I18n::kCount] = {
     "Success! Got {}",
     "Exchanged for {}",
     "Trash petals (T) or fill inventory to bank materials by rarity",
-    "That name is already in use",
+    "That name is in use or reserved for an account",
+    "Invert attack (RMB / Shift)",
+    "Invert defend (LMB / Space)",
 };
 
 static char const *const ZH[I18n::kCount] = {
@@ -175,8 +177,8 @@ static char const *const ZH[I18n::kCount] = {
     "键盘移动",
     "移动辅助",
     "调试信息",
-    "作者：bismuth (trigonal-bacon)",
-    "素材致谢：M28 及相关作者",
+    "作者：灰烬 (aqiangei) · ashflor",
+    "基于 gardn / bismuth (trigonal-bacon) · 素材：M28 等",
     "中文界面",
     "统计",
     "分数：{}",
@@ -278,7 +280,9 @@ static char const *const ZH[I18n::kCount] = {
     "成功！获得 {}",
     "直兑获得 {}",
     "按 T 丢弃花瓣，或背包满时拾取，会按稀有度存入材料库",
-    "该名字已被占用",
+    "该昵称已被使用或是注册账号名",
+    "反转攻击（右键 / Shift）",
+    "反转防御（左键 / 空格）",
 };
 
 char const *I18n::tr(Str id) {

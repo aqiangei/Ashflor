@@ -136,7 +136,13 @@ public:
     X(8, Game::guest_level) \
     X(9, Game::guest_petals) \
     X(10, Game::guest_craft_bank) \
-    X(11, Game::guest_coins)
+    X(11, Game::guest_coins) \
+    X(12, Input::invert_attack) \
+    X(13, Input::invert_defend) \
+    X(14, Game::session_token) \
+    X(15, Game::talent_hp) \
+    X(16, Game::talent_rot) \
+    X(17, Game::rot_speed_setting)
 
 #define X(ct, name) static auto checker_##ct = MutationObserver(name);
 STORED
@@ -176,6 +182,8 @@ void Storage::retrieve() {
                 I18n::use_chinese = BitMath::at(opts, 2);
             else
                 I18n::use_chinese = 1;
+            Input::invert_attack = BitMath::at(opts, 4);
+            Input::invert_defend = BitMath::at(opts, 5);
         }
     }
     {
@@ -190,6 +198,19 @@ void Storage::retrieve() {
         if (len > 0 && len <= sizeof(uint32_t) * MAX_USERNAME_LENGTH + 4) {
             Decoder reader(&StorageProtocol::buffer[0]);
             Game::username = reader.read<std::string>();
+        }
+    }
+    {
+        uint32_t len = StorageProtocol::retrieve("session", 64);
+        if (len > 0) {
+            Decoder reader(&StorageProtocol::buffer[0]);
+            std::string tok = reader.read<std::string>();
+            uint64_t v = 0;
+            for (unsigned char c : tok) {
+                if (c < '0' || c > '9') { v = 0; break; }
+                v = v * 10 + (uint64_t) (c - '0');
+            }
+            Game::session_token = v;
         }
     }
     {
@@ -229,6 +250,17 @@ void Storage::retrieve() {
             }
         }
     }
+    {
+        uint32_t len = StorageProtocol::retrieve("talents", 8);
+        if (len >= 3) {
+            Decoder reader(&StorageProtocol::buffer[0]);
+            Game::talent_hp = reader.read<uint8_t>();
+            Game::talent_rot = reader.read<uint8_t>();
+            uint8_t rs = reader.read<uint8_t>();
+            if (rs > 10) rs = 7;
+            Game::rot_speed_setting = rs;
+        }
+    }
     #ifdef DEBUG
     for (MobID::T i = 0; i < MobID::kNumMobs; ++i) Game::seen_mobs[i] = 1;
     for (PetalID::T i = PetalID::kBasic; i < PetalID::kNumPetals; ++i) Game::seen_petals[i] = 1;
@@ -265,11 +297,18 @@ void Storage::set() {
     }
     {
         Encoder writer(&StorageProtocol::buffer[0]);
+        writer.write<std::string>(std::to_string(Game::session_token));
+        StorageProtocol::store("session", writer.at - writer.base);
+    }
+    {
+        Encoder writer(&StorageProtocol::buffer[0]);
         writer.write<uint8_t>(
             Input::movement_helper
             | (Input::keyboard_movement << 1)
             | (I18n::use_chinese << 2)
             | (1 << 3)
+            | (Input::invert_attack << 4)
+            | (Input::invert_defend << 5)
         );
         StorageProtocol::store("settings", writer.at - writer.base);
     }
@@ -283,5 +322,12 @@ void Storage::set() {
             writer.write<uint32_t>(Game::guest_craft_bank[i]);
         writer.write<uint32_t>(Game::guest_coins);
         StorageProtocol::store("guest", writer.at - writer.base);
+    }
+    {
+        Encoder writer(&StorageProtocol::buffer[0]);
+        writer.write<uint8_t>(Game::talent_hp);
+        writer.write<uint8_t>(Game::talent_rot);
+        writer.write<uint8_t>(Game::rot_speed_setting);
+        StorageProtocol::store("talents", writer.at - writer.base);
     }
 }

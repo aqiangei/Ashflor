@@ -44,6 +44,7 @@ set(SOURCES
     ../Shared/Entity.cc
     ../Shared/EntityDef.cc
     ../Shared/Map.cc
+    ../Shared/MapGen.cc
     ../Shared/Simulation.cc
     ../Shared/StaticData.cc
 )

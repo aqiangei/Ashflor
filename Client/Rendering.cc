@@ -1,6 +1,7 @@
 #include <Client/Game.hh>
 
 #include <Client/Input.hh>
+#include <Client/MapChunkCache.hh>
 #include <Client/Particle.hh>
 
 #include <Client/Ui/Extern.hh>
@@ -29,7 +30,7 @@ void Game::render_game() {
     DEBUG_ONLY(assert(simulation.ent_exists(camera_id));)
     Entity const &camera = simulation.get_ent(camera_id);
     renderer.translate(renderer.width / 2, renderer.height / 2);
-    renderer.scale(Ui::scale * camera.get_fov());
+    renderer.scale(Ui::scale * camera.get_fov() * Game::camera_zoom);
     renderer.translate(-camera.get_camera_x(), -camera.get_camera_y());
     if (alive()) {
         Entity const &player = simulation.get_ent(player_id);
@@ -56,113 +57,31 @@ void Game::render_game() {
         RenderContext context(&renderer);
         uint8_t mid = Game::simulation.arena_info.map_id;
         if (mid >= MapID::kNumMaps) mid = MapID::kGarden;
-        MapZones const &zones = map_zones(mid);
-        for (ZoneDefinition const &def : zones) {
-            renderer.set_fill(def.color);
-            renderer.fill_rect(def.left, def.top, def.right - def.left, def.bottom - def.top);
-            if (Map::difficulty_at_level(score_to_level(Game::score)) > def.difficulty) {
-                renderer.set_fill(0x40000000);
-                renderer.fill_rect(def.left, def.top, def.right - def.left, def.bottom - def.top);
-            }
-        }
-
-        // Cloth weave on ground (visible tiles around camera)
-        float scale = 1 / (2 * camera.get_fov() * Ui::scale);
+        float scale = 1.f / (2.f * camera.get_fov() * Game::camera_zoom * Ui::scale);
         float leftX = camera.get_camera_x() - renderer.width * scale;
         float rightX = camera.get_camera_x() + renderer.width * scale;
         float topY = camera.get_camera_y() - renderer.height * scale;
         float bottomY = camera.get_camera_y() + renderer.height * scale;
-        {
-            float const weave = 64.f;
-            renderer.set_stroke(MapTheme::WEAVE_DARK);
-            renderer.set_line_width(1.2f);
-            renderer.begin_path();
-            float x0 = floorf(leftX / weave) * weave;
-            float y0 = floorf(topY / weave) * weave;
-            for (float x = x0; x < rightX + weave; x += weave) {
-                renderer.move_to(x, topY);
-                renderer.line_to(x + (bottomY - topY), bottomY);
-            }
-            for (float y = y0; y < bottomY + weave; y += weave) {
-                renderer.move_to(leftX, y);
-                renderer.line_to(rightX, y + (rightX - leftX) * 0.35f);
-            }
-            renderer.stroke();
-            renderer.set_stroke(MapTheme::WEAVE_LIGHT);
-            renderer.set_line_width(0.8f);
-            renderer.begin_path();
-            for (float x = x0 + weave * 0.5f; x < rightX + weave; x += weave) {
-                renderer.move_to(x, topY);
-                renderer.line_to(x + (bottomY - topY), bottomY);
-            }
-            renderer.stroke();
-        }
+        MapChunkCache::draw(renderer, mid,
+                            Map::difficulty_at_level(score_to_level(Game::score)),
+                            leftX, topY, rightX, bottomY, Input::is_mobile);
 
-        // Terrain: hills/water (solid cloth blocks) then channels (overlay)
-        MapTerrain const &terrain = map_terrain(mid);
-        auto draw_feature_fill = [&](TerrainFeature const &f) {
-            renderer.set_fill(f.color);
-            if (f.shape == TerrainShape::kEllipse) {
-                renderer.begin_path();
-                renderer.ellipse(f.left, f.top, f.right, f.bottom);
-                renderer.fill();
-            } else {
-                renderer.fill_rect(f.left, f.top, f.right - f.left, f.bottom - f.top);
-            }
-        };
-        for (TerrainFeature const &f : terrain) {
-            if (f.kind == TerrainKind::kChannel) continue;
-            draw_feature_fill(f);
-            // subtle weave highlight on hills/water
-            renderer.set_stroke(MapTheme::WEAVE_LIGHT);
-            renderer.set_line_width(2.f);
-            if (f.shape == TerrainShape::kEllipse) {
-                renderer.begin_path();
-                renderer.ellipse(f.left, f.top, f.right * 0.92f, f.bottom * 0.92f);
-                renderer.stroke();
-            } else {
-                renderer.stroke_rect(f.left + 8, f.top + 8, f.right - f.left - 16, f.bottom - f.top - 16);
-            }
-        }
-        for (TerrainFeature const &f : terrain) {
-            if (f.kind != TerrainKind::kChannel) continue;
-            draw_feature_fill(f);
-            // Channel speckles (leaf / sand / coral feel)
-            renderer.set_fill(MapTheme::WEAVE_LIGHT);
-            float x0 = (f.shape == TerrainShape::kEllipse) ? (f.left - f.right) : f.left;
-            float y0 = (f.shape == TerrainShape::kEllipse) ? (f.top - f.bottom) : f.top;
-            float x1 = (f.shape == TerrainShape::kEllipse) ? (f.left + f.right) : f.right;
-            float y1 = (f.shape == TerrainShape::kEllipse) ? (f.top + f.bottom) : f.bottom;
-            for (float px = x0; px < x1; px += 55.f) {
-                for (float py = y0; py < y1; py += 48.f) {
-                    float sx = px + std::fmod(px * 0.37f, 18.f);
-                    float sy = py + std::fmod(py * 0.29f, 14.f);
-                    if (!Map::point_in_feature(f, sx, sy)) continue;
-                    renderer.begin_path();
-                    renderer.ellipse(sx, sy, 7.f, 4.f);
-                    renderer.fill();
-                }
-            }
-        }
-
+        // The camera-dependent guide grid stays crisp at every zoom level.
         renderer.set_stroke(alpha);
-        renderer.set_line_width(0.5);
-        float newLeftX = ceilf(leftX / 50) * 50;
-        float newTopY = ceilf(topY / 50) * 50;
+        renderer.set_line_width(0.5f);
+        float newLeftX = ceilf(leftX / 50.f) * 50.f;
+        float newTopY = ceilf(topY / 50.f) * 50.f;
         renderer.begin_path();
-        for (; newLeftX < rightX; newLeftX += 50)
-        {
+        for (; newLeftX < rightX; newLeftX += 50.f) {
             renderer.move_to(newLeftX, topY);
             renderer.line_to(newLeftX, bottomY);
         }
-        for (; newTopY < bottomY; newTopY += 50)
-        {
+        for (; newTopY < bottomY; newTopY += 50.f) {
             renderer.move_to(leftX, newTopY);
             renderer.line_to(rightX, newTopY);
         }
         renderer.stroke();
     }
-
     // Antenna / FOV helper — thin ray toward cursor (default on)
     if (alive() && Input::movement_helper && !Input::is_mobile) {
         Entity const &player = simulation.get_ent(player_id);
@@ -203,33 +122,49 @@ void Game::render_game() {
 
     Particle::tick_game(renderer, Ui::dt);
 
-    simulation.for_each<kWeb>([](Simulation *sim, Entity const &ent){
+    // Rendering is independent of simulation: skip entities outside the camera
+    // while retaining a margin for large sprites and labels.
+    float const world_scale = Ui::scale * camera.get_fov() * Game::camera_zoom;
+    float const view_half_w = renderer.width / (2 * world_scale);
+    float const view_half_h = renderer.height / (2 * world_scale);
+    auto visible = [&](Entity const &ent) {
+        float const margin = std::max(200.f, (float)ent.get_radius() * 2.f);
+        return std::fabs((float)ent.get_x() - (float)camera.get_camera_x()) <= view_half_w + margin
+            && std::fabs((float)ent.get_y() - (float)camera.get_camera_y()) <= view_half_h + margin;
+    };
+
+    simulation.for_each<kWeb>([&](Simulation *sim, Entity const &ent){
+        if (!visible(ent)) return;
         RenderContext context(&renderer);
         renderer.translate(ent.get_x(), ent.get_y());
         renderer.rotate(ent.get_angle());
         renderer.scale(ent.animation);
         render_web(renderer, ent);
     });
-    simulation.for_each<kDrop>([](Simulation *sim, Entity const &ent){
+    simulation.for_each<kDrop>([&](Simulation *sim, Entity const &ent){
+        if (!visible(ent)) return;
         RenderContext context(&renderer);
         renderer.translate(ent.get_x(), ent.get_y());
         renderer.rotate(ent.get_angle() + (ent.animation - 1) * 3 * M_PI);
         renderer.scale(ent.animation);
         render_drop(renderer, ent);
     });
-    simulation.for_each<kHealth>([](Simulation *sim, Entity const &ent){
+    simulation.for_each<kHealth>([&](Simulation *sim, Entity const &ent){
+        if (!visible(ent)) return;
         RenderContext context(&renderer);
         renderer.translate(ent.get_x(), ent.get_y());
         render_health(renderer, ent);
     });
-    simulation.for_each<kPetal>([](Simulation *sim, Entity const &ent){
+    simulation.for_each<kPetal>([&](Simulation *sim, Entity const &ent){
+        if (!visible(ent)) return;
         RenderContext context(&renderer);
         renderer.translate(ent.get_x(), ent.get_y());
         renderer.rotate(ent.get_angle());
         _apply_damage_filter(renderer, ent);
         render_petal(renderer, ent);
     });
-    simulation.for_each<kMob>([](Simulation *sim, Entity const &ent){
+    simulation.for_each<kMob>([&](Simulation *sim, Entity const &ent){
+        if (!visible(ent)) return;
         if (ent.get_mob_id() != MobID::kAntHole) return;
         RenderContext context(&renderer);
         renderer.translate(ent.get_x(), ent.get_y());
@@ -238,7 +173,8 @@ void Game::render_game() {
         _apply_damage_filter(renderer, ent);
         render_mob(renderer, ent);
     });
-    simulation.for_each<kMob>([](Simulation *sim, Entity const &ent){
+    simulation.for_each<kMob>([&](Simulation *sim, Entity const &ent){
+        if (!visible(ent)) return;
         if (ent.get_mob_id() == MobID::kAntHole) return;
         RenderContext context(&renderer);
         renderer.translate(ent.get_x(), ent.get_y());
@@ -247,13 +183,15 @@ void Game::render_game() {
         _apply_damage_filter(renderer, ent);
         render_mob(renderer, ent);
     });
-    simulation.for_each<kFlower>([](Simulation *sim, Entity const &ent){
+    simulation.for_each<kFlower>([&](Simulation *sim, Entity const &ent){
+        if (!visible(ent)) return;
         RenderContext context(&renderer);
         renderer.translate(ent.get_x(), ent.get_y());
         _apply_damage_filter(renderer, ent);
         render_flower(renderer, ent);
     });
-    simulation.for_each<kName>([](Simulation *sim, Entity const &ent){
+    simulation.for_each<kName>([&](Simulation *sim, Entity const &ent){
+        if (!visible(ent)) return;
         RenderContext context(&renderer);
         renderer.translate(ent.get_x(), ent.get_y());
         render_name(renderer, ent);

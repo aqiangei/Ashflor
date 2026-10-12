@@ -11,12 +11,19 @@ static std::string _gen_nonce() {
     return "fjs" + std::to_string(static_cast<uint32_t>(frand() * 49263 + 672));
 }
 
-TextInput::TextInput(std::string &r, float w, float h, uint32_t m, Style s) : 
-    Element(w, h, s), name(_gen_nonce()), ref(r), max(m) {
+TextInput::TextInput(std::string &r, float w, float h, uint32_t m, Style s, uint8_t password) : 
+    Element(w, h, s), name(_gen_nonce()), ref(r), max(m),
+    is_password(password), password_masked(password ? 1 : 0) {
     style.fill = 0xffeeeeee;
     style.stroke_hsv = 0;
-    DOM::create_text_input(name.c_str(), max);
+    DOM::create_text_input(name.c_str(), max, is_password ? 1 : 0);
     DOM::update_text(name.c_str(), r, max);
+}
+
+void TextInput::set_password_masked(uint8_t masked) {
+    if (!is_password) return;
+    password_masked = masked ? 1 : 0;
+    DOM::set_input_password(name.c_str(), password_masked);
 }
 
 void TextInput::focus() {

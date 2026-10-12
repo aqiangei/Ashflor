@@ -59,9 +59,14 @@ void Ui::ui_swap_petals(uint8_t static_pos1, uint8_t static_pos2) {
     UiLoadoutPetal *a1 = Ui::UiLoadout::petal_slots[static_pos1];
     UiLoadoutPetal *a2 = Ui::UiLoadout::petal_slots[static_pos2];
     if (a1 == nullptr || a2 == nullptr) return;
-    if (a1->petal_id == a2->petal_id) return;
-    a2->petal_id = Game::cached_loadout[static_pos1];
-    a1->petal_id = Game::cached_loadout[static_pos2];
+    PetalID::T id1 = Game::cached_loadout[static_pos1];
+    PetalID::T id2 = Game::cached_loadout[static_pos2];
+    if (id1 == id2) return;
+    // Objects travel with their petals
+    a1->petal_id = id1;
+    a2->petal_id = id2;
+    if (id1 != PetalID::kNone) a1->last_id = id1;
+    if (id2 != PetalID::kNone) a2->last_id = id2;
     a1->static_pos = static_pos2;
     a2->static_pos = static_pos1;
     Ui::UiLoadout::petal_slots[static_pos1] = a2;
@@ -70,21 +75,92 @@ void Ui::ui_swap_petals(uint8_t static_pos1, uint8_t static_pos2) {
     Game::swap_petals(static_pos1, static_pos2);
 }
 
+static uint8_t find_auto_equip_target() {
+    uint8_t n = Game::loadout_count;
+    // Primary left → right (empty or Basic)
+    for (uint8_t i = 0; i < n; ++i) {
+        PetalID::T id = Game::cached_loadout[i];
+        if (id == PetalID::kNone || id == PetalID::kBasic)
+            return i;
+    }
+    // Secondary left → right (empty only)
+    for (uint8_t i = 0; i < n; ++i) {
+        uint8_t s = (uint8_t) (n + i);
+        if (Game::cached_loadout[s] == PetalID::kNone)
+            return s;
+    }
+    return (uint8_t) -1;
+}
+
+uint8_t Ui::ui_auto_equip_from_bag(uint8_t bag_pos, float screen_x, float screen_y) {
+    if (!Game::alive()) return 0;
+    uint8_t n = Game::loadout_count;
+    if (bag_pos < 2 * n || bag_pos >= n + MAX_SLOT_COUNT) return 0;
+    PetalID::T id = Game::cached_loadout[bag_pos];
+    if (id == PetalID::kNone || id >= PetalID::kNumPetals) return 0;
+    uint8_t target = find_auto_equip_target();
+    if (target == (uint8_t) -1) return 0; // full — no equip, no fly
+
+    UiLoadoutPetal *from = Ui::UiLoadout::petal_slots[bag_pos];
+    if (from != nullptr) {
+        from->x = (screen_x - Ui::window_width / 2) / Ui::scale;
+        from->y = (screen_y - Ui::window_height / 2) / Ui::scale;
+        from->width = 48;
+        from->height = 48;
+        from->petal_id = id;
+        from->last_id = id;
+        from->showed = 1;
+        from->fly_hint = 1;
+        from->style.layer = 1;
+    }
+    ui_swap_petals(target, bag_pos);
+    UiLoadoutPetal *at = Ui::UiLoadout::petal_slots[target];
+    if (at != nullptr) {
+        at->petal_id = id;
+        at->last_id = id;
+        at->fly_hint = 1;
+        at->style.layer = 1;
+        at->showed = 1;
+    }
+    return 1;
+}
+
+uint8_t Ui::ui_unequip_to_backpack(uint8_t static_pos) {
+    if (!Game::alive()) return 0;
+    if (static_pos >= Game::loadout_count) return 0; // only primary equip slots
+    if (Game::cached_loadout[static_pos] == PetalID::kNone) return 0;
+    // Prefer paired secondary if empty
+    uint8_t pair = (uint8_t) (static_pos + Game::loadout_count);
+    if (pair < Game::loadout_count + MAX_SLOT_COUNT
+        && Game::cached_loadout[pair] == PetalID::kNone) {
+        ui_swap_petals(static_pos, pair);
+        return 1;
+    }
+    // Else first empty backpack slot
+    for (uint8_t i = 0; i < MAX_SLOT_COUNT; ++i) {
+        uint8_t bag = (uint8_t) (Game::loadout_count + i);
+        if (bag >= 2 * MAX_SLOT_COUNT) break;
+        if (Game::cached_loadout[bag] == PetalID::kNone) {
+            ui_swap_petals(static_pos, bag);
+            return 1;
+        }
+    }
+    return 0;
+}
+
 void Ui::ui_toggle_petal_slot(uint8_t static_pos) {
     if (!Game::alive()) return;
     if (static_pos >= Game::loadout_count + MAX_SLOT_COUNT) return;
     if (Game::cached_loadout[static_pos] == PetalID::kNone) return;
-    uint8_t pair;
     if (static_pos < Game::loadout_count) {
-        // Primary → retract into paired backpack slot
-        pair = (uint8_t) (static_pos + Game::loadout_count);
-    } else {
-        // Secondary → equip into paired primary slot
-        uint8_t i = (uint8_t) (static_pos - Game::loadout_count);
-        if (i >= Game::loadout_count) return;
-        pair = i;
+        // Primary equip → back to backpack
+        ui_unequip_to_backpack(static_pos);
+        return;
     }
-    ui_swap_petals(static_pos, pair);
+    // Secondary → equip into paired primary slot
+    uint8_t i = (uint8_t) (static_pos - Game::loadout_count);
+    if (i >= Game::loadout_count) return;
+    ui_swap_petals(static_pos, i);
 }
 
 static uint8_t dynamic_to_static(uint8_t dynamic_pos) {
@@ -143,7 +219,7 @@ void Ui::begin_petal_drag(uint8_t static_pos, uint32_t touch_id) {
 UiLoadoutPetal::UiLoadoutPetal(uint8_t pos) : Element(60, 60), 
     persistent_touch_id((uint32_t)-1),
     press_x(0), press_y(0),
-    static_pos(pos), curr_pos(pos), no_change_ticks(0), selected(0),
+    static_pos(pos), curr_pos(pos), no_change_ticks(0), selected(0), fly_hint(0),
     petal_id(PetalID::kNone), last_id(PetalID::kNone) 
 {
     reload = 1;
@@ -212,7 +288,7 @@ UiLoadoutPetal::UiLoadoutPetal(uint8_t pos) : Element(60, 60),
             constexpr float kClickSlop = 14.f;
             uint8_t is_click = drag_dist < kClickSlop;
             if (released && is_click) {
-                // Tap slot: toggle primary ↔ backpack (equip / retract)
+                // Tap: primary unequips to bag; secondary equips to primary
                 ui_toggle_petal_slot(static_pos);
             } else {
                 uint8_t potential_swap = find_loadout_drop_target(mouse_x, mouse_y);
@@ -231,6 +307,9 @@ UiLoadoutPetal::UiLoadoutPetal(uint8_t pos) : Element(60, 60),
                         width = lerp(width, slot->width, lerp_amt);
                         height = lerp(height, slot->height, lerp_amt);
                     }
+                } else if (released && !is_click && static_pos < Game::loadout_count) {
+                    // Dragged equip petal out with no drop target → backpack
+                    ui_unequip_to_backpack(static_pos);
                 } else {
                     x = lerp(x, (mouse_x - Ui::window_width / 2) / Ui::scale, lerp_amt);
                     y = lerp(y, (mouse_y - Ui::window_height / 2) / Ui::scale, lerp_amt);
@@ -247,12 +326,24 @@ UiLoadoutPetal::UiLoadoutPetal(uint8_t pos) : Element(60, 60),
             height = lerp(height, parent_slot->height + 20, lerp_amt);
             ctx.rotate(sin(Game::timestamp / 150) * 0.1);
         } else {
-            style.layer = 0;
-            if (!showed) lerp_amt = 1;
-            x = lerp(x, (parent_slot->screen_x - Ui::window_width / 2) / Ui::scale, lerp_amt);
-            y = lerp(y, (parent_slot->screen_y - Ui::window_height / 2) / Ui::scale, lerp_amt);
+            float tx = (parent_slot->screen_x - Ui::window_width / 2) / Ui::scale;
+            float ty = (parent_slot->screen_y - Ui::window_height / 2) / Ui::scale;
+            if (fly_hint) {
+                style.layer = 1;
+                if (!showed) showed = 1;
+                lerp_amt = Ui::lerp_amount * 1.6f; // snappier bag→slot path
+            } else {
+                style.layer = 0;
+                if (!showed) lerp_amt = 1;
+            }
+            x = lerp(x, tx, lerp_amt);
+            y = lerp(y, ty, lerp_amt);
             width = lerp(width, parent_slot->width, lerp_amt);
             height = lerp(height, parent_slot->height, lerp_amt);
+            if (fly_hint && fabsf(x - tx) + fabsf(y - ty) < 4.f) {
+                fly_hint = 0;
+                style.layer = 0;
+            }
         }
         //if (!Game::alive())
             //Ui::UiLoadout::petal_selected = nullptr;

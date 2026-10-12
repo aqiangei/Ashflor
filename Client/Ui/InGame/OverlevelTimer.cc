@@ -42,14 +42,7 @@ Element *Ui::make_overlevel_indicator() {
         .animate = [](Element *elt, Renderer &ctx){
             ctx.set_global_alpha(elt->animation);
         },
-        .should_render = [](){
-            if (!Game::alive()) return false;
-            Entity const &player = Game::simulation.get_ent(Game::player_id);
-            uint8_t mid = Game::simulation.arena_info.map_id;
-            uint32_t zid = Map::get_zone_from_pos(mid, player.get_x(), player.get_y());
-            return map_zones(mid)[zid].difficulty < Map::difficulty_at_level(score_to_level(Game::score))
-            && Game::overlevel_timer > 0;
-        }
+        .should_render = [](){ return false; }
     });
     elt->y = -80;
     return elt;

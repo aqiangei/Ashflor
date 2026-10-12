@@ -5,3 +5,16 @@ node_modules/
 .vscode/
 gardn-client.js
 gardn-client.wasm
+gardn-client.js.br
+gardn-client.js.gz
+gardn-client.wasm.br
+gardn-client.wasm.gz
+
+# secrets / local ops (never commit)
+*.pem
+*.key
+.env
+.env.*
+accounts.dat
+leaderboard.dat
+backups/

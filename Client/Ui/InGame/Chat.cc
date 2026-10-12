@@ -163,9 +163,9 @@ Element *Ui::make_chat_panel() {
         .h_justify = Style::Left,
         .v_justify = Style::Bottom
     });
-    elt->x = 12;
-    // Above drawers (-52) and B/Z/C/V (-8); status no longer on bottom-left
-    elt->y = -120;
+    // Right of vertical B/Z/C/V column (~44+pad), sit on bottom edge
+    elt->x = 64;
+    elt->y = -10;
     return elt;
 }
 

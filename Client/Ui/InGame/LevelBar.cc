@@ -15,7 +15,8 @@
 
 using namespace Ui;
 
-LevelBar::LevelBar() : Element(280, 36) {
+// Height includes name (top) + XP bar (bottom) so layout does not paint outside bounds
+LevelBar::LevelBar() : Element(280, 56) {
     progress = 0;
     style.animate = [&](Element *elt, Renderer &ctx) {
         if (Game::alive()) {
@@ -31,24 +32,33 @@ LevelBar::LevelBar() : Element(280, 36) {
 }
 
 void LevelBar::on_render(Renderer &ctx) {
+    float const bar_h = 32.f;
+    float const bar_y = height / 2 - bar_h / 2; // bar sits in lower half
+
+    char const *display = Game::nickname.c_str();
+    if (Game::account_logged_in && !Game::username.empty())
+        display = Game::username.c_str();
+    ctx.translate(0, -height / 2 + 14);
+    ctx.draw_text(display, { .size = 20 });
+    ctx.translate(0, height / 2 - 14);
+
+    ctx.translate(0, bar_y);
     ctx.set_stroke(0xc0222222);
     ctx.round_line_cap();
-    ctx.set_line_width(height);
+    ctx.set_line_width(bar_h);
     ctx.begin_path();
     ctx.move_to(-width / 2, 0);
     ctx.line_to(width / 2, 0);
     ctx.stroke();
     ctx.set_stroke(0xfff9e496);
-    ctx.set_line_width(height * 0.8);
+    ctx.set_line_width(bar_h * 0.8f);
     ctx.begin_path();
     ctx.move_to(-width / 2, 0);
     ctx.line_to(-width / 2 + width * ((float) progress), 0);
     ctx.stroke();
-
     std::string text = I18n::format_lvl_flower(level);
     ctx.draw_text(text.c_str(), { .size = 15 });
-    ctx.translate(0, -height / 2 - 14);
-    ctx.draw_text(Game::nickname.c_str(), { .size = 20 });
+    ctx.translate(0, -bar_y);
 }
 
 HealthBar::HealthBar() : Element(280, 16) {
@@ -121,7 +131,8 @@ Element *Ui::make_level_bar() {
         .v_justify = Style::Top
     });
     status->x = 12;
-    status->y = 56; // below top-left gear / exit
+    // Topbar: y=6, height = 40 + 2*outer_pad(10) = 60 → bottom at 66
+    status->y = 76;
     status->style.animate = [](Element *elt, Renderer &ctx) {
         ctx.translate(-(1 - (float) elt->animation) * 1.5f * elt->width, 0);
     };

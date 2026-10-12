@@ -144,8 +144,9 @@ int setup_inputs() {
             };
         }, { capture: true });
         window.addEventListener("wheel", (e) => {
+            e.preventDefault();
             _wheel_event(e.deltaY);
-        });
+        }, { passive: false });
     });
     return 0;
 }
@@ -154,9 +155,28 @@ void main_loop() {
     EM_ASM({
         function loop(time)
         {
-            Module.canvas.width = innerWidth * devicePixelRatio;
-            Module.canvas.height = innerHeight * devicePixelRatio;
-            _loop(time, innerWidth * devicePixelRatio, innerHeight * devicePixelRatio);
+            const width = Math.max(1, Math.round(innerWidth * devicePixelRatio));
+            const height = Math.max(1, Math.round(innerHeight * devicePixelRatio));
+            if (Module.canvas.width !== width || Module.canvas.height !== height) {
+                Module.canvas.width = width;
+                Module.canvas.height = height;
+            }
+            const frameStart = Module['profileFrames'] ? performance.now() : 0;
+            _loop(time, width, height);
+            if (Module['profileFrames']) {
+                const samples = Module['profileFrames'];
+                samples.push(performance.now() - frameStart);
+                if (samples.length === 300) {
+                    samples.sort((a, b) => a - b);
+                    console.info('Ashflor frame work: median ' + samples[149].toFixed(1)
+                        + ' ms, P95 ' + samples[284].toFixed(1) + ' ms');
+                    samples.length = 0;
+                }
+            }
+            if (Module['onFirstFrame']) {
+                Module['onFirstFrame']();
+                Module['onFirstFrame'] = null;
+            }
             requestAnimationFrame(loop);
         };
         requestAnimationFrame(loop);
@@ -166,8 +186,8 @@ void main_loop() {
 int setup_canvas() {
     EM_ASM({
         Module.canvas = document.getElementById("canvas");
-        Module.canvas.width = innerWidth * devicePixelRatio;
-        Module.canvas.height = innerHeight * devicePixelRatio;
+        Module.canvas.width = Math.max(1, Math.round(innerWidth * devicePixelRatio));
+        Module.canvas.height = Math.max(1, Math.round(innerHeight * devicePixelRatio));
         Module.canvas.oncontextmenu = function() { return false; };
         window.onbeforeunload = function(e) { return "Are you sure?"; };
         Module.ctxs = [];

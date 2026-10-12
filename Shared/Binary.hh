@@ -12,7 +12,8 @@ enum Clientbound {
     kChatMessage,
     kPartyUpdate,
     kCraftUpdate,
-    kSpawnResult
+    kSpawnResult,
+    kTalentUpdate
 };
 
 enum SpawnResultCode : uint8_t {
@@ -32,7 +33,8 @@ enum Serverbound {
     kPartyLeave,
     kPetalCraft,
     kGuestProgress,
-    kAccountLogout
+    kAccountLogout,
+    kTalentSpend
 };
 
 enum CraftMode : uint8_t {
@@ -56,7 +58,8 @@ enum CraftResultCode : uint8_t {
 
 enum AccountAuthMode {
     kAccountLogin = 0,
-    kAccountRegister = 1
+    kAccountRegister = 1,
+    kAccountResume = 2
 };
 
 enum AccountResultCode {

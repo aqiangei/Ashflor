@@ -11,12 +11,18 @@
 
 #include <array>
 #include <string>
+#include <unordered_map>
 #include <vector>
 
 namespace Game {
     struct ChatLine {
         uint8_t channel = ChatChannel::kChatNearby;
         std::string sender;
+        std::string text;
+        double expires_at = 0;
+    };
+
+    struct SpeechBubble {
         std::string text;
         double expires_at = 0;
     };
@@ -36,6 +42,8 @@ namespace Game {
     extern std::string username;
     extern std::string password;
     extern std::string account_status;
+    extern uint64_t session_token; // browser-local; auto-resume after reconnect
+    extern uint8_t pending_auto_login;
     extern uint8_t account_logged_in;
     extern uint8_t auth_panel; // 0 closed, 1 login, 2 register
     extern std::string disconnect_message;
@@ -59,6 +67,7 @@ namespace Game {
     extern uint8_t show_debug;
     extern uint8_t selected_map; // MapID for title-screen world select
     extern uint8_t minimap_expanded; // 0 compact full-map, 1 larger full-map (toggle M)
+    extern float camera_zoom; // client wheel zoom multiplier (1 = default)
     extern uint8_t pause_menu_open;
     extern uint8_t leave_confirm_open;
     extern uint8_t game_panel; // 0 none, see kPanel*
@@ -74,6 +83,7 @@ namespace Game {
     extern std::string chat_whisper_to;
     extern std::string chat_draft;
     extern std::vector<ChatLine> chat_lines;
+    extern std::unordered_map<std::string, SpeechBubble> speech_bubbles;
     extern uint8_t chat_menu_open;
     extern std::string chat_menu_name;
     extern float chat_menu_x;
@@ -95,6 +105,9 @@ namespace Game {
     extern std::array<PetalID::T, 2 * MAX_SLOT_COUNT> guest_petals;
     extern std::array<uint32_t, PetalID::kNumPetals> guest_craft_bank;
     extern uint32_t guest_coins;
+    extern uint8_t talent_hp;
+    extern uint8_t talent_rot;
+    extern uint8_t rot_speed_setting; // Q/E 0..10
 
     void init();
     void reset();
@@ -127,13 +140,19 @@ namespace Game {
     void party_leave();
     void spawn_in();
     void account_auth(uint8_t is_register);
+    void account_resume();
     void account_logout();
+    void talent_spend(uint8_t talent_id);
     void delete_petal(uint8_t);
     void swap_petals(uint8_t, uint8_t);
     void swap_all_petals();
     void craft_petals(uint8_t mode, PetalID::T petal_id);
     void craft_buy_rarity(uint8_t rarity);
     void craft_buy_special(PetalID::T id);
+    // Pure bag + secondary (not primary) count of this petal id
+    uint32_t craft_bag_count(PetalID::T id);
+    // craft_bank + craft_bag_count
+    uint32_t craft_owned(PetalID::T id);
     uint32_t craft_available(PetalID::T id);
     void craft_tray_add(PetalID::T id, uint32_t amount);
     void craft_tray_clear();

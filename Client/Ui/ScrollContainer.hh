@@ -15,6 +15,8 @@ namespace Ui {
     class ScrollContainer : public HContainer {
     public:
         float lerp_scroll;
+        // When set, wheel scrolls this list whenever visible (not only on hover)
+        uint8_t always_capture_wheel = 0;
         ScrollContainer(Element *, float);
 
         virtual void on_render(Renderer &) override;

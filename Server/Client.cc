@@ -15,6 +15,7 @@
 #include <Shared/Config.hh>
 #include <Shared/Craft.hh>
 #include <Shared/StaticData.hh>
+#include <Shared/Talent.hh>
 
 #include <Helpers/Math.hh>
 
@@ -33,6 +34,41 @@ static void send_craft_update(Client *client, uint8_t result, PetalID::T petal) 
         writer.write<uint32_t>(client->craft_bank[i]);
     writer.write<uint32_t>(client->coins);
     client->send_packet(writer.packet, writer.at - writer.packet);
+}
+
+static void send_talent_update(Client *client) {
+    Writer writer(Server::OUTGOING_PACKET);
+    writer.write<uint8_t>(Clientbound::kTalentUpdate);
+    writer.write<uint8_t>(client->talent_hp);
+    writer.write<uint8_t>(client->talent_rot);
+    client->send_packet(writer.packet, writer.at - writer.packet);
+}
+
+static uint32_t client_level(Client *client) {
+    if (client == nullptr || client->game == nullptr) return 1;
+    Simulation *sim = &client->game->simulation;
+    if (!sim->ent_exists(client->camera)) return 1;
+    Entity &camera = sim->get_ent(client->camera);
+    if (sim->ent_alive(camera.get_player())) {
+        uint32_t lv = score_to_level(sim->get_ent(camera.get_player()).get_score());
+        return lv < 1 ? 1 : lv;
+    }
+    uint8_t lv = camera.get_respawn_level();
+    return lv < 1 ? 1 : lv;
+}
+
+static uint8_t try_spend_talent(Client *client, uint8_t talent_id) {
+    if (client == nullptr) return 0;
+    if (talent_id >= TalentID::kNum) return 0;
+    uint32_t level = client_level(client);
+    uint8_t max_r = Talent::max_rank(level);
+    uint8_t &rank = (talent_id == TalentID::kHealth) ? client->talent_hp : client->talent_rot;
+    if (rank >= max_r) return 0;
+    uint8_t next = (uint8_t) (rank + 1);
+    uint32_t free = Talent::points_free(level, client->talent_hp, client->talent_rot);
+    if (free < Talent::rank_cost(next)) return 0;
+    rank = next;
+    return 1;
 }
 
 // Always snapshot full account (loadout + bank + coins + attempts) — never bank-only
@@ -135,6 +171,7 @@ void Client::on_message(WebSocket *ws, std::string_view message, uint64_t code) 
             // Temporarily accept recent hashes so cached tabs can get in;
             // new deploys still ship VERSION_HASH and cache-busted assets.
             uint8_t ok = (got == VERSION_HASH)
+                || (got == 19235684321350ull)
                 || (got == 19235684321333ull)
                 || (got == 19235684321332ull)
                 || (got == 19235684321331ull)
@@ -169,6 +206,7 @@ void Client::on_message(WebSocket *ws, std::string_view message, uint64_t code) 
             if (client->check_invalid(
                 validator.validate_float() &&
                 validator.validate_float() &&
+                validator.validate_uint8() &&
                 validator.validate_uint8()
             )) return;
             float x = reader.read<float>();
@@ -183,6 +221,9 @@ void Client::on_message(WebSocket *ws, std::string_view message, uint64_t code) 
                 player.acceleration = accel;
             }
             player.input = reader.read<uint8_t>();
+            uint8_t rot_set = reader.read<uint8_t>();
+            if (rot_set > Talent::kRotSettingMax) rot_set = Talent::kRotSettingMax;
+            client->rot_speed_setting = rot_set;
             break;
         }
         case Serverbound::kClientSpawn: {
@@ -197,7 +238,14 @@ void Client::on_message(WebSocket *ws, std::string_view message, uint64_t code) 
             if (client->check_invalid(UTF8Parser::is_valid_utf8(name))) return;
             uint8_t map_id = reader.read<uint8_t>();
             if (map_id >= MapID::kNumMaps) map_id = MapID::kGarden;
-            if (name.empty() && !client->account_name.empty()) name = client->account_name;
+            if (!client->account_name.empty()) name = client->account_name;
+            if (client->account_name.empty() && AccountStore::name_reserved_for_guest(name)) {
+                Writer writer(Server::OUTGOING_PACKET);
+                writer.write<uint8_t>(Clientbound::kSpawnResult);
+                writer.write<uint8_t>(SpawnResultCode::kSpawnNameTaken);
+                client->send_packet(writer.packet, writer.at - writer.packet);
+                break;
+            }
             // Unique play names across all maps (empty / unnamed allowed)
             if (!name.empty() && LeaderboardStore::name_taken(name, client)) {
                 Writer writer(Server::OUTGOING_PACKET);
@@ -245,6 +293,13 @@ void Client::on_message(WebSocket *ws, std::string_view message, uint64_t code) 
                 result = AccountStore::register_account(client, username, password);
                 if (result == AccountResultCode::kAccountOk)
                     result = AccountStore::login(client, username, password);
+            } else if (mode == AccountAuthMode::kAccountResume) {
+                uint64_t token = 0;
+                for (unsigned char c : password) {
+                    if (c < '0' || c > '9') { token = 0; break; }
+                    token = token * 10 + (uint64_t) (c - '0');
+                }
+                result = AccountStore::resume(client, username, token);
             } else {
                 result = AccountStore::login(client, username, password);
             }
@@ -258,9 +313,27 @@ void Client::on_message(WebSocket *ws, std::string_view message, uint64_t code) 
             for (uint32_t i = 0; i < PetalID::kNumPetals; ++i)
                 writer.write<uint32_t>(acc == nullptr ? 0 : acc->craft_bank[i]);
             writer.write<uint32_t>(acc == nullptr ? 0 : acc->coins);
+            writer.write<uint64_t>(
+                result == AccountResultCode::kAccountOk
+                    ? AccountStore::current_session(client->account_name)
+                    : 0
+            );
             client->send_packet(writer.packet, writer.at - writer.packet);
-            if (result == AccountResultCode::kAccountOk)
+            if (result == AccountResultCode::kAccountOk) {
                 send_craft_update(client, CraftResultCode::kCraftBankSync, PetalID::kNone);
+                send_talent_update(client);
+            }
+            break;
+        }
+        case Serverbound::kTalentSpend: {
+            if (client->check_invalid(validator.validate_uint8())) return;
+            uint8_t talent_id = reader.read<uint8_t>();
+            if (try_spend_talent(client, talent_id)) {
+                AccountStore::capture(client);
+                send_talent_update(client);
+            } else {
+                send_talent_update(client);
+            }
             break;
         }
         case Serverbound::kPetalDelete: {
@@ -434,7 +507,7 @@ void Client::on_message(WebSocket *ws, std::string_view message, uint64_t code) 
                 Entity &camera = simulation->get_ent(client->camera);
                 simulation->request_delete(camera.get_player());
             }
-            AccountStore::logout(client);
+            AccountStore::logout(client, 1);
             client->craft_bank = {};
             client->coins = 0;
             client->craft_attempts = 0;
@@ -448,6 +521,7 @@ void Client::on_message(WebSocket *ws, std::string_view message, uint64_t code) 
             for (uint32_t i = 0; i < PetalID::kNumPetals; ++i)
                 writer.write<uint32_t>(0);
             writer.write<uint32_t>(0);
+            writer.write<uint64_t>(0);
             client->send_packet(writer.packet, writer.at - writer.packet);
             send_craft_update(client, CraftResultCode::kCraftBankSync, PetalID::kNone);
             break;
@@ -465,6 +539,7 @@ void Client::on_message(WebSocket *ws, std::string_view message, uint64_t code) 
             for (uint32_t i = 0; i < PetalID::kNumPetals; ++i)
                 if (client->check_invalid(validator.validate_uint32())) return;
             if (client->check_invalid(validator.validate_uint32())) return; // coins
+            if (client->check_invalid(validator.validate_uint8() && validator.validate_uint8())) return;
             uint8_t level = reader.read<uint8_t>();
             if (level < 1) level = 1;
             if (level > MAX_LEVEL) level = MAX_LEVEL;
@@ -485,7 +560,13 @@ void Client::on_message(WebSocket *ws, std::string_view message, uint64_t code) 
             for (uint32_t i = 0; i < PetalID::kNumPetals; ++i)
                 client->craft_bank[i] = reader.read<uint32_t>();
             client->coins = reader.read<uint32_t>();
+            uint8_t th = reader.read<uint8_t>();
+            uint8_t tr = reader.read<uint8_t>();
+            uint8_t max_r = Talent::max_rank(level);
+            client->talent_hp = th > max_r ? max_r : th;
+            client->talent_rot = tr > max_r ? max_r : tr;
             send_craft_update(client, CraftResultCode::kCraftBankSync, PetalID::kNone);
+            send_talent_update(client);
             break;
         }
     }

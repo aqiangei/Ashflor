@@ -33,6 +33,9 @@ public:
     std::array<uint32_t, PetalID::kNumPetals> craft_bank = {};
     uint32_t coins = 0;
     uint32_t craft_attempts = 0;
+    uint8_t talent_hp = 0;
+    uint8_t talent_rot = 0;
+    uint8_t rot_speed_setting = 7; // Q/E wheel 0..10
     uint64_t last_chat_ms = 0;
     uint32_t party_id = 0;
     uint8_t party_leader = 0;
