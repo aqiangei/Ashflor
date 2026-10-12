@@ -5,6 +5,8 @@
 #include <Client/Input.hh>
 
 #include <Shared/Config.hh>
+#include <Shared/Craft.hh>
+#include <Shared/StaticData.hh>
 
 #include <cstring>
 #include <string>
@@ -191,7 +193,7 @@ void Storage::retrieve() {
         }
     }
     {
-        uint32_t len = StorageProtocol::retrieve("guest", 256);
+        uint32_t len = StorageProtocol::retrieve("guest", StorageProtocol::MAX_LENGTH);
         if (len >= 2 + 2 * MAX_SLOT_COUNT) {
             Decoder reader(&StorageProtocol::buffer[0]);
             Game::guest_save_valid = reader.read<uint8_t>() ? 1 : 0;
@@ -203,12 +205,24 @@ void Storage::retrieve() {
                 Game::guest_petals[i] = id;
                 if (id != PetalID::kNone) Game::seen_petals[id] = 1;
             }
-            for (uint32_t i = 0; i < RarityID::kNumRarities; ++i) {
-                if (reader.at >= StorageProtocol::buffer + len) break;
-                Game::guest_craft_bank[i] = reader.read<uint32_t>();
-            }
+            Game::guest_craft_bank = {};
+            uint32_t remain = 0;
             if (reader.at < StorageProtocol::buffer + len)
-                Game::guest_coins = reader.read<uint32_t>();
+                remain = (uint32_t) ((StorageProtocol::buffer + len - reader.at) / 4);
+            if (remain >= PetalID::kNumPetals) {
+                for (uint32_t i = 0; i < PetalID::kNumPetals; ++i)
+                    Game::guest_craft_bank[i] = reader.read<uint32_t>();
+                if (reader.at + 4 <= StorageProtocol::buffer + len)
+                    Game::guest_coins = reader.read<uint32_t>();
+            } else if (remain >= RarityID::kNumRarities) {
+                for (uint8_t r = 0; r < RarityID::kNumRarities; ++r) {
+                    uint32_t n = reader.read<uint32_t>();
+                    PetalID::T id = Craft::first_petal_of_rarity(r);
+                    if (id != PetalID::kNone) Game::guest_craft_bank[id] = n;
+                }
+                if (reader.at + 4 <= StorageProtocol::buffer + len)
+                    Game::guest_coins = reader.read<uint32_t>();
+            }
             if (Game::guest_save_valid) {
                 Game::craft_bank = Game::guest_craft_bank;
                 Game::coins = Game::guest_coins;
@@ -265,7 +279,7 @@ void Storage::set() {
         writer.write<uint8_t>(Game::guest_level);
         for (uint32_t i = 0; i < 2 * MAX_SLOT_COUNT; ++i)
             writer.write<uint8_t>(Game::guest_petals[i]);
-        for (uint32_t i = 0; i < RarityID::kNumRarities; ++i)
+        for (uint32_t i = 0; i < PetalID::kNumPetals; ++i)
             writer.write<uint32_t>(Game::guest_craft_bank[i]);
         writer.write<uint32_t>(Game::guest_coins);
         StorageProtocol::store("guest", writer.at - writer.base);

@@ -13,6 +13,7 @@ CLIENT_ONLY(typedef LerpFloat Float;)
 
 #define FIELDS_Arena \
     SINGLE(player_count, uint32_t) \
+    SINGLE(registered_count, uint32_t) \
     SINGLE(map_id, uint8_t) \
     MULTIPLE(scores, Float, LEADERBOARD_SIZE) \
     MULTIPLE(names, std::string, LEADERBOARD_SIZE) \

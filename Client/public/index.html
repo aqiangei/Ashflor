@@ -1,11 +1,8 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="zh-CN">
     <head>
         <meta charset="utf-8">
-        <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
-        <meta http-equiv="Pragma" content="no-cache">
-        <meta http-equiv="Expires" content="0">
-        <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;700&family=Ubuntu:wght@700&display=swap" rel="stylesheet" type="text/css">
+        <meta http-equiv="Cache-Control" content="no-cache">
         <style>
             * {
                 margin: 0px;
@@ -15,9 +12,10 @@
             html, body {
                 width: 100%;
                 height: 100%;
-                background: #000000;
+                background: #0a0a0a;
+                font-family: "Microsoft YaHei", "PingFang SC", "Noto Sans SC", Ubuntu, system-ui, sans-serif;
             }
-            /* Font probe only 鈥?must never show as a "loading page" */
+            /* Font probe only — must never show as a "loading page" */
             #font-loader {
                 position: absolute;
                 left: -9999px;
@@ -37,41 +35,110 @@
                 z-index: 1;
                 background: #000000;
             }
+            /* DOM text fields live above the canvas */
+            body > input[type="text"] {
+                z-index: 5 !important;
+                color: #111111 !important;
+                caret-color: #111111 !important;
+                -webkit-text-fill-color: #111111 !important;
+                background: transparent !important;
+                pointer-events: auto;
+            }
             #loading-bar {
                 position: absolute;
-                top: 0%;
-                left: 0%;
-                width: 100%;
-                height: 100%;
-                background-color: #000000;
+                inset: 0;
+                background:
+                    radial-gradient(ellipse 70% 50% at 50% 42%, #1a2a1c 0%, #0a0a0a 62%, #050505 100%);
                 z-index: 10;
+                display: flex;
+                flex-direction: column;
+                align-items: center;
+                justify-content: center;
+                gap: 28px;
+                transition: opacity 0.45s ease, visibility 0.45s ease;
+            }
+            #loading-bar.hide {
+                opacity: 0;
+                visibility: hidden;
+                pointer-events: none;
+            }
+            #loading-brand {
+                font-family: Ubuntu, "Noto Sans SC", sans-serif;
+                font-size: clamp(28px, 6vw, 52px);
+                font-weight: 700;
+                color: #f4f4f4;
+                letter-spacing: 0.04em;
+                animation: brand-breathe 2.4s ease-in-out infinite;
+            }
+            @keyframes brand-breathe {
+                0%, 100% { opacity: 0.72; transform: scale(1); }
+                50% { opacity: 1; transform: scale(1.03); }
             }
             #loading {
-                position: absolute;
-                top: 50%;
-                left: 50%;
-                font-size: 48pt;
+                font-size: clamp(16px, 3.2vw, 22px);
                 font-family: "Noto Sans SC", "Microsoft YaHei", sans-serif;
-                transform: translate(-50%, -50%);
-                color: #ffffff;
-                font-weight: bold;
+                color: #d8d8d8;
+                font-weight: 700;
                 white-space: nowrap;
+                min-height: 1.4em;
+            }
+            #loading.is-error {
+                color: #ff8a80;
+                animation: none;
+            }
+            #loading .label {
+                display: inline;
             }
             #loading .dots {
                 display: inline-block;
-                width: 1.35em;
+                width: 1.5em;
                 text-align: left;
             }
             #loading .dots span {
-                opacity: 0.15;
-                animation: loading-dot 1.2s ease-in-out infinite;
+                display: inline-block;
+                opacity: 0.2;
+                transform: translateY(0);
+                animation: loading-dot 1.05s ease-in-out infinite;
             }
             #loading .dots span:nth-child(1) { animation-delay: 0s; }
-            #loading .dots span:nth-child(2) { animation-delay: 0.2s; }
-            #loading .dots span:nth-child(3) { animation-delay: 0.4s; }
+            #loading .dots span:nth-child(2) { animation-delay: 0.18s; }
+            #loading .dots span:nth-child(3) { animation-delay: 0.36s; }
             @keyframes loading-dot {
-                0%, 80%, 100% { opacity: 0.15; }
-                40% { opacity: 1; }
+                0%, 80%, 100% {
+                    opacity: 0.2;
+                    transform: translateY(0);
+                }
+                40% {
+                    opacity: 1;
+                    transform: translateY(-4px);
+                }
+            }
+            #loading-track {
+                width: min(280px, 58vw);
+                height: 6px;
+                border-radius: 999px;
+                background: rgba(255, 255, 255, 0.12);
+                overflow: hidden;
+                position: relative;
+            }
+            #loading-track.done,
+            #loading-track.error {
+                display: none;
+            }
+            #loading-fill {
+                position: absolute;
+                top: 0;
+                left: 0;
+                height: 100%;
+                width: 38%;
+                border-radius: inherit;
+                background: linear-gradient(90deg, #149a22, #1dd129, #7dff8a);
+                animation: loading-slide 1.35s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+            }
+            @keyframes loading-slide {
+                0% { left: -40%; width: 34%; }
+                50% { left: 28%; width: 48%; }
+                100% { left: 108%; width: 34%; }
             }
             #landscape-btn {
                 display: none;
@@ -108,10 +175,12 @@
     </head>
     <body>
     <div id="loading-bar">
-        <span id="loading">鍔犺浇涓?span class="dots" aria-hidden="true"><span>.</span><span>.</span><span>.</span></span></span>
-        <button id="landscape-btn" type="button">妯睆娓哥帺</button>
+        <div id="loading-brand">ashflor.io</div>
+        <div id="loading"><span class="label">加载中</span><span class="dots" aria-hidden="true"><span>.</span><span>.</span><span>.</span></span></div>
+        <div id="loading-track" aria-hidden="true"><div id="loading-fill"></div></div>
+        <button id="landscape-btn" type="button">横屏游戏</button>
     </div>
-    <div id="font-loader" style="font-family: 'Noto Sans SC', 'Microsoft YaHei', Ubuntu;">鍔犺浇涓?浣犲ソ hello!</div>
+    <div id="font-loader" style="font-family: 'Noto Sans SC', 'Microsoft YaHei', Ubuntu;">加载中 你好 hello!</div>
     <canvas id="canvas" width="0" height="0"></canvas>
     <script>
         (function () {
@@ -140,7 +209,6 @@
                 goLandscape();
             }, { passive: false });
 
-            // Blink ~3s then fade away
             setTimeout(function () {
                 btn.classList.add("hide");
                 setTimeout(function () {
@@ -151,21 +219,73 @@
         })();
 
         document.addEventListener("DOMContentLoaded", () => {
-            // Bust CDN/browser cache when VERSION_HASH changes
-            var cacheV = '21352';
+            var cacheV = '21378';
+            var cacheName = 'ashflor-assets-' + cacheV;
             var hidden = false;
             var loadingEl = document.getElementById("loading");
-            function showLoadError(msg) {
-                if (loadingEl) loadingEl.textContent = msg;
+            var trackEl = document.getElementById("loading-track");
+            var brandEl = document.getElementById("loading-brand");
+
+            function setLoadingMessage(msg, withDots) {
+                if (!loadingEl) return;
+                loadingEl.classList.remove("is-error");
+                if (withDots) {
+                    loadingEl.innerHTML =
+                        '<span class="label"></span>' +
+                        '<span class="dots" aria-hidden="true"><span>.</span><span>.</span><span>.</span></span>';
+                    loadingEl.querySelector(".label").textContent = msg;
+                    if (trackEl) {
+                        trackEl.classList.remove("error", "done");
+                    }
+                    if (brandEl) brandEl.style.animationPlayState = "running";
+                } else {
+                    loadingEl.classList.add("is-error");
+                    loadingEl.textContent = msg;
+                    if (trackEl) trackEl.classList.add("error");
+                    if (brandEl) brandEl.style.animationPlayState = "paused";
+                }
             }
+
             function hideLoading() {
                 if (hidden) return;
-                // Only hide once wasm actually started (canvas ready)
                 if (!window.Module || !window.Module.canvas) return;
                 hidden = true;
                 var bar = document.getElementById("loading-bar");
-                if (bar) bar.style.display = "none";
+                if (trackEl) trackEl.classList.add("done");
+                if (bar) {
+                    bar.classList.add("hide");
+                    setTimeout(function () {
+                        bar.style.display = "none";
+                    }, 480);
+                }
             }
+
+            // Prefetch + Cache API so wasm/js hit disk on return visits
+            function warmAssetCache() {
+                if (!('caches' in window)) return Promise.resolve();
+                var urls = [
+                    'gardn-client.js?v=' + cacheV,
+                    'gardn-client.wasm?v=' + cacheV
+                ];
+                return caches.open(cacheName).then(function (cache) {
+                    return Promise.all(urls.map(function (u) {
+                        return cache.match(u).then(function (hit) {
+                            if (hit) return;
+                            return fetch(u, { credentials: 'same-origin' }).then(function (res) {
+                                if (res && res.ok) return cache.put(u, res.clone());
+                            }).catch(function () {});
+                        });
+                    }));
+                }).then(function () {
+                    return caches.keys().then(function (keys) {
+                        return Promise.all(keys.map(function (k) {
+                            if (k.indexOf('ashflor-assets-') === 0 && k !== cacheName)
+                                return caches.delete(k);
+                        }));
+                    });
+                }).catch(function () {});
+            }
+
             var Module = window.Module = window.Module || {};
             Module.locateFile = function (path) {
                 return path + '?v=' + cacheV;
@@ -175,24 +295,27 @@
             };
             Module.postRun = [function () { hideLoading(); }];
             Module.onAbort = function (what) {
-                showLoadError("鍔犺浇澶辫触: " + String(what).slice(0, 80));
+                setLoadingMessage("加载失败: " + String(what).slice(0, 80), false);
             };
-            // FRP 涓?wasm ~13MB锛屽嬁鍦ㄨ剼鏈?onload 鍚庤繃鏃╁叧閬僵锛堝惁鍒欑櫧灞忛湶鍑?font-loader锛?            setTimeout(function () {
-                if (!hidden) showLoadError("鍔犺浇杈冩參锛屼粛鍦ㄤ笅杞藉鎴风鈥?);
+            setTimeout(function () {
+                if (!hidden) setLoadingMessage("仍在下载客户端", true);
             }, 8000);
             setTimeout(function () {
                 if (!hidden) {
                     if (window.Module && window.Module.canvas) hideLoading();
-                    else showLoadError("鍔犺浇瓒呮椂锛岃鍒锋柊鎴栨鏌ョ綉缁?);
+                    else setLoadingMessage("加载超时，请刷新或检查网络", false);
                 }
             }, 60000);
-            const script = document.createElement('script');
-            script.src = 'gardn-client.js?v=' + cacheV;
-            script.async = true;
-            script.onerror = function () {
-                showLoadError("鍔犺浇澶辫触锛氭棤娉曚笅杞藉鎴风鑴氭湰");
-            };
-            document.body.appendChild(script);
+
+            warmAssetCache().finally(function () {
+                const script = document.createElement('script');
+                script.src = 'gardn-client.js?v=' + cacheV;
+                script.async = true;
+                script.onerror = function () {
+                    setLoadingMessage("加载失败：无法下载客户端脚本", false);
+                };
+                document.body.appendChild(script);
+            });
         });
     </script>
     </body>

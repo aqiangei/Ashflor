@@ -11,11 +11,12 @@ inline uint32_t const ARENA_HEIGHT = 4000;
 inline uint32_t const MAX_SLOT_COUNT = 8;
 inline uint32_t const LEVELS_PER_EXTRA_SLOT = 15;
 inline uint32_t const LEADERBOARD_SIZE = 10;
-inline uint32_t const MINIMAP_PLAYER_CAP = 48;
+inline uint32_t const MINIMAP_PLAYER_CAP = 128;
 inline uint32_t const MAX_PETALS_IN_CLUMP = 4;
 inline uint32_t const MAX_DIFFICULTY = 3;
 inline uint32_t const MAX_DROPS_PER_MOB = 6;
 inline uint32_t const MAX_ZONES_PER_MAP = 8;
+inline uint32_t const MAX_TERRAIN_PER_MAP = 64;
 
 namespace MapID {
     enum : uint8_t {
@@ -25,6 +26,50 @@ namespace MapID {
         kPolar,
         kNumMaps
     };
+}
+
+namespace TerrainKind {
+    enum : uint8_t {
+        kHill = 0,
+        kWater,
+        kChannel
+    };
+}
+
+namespace TerrainShape {
+    enum : uint8_t {
+        kAABB = 0,
+        kEllipse
+    };
+}
+
+namespace TerrainFlags {
+    enum : uint8_t {
+        kImpassable = 1 << 0,
+        kNoAttack = 1 << 1
+    };
+}
+
+// Theme cloth colors (shared across maps — see MAP_TERRAIN.md)
+namespace MapTheme {
+    inline uint32_t const GARDEN_GROUND = 0xff3cb371;
+    inline uint32_t const GARDEN_HILL = 0xff2d6a4f;
+    inline uint32_t const GARDEN_WATER = 0xff40916c;
+    inline uint32_t const GARDEN_CHANNEL = 0x99d4a373;
+    inline uint32_t const DESERT_GROUND = 0xffe9c46a;
+    inline uint32_t const DESERT_HILL = 0xffbc6c25;
+    inline uint32_t const DESERT_WATER = 0xff2a9d8f;
+    inline uint32_t const DESERT_CHANNEL = 0x99f4a261;
+    inline uint32_t const OCEAN_GROUND = 0xff0077b6;
+    inline uint32_t const OCEAN_HILL = 0xff023e8a;
+    inline uint32_t const OCEAN_WATER = 0xff00b4d8;
+    inline uint32_t const OCEAN_CHANNEL = 0x99ff85a1;
+    inline uint32_t const POLAR_GROUND = 0xffadb5bd;
+    inline uint32_t const POLAR_HILL = 0xff6c757d;
+    inline uint32_t const POLAR_WATER = 0xff4cc9f0;
+    inline uint32_t const POLAR_CHANNEL = 0x99caf0f8;
+    inline uint32_t const WEAVE_LIGHT = 0x28ffffff;
+    inline uint32_t const WEAVE_DARK = 0x18000000;
 }
 
 namespace DamageType {
@@ -288,4 +333,16 @@ struct ZoneDefinition {
     uint32_t difficulty;
     uint32_t color;
     char const *name;
+};
+
+// AABB: left/top/right/bottom. Ellipse: left/top = center, right/bottom = rx/ry.
+struct TerrainFeature {
+    uint8_t kind;
+    uint8_t shape;
+    uint8_t flags;
+    float left;
+    float top;
+    float right;
+    float bottom;
+    uint32_t color;
 };

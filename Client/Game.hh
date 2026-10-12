@@ -58,7 +58,7 @@ namespace Game {
     extern uint8_t on_game_screen;
     extern uint8_t show_debug;
     extern uint8_t selected_map; // MapID for title-screen world select
-    extern uint8_t minimap_expanded; // 0 local detail, 1 full arena (toggle M)
+    extern uint8_t minimap_expanded; // 0 compact full-map, 1 larger full-map (toggle M)
     extern uint8_t pause_menu_open;
     extern uint8_t leave_confirm_open;
     extern uint8_t game_panel; // 0 none, see kPanel*
@@ -82,16 +82,18 @@ namespace Game {
     extern uint8_t party_member_count;
     extern uint8_t revive_progress;
     extern uint8_t awaiting_party_revive;
-    extern std::array<uint32_t, RarityID::kNumRarities> craft_bank;
+    extern std::array<uint32_t, PetalID::kNumPetals> craft_bank;
     extern uint32_t coins;
-    extern uint8_t craft_selected_rarity;
+    extern uint8_t craft_selected_rarity; // shop / specials
+    extern PetalID::T craft_tray_id;
+    extern uint32_t craft_tray_count;
     extern std::string craft_status;
 
     // Guest local progress (browser localStorage)
     extern uint8_t guest_save_valid;
     extern uint8_t guest_level;
     extern std::array<PetalID::T, 2 * MAX_SLOT_COUNT> guest_petals;
-    extern std::array<uint32_t, RarityID::kNumRarities> guest_craft_bank;
+    extern std::array<uint32_t, PetalID::kNumPetals> guest_craft_bank;
     extern uint32_t guest_coins;
 
     void init();
@@ -125,12 +127,16 @@ namespace Game {
     void party_leave();
     void spawn_in();
     void account_auth(uint8_t is_register);
+    void account_logout();
     void delete_petal(uint8_t);
     void swap_petals(uint8_t, uint8_t);
     void swap_all_petals();
-    void craft_petals(uint8_t mode);
+    void craft_petals(uint8_t mode, PetalID::T petal_id);
     void craft_buy_rarity(uint8_t rarity);
     void craft_buy_special(PetalID::T id);
+    uint32_t craft_available(PetalID::T id);
+    void craft_tray_add(PetalID::T id, uint32_t amount);
+    void craft_tray_clear();
     void on_message(uint8_t *, uint32_t);
     void poll_ui_event(Ui::ScreenEvent const &);
 };

@@ -1,7 +1,8 @@
 #include <Server/Process.hh>
 
-#include <Shared/Simulation.hh>
 #include <Shared/Entity.hh>
+#include <Shared/Map.hh>
+#include <Shared/Simulation.hh>
 
 #include <cmath>
 
@@ -36,8 +37,14 @@ void tick_entity_motion(Simulation *sim, Entity &ent) {
     }
     ent.velocity += ent.collision_velocity * 0.5;
     if (!ent.has_component(kPetal) && !ent.has_component(kWeb)) {
-        ent.set_x(fclamp(ent.get_x(), ent.get_radius(), ARENA_WIDTH - ent.get_radius()));
-        ent.set_y(fclamp(ent.get_y(), ent.get_radius(), ARENA_HEIGHT - ent.get_radius()));
+        float x = ent.get_x();
+        float y = ent.get_y();
+        float r = ent.get_radius();
+        Map::resolve_circle_terrain(sim->map_id, x, y, r);
+        x = fclamp(x, r, ARENA_WIDTH - r);
+        y = fclamp(y, r, ARENA_HEIGHT - r);
+        ent.set_x(x);
+        ent.set_y(y);
     }
     //ent.acceleration.set(0,0);
     ent.collision_velocity.set(0,0);

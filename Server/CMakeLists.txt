@@ -26,6 +26,7 @@ set(SOURCES
     Chat.cc
     Client.cc
     Game.cc
+    LeaderboardStore.cc
     Main.cc
     Party.cc
     PetalTracker.cc
@@ -74,7 +75,11 @@ endif()
 if(WASM_SERVER)
     set(CMAKE_CXX_COMPILER "em++")
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DWASM_SERVER=1")
-    add_link_options(-sEXIT_RUNTIME=0 -sEXPORTED_FUNCTIONS=_main,_on_connect,_on_disconnect,_tick,_on_message,_malloc,_free)
+    add_link_options(
+        -sEXIT_RUNTIME=0
+        -sEXPORTED_FUNCTIONS=_main,_on_connect,_on_disconnect,_tick,_on_message,_malloc,_free
+        --js-library=${CMAKE_CURRENT_SOURCE_DIR}/node_fs_library.js
+    )
     if (NOT DEBUG) 
         set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} --closure=1")
     endif()

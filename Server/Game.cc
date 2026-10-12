@@ -1,6 +1,7 @@
 #include <Server/Game.hh>
 
 #include <Server/AccountStore.hh>
+#include <Server/LeaderboardStore.hh>
 #include <Server/Client.hh>
 #include <Server/Party.hh>
 #include <Server/PetalTracker.hh>
@@ -151,6 +152,15 @@ Client *GameInstance::client_by_camera(EntityID const &id) {
 
 void GameInstance::remove_client(Client *client) {
     DEBUG_ONLY(assert(client->game == this);)
+    // Flush best score before releasing the play name
+    if (!client->play_name.empty() && simulation.ent_exists(client->camera)) {
+        Entity &cam = simulation.get_ent(client->camera);
+        if (simulation.ent_alive(cam.get_player())) {
+            Entity &player = simulation.get_ent(cam.get_player());
+            LeaderboardStore::record(client->play_name, player.get_score(), player.get_color());
+            LeaderboardStore::flush();
+        }
+    }
     AccountStore::capture(client);
     AccountStore::logout(client);
     Party::leave(client);
@@ -158,6 +168,7 @@ void GameInstance::remove_client(Client *client) {
     _teardown_camera(this, client);
     client->game = nullptr;
     client->in_view.clear();
+    client->play_name.clear();
 }
 
 void GameInstance::transfer_client(Client *client, GameInstance *dest) {

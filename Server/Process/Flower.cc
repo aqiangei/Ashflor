@@ -3,8 +3,11 @@
 #include <Server/EntityFunctions.hh>
 #include <Server/Spawn.hh>
 #include <Shared/Entity.hh>
+#include <Shared/Map.hh>
 #include <Shared/Simulation.hh>
 #include <Shared/StaticData.hh>
+
+#include <Helpers/Bits.hh>
 
 #include <cmath>
 
@@ -111,6 +114,9 @@ static RotationCenter const _get_petal_rotation_center(Simulation *sim, Entity c
 void tick_player_behavior(Simulation *sim, Entity &player) {
     if (player.pending_delete) return;
     DEBUG_ONLY(assert(player.max_health > 0);)
+    // Fast channels: walkable but no attacking (leaf/sand/coral corridors)
+    if (Map::in_no_attack_zone(sim->map_id, player.get_x(), player.get_y()))
+        BitMath::unset(player.input, InputFlags::kAttacking);
     PlayerBuffs const buffs = _get_petal_passive_buffs(sim, player);
     float health_ratio = player.health / player.max_health;
     if (!player.has_component(kMob)) {

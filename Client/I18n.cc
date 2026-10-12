@@ -101,6 +101,7 @@ static char const *const EN[I18n::kCount] = {
     "Password",
     "Login",
     "Register",
+    "Logout",
     "Logged in",
     "Username must be 3-16 letters, numbers or _",
     "Password must be 4-32 characters",
@@ -108,6 +109,7 @@ static char const *const EN[I18n::kCount] = {
     "Account not found",
     "Wrong password",
     "This account is already online",
+    "Logged out",
     "Not connected",
     "Logged in: {}  Lv.{}",
     "Guest mode (register to keep current progress)",
@@ -148,6 +150,7 @@ static char const *const EN[I18n::kCount] = {
     "Success! Got {}",
     "Exchanged for {}",
     "Trash petals (T) or fill inventory to bank materials by rarity",
+    "That name is already in use",
 };
 
 static char const *const ZH[I18n::kCount] = {
@@ -226,6 +229,7 @@ static char const *const ZH[I18n::kCount] = {
     "密码",
     "登录",
     "注册",
+    "退出账号",
     "登录成功",
     "账号需为 3-16 位字母、数字或下划线",
     "密码需为 4-32 个字符",
@@ -233,6 +237,7 @@ static char const *const ZH[I18n::kCount] = {
     "账号不存在",
     "密码错误",
     "该账号已在线",
+    "已退出账号",
     "尚未连接到服务器",
     "已登录：{}  {}级",
     "游客模式（注册账号可继承当前进度）",
@@ -273,6 +278,7 @@ static char const *const ZH[I18n::kCount] = {
     "成功！获得 {}",
     "直兑获得 {}",
     "按 T 丢弃花瓣，或背包满时拾取，会按稀有度存入材料库",
+    "该名字已被占用",
 };
 
 char const *I18n::tr(Str id) {

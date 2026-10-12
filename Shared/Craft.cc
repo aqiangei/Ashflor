@@ -5,24 +5,23 @@
 #include <Helpers/Math.hh>
 
 #include <cmath>
+#include <cstring>
 #include <vector>
 
 namespace Craft {
-    // C→U, U→R, R→E, E→L, L→M, M→Unique
     static float const SUCCESS[RarityID::kNumRarities - 1] = {
-        0.64f,  // EV≈7.8   commons → unusual (commons drop fast)
-        0.36f,  // EV≈13.9
-        0.18f,  // EV≈27.8  rare→epic (matches ~25× farm gap)
-        0.09f,  // EV≈55.6
-        0.04f,  // EV≈125
-        0.015f  // EV≈333   mythic→unique
+        0.64f,
+        0.36f,
+        0.18f,
+        0.09f,
+        0.04f,
+        0.015f
     };
 
     static float const FARM_SEC[RarityID::kNumRarities] = {
         8.f, 28.f, 140.f, 700.f, 2800.f, 9000.f, 28000.f
     };
 
-    // Kill payout: common ants give pocket change; mythic/unique bosses pay big
     static uint32_t const COIN_BASE[RarityID::kNumRarities] = {
         1, 4, 12, 35, 90, 220, 550
     };
@@ -30,7 +29,6 @@ namespace Craft {
         2, 4, 10, 25, 60, 140, 350
     };
 
-    // Shop: random petal of rarity → backpack
     static uint32_t const BUY_RARITY[RarityID::kNumRarities] = {
         8, 25, 90, 320, 1200, 4800, 18000
     };
@@ -51,17 +49,11 @@ namespace Craft {
         return FARM_SEC[rarity];
     }
 
-    uint8_t can_upgrade(uint8_t from_rarity) {
-        return from_rarity < RarityID::kUnique;
-    }
-
     PetalID::T random_petal_of_rarity(uint8_t rarity) {
         static std::vector<PetalID::T> pools[RarityID::kNumRarities];
         static uint8_t inited = 0;
         if (!inited) {
             for (PetalID::T id = 1; id < PetalID::kNumPetals; ++id) {
-                // Skip equipment-only specials from random rarity pools
-                // (bought separately); still allow if they match rarity for exchange
                 uint8_t r = PETAL_DATA[id].rarity;
                 if (r < RarityID::kNumRarities)
                     pools[r].push_back(id);
@@ -73,6 +65,47 @@ namespace Craft {
         uint32_t idx = (uint32_t) (frand() * pools[rarity].size());
         if (idx >= pools[rarity].size()) idx = (uint32_t) pools[rarity].size() - 1;
         return pools[rarity][idx];
+    }
+
+    PetalID::T first_petal_of_rarity(uint8_t rarity) {
+        static PetalID::T first[RarityID::kNumRarities];
+        static uint8_t inited = 0;
+        if (!inited) {
+            for (uint8_t r = 0; r < RarityID::kNumRarities; ++r)
+                first[r] = PetalID::kNone;
+            for (PetalID::T id = 1; id < PetalID::kNumPetals; ++id) {
+                uint8_t r = PETAL_DATA[id].rarity;
+                if (r < RarityID::kNumRarities && first[r] == PetalID::kNone)
+                    first[r] = id;
+            }
+            inited = 1;
+        }
+        if (rarity >= RarityID::kNumRarities) return PetalID::kNone;
+        return first[rarity];
+    }
+
+    static PetalID::T find_same_name_at_rarity(PetalID::T from, uint8_t rarity) {
+        if (from == PetalID::kNone || from >= PetalID::kNumPetals) return PetalID::kNone;
+        char const *name = PETAL_DATA[from].name;
+        for (PetalID::T id = 1; id < PetalID::kNumPetals; ++id) {
+            if (PETAL_DATA[id].rarity != rarity) continue;
+            if (std::strcmp(PETAL_DATA[id].name, name) == 0)
+                return id;
+        }
+        return PetalID::kNone;
+    }
+
+    uint8_t can_upgrade_petal(PetalID::T id) {
+        if (id == PetalID::kNone || id >= PetalID::kNumPetals) return 0;
+        return PETAL_DATA[id].rarity < RarityID::kUnique;
+    }
+
+    PetalID::T craft_result(PetalID::T from) {
+        if (!can_upgrade_petal(from)) return PetalID::kNone;
+        uint8_t next_r = (uint8_t) (PETAL_DATA[from].rarity + 1);
+        PetalID::T same = find_same_name_at_rarity(from, next_r);
+        if (same != PetalID::kNone) return same;
+        return random_petal_of_rarity(next_r);
     }
 
     uint32_t coins_from_mob(uint8_t mob_rarity) {

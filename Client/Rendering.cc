@@ -54,7 +54,9 @@ void Game::render_game() {
     }
     {
         RenderContext context(&renderer);
-        MapZones const &zones = map_zones(Game::simulation.arena_info.map_id);
+        uint8_t mid = Game::simulation.arena_info.map_id;
+        if (mid >= MapID::kNumMaps) mid = MapID::kGarden;
+        MapZones const &zones = map_zones(mid);
         for (ZoneDefinition const &def : zones) {
             renderer.set_fill(def.color);
             renderer.fill_rect(def.left, def.top, def.right - def.left, def.bottom - def.top);
@@ -63,13 +65,88 @@ void Game::render_game() {
                 renderer.fill_rect(def.left, def.top, def.right - def.left, def.bottom - def.top);
             }
         }
-        renderer.set_stroke(alpha);
-        renderer.set_line_width(0.5);
+
+        // Cloth weave on ground (visible tiles around camera)
         float scale = 1 / (2 * camera.get_fov() * Ui::scale);
         float leftX = camera.get_camera_x() - renderer.width * scale;
         float rightX = camera.get_camera_x() + renderer.width * scale;
         float topY = camera.get_camera_y() - renderer.height * scale;
         float bottomY = camera.get_camera_y() + renderer.height * scale;
+        {
+            float const weave = 64.f;
+            renderer.set_stroke(MapTheme::WEAVE_DARK);
+            renderer.set_line_width(1.2f);
+            renderer.begin_path();
+            float x0 = floorf(leftX / weave) * weave;
+            float y0 = floorf(topY / weave) * weave;
+            for (float x = x0; x < rightX + weave; x += weave) {
+                renderer.move_to(x, topY);
+                renderer.line_to(x + (bottomY - topY), bottomY);
+            }
+            for (float y = y0; y < bottomY + weave; y += weave) {
+                renderer.move_to(leftX, y);
+                renderer.line_to(rightX, y + (rightX - leftX) * 0.35f);
+            }
+            renderer.stroke();
+            renderer.set_stroke(MapTheme::WEAVE_LIGHT);
+            renderer.set_line_width(0.8f);
+            renderer.begin_path();
+            for (float x = x0 + weave * 0.5f; x < rightX + weave; x += weave) {
+                renderer.move_to(x, topY);
+                renderer.line_to(x + (bottomY - topY), bottomY);
+            }
+            renderer.stroke();
+        }
+
+        // Terrain: hills/water (solid cloth blocks) then channels (overlay)
+        MapTerrain const &terrain = map_terrain(mid);
+        auto draw_feature_fill = [&](TerrainFeature const &f) {
+            renderer.set_fill(f.color);
+            if (f.shape == TerrainShape::kEllipse) {
+                renderer.begin_path();
+                renderer.ellipse(f.left, f.top, f.right, f.bottom);
+                renderer.fill();
+            } else {
+                renderer.fill_rect(f.left, f.top, f.right - f.left, f.bottom - f.top);
+            }
+        };
+        for (TerrainFeature const &f : terrain) {
+            if (f.kind == TerrainKind::kChannel) continue;
+            draw_feature_fill(f);
+            // subtle weave highlight on hills/water
+            renderer.set_stroke(MapTheme::WEAVE_LIGHT);
+            renderer.set_line_width(2.f);
+            if (f.shape == TerrainShape::kEllipse) {
+                renderer.begin_path();
+                renderer.ellipse(f.left, f.top, f.right * 0.92f, f.bottom * 0.92f);
+                renderer.stroke();
+            } else {
+                renderer.stroke_rect(f.left + 8, f.top + 8, f.right - f.left - 16, f.bottom - f.top - 16);
+            }
+        }
+        for (TerrainFeature const &f : terrain) {
+            if (f.kind != TerrainKind::kChannel) continue;
+            draw_feature_fill(f);
+            // Channel speckles (leaf / sand / coral feel)
+            renderer.set_fill(MapTheme::WEAVE_LIGHT);
+            float x0 = (f.shape == TerrainShape::kEllipse) ? (f.left - f.right) : f.left;
+            float y0 = (f.shape == TerrainShape::kEllipse) ? (f.top - f.bottom) : f.top;
+            float x1 = (f.shape == TerrainShape::kEllipse) ? (f.left + f.right) : f.right;
+            float y1 = (f.shape == TerrainShape::kEllipse) ? (f.top + f.bottom) : f.bottom;
+            for (float px = x0; px < x1; px += 55.f) {
+                for (float py = y0; py < y1; py += 48.f) {
+                    float sx = px + std::fmod(px * 0.37f, 18.f);
+                    float sy = py + std::fmod(py * 0.29f, 14.f);
+                    if (!Map::point_in_feature(f, sx, sy)) continue;
+                    renderer.begin_path();
+                    renderer.ellipse(sx, sy, 7.f, 4.f);
+                    renderer.fill();
+                }
+            }
+        }
+
+        renderer.set_stroke(alpha);
+        renderer.set_line_width(0.5);
         float newLeftX = ceilf(leftX / 50) * 50;
         float newTopY = ceilf(topY / 50) * 50;
         renderer.begin_path();

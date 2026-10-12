@@ -151,6 +151,43 @@ Element *Ui::make_game_topbar() {
         { .fill = 0xffd94a4a, .line_width = 4, .round_radius = 8 }
     );
 
+    Element *changelog_icon = new Ui::StaticIcon([](Element *elt, Renderer &ctx){
+        float w = elt->width * 0.55f;
+        float h = elt->height * 0.65f;
+        ctx.set_fill(0xffffffff);
+        ctx.begin_path();
+        ctx.round_rect(-w / 2, -h / 2, w, h, 2);
+        ctx.fill();
+        ctx.set_stroke(0xff5a8a3a);
+        ctx.set_line_width(2);
+        ctx.begin_path();
+        ctx.move_to(0, -h / 2 + 2);
+        ctx.line_to(0, h / 2 - 2);
+        ctx.stroke();
+        ctx.set_stroke(0xffa8d878);
+        ctx.set_line_width(1.5f);
+        for (int i = 0; i < 3; ++i) {
+            float y = -h * 0.2f + i * h * 0.22f;
+            ctx.begin_path();
+            ctx.move_to(-w * 0.32f, y);
+            ctx.line_to(-w * 0.08f, y);
+            ctx.move_to(w * 0.08f, y);
+            ctx.line_to(w * 0.32f, y);
+            ctx.stroke();
+        }
+    }, 22, 22);
+
+    Element *changelog_btn = new Ui::Button(40, 40, changelog_icon,
+        [](Element *, uint8_t e){
+            if (e == Ui::kClick) {
+                Game::pause_menu_open = 0;
+                Ui::toggle_panel(Panel::kChangelog);
+            }
+        },
+        [](){ return Ui::panel_open == Panel::kChangelog; },
+        { .fill = 0xff7ec850, .line_width = 4, .round_radius = 8 }
+    );
+
     Element *exit_btn = new Ui::Button(40, 40,
         new Ui::StaticIcon([](Element *elt, Renderer &ctx){
             float s = elt->width * 0.32f;
@@ -184,6 +221,7 @@ Element *Ui::make_game_topbar() {
         gear,
         mob_btn,
         trophy_btn,
+        changelog_btn,
         exit_btn
     }, 10, 8, {
         .should_render = [](){

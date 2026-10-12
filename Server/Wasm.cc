@@ -73,9 +73,13 @@ WebSocketServer::WebSocketServer() {
                     break;
             }
             if (file && fs.existsSync(file)) {
+                // HTML: revalidate. JS/WASM: long-cache (URLs already bust with ?v=)
+                const cacheCtl = (file === "index.html")
+                    ? "no-cache"
+                    : "public, max-age=31536000, immutable";
                 res.writeHead(200, {
                     "Content-Type": encodeType,
-                    "Cache-Control": "no-cache"
+                    "Cache-Control": cacheCtl
                 });
                 res.end(fs.readFileSync(file));
                 return;

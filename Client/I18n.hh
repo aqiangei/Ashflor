@@ -85,6 +85,7 @@ namespace I18n {
         kPassword,
         kLogin,
         kRegister,
+        kLogout,
         kAuthOk,
         kAuthInvalidUser,
         kAuthInvalidPass,
@@ -92,6 +93,7 @@ namespace I18n {
         kAuthNotFound,
         kAuthWrongPass,
         kAuthAlreadyIn,
+        kAuthLoggedOut,
         kAuthNeedConnect,
         kLoggedInAs,
         kGuestHint,
@@ -132,6 +134,7 @@ namespace I18n {
         kCraftWin,
         kCraftExchanged,
         kCraftBankHint,
+        kSpawnNameTaken,
         kCount
     };
 

@@ -78,14 +78,16 @@ namespace Game {
     uint8_t party_member_count = 0;
     uint8_t revive_progress = 0;
     uint8_t awaiting_party_revive = 0;
-    std::array<uint32_t, RarityID::kNumRarities> craft_bank = {};
+    std::array<uint32_t, PetalID::kNumPetals> craft_bank = {};
     uint32_t coins = 0;
     uint8_t guest_save_valid = 0;
     uint8_t guest_level = 1;
     std::array<PetalID::T, 2 * MAX_SLOT_COUNT> guest_petals = {PetalID::kNone};
-    std::array<uint32_t, RarityID::kNumRarities> guest_craft_bank = {};
+    std::array<uint32_t, PetalID::kNumPetals> guest_craft_bank = {};
     uint32_t guest_coins = 0;
     uint8_t craft_selected_rarity = 0;
+    PetalID::T craft_tray_id = PetalID::kNone;
+    uint32_t craft_tray_count = 0;
     std::string craft_status;
 }
 
@@ -264,6 +266,8 @@ void Game::reset() {
         craft_bank = {};
         coins = 0;
     }
+    craft_tray_id = PetalID::kNone;
+    craft_tray_count = 0;
     simulation.reset();
 }
 
@@ -279,7 +283,7 @@ void Game::send_guest_progress() {
     writer.write<uint8_t>(guest_level < 1 ? 1 : guest_level);
     for (uint32_t i = 0; i < 2 * MAX_SLOT_COUNT; ++i)
         writer.write<uint8_t>(guest_petals[i]);
-    for (uint32_t i = 0; i < RarityID::kNumRarities; ++i)
+    for (uint32_t i = 0; i < PetalID::kNumPetals; ++i)
         writer.write<uint32_t>(guest_craft_bank[i]);
     writer.write<uint32_t>(guest_coins);
     socket.send(writer.packet, writer.at - writer.packet);
@@ -547,7 +551,8 @@ void Game::tick(double time) {
         //process keybind petal switches (disabled while pause/chat/panels open)
         if (!Game::pause_menu_open && !Game::chat_open && !Game::leave_confirm_open
             && !Game::game_panel_blocking()) {
-            if (Input::keys_held_this_tick.contains('X'))
+            // R = swap all primary ↔ secondary in one press
+            if (Input::keys_held_this_tick.contains('R'))
                 Game::swap_all_petals();
             else if (Input::keys_held_this_tick.contains('E')) 
                 Ui::forward_secondary_select();

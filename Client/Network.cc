@@ -3,11 +3,13 @@
 #include <Client/I18n.hh>
 #include <Client/Input.hh>
 #include <Client/Ui/InGame/GameInfo.hh>
+#include <Client/Ui/InGame/Loadout.hh>
 #include <Client/Ui/TextInput.hh>
 #include <Client/Ui/Ui.hh>
 
 #include <Shared/Binary.hh>
 #include <Shared/Config.hh>
+#include <Shared/Craft.hh>
 #include <Shared/StaticDefinitions.hh>
 
 #include <format>
@@ -28,7 +30,8 @@ void Game::on_message(uint8_t *ptr, uint32_t len) {
                 I18n::kAuthExists,
                 I18n::kAuthNotFound,
                 I18n::kAuthWrongPass,
-                I18n::kAuthAlreadyIn
+                I18n::kAuthAlreadyIn,
+                I18n::kAuthLoggedOut
             };
             if (result < sizeof(reasons) / sizeof(reasons[0]))
                 account_status = I18n::tr(reasons[result]);
@@ -47,17 +50,53 @@ void Game::on_message(uint8_t *ptr, uint32_t len) {
                 for (uint32_t i = 0; i < 2 * MAX_SLOT_COUNT; ++i)
                     reader.read<uint8_t>();
             }
-            for (uint32_t i = 0; i < RarityID::kNumRarities; ++i)
+            for (uint32_t i = 0; i < PetalID::kNumPetals; ++i)
                 craft_bank[i] = reader.read<uint32_t>();
             coins = reader.read<uint32_t>();
+            // Explicit logout → back to guest local progress (account row kept on server)
+            if (result == AccountResultCode::kAccountLoggedOut) {
+                account_logged_in = 0;
+                auth_panel = 0;
+                password.clear();
+                craft_tray_clear();
+                if (guest_save_valid) {
+                    respawn_level = guest_level < 1 ? 1 : guest_level;
+                    craft_bank = guest_craft_bank;
+                    coins = guest_coins;
+                } else {
+                    respawn_level = 1;
+                    craft_bank = {};
+                    coins = 0;
+                }
+                on_game_screen = 0;
+                send_guest_progress();
+            }
+            break;
+        }
+        case Clientbound::kSpawnResult: {
+            uint8_t result = reader.read<uint8_t>();
+            if (result == SpawnResultCode::kSpawnNameTaken)
+                account_status = I18n::tr(I18n::kSpawnNameTaken);
             break;
         }
         case Clientbound::kCraftUpdate: {
             uint8_t result = reader.read<uint8_t>();
             PetalID::T petal = reader.read<uint8_t>();
-            for (uint32_t i = 0; i < RarityID::kNumRarities; ++i)
+            for (uint32_t i = 0; i < PetalID::kNumPetals; ++i)
                 craft_bank[i] = reader.read<uint32_t>();
             coins = reader.read<uint32_t>();
+            // Tray is a staging view of banked petals — clamp after server bank sync
+            if (result == CraftResultCode::kCraftWin || result == CraftResultCode::kCraftMiss) {
+                if (craft_tray_id != PetalID::kNone) {
+                    if (craft_tray_count <= Craft::kCraftBatch) craft_tray_clear();
+                    else craft_tray_count -= Craft::kCraftBatch;
+                }
+            }
+            if (craft_tray_id != PetalID::kNone) {
+                if (craft_bank[craft_tray_id] == 0) craft_tray_clear();
+                else if (craft_tray_count > craft_bank[craft_tray_id])
+                    craft_tray_count = craft_bank[craft_tray_id];
+            }
             if (result == CraftResultCode::kCraftNoMats)
                 craft_status = I18n::use_chinese ? "材料不足" : "Not enough materials";
             else if (result == CraftResultCode::kCraftNoCoins)
@@ -186,23 +225,25 @@ void Game::send_chat() {
 void Game::spawn_in() {
     Writer writer(static_cast<uint8_t *>(OUTGOING_PACKET));
     if (Game::alive()) return;
-    if (Game::on_game_screen == 0) {
-        // Re-sync guest bag/coins before spawn so reconnect/respawn keeps progress
-        if (!account_logged_in && guest_save_valid)
-            send_guest_progress();
-        writer.write<uint8_t>(Serverbound::kClientSpawn);
-        std::string name = Game::nickname;
-        if (name.empty() && Game::account_logged_in) name = Game::username;
-        writer.write<std::string>(name);
-        uint8_t map_id = Game::selected_map;
-        if (map_id >= MapID::kNumMaps) map_id = MapID::kGarden;
-        writer.write<uint8_t>(map_id);
-        socket.send(writer.packet, writer.at - writer.packet);
-    } else {
+    // Death "Continue" and title Spawn both go through here: leave death UI then spawn
+    if (Game::on_game_screen != 0) {
         Game::on_game_screen = 0;
         awaiting_party_revive = 0;
         revive_progress = 0;
     }
+    if (!socket.ready) return;
+    account_status.clear();
+    // Re-sync guest bag/coins before spawn so reconnect/respawn keeps progress
+    if (!account_logged_in && guest_save_valid)
+        send_guest_progress();
+    writer.write<uint8_t>(Serverbound::kClientSpawn);
+    std::string name = Game::nickname;
+    if (name.empty() && Game::account_logged_in) name = Game::username;
+    writer.write<std::string>(name);
+    uint8_t map_id = Game::selected_map;
+    if (map_id >= MapID::kNumMaps) map_id = MapID::kGarden;
+    writer.write<uint8_t>(map_id);
+    socket.send(writer.packet, writer.at - writer.packet);
 }
 
 void Game::party_invite_nearest() {
@@ -237,6 +278,17 @@ void Game::account_auth(uint8_t is_register) {
     socket.send(writer.packet, writer.at - writer.packet);
 }
 
+void Game::account_logout() {
+    if (!socket.ready) {
+        account_status = I18n::tr(I18n::kAuthNeedConnect);
+        return;
+    }
+    if (!account_logged_in) return;
+    Writer writer(static_cast<uint8_t *>(OUTGOING_PACKET));
+    writer.write<uint8_t>(Serverbound::kAccountLogout);
+    socket.send(writer.packet, writer.at - writer.packet);
+}
+
 void Game::delete_petal(uint8_t pos) {
     Writer writer(static_cast<uint8_t *>(OUTGOING_PACKET));
     if (!Game::alive()) return;
@@ -255,18 +307,69 @@ void Game::swap_petals(uint8_t pos1, uint8_t pos2) {
 }
 
 void Game::swap_all_petals() {
+    // One-key swap every primary ↔ paired secondary (1:1). Update local cache
+    // first so UI stays consistent; do not remap petal_slots pointers mid-loop.
     if (!Game::alive()) return;
-    for (uint32_t i = 0; i < Game::loadout_count; ++i)
-        Ui::ui_swap_petals(i, i + Game::loadout_count);
+    for (uint32_t i = 0; i < Game::loadout_count; ++i) {
+        uint8_t p = (uint8_t) i;
+        uint8_t s = (uint8_t) (i + Game::loadout_count);
+        if (s >= 2 * MAX_SLOT_COUNT) break;
+        PetalID::T a = Game::cached_loadout[p];
+        PetalID::T b = Game::cached_loadout[s];
+        if (a == b) continue;
+        Game::cached_loadout[p] = b;
+        Game::cached_loadout[s] = a;
+        Ui::UiLoadoutPetal *slot_p = Ui::UiLoadout::petal_slots[p];
+        Ui::UiLoadoutPetal *slot_s = Ui::UiLoadout::petal_slots[s];
+        if (slot_p != nullptr) {
+            slot_p->petal_id = b;
+            if (b != PetalID::kNone) slot_p->last_id = b;
+            slot_p->no_change_ticks = 100;
+        }
+        if (slot_s != nullptr) {
+            slot_s->petal_id = a;
+            if (a != PetalID::kNone) slot_s->last_id = a;
+            slot_s->no_change_ticks = 100;
+        }
+        Game::swap_petals(p, s);
+    }
 }
 
-void Game::craft_petals(uint8_t mode) {
+void Game::craft_petals(uint8_t mode, PetalID::T petal_id) {
     if (!socket.ready || !alive()) return;
+    if (petal_id == PetalID::kNone || petal_id >= PetalID::kNumPetals) return;
     Writer writer(static_cast<uint8_t *>(OUTGOING_PACKET));
     writer.write<uint8_t>(Serverbound::kPetalCraft);
     writer.write<uint8_t>(mode);
-    writer.write<uint8_t>(craft_selected_rarity);
+    writer.write<uint8_t>(petal_id);
     socket.send(writer.packet, writer.at - writer.packet);
+}
+
+uint32_t Game::craft_available(PetalID::T id) {
+    if (id == PetalID::kNone || id >= PetalID::kNumPetals) return 0;
+    uint32_t n = craft_bank[id];
+    if (craft_tray_id == id && craft_tray_count > 0) {
+        if (craft_tray_count >= n) return 0;
+        return n - craft_tray_count;
+    }
+    return n;
+}
+
+void Game::craft_tray_clear() {
+    craft_tray_id = PetalID::kNone;
+    craft_tray_count = 0;
+}
+
+void Game::craft_tray_add(PetalID::T id, uint32_t amount) {
+    if (id == PetalID::kNone || id >= PetalID::kNumPetals || amount == 0) return;
+    if (craft_tray_id != id) {
+        craft_tray_id = id;
+        craft_tray_count = 0;
+    }
+    uint32_t bank = craft_bank[id];
+    uint32_t room = bank > craft_tray_count ? bank - craft_tray_count : 0;
+    if (amount > room) amount = room;
+    craft_tray_count += amount;
 }
 
 void Game::craft_buy_rarity(uint8_t rarity) {

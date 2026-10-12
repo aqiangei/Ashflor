@@ -12,15 +12,21 @@ void DOM::create_text_input(char const *name, uint32_t max_len) {
         elem.id = name;
         elem.type = "text";
         elem.style.position = "absolute";
-        elem.style["font-family"] = "Ubuntu";
+        // Above #canvas (z-index:1) so typed text is visible and clickable
+        elem.style.zIndex = "5";
+        elem.style["font-family"] = "\"Noto Sans SC\", \"Microsoft YaHei\", Ubuntu, sans-serif";
         elem.style.display = 'none';
         elem.style["border-width"] = "0px";
         elem.style.background = "transparent";
         elem.style.border = "none";
         elem.style.outline = "none";
+        elem.style.color = "#111111";
+        elem.style["caret-color"] = "#111111";
+        elem.style["-webkit-text-fill-color"] = "#111111";
         elem.style["padding-left"] = "5px";
         elem.maxLength = ($1).toString();
         elem.setAttribute("spellcheck", "false");
+        elem.setAttribute("autocomplete", "off");
         document.body.appendChild(elem);
     },
     name, max_len * 2);

@@ -1,6 +1,6 @@
 #include <Shared/Config.hh>
 
-extern const uint64_t VERSION_HASH = 19235684321345ull;
+extern const uint64_t VERSION_HASH = 19235684321350ull;
 
 extern const uint32_t SERVER_PORT = 9001;
 extern const uint32_t MAX_NAME_LENGTH = 16;

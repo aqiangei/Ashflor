@@ -28,8 +28,11 @@ public:
     uint8_t verified = 0;
     uint8_t seen_arena = 0;
     std::string account_name;
-    std::array<uint32_t, RarityID::kNumRarities> craft_bank = {};
+    // Display name claimed on last spawn (empty = unnamed); used for unique-name checks
+    std::string play_name;
+    std::array<uint32_t, PetalID::kNumPetals> craft_bank = {};
     uint32_t coins = 0;
+    uint32_t craft_attempts = 0;
     uint64_t last_chat_ms = 0;
     uint32_t party_id = 0;
     uint8_t party_leader = 0;

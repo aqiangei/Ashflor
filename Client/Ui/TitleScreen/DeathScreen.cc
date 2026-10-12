@@ -63,8 +63,8 @@ Element *Ui::make_death_main_screen() {
         145,
         40,
         new Ui::DynamicText(28, [](){ return I18n::tr(I18n::kContinue); }),
-        [](Element *elt, uint8_t e){ if (e == Ui::kClick && Game::on_game_screen) Game::on_game_screen = 0; },
-        [](){ return !Game::in_game(); },
+        [](Element *elt, uint8_t e){ if (e == Ui::kClick && !Game::alive()) Game::spawn_in(); },
+        [](){ return !Game::alive(); },
         {.fill = 0xff1dd129, .line_width = 5, .round_radius = 3 }
     );
     Ui::Element *container = new Ui::VContainer({

@@ -29,18 +29,9 @@ static bool _should_interact(Entity const &ent1, Entity const &ent2) {
 
 static void _add_to_craft_bank(Client *client, PetalID::T id) {
     if (client == nullptr || id == PetalID::kNone || id >= PetalID::kNumPetals) return;
-    uint8_t rarity = PETAL_DATA[id].rarity;
-    if (rarity >= RarityID::kNumRarities) return;
-    if (client->craft_bank[rarity] < 1000000)
-        client->craft_bank[rarity] += 1;
-    if (!client->account_name.empty()) {
-        Account *acc = AccountStore::find(client->account_name);
-        if (acc != nullptr) {
-            acc->craft_bank = client->craft_bank;
-            acc->coins = client->coins;
-            AccountStore::save();
-        }
-    }
+    if (client->craft_bank[id] < 1000000)
+        client->craft_bank[id] += 1;
+    AccountStore::capture(client);
     client_sync_craft(client);
 }
 
@@ -60,6 +51,10 @@ static void _pickup_drop(Simulation *sim, Entity &player, Entity &drop) {
         drop.set_y(player.get_y());
         BitMath::unset(drop.flags, EntityFlags::kIsDespawning);
         sim->request_delete(drop.id);
+        {
+            Client *client = Server::client_by_camera(sim, player.get_parent());
+            if (client != nullptr) AccountStore::capture(client);
+        }
         return;
     }
     // Inventory full → craft material bank (always despawn the drop)

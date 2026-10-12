@@ -21,7 +21,7 @@ static float const LEADERBOARD_WIDTH = 220;
 LeaderboardSlot::LeaderboardSlot(uint8_t p) : Element(LEADERBOARD_WIDTH, 20) , pos(p) {
     ratio.set(1);
     style.animate = [&](Element *, Renderer &){
-        if (pos >= Game::simulation.arena_info.player_count) return;
+        if (Game::simulation.arena_info.names[pos].empty()) return;
         float r = 1;
         if (((float) Game::simulation.arena_info.scores[0]) != 0)
             r = (float) Game::simulation.arena_info.scores[pos] / (float) Game::simulation.arena_info.scores[0];
@@ -31,7 +31,7 @@ LeaderboardSlot::LeaderboardSlot(uint8_t p) : Element(LEADERBOARD_WIDTH, 20) , p
 }
 
 void LeaderboardSlot::on_render(Renderer &ctx) {
-    if (pos >= Game::simulation.arena_info.player_count) return;
+    if (Game::simulation.arena_info.names[pos].empty()) return;
     ctx.set_stroke(0xff222222);
     ctx.set_line_width(height);
     ctx.round_line_cap();
@@ -65,10 +65,11 @@ Element *Ui::make_leaderboard() {
             .h_justify = Style::Left
         }),
         new Ui::DynamicText(13, [](){
-            uint32_t n = Game::simulation.arena_info.player_count;
+            uint32_t reg = Game::simulation.arena_info.registered_count;
+            uint32_t online = Game::simulation.arena_info.player_count;
             if (I18n::use_chinese)
-                return n == 0 ? std::string{"暂无数据"} : std::format("在线 {} 人", n);
-            return n == 0 ? std::string{"No data"} : std::format("{} online", n);
+                return std::format("记录 {} · 在线 {}", reg, online);
+            return std::format("{} recorded · {} online", reg, online);
         }, { .fill = 0xffdddddd, .h_justify = Style::Left }),
         new Ui::VContainer(
             Ui::make_range(0, LEADERBOARD_SIZE, [](uint32_t i){ return (Element *) (new Ui::LeaderboardSlot(i)); })

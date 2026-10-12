@@ -11,7 +11,13 @@ enum Clientbound {
     kAccountResult,
     kChatMessage,
     kPartyUpdate,
-    kCraftUpdate
+    kCraftUpdate,
+    kSpawnResult
+};
+
+enum SpawnResultCode : uint8_t {
+    kSpawnOk = 0,
+    kSpawnNameTaken = 1
 };
 
 enum Serverbound {
@@ -25,14 +31,16 @@ enum Serverbound {
     kPartyInvite,
     kPartyLeave,
     kPetalCraft,
-    kGuestProgress
+    kGuestProgress,
+    kAccountLogout
 };
 
 enum CraftMode : uint8_t {
-    kCraftGamble = 0,
-    kCraftExchange = 1,
+    kCraftGamble = 0,     // arg = PetalID → consume 5, chance at higher
+    kCraftExchange = 1,   // arg = PetalID → EV-cost consume, guaranteed
     kCraftBuyRarity = 2,  // arg = rarity → random petal of that rarity
-    kCraftBuySpecial = 3  // arg = PetalID special
+    kCraftBuySpecial = 3, // arg = PetalID special
+    kCraftGambleAll = 4   // arg = PetalID → craft every possible batch
 };
 
 enum CraftResultCode : uint8_t {
@@ -58,7 +66,8 @@ enum AccountResultCode {
     kAccountExists = 3,
     kAccountNotFound = 4,
     kAccountWrongPass = 5,
-    kAccountAlreadyIn = 6
+    kAccountAlreadyIn = 6,
+    kAccountLoggedOut = 7
 };
 
 enum CloseReason {

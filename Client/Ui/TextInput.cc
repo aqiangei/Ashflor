@@ -39,7 +39,10 @@ uint8_t TextInput::contains_screen_point(float x, float y) const {
         && std::abs(y - screen_y) <= height * Ui::scale / 2;
 }
 
-void TextInput::on_event(uint8_t) {}
+void TextInput::on_event(uint8_t event) {
+    if (event == kMouseDown || event == kClick)
+        focus();
+}
 
 void TextInput::on_render(Renderer &ctx) {
     DOM::element_show(name.c_str());

@@ -271,6 +271,15 @@ void player_spawn(Simulation *sim, Entity &camera, Entity &player) {
         Map::get_suitable_difficulty_zone(sim->map_id, power)];
     float spawn_x = lerp(zone.left, zone.right, frand());
     float spawn_y = lerp(zone.top, zone.bottom, frand());
+    for (uint32_t tries = 0; tries < 24; ++tries) {
+        if (!Map::circle_hits_impassable(sim->map_id, spawn_x, spawn_y, BASE_FLOWER_RADIUS + 8))
+            break;
+        spawn_x = lerp(zone.left, zone.right, frand());
+        spawn_y = lerp(zone.top, zone.bottom, frand());
+    }
+    Map::resolve_circle_terrain(sim->map_id, spawn_x, spawn_y, BASE_FLOWER_RADIUS + 8);
+    spawn_x = fclamp(spawn_x, BASE_FLOWER_RADIUS, ARENA_WIDTH - BASE_FLOWER_RADIUS);
+    spawn_y = fclamp(spawn_y, BASE_FLOWER_RADIUS, ARENA_HEIGHT - BASE_FLOWER_RADIUS);
     _finish_player_spawn(sim, camera, player, spawn_x, spawn_y);
 }
 

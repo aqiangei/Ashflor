@@ -85,6 +85,12 @@ Element *Ui::make_title_input_box() {
                     )
                 }, 0, 10,{}),
                 new Ui::DynamicText(14, [](){ return I18n::tr(I18n::kOrPressEnterSpawn); }),
+                new Ui::DynamicText(14, [](){
+                    return Game::account_status;
+                }, {
+                    .fill = 0xffff6666,
+                    .should_render = [](){ return !Game::account_status.empty(); }
+                }),
                 new Ui::VContainer({
                     new Ui::HContainer({
                         make_map_select_button(MapID::kGarden, 0xff1ea761, select_map_garden, darken_map_garden),
@@ -95,30 +101,43 @@ Element *Ui::make_title_input_box() {
                 }, 8, 8, {}),
                 new Ui::Choose(
                     new Ui::VContainer({
-                        new Ui::HContainer({
-                            new Ui::Button(100, 32,
-                                new Ui::DynamicText(16, [](){ return I18n::tr(I18n::kLogin); }),
-                                [](Element *, uint8_t e){
-                                    if (e == Ui::kClick) {
-                                        Game::auth_panel = 1;
-                                        Game::account_status.clear();
-                                    }
-                                },
-                                [](){ return Game::account_logged_in != 0; },
-                                { .fill = 0xff5a9fdb, .line_width = 4, .round_radius = 3 }
-                            ),
-                            new Ui::Button(100, 32,
-                                new Ui::DynamicText(16, [](){ return I18n::tr(I18n::kRegister); }),
-                                [](Element *, uint8_t e){
-                                    if (e == Ui::kClick) {
-                                        Game::auth_panel = 2;
-                                        Game::account_status.clear();
-                                    }
-                                },
-                                nullptr,
-                                { .fill = 0xff1dd129, .line_width = 4, .round_radius = 3 }
-                            )
-                        }, 0, 10, {}),
+                        new Ui::Choose(
+                            new Ui::HContainer({
+                                new Ui::Button(100, 32,
+                                    new Ui::DynamicText(16, [](){ return I18n::tr(I18n::kLogin); }),
+                                    [](Element *, uint8_t e){
+                                        if (e == Ui::kClick) {
+                                            Game::auth_panel = 1;
+                                            Game::account_status.clear();
+                                        }
+                                    },
+                                    nullptr,
+                                    { .fill = 0xff5a9fdb, .line_width = 4, .round_radius = 3 }
+                                ),
+                                new Ui::Button(100, 32,
+                                    new Ui::DynamicText(16, [](){ return I18n::tr(I18n::kRegister); }),
+                                    [](Element *, uint8_t e){
+                                        if (e == Ui::kClick) {
+                                            Game::auth_panel = 2;
+                                            Game::account_status.clear();
+                                        }
+                                    },
+                                    nullptr,
+                                    { .fill = 0xff1dd129, .line_width = 4, .round_radius = 3 }
+                                )
+                            }, 0, 10, {}),
+                            new Ui::HContainer({
+                                new Ui::Button(120, 32,
+                                    new Ui::DynamicText(16, [](){ return I18n::tr(I18n::kLogout); }),
+                                    [](Element *, uint8_t e){
+                                        if (e == Ui::kClick) Game::account_logout();
+                                    },
+                                    nullptr,
+                                    { .fill = 0xffc44b4b, .line_width = 4, .round_radius = 3 }
+                                )
+                            }, 0, 10, {}),
+                            [](){ return Game::account_logged_in != 0; }
+                        ),
                         new Ui::DynamicText(13, [](){
                             if (Game::account_logged_in)
                                 return I18n::format_logged_in(Game::username, Game::respawn_level);

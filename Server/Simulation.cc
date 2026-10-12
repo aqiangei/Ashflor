@@ -7,6 +7,7 @@
 #include <Server/Spawn.hh>
 #include <Server/SpatialHash.hh>
 
+#include <Server/LeaderboardStore.hh>
 #include <Shared/Map.hh>
 
 #include <algorithm>
@@ -14,21 +15,37 @@
 
 static void calculate_leaderboard(Simulation *sim) {
     std::vector<Entity const *> players;
-    sim->for_each<kCamera>([&](Simulation *sim, Entity &ent) { 
-        if (sim->ent_alive(ent.get_player())) players.push_back(&sim->get_ent(ent.get_player()));
+    sim->for_each<kCamera>([&](Simulation *sim, Entity &ent) {
+        if (!sim->ent_alive(ent.get_player())) return;
+        Entity const &player = sim->get_ent(ent.get_player());
+        players.push_back(&player);
+        // Persist best score for every named entrant
+        std::string const &name = player.get_name();
+        if (!name.empty())
+            LeaderboardStore::record(name, player.get_score(), player.get_color());
     });
+    uint32_t online = (uint32_t) players.size();
+    sim->arena_info.set_player_count(online);
+    sim->arena_info.set_registered_count(LeaderboardStore::recorded_count());
+
+    std::vector<LeaderboardEntry> top;
+    LeaderboardStore::fill_top(top);
+    for (uint32_t i = 0; i < LEADERBOARD_SIZE; ++i) {
+        if (i < top.size()) {
+            sim->arena_info.set_names(i, top[i].name);
+            sim->arena_info.set_scores(i, top[i].score);
+            sim->arena_info.set_colors(i, top[i].color);
+        } else {
+            sim->arena_info.set_names(i, std::string{});
+            sim->arena_info.set_scores(i, 0);
+            sim->arena_info.set_colors(i, 0);
+        }
+    }
+    // Minimap: every living player on this map (not only leaderboard top)
     std::stable_sort(players.begin(), players.end(), [](Entity const *a, Entity const *b){
         return a->get_score() > b->get_score();
     });
-    uint32_t num = players.size();
-    sim->arena_info.set_player_count(num);
-    uint32_t lb = std::min(num, LEADERBOARD_SIZE);
-    for (uint32_t i = 0; i < lb; ++i) {
-        sim->arena_info.set_names(i, players[i]->get_name());
-        sim->arena_info.set_scores(i, players[i]->get_score());
-        sim->arena_info.set_colors(i, players[i]->get_color());
-    }
-    uint32_t map_n = std::min(num, MINIMAP_PLAYER_CAP);
+    uint32_t map_n = std::min(online, MINIMAP_PLAYER_CAP);
     for (uint32_t i = 0; i < MINIMAP_PLAYER_CAP; ++i) {
         if (i < map_n) {
             sim->arena_info.set_minimap_x(i, players[i]->get_x());

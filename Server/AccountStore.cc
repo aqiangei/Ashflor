@@ -2,44 +2,35 @@
 
 #include <Server/Client.hh>
 #include <Server/Game.hh>
+#include <Server/NodeFs.hh>
 #include <Server/PetalTracker.hh>
 #include <Server/Server.hh>
 
 #include <Shared/Binary.hh>
 #include <Shared/Config.hh>
+#include <Shared/Craft.hh>
 #include <Shared/Entity.hh>
 #include <Shared/Simulation.hh>
+#include <Shared/StaticData.hh>
 
 #include <cctype>
+#include <chrono>
 #include <cstdio>
+#include <cstdlib>
 #include <fstream>
+#include <iostream>
 #include <sstream>
 #include <vector>
-
-#ifdef WASM_SERVER
-#include <emscripten.h>
-#endif
 
 static char const *ACCOUNT_FILE = "accounts.dat";
 static std::unordered_map<std::string, Account> ACCOUNTS;
 static std::unordered_set<std::string> ACTIVE_SESSIONS;
+static std::chrono::steady_clock::time_point LAST_SNAPSHOT =
+    std::chrono::steady_clock::now() - std::chrono::hours(1);
 
 static std::string read_file(char const *path) {
 #ifdef WASM_SERVER
-    char *ptr = (char *) EM_ASM_PTR({
-        const fs = require("fs");
-        const p = UTF8ToString($0);
-        try {
-            if (!fs.existsSync(p)) return 0;
-            const buf = fs.readFileSync(p);
-            const mem = _malloc(buf.length + 1);
-            HEAPU8.set(buf, mem);
-            HEAPU8[mem + buf.length] = 0;
-            return mem;
-        } catch (e) {
-            return 0;
-        }
-    }, path);
+    char *ptr = node_fs_read_alloc(path);
     if (ptr == nullptr) return {};
     std::string out(ptr);
     free(ptr);
@@ -51,17 +42,35 @@ static std::string read_file(char const *path) {
 #endif
 }
 
-static void write_file(char const *path, std::string const &data) {
+static void write_file_atomic(char const *path, std::string const &data) {
 #ifdef WASM_SERVER
-    EM_ASM({
-        const fs = require("fs");
-        const p = UTF8ToString($0);
-        const bytes = HEAPU8.subarray($1, $1 + $2);
-        fs.writeFileSync(p, Buffer.from(bytes));
-    }, path, data.data(), (int) data.size());
+    int ok = node_fs_write_atomic(path, data.data(), (int) data.size());
+    if (!ok) std::cerr << "[accounts] write failed: " << path << std::endl;
 #else
-    std::ofstream out(path, std::ios::binary | std::ios::trunc);
-    out.write(data.data(), (std::streamsize) data.size());
+    std::string tmp = std::string(path) + ".tmp";
+    std::string bak = std::string(path) + ".bak";
+    {
+        std::ofstream out(tmp, std::ios::binary | std::ios::trunc);
+        out.write(data.data(), (std::streamsize) data.size());
+    }
+    {
+        std::ifstream in(path, std::ios::binary);
+        if (in) {
+            std::ofstream out(bak, std::ios::binary | std::ios::trunc);
+            out << in.rdbuf();
+        }
+    }
+    std::remove(path);
+    std::rename(tmp.c_str(), path);
+#endif
+}
+
+static void maybe_write_snapshot(char const *path) {
+    auto now = std::chrono::steady_clock::now();
+    if (now - LAST_SNAPSHOT < std::chrono::minutes(5)) return;
+    LAST_SNAPSHOT = now;
+#ifdef WASM_SERVER
+    node_fs_snapshot(path);
 #endif
 }
 
@@ -112,40 +121,61 @@ void AccountStore::load() {
         acc.petals.fill(PetalID::kNone);
         acc.craft_bank.fill(0);
         acc.coins = 0;
+        acc.craft_attempts = 0;
         for (uint32_t i = 0; i < 2 * MAX_SLOT_COUNT; ++i) {
             unsigned int v = PetalID::kNone;
             if (!(ls >> v)) break;
             if (v >= PetalID::kNumPetals) v = PetalID::kNone;
             acc.petals[i] = (PetalID::T) v;
         }
-        for (uint32_t i = 0; i < RarityID::kNumRarities; ++i) {
-            unsigned int v = 0;
-            if (!(ls >> v)) break;
-            acc.craft_bank[i] = v;
-        }
         {
+            std::vector<unsigned int> rest;
             unsigned int v = 0;
-            if (ls >> v) acc.coins = v;
+            while (ls >> v) rest.push_back(v);
+            if (rest.size() >= PetalID::kNumPetals) {
+                for (uint32_t i = 0; i < PetalID::kNumPetals; ++i)
+                    acc.craft_bank[i] = rest[i];
+                if (rest.size() > PetalID::kNumPetals)
+                    acc.coins = rest[PetalID::kNumPetals];
+                if (rest.size() > PetalID::kNumPetals + 1)
+                    acc.craft_attempts = rest[PetalID::kNumPetals + 1];
+            } else if (rest.size() >= RarityID::kNumRarities) {
+                // Legacy rarity buckets → park counts on first petal of that rarity
+                for (uint8_t r = 0; r < RarityID::kNumRarities; ++r) {
+                    PetalID::T id = Craft::first_petal_of_rarity(r);
+                    if (id != PetalID::kNone)
+                        acc.craft_bank[id] = rest[r];
+                }
+                if (rest.size() > RarityID::kNumRarities)
+                    acc.coins = rest[RarityID::kNumRarities];
+            }
         }
         ACCOUNTS[acc.username] = acc;
     }
-    std::printf("loaded %zu accounts\n", ACCOUNTS.size());
+    std::cout << "[accounts] loaded " << ACCOUNTS.size() << " accounts" << std::endl;
+    // Ensure accounts.dat always exists on disk after boot (empty file OK)
+    save();
 }
 
 void AccountStore::save() {
     std::ostringstream out;
-    out << "# gardn accounts\n";
+    out << "# gardn accounts  fields: user hash level petals[16] craft_bank[N] coins craft_attempts\n";
     for (auto const &kv : ACCOUNTS) {
         Account const &acc = kv.second;
         out << acc.username << ' ' << acc.pass_hash << ' ' << (uint32_t) acc.level;
         for (uint32_t i = 0; i < 2 * MAX_SLOT_COUNT; ++i)
             out << ' ' << (uint32_t) acc.petals[i];
-        for (uint32_t i = 0; i < RarityID::kNumRarities; ++i)
+        for (uint32_t i = 0; i < PetalID::kNumPetals; ++i)
             out << ' ' << acc.craft_bank[i];
-        out << ' ' << acc.coins;
+        out << ' ' << acc.coins << ' ' << acc.craft_attempts;
         out << '\n';
     }
-    write_file(ACCOUNT_FILE, out.str());
+    write_file_atomic(ACCOUNT_FILE, out.str());
+    maybe_write_snapshot(ACCOUNT_FILE);
+}
+
+uint32_t AccountStore::registered_count() {
+    return (uint32_t) ACCOUNTS.size();
 }
 
 static void normalize_petals(Account &acc) {
@@ -185,6 +215,7 @@ static void copy_progress(Account &acc, Client *client) {
     normalize_petals(acc);
     acc.craft_bank = client->craft_bank;
     acc.coins = client->coins;
+    acc.craft_attempts = client->craft_attempts;
 }
 
 uint8_t AccountStore::register_account(Client *client, std::string const &username, std::string const &password) {
@@ -198,6 +229,7 @@ uint8_t AccountStore::register_account(Client *client, std::string const &userna
     acc.petals.fill(PetalID::kNone);
     acc.craft_bank.fill(0);
     acc.coins = 0;
+    acc.craft_attempts = 0;
     normalize_petals(acc);
     copy_progress(acc, client);
     ACCOUNTS[username] = acc;
@@ -231,6 +263,7 @@ uint8_t AccountStore::login(Client *client, std::string const &username, std::st
     client->account_name = username;
     client->craft_bank = acc->craft_bank;
     client->coins = acc->coins;
+    client->craft_attempts = acc->craft_attempts;
     ACTIVE_SESSIONS.insert(username);
     if (client->game != nullptr && client->game->simulation.ent_exists(client->camera) && !client->alive())
         apply_to_camera(&client->game->simulation, client->game->simulation.get_ent(client->camera), *acc);
@@ -244,10 +277,15 @@ void AccountStore::logout(Client *client) {
     }
 }
 
-void AccountStore::capture(Client *client) {
+void AccountStore::capture_nosave(Client *client) {
     if (client == nullptr || client->account_name.empty() || client->game == nullptr) return;
     Account *acc = find(client->account_name);
     if (acc == nullptr) return;
     copy_progress(*acc, client);
-    save();
+}
+
+void AccountStore::capture(Client *client) {
+    capture_nosave(client);
+    if (client != nullptr && !client->account_name.empty())
+        save();
 }
