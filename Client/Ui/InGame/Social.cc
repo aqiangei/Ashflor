@@ -1,6 +1,7 @@
 #include <Client/Ui/InGame/GameInfo.hh>
 
 #include <Client/Ui/Button.hh>
+#include <Client/Ui/Chrome.hh>
 #include <Client/Ui/Container.hh>
 #include <Client/Ui/DynamicText.hh>
 #include <Client/Ui/StaticIcon.hh>
@@ -53,10 +54,10 @@ Element *Ui::make_invite_toast() {
             if (Game::invite_type == InviteType::kInviteGuild)
                 return I18n::tr(I18n::kInviteGuildTitle);
             return I18n::tr(I18n::kInvitePartyTitle);
-        }, { .fill = 0xffffffff, .h_justify = Style::Left }),
+        }, { .fill = Chrome::kTitle, .h_justify = Style::Left }),
         new Ui::DynamicText(13, [](){
             return Game::invite_from;
-        }, { .fill = 0xffffd24a, .h_justify = Style::Left }),
+        }, { .fill = Chrome::kGold, .h_justify = Style::Left }),
         new Ui::HContainer({
             new Ui::Button(88, 30,
                 new Ui::DynamicText(13, [](){ return I18n::tr(I18n::kInviteAccept); }),
@@ -64,19 +65,19 @@ Element *Ui::make_invite_toast() {
                     if (e == Ui::kClick) Game::invite_respond(1);
                 },
                 nullptr,
-                { .fill = 0xff2ecc71, .line_width = 3, .round_radius = 5 }),
+                { .fill = Chrome::kBtnMoss, .line_width = 4, .round_radius = Chrome::kRadius }),
             new Ui::Button(88, 30,
                 new Ui::DynamicText(13, [](){ return I18n::tr(I18n::kInviteReject); }),
                 [](Element *, uint8_t e){
                     if (e == Ui::kClick) Game::invite_respond(0);
                 },
                 nullptr,
-                { .fill = 0xffe74c3c, .line_width = 3, .round_radius = 5 })
+                { .fill = Chrome::kBtnDanger, .line_width = 4, .round_radius = Chrome::kRadius })
         }, 0, 8, { .h_justify = Style::Left })
     }, 12, 8, {
-        .fill = 0xe01a2a3a,
-        .line_width = 4,
-        .round_radius = 8,
+        .fill = Chrome::kPanelDeep,
+        .line_width = 5,
+        .round_radius = Chrome::kRadius,
         .animate = [](Element *elt, Renderer &ctx){
             ctx.translate((1.f - (float) elt->animation) * -40.f, 0);
         },
@@ -107,7 +108,7 @@ Element *Ui::make_guild_panel() {
     Element *elt = new Ui::VContainer({
         new Ui::HFlexContainer(
             new Ui::DynamicText(20, [](){ return I18n::tr(I18n::kGuildTitle); }, {
-                .fill = 0xffffffff
+                .fill = Chrome::kTitle
             }),
             new Ui::Button(32, 28,
                 new Ui::DynamicText(14, [](){ return std::string{"X"}; }),
@@ -115,25 +116,25 @@ Element *Ui::make_guild_panel() {
                     if (e == Ui::kClick) Game::close_guild_panel();
                 },
                 nullptr,
-                { .fill = 0xffe03a3a, .line_width = 3, .round_radius = 5 }),
+                { .fill = Chrome::kBtnDanger, .line_width = 4, .round_radius = Chrome::kRadius }),
             0, 8, {}
         ),
         new Ui::DynamicText(13, []() -> std::string {
             if (Game::guild_name.empty())
                 return I18n::tr(I18n::kGuildEmpty);
             return Game::guild_name;
-        }, { .fill = 0xffffd24a, .h_justify = Style::Left }),
+        }, { .fill = Chrome::kGold, .h_justify = Style::Left }),
         new Ui::DynamicText(12, [](){
             return std::string{I18n::tr(I18n::kGuildMembers)} + ": " + Game::guild_status;
         }, {
-            .fill = 0xffdddddd,
+            .fill = Chrome::kBody,
             .should_render = [](){ return !Game::guild_name.empty(); },
             .h_justify = Style::Left
         }),
         new Ui::DynamicText(11, [](){
             return I18n::tr(I18n::kGuildCreateHint);
         }, {
-            .fill = 0xffaaaaaa,
+            .fill = Chrome::kMuted,
             .should_render = [](){ return Game::guild_name.empty(); },
             .h_justify = Style::Left
         }),
@@ -146,9 +147,9 @@ Element *Ui::make_guild_panel() {
                 },
                 nullptr,
                 {
-                    .fill = 0xff3d8bfd,
-                    .line_width = 3,
-                    .round_radius = 5,
+                    .fill = Chrome::kBtnMoss,
+                    .line_width = 4,
+                    .round_radius = Chrome::kRadius,
                     .should_render = [](){ return Game::guild_name.empty(); }
                 })
         }, 0, 8, { .h_justify = Style::Left }),
@@ -159,20 +160,20 @@ Element *Ui::make_guild_panel() {
             },
             nullptr,
             {
-                .fill = 0xff6c757d,
-                .line_width = 3,
-                .round_radius = 5,
+                .fill = Chrome::kBtnIron,
+                .line_width = 4,
+                .round_radius = Chrome::kRadius,
                 .should_render = [](){ return !Game::guild_name.empty(); }
             }),
         new Ui::DynamicText(11, [](){
             return I18n::use_chinese
                 ? "聊天框右键玩家名 → 邀请入公会 / 组队 / 私信"
                 : "Right-click a chat name → guild / party / whisper";
-        }, { .fill = 0xff999999, .h_justify = Style::Left })
+        }, { .fill = Chrome::kMuted, .h_justify = Style::Left })
     }, 14, 8, {
-        .fill = 0xe01e3a5f,
-        .line_width = 5,
-        .round_radius = 10,
+        .fill = Chrome::kPanelDeep,
+        .line_width = 6,
+        .round_radius = Chrome::kRadius,
         .animate = [](Element *elt, Renderer &ctx){
             ctx.translate(0, (1.f - (float) elt->animation) * -20.f);
         },
@@ -203,6 +204,6 @@ Element *Ui::make_guild_top_button() {
             }
         },
         [](){ return Game::guild_panel_open != 0; },
-        { .fill = 0xff3d8bfd, .line_width = 4, .round_radius = 8 }
+        { .fill = Chrome::kBtnSlate, .line_width = 5, .round_radius = Chrome::kRadius }
     );
 }

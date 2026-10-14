@@ -38,6 +38,10 @@ extern "C" {
         Server::tick();
     }
 
+    void sigusr2() {
+        Server::is_draining = 1;
+    }
+
     void on_message(int ws_id, uint32_t len) {
         auto iter = WS_MAP.find(ws_id);
         //WebSocket *ws = WS_MAP[ws_id];
@@ -156,11 +160,13 @@ WebSocketServer::WebSocketServer() {
             res.end("Not Found");
         });
 
+        Module.server = server;
         server.listen($0, function() {
             console.log("Server running at http://localhost:"+$0);
         });
         
         const wss = new WSS.Server({ "server": server });
+        Module.wss = wss;
         Module.ws_connections = {};
         let curr_id = 0;
         // Protocol ping keeps nginx / mobile NATs from dropping "idle" sockets
@@ -195,8 +201,41 @@ WebSocketServer::WebSocketServer() {
 
 void Server::run() {
     EM_ASM({
-        setInterval(_tick, $0);
+        globalThis.Module = Module;
+        process.on("SIGUSR2", function () {
+            console.log("SIGUSR2: draining...");
+            _sigusr2();
+        });
+        Module.tickInterval = setInterval(_tick, $0);
     }, 1000 / TPS);
+}
+
+void Server::stop() {
+    if (Server::is_stopping) return;
+    Server::is_stopping = true;
+    std::cout << "stopping...\n";
+    EM_ASM({
+        try {
+            if (Module.tickInterval) clearInterval(Module.tickInterval);
+            Module.tickInterval = 0;
+            if (Module.wss) {
+                try { Module.wss.close(); } catch (e) {}
+            }
+            for (const id in (Module.ws_connections || {})) {
+                const ws = Module.ws_connections[id];
+                try { ws.close(1001, "Shutting Down"); } catch (e) {}
+            }
+            if (Module.server) {
+                Module.server.close(function () {
+                    setTimeout(function () { process.exit(0); }, 100);
+                });
+            } else {
+                setTimeout(function () { process.exit(0); }, 100);
+            }
+        } catch (e) {
+            process.exit(0);
+        }
+    });
 }
 
 void Client::send_packet(uint8_t const *packet, size_t size) {

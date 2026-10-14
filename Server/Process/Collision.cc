@@ -9,6 +9,8 @@
 #include <Shared/StaticData.hh>
 #include <Shared/Binary.hh>
 
+#include <Helpers/Math.hh>
+
 #include <cmath>
 #include <iostream>
 
@@ -73,12 +75,16 @@ static void _pickup_drop(Simulation *sim, Entity &player, Entity &drop) {
 
 static void _deal_push(Entity &ent, Vector knockback, float mass_ratio, float scale) {
     if (fabsf(mass_ratio) < 0.01) return;
+    if (!is_finite(knockback.x) || !is_finite(knockback.y)) return;
+    if (!is_finite(mass_ratio) || !is_finite(scale)) return;
     knockback *= scale * mass_ratio;
     ent.collision_velocity += knockback;
 }
 
 static void _deal_knockback(Entity &ent, Vector knockback, float mass_ratio) {
     if (fabsf(mass_ratio) < 0.01) return;
+    if (!is_finite(knockback.x) || !is_finite(knockback.y)) return;
+    if (!is_finite(mass_ratio)) return;
     float scale = PLAYER_ACCELERATION * 2;
     knockback *= scale * mass_ratio;
     ent.collision_velocity += knockback;
@@ -124,6 +130,24 @@ void on_collide(Simulation *sim, Entity &ent1, Entity &ent2) {
     }
 
     if (BOTH(kHealth) && !(ent1.get_team() == ent2.get_team())) {
+        // Iron Guard intercepts enemy detached / despawning projectiles
+        auto try_iron_guard = [&](Entity &guard, Entity &proj) {
+            if (!guard.has_component(kPetal) || !proj.has_component(kPetal)) return false;
+            if (guard.get_petal_id() != PetalID::kIronGuard) return false;
+            if (!(BitMath::at(proj.flags, EntityFlags::kIsDetached)
+                  || BitMath::at(proj.flags, EntityFlags::kIsDespawning)))
+                return false;
+            if (proj.get_petal_id() != PetalID::kMissile
+                && proj.get_petal_id() != PetalID::kPeas
+                && proj.get_petal_id() != PetalID::kPoisonPeas)
+                return false;
+            inflict_damage(sim, proj.id, guard.id, proj.damage * 0.35f, DamageType::kContact);
+            sim->request_delete(proj.id);
+            if (guard.health <= 0) sim->request_delete(guard.id);
+            return true;
+        };
+        if (try_iron_guard(ent1, ent2) || try_iron_guard(ent2, ent1))
+            return;
         if (ent1.health > 0 && ent2.health > 0) {
             inflict_damage(sim, ent1.id, ent2.id, ent1.damage, DamageType::kContact);
             inflict_damage(sim, ent2.id, ent1.id, ent2.damage, DamageType::kContact);

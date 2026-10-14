@@ -3,8 +3,13 @@
 #include <Server/Spawn.hh>
 #include <Shared/Entity.hh>
 #include <Shared/Simulation.hh>
+#include <Shared/StaticData.hh>
 
 #include <cmath>
+
+#ifndef M_PI
+#define M_PI 3.14159265358979323846
+#endif
 
 static bool _yggdrasil_revival_clause(Simulation *sim, Entity &player) {
     for (uint32_t i = 0; i < player.get_loadout_count(); ++i) {
@@ -26,6 +31,23 @@ void inflict_damage(Simulation *sim, EntityID const atk_id, EntityID const def_i
     if (defender.immunity_ticks > 0) return;
     if (type == DamageType::kContact) amt -= defender.armor;
     else if (type == DamageType::kPoison) amt -= defender.poison_armor;
+    // Shield Sentinel: frontal damage reduction (~60% when hit from facing arc)
+    if (type == DamageType::kContact
+        && defender.has_component(kMob)
+        && defender.get_mob_id() == MobID::kShieldSentinel
+        && sim->ent_alive(atk_id)) {
+        Entity &atk = sim->get_ent(atk_id);
+        if (atk.has_component(kPhysics) && defender.has_component(kPhysics)) {
+            float dx = atk.get_x() - defender.get_x();
+            float dy = atk.get_y() - defender.get_y();
+            float hit_ang = std::atan2(dy, dx);
+            float d = hit_ang - defender.get_angle();
+            while (d > (float)M_PI) d -= (float)(2.0 * M_PI);
+            while (d < -(float)M_PI) d += (float)(2.0 * M_PI);
+            if (std::fabs(d) < (float)M_PI * 0.55f)
+                amt *= 0.4f;
+        }
+    }
     if (amt <= 0) return;
     //if (amt <= defender.armor) return;
     float old_health = defender.health;

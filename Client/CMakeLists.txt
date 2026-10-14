@@ -54,6 +54,7 @@ set(SRCS
     Ui/TitleScreen/Settings.cc
     Ui/TitleScreen/StatScreen.cc
     Ui/Button.cc
+    Ui/Chrome.cc
     Ui/Choose.cc
     Ui/Container.cc
     Ui/DynamicText.cc
@@ -82,8 +83,13 @@ set(SRCS
 set(CMAKE_CXX_COMPILER "em++")
 set(CMAKE_CXX_FLAGS "-DCLIENTSIDE=1 -std=c++20")
 
+# Chinese / multi-byte names & chat — default ON for ashflor
+option(USE_CODEPOINT_LEN "Measure strings by Unicode codepoints" ON)
 if (USE_CODEPOINT_LEN)
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DUSE_CODEPOINT_LEN=1")
+endif()
+if (VERSION_HASH)
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DVERSION_HASH=${VERSION_HASH}ull")
 endif()
 if(DEBUG)
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DDEBUG=1 -gdwarf-4 -sNO_DISABLE_EXCEPTION_CATCHING")
@@ -92,10 +98,14 @@ else()
 endif()
 
 add_link_options(-sEXPORTED_RUNTIME_METHODS=stringToNewUTF8)
-add_link_options(-sEXPORTED_FUNCTIONS=_main,_key_event,_mouse_event,_touch_event,_wheel_event,_clipboard_event,_loop,_on_message)
+add_link_options(-sEXPORTED_FUNCTIONS=_main,_key_event,_mouse_event,_touch_event,_wheel_event,_clipboard_event,_loop,_on_message,_ashflor_cancel_petal_drags)
 
 add_executable(gardn-client ${SRCS})
 set(CMAKE_EXECUTABLE_SUFFIX ".js")
+
+if (WS_URL)
+    target_compile_definitions(gardn-client PRIVATE WS_URL="${WS_URL}")
+endif()
 
 find_program(NODE_EXECUTABLE node)
 if(NODE_EXECUTABLE AND NOT DEBUG)

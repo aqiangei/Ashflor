@@ -30,12 +30,11 @@ void tick_camera_behavior(Simulation *sim, Entity &ent) {
             else player.set_overlevel_timer(0);
         }
     } else {
-        if (BitMath::at(ent.flags, EntityFlags::kCPUControlled)) {
-            //temp: cpu cameras die
-            return sim->request_delete(ent.id);
-        }
         ent.set_player(NULL_ENTITY);
         ent.set_fov(BASE_FOV * 0.9);
+        // CPU bots: keep camera alive; FlowerAi respawns the flower
+        if (BitMath::at(ent.flags, EntityFlags::kCPUControlled))
+            return;
         if (Client *owner = Server::client_by_camera(sim, ent.id)) {
             if (owner->awaiting_revive) {
                 ent.set_camera_x(owner->corpse_x);

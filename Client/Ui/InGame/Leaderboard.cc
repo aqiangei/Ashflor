@@ -1,5 +1,6 @@
 #include <Client/Ui/InGame/GameInfo.hh>
 
+#include <Client/Ui/Chrome.hh>
 #include <Client/Ui/Container.hh>
 #include <Client/Ui/DynamicText.hh>
 #include <Client/Ui/Extern.hh>
@@ -61,7 +62,7 @@ void LeaderboardSlot::on_render(Renderer &ctx) {
 Element *Ui::make_leaderboard() {
     Element *elt = new Ui::VContainer({
         new Ui::DynamicText(22, [](){ return I18n::tr(I18n::kLeaderboardTitle); }, {
-            .fill = 0xffffffff,
+            .fill = Chrome::kTitle,
             .h_justify = Style::Left
         }),
         new Ui::DynamicText(13, [](){
@@ -70,14 +71,14 @@ Element *Ui::make_leaderboard() {
             if (I18n::use_chinese)
                 return std::format("记录 {} · 在线 {}", reg, online);
             return std::format("{} recorded · {} online", reg, online);
-        }, { .fill = 0xffdddddd, .h_justify = Style::Left }),
+        }, { .fill = Chrome::kMuted, .h_justify = Style::Left }),
         new Ui::VContainer(
             Ui::make_range(0, LEADERBOARD_SIZE, [](uint32_t i){ return (Element *) (new Ui::LeaderboardSlot(i)); })
         , 8, 4, { .h_justify = Style::Left })
     }, 16, 8, {
-        .fill = 0xc0c04040,
-        .line_width = 5,
-        .round_radius = 6,
+        .fill = Chrome::kPanelDeep,
+        .line_width = 6,
+        .round_radius = Chrome::kRadius,
         .animate = [](Element *elt, Renderer &ctx){
             elt->y = Game::alive() ? 170.f : 68.f;
             ctx.translate(0, (elt->animation - 1) * elt->height);

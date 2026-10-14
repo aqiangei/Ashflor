@@ -12,6 +12,7 @@ namespace Ui {
         virtual void on_render(Renderer &) override;
         virtual void refactor() override;
         virtual void on_event(uint8_t) override;
+        virtual void poll_events(ScreenEvent const &) override;
     };
 
     class ToggleButton : public Element {
@@ -22,5 +23,6 @@ namespace Ui {
 
         virtual void on_render(Renderer &) override;
         virtual void on_event(uint8_t) override;
+        virtual void poll_events(ScreenEvent const &) override;
     };
 }

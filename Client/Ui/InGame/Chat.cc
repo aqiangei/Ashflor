@@ -1,6 +1,7 @@
 #include <Client/Ui/InGame/GameInfo.hh>
 
 #include <Client/Ui/Button.hh>
+#include <Client/Ui/Chrome.hh>
 #include <Client/Ui/Container.hh>
 #include <Client/Ui/DynamicText.hh>
 #include <Client/Ui/TextInput.hh>
@@ -172,7 +173,7 @@ Element *Ui::make_chat_panel() {
 Element *Ui::make_chat_context_menu() {
     Element *elt = new Ui::VContainer({
         new Ui::DynamicText(12, [](){ return Game::chat_menu_name; }, {
-            .fill = 0xffdddddd
+            .fill = Chrome::kBody
         }),
         new Ui::Button(150, 28,
             new Ui::DynamicText(13, [](){ return I18n::tr(I18n::kChatInviteParty); }),
@@ -180,7 +181,7 @@ Element *Ui::make_chat_context_menu() {
                 if (e == Ui::kClick) Game::chat_menu_invite();
             },
             nullptr,
-            { .fill = 0xff5a9fdb, .line_width = 3, .round_radius = 3 }
+            { .fill = Chrome::kBtnSlate, .line_width = 4, .round_radius = Chrome::kRadius }
         ),
         new Ui::Button(150, 28,
             new Ui::DynamicText(13, [](){ return I18n::tr(I18n::kChatInviteGuild); }),
@@ -188,7 +189,7 @@ Element *Ui::make_chat_context_menu() {
                 if (e == Ui::kClick) Game::chat_menu_invite_guild();
             },
             nullptr,
-            { .fill = 0xff3d8bfd, .line_width = 3, .round_radius = 3 }
+            { .fill = Chrome::kBtnBronze, .line_width = 4, .round_radius = Chrome::kRadius }
         ),
         new Ui::Button(150, 28,
             new Ui::DynamicText(13, [](){ return I18n::tr(I18n::kChatWhisper); }),
@@ -196,12 +197,12 @@ Element *Ui::make_chat_context_menu() {
                 if (e == Ui::kClick) Game::chat_menu_whisper();
             },
             nullptr,
-            { .fill = 0xff7a3d9b, .line_width = 3, .round_radius = 3 }
+            { .fill = Chrome::kBtnIron, .line_width = 4, .round_radius = Chrome::kRadius }
         )
     }, 8, 6, {
-        .fill = 0xe0222222,
-        .line_width = 3,
-        .round_radius = 5,
+        .fill = Chrome::kPanelDeep,
+        .line_width = 5,
+        .round_radius = Chrome::kRadius,
         .animate = [](Element *elt, Renderer &) {
             elt->x = Game::chat_menu_x / Ui::scale;
             elt->y = Game::chat_menu_y / Ui::scale;

@@ -3,9 +3,15 @@
 #include <Client/Game.hh>
 #include <Client/I18n.hh>
 #include <Client/Input.hh>
+#include <Client/StaticData.hh>
 #include <Client/Ui/Container.hh>
+#include <Client/Ui/Extern.hh>
 #include <Shared/Entity.hh>
+#include <Shared/StaticData.hh>
 #include <Shared/Talent.hh>
+
+#include <Helpers/Bits.hh>
+#include <Helpers/Math.hh>
 
 #include <cmath>
 #include <format>
@@ -17,35 +23,122 @@
 using namespace Ui;
 
 class RotationWheel final : public Element {
+    uint32_t hold_touch = (uint32_t)-1;
+    uint8_t dragging = 0;
+
+    void apply_pointer(float px, float py) {
+        float dx = (px - screen_x) / Ui::scale;
+        float dy = (py - screen_y) / Ui::scale;
+        float dist = std::sqrt(dx * dx + dy * dy);
+        float r = width * 0.42f;
+        if (dist < r * 0.18f) return; // dead zone: keep current
+        // Angle from top (−π/2), clockwise → 0..1 matching partial_arc fill
+        float ang = std::atan2(dy, dx);
+        float t = (ang + (float) M_PI / 2.f) / (float)(2.0 * M_PI);
+        if (t < 0.f) t += 1.f;
+        if (t >= 1.f) t -= 1.f;
+        Game::set_rot_speed_from_frac(t);
+    }
+
+    void poll_hold_adjust() {
+        float px = 0, py = 0;
+        uint8_t active = 0;
+        if (Input::is_mobile) {
+            auto it = Input::touches.find(hold_touch);
+            if (it != Input::touches.end()) {
+                px = it->second.x;
+                py = it->second.y;
+                active = 1;
+            } else {
+                hold_touch = (uint32_t)-1;
+                dragging = 0;
+            }
+        } else if (dragging && BitMath::at(Input::mouse_buttons_state, Input::LeftMouse)) {
+            px = Input::mouse_x;
+            py = Input::mouse_y;
+            active = 1;
+        } else {
+            dragging = 0;
+        }
+        if (active)
+            apply_pointer(px, py);
+    }
+
 public:
-    RotationWheel() : Element(72, 72, { .no_animation = 1 }) {
+    RotationWheel() : Element(Input::is_mobile ? 96 : 72, Input::is_mobile ? 96 : 72, { .no_animation = 1 }) {
         style.should_render = [](){ return Game::alive(); };
     }
+
+    void on_event(uint8_t e) override {
+        if (e == kMouseDown) {
+            dragging = 1;
+            if (Input::is_mobile)
+                hold_touch = touch_id;
+            else {
+                apply_pointer(Input::mouse_x, Input::mouse_y);
+            }
+        } else if (e == kFocusLost || e == kClick) {
+            dragging = 0;
+            hold_touch = (uint32_t)-1;
+        }
+    }
+
     void on_render(Renderer &ctx) override {
+        poll_hold_adjust();
+
         float r = width * 0.42f;
-        float t = (float) Game::rot_speed_setting / (float) Talent::kRotSettingMax;
+        float t = Game::rot_speed_f / (float) Talent::kRotSettingMax;
+        float hint = Game::rot_hint_opacity;
+        float pulse = 1.f + 0.08f * hint * std::sin((float) Game::timestamp * 0.012f);
+
+        // Base disc
         ctx.set_fill(0xc0222222);
         ctx.begin_path();
-        ctx.arc(0, 0, r);
+        ctx.arc(0, 0, r * pulse);
         ctx.fill();
-        ctx.set_stroke(0xff66c2ff);
-        ctx.set_line_width(7);
+
+        // Track ring
+        ctx.set_stroke(0x66ffffff);
+        ctx.set_line_width(6);
+        ctx.begin_path();
+        ctx.arc(0, 0, r * 0.78f);
+        ctx.stroke();
+
+        // Filled arc = current spin (smooth)
+        ctx.set_stroke(hint > 0.05f ? 0xff7ad4ff : 0xff66c2ff);
+        ctx.set_line_width(7 + 3 * hint);
         ctx.begin_path();
         ctx.partial_arc(0, 0, r * 0.78f, -M_PI / 2, -M_PI / 2 + 2 * M_PI * t, 0);
         ctx.stroke();
-        // Spinning tick mark
-        float ang = (float) (Game::timestamp * 0.004 * (0.6 + t * 1.4));
+
+        // Outer hint glow while adjusting
+        if (hint > 0.02f) {
+            ctx.set_global_alpha(hint * 0.55f);
+            ctx.set_stroke(0xffa8e6ff);
+            ctx.set_line_width(3);
+            ctx.begin_path();
+            ctx.arc(0, 0, r * 1.05f);
+            ctx.stroke();
+            ctx.set_global_alpha(1.f);
+        }
+
+        // Spinning tick — angular speed tracks setting (matches petal spin feel)
+        float spin = (float) (Game::timestamp * 0.0035 * (0.35 + t * 1.85));
         ctx.set_stroke(0xffffffff);
         ctx.set_line_width(3);
         ctx.round_line_cap();
         ctx.begin_path();
-        ctx.move_to(cosf(ang) * r * 0.25f, sinf(ang) * r * 0.25f);
-        ctx.line_to(cosf(ang) * r * 0.72f, sinf(ang) * r * 0.72f);
+        ctx.move_to(cosf(spin) * r * 0.22f, sinf(spin) * r * 0.22f);
+        ctx.line_to(cosf(spin) * r * 0.72f, sinf(spin) * r * 0.72f);
         ctx.stroke();
-        std::string label = std::format("{}", (int) Game::rot_speed_setting);
-        ctx.draw_text(label.c_str(), { .size = 16 });
-        ctx.translate(0, height * 0.42f);
-        ctx.draw_text("Q·E", { .size = 11, .fill = 0xffdddddd });
+
+        std::string label = std::format("{:.0f}", Game::rot_speed_f);
+        ctx.draw_text(label.c_str(), { .size = Input::is_mobile ? 18.f : 16.f });
+        ctx.translate(0, height * 0.40f);
+        if (Input::is_mobile)
+            ctx.draw_text(I18n::use_chinese ? "拖环" : "Drag", { .size = 11, .fill = 0xffdddddd });
+        else
+            ctx.draw_text("Q·E", { .size = 11, .fill = 0xffdddddd });
     }
 };
 
@@ -73,7 +166,30 @@ UiLoadoutSlot::UiLoadoutSlot(uint8_t pos) : Element(70, 70, { .fill = 0xffeeeeee
 }
 
 void UiLoadoutSlot::on_render(Renderer &ctx) {
+    // Rarity-tinted slot (zorr / florr_clone loadout bar)
+    uint32_t saved_fill = style.fill;
+    if (position < 2 * MAX_SLOT_COUNT) {
+        PetalID::T pid = Game::cached_loadout[position];
+        if (pid != PetalID::kNone && pid < PetalID::kNumPetals) {
+            uint8_t r = PETAL_DATA[pid].rarity;
+            if (r < RarityID::kNumRarities)
+                style.fill = RARITY_COLORS[r];
+        }
+    }
     Element::on_render(ctx);
+    style.fill = saved_fill;
+    // Hover highlight while dragging a petal over this slot
+    if (Ui::UiLoadout::num_petals_selected != 0) {
+        float dist = std::max(fabsf(Input::mouse_x - screen_x), fabsf(Input::mouse_y - screen_y));
+        if (dist < (width + 8) * Ui::scale / 2) {
+            ctx.set_global_alpha(0.18f);
+            ctx.set_fill(0xffffffff);
+            ctx.begin_path();
+            ctx.round_rect(-width / 2, -height / 2, width, height, style.round_radius);
+            ctx.fill();
+            ctx.set_global_alpha(1.f);
+        }
+    }
     if (Game::slot_indicator_opacity < 0.01) return;
     if (position < Game::loadout_count) {
         ctx.set_global_alpha(Game::slot_indicator_opacity);
@@ -81,9 +197,10 @@ void UiLoadoutSlot::on_render(Renderer &ctx) {
         char str[4] = {'[', SLOT_KEYBINDS[position], ']', '\0'};
         ctx.draw_text(&str[0], { .size = 16 });
     } else if (position == 2 * MAX_SLOT_COUNT) {
+        // Drop-on-ground slot (T still unequips selected secondary)
         ctx.set_global_alpha(Game::slot_indicator_opacity);
         ctx.translate(0, -height / 2 - 14);
-        ctx.draw_text("[T]", { .size = 14 });
+        ctx.draw_text("[D]", { .size = 14 });
         ctx.translate(0, height / 2 + 14);
     }
 }

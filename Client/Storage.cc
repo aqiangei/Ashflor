@@ -140,6 +140,7 @@ public:
     X(11, Game::guest_coins) \
     X(12, Input::invert_attack) \
     X(13, Input::invert_defend) \
+    X(19, Input::request_mobile) \
     X(14, Game::session_token) \
     X(15, Game::talent_hp) \
     X(16, Game::talent_rot) \
@@ -187,6 +188,13 @@ void Storage::retrieve() {
             uint8_t swapped = BitMath::at(opts, 4) | BitMath::at(opts, 5);
             Input::invert_attack = swapped;
             Input::invert_defend = swapped;
+            // bit7 = request_mobile explicitly saved; else default to device probe
+            if (BitMath::at(opts, 7))
+                Input::request_mobile = BitMath::at(opts, 6);
+            else
+                Input::request_mobile = Input::is_mobile;
+        } else {
+            Input::request_mobile = Input::is_mobile;
         }
     }
     {
@@ -245,8 +253,19 @@ void Storage::retrieve() {
             uint32_t remain = 0;
             if (reader.at < StorageProtocol::buffer + len)
                 remain = (uint32_t) ((StorageProtocol::buffer + len - reader.at) / 4);
-            if (remain >= PetalID::kNumPetals) {
-                for (uint32_t i = 0; i < PetalID::kNumPetals; ++i)
+            uint32_t bank_n = PetalID::kNumPetals;
+            constexpr uint32_t kLadderAdded = 43;
+            constexpr uint32_t kRoyalAdded = 12;
+            uint32_t const prev_ladder = PetalID::kNumPetals > kLadderAdded
+                ? (uint32_t)(PetalID::kNumPetals - kLadderAdded) : PetalID::kNumPetals;
+            uint32_t const prev_royal = prev_ladder > kRoyalAdded
+                ? prev_ladder - kRoyalAdded : prev_ladder;
+            if (remain < bank_n && remain >= prev_ladder)
+                bank_n = prev_ladder;
+            else if (remain < bank_n && remain >= prev_royal)
+                bank_n = prev_royal;
+            if (remain >= bank_n) {
+                for (uint32_t i = 0; i < bank_n; ++i)
                     Game::guest_craft_bank[i] = reader.read<uint32_t>();
                 if (reader.at + 4 <= StorageProtocol::buffer + len)
                     Game::guest_coins = reader.read<uint32_t>();
@@ -274,6 +293,7 @@ void Storage::retrieve() {
             uint8_t rs = reader.read<uint8_t>();
             if (rs > 10) rs = 7;
             Game::rot_speed_setting = rs;
+            Game::rot_speed_f = (float) rs;
         }
     }
     #ifdef DEBUG
@@ -329,6 +349,8 @@ void Storage::set() {
             | (1 << 3)
             | (Input::invert_attack << 4)
             | (Input::invert_defend << 5)
+            | ((Input::request_mobile ? 1 : 0) << 6)
+            | (1 << 7)
         );
         StorageProtocol::store("settings", writer.at - writer.base);
     }

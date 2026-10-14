@@ -31,7 +31,7 @@ Renderer &static_minimap(uint8_t map_id, float width, float height) {
         if (layer.map_id == map_id && layer.width == width)
             return *layer.canvas;
     }
-    if (minimap_layers.size() >= 8) minimap_layers.clear();
+    if (minimap_layers.size() >= MapID::kNumMaps + 2) minimap_layers.clear();
     minimap_layers.push_back({map_id, width, std::make_unique<Renderer>()});
     Renderer &canvas = *minimap_layers.back().canvas;
     canvas.set_dimensions(width, height);
@@ -40,7 +40,10 @@ Renderer &static_minimap(uint8_t map_id, float width, float height) {
     float const sx = width / (float)ARENA_WIDTH;
     float const sy = height / (float)ARENA_HEIGHT;
 
-    for (ZoneDefinition const &def : map_zones(map_id)) {
+    MapZones const &zones = map_zones(map_id);
+    uint32_t ring_n = zones.size() < 4 ? zones.size() : 4;
+    for (uint32_t i = 0; i < ring_n; ++i) {
+        ZoneDefinition const &def = zones[i];
         canvas.set_fill(def.color);
         canvas.fill_rect(def.left * sx, def.top * sy,
                          (def.right - def.left) * sx, (def.bottom - def.top) * sy);

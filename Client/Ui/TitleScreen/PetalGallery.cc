@@ -1,5 +1,6 @@
 #include <Client/Ui/TitleScreen/TitleScreen.hh>
 
+#include <Client/Ui/Chrome.hh>
 #include <Client/Ui/InGame/GameInfo.hh>
 #include <Client/Ui/ScrollContainer.hh>
 #include <Client/Ui/DynamicText.hh>
@@ -86,9 +87,9 @@ Element *Ui::make_petal_gallery() {
         new Ui::DynamicText(25, [](){ return I18n::tr(I18n::kPetalGallery); }),
         make_scroll()
     }, 15, 10, { 
-        .fill = 0xff5a9fdb,
-        .line_width = 7,
-        .round_radius = 6,
+        .fill = Chrome::kPanelDeep,
+        .line_width = 6,
+        .round_radius = Chrome::kRadius,
         .animate = [](Element *elt, Renderer &ctx){
             ctx.translate(0, (elt->animation - 1) * elt->height);
         },

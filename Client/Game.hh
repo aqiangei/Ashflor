@@ -68,6 +68,7 @@ namespace Game {
     extern uint8_t loadout_count;
     extern uint8_t simulation_ready;
     extern uint8_t on_game_screen;
+    extern uint8_t leaving_to_title; // soft-leave in progress — don't force game UI / auto-respawn
     extern uint8_t show_debug;
     extern uint8_t selected_map; // MapID for title-screen world select
     extern uint8_t minimap_expanded; // 0 compact full-map, 1 larger full-map (toggle M)
@@ -120,7 +121,14 @@ namespace Game {
     extern uint32_t guest_coins;
     extern uint8_t talent_hp;
     extern uint8_t talent_rot;
-    extern uint8_t rot_speed_setting; // Q/E 0..10
+    extern uint8_t rot_speed_setting; // quantized 0..10 (network)
+    extern float rot_speed_f;         // smooth 0..10 (hold Q/E / touch)
+    extern float rot_hint_opacity;    // world/UI hint ring while adjusting
+    extern double rot_hint_stamp;     // timestamp of last adjust
+
+    // Apply continuous spin adjust (delta levels); refreshes hint ring
+    void nudge_rot_speed(float delta);
+    void set_rot_speed_from_frac(float frac01);
 
     void init();
     void reset();

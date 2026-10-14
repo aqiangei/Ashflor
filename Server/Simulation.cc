@@ -59,8 +59,38 @@ static void calculate_leaderboard(Simulation *sim) {
     }
 }
 
+static void ensure_fallen_king(Simulation *sim) {
+    if (sim->map_id != MapID::kRoyalCapital) return;
+    // Single Royal room process state: never spawned | waiting after death | ready
+    static bool ever_spawned = false;
+    static int32_t respawn_ticks = 0;
+    bool alive = false;
+    sim->for_each<kMob>([&](Simulation *, Entity &m) {
+        if (m.get_mob_id() == MobID::kFallenKing && !m.pending_delete) alive = true;
+    });
+    if (alive) return;
+    if (ever_spawned) {
+        if (respawn_ticks <= 0)
+            respawn_ticks = 45 * (int32_t)TPS;
+        if (--respawn_ticks > 0) return;
+    }
+    // Align with Ai.cc palace clamp center
+    float kx = ARENA_WIDTH * 0.5f + 4200.f;
+    float ky = ARENA_HEIGHT * 0.5f - 1800.f;
+    Map::resolve_circle_terrain(sim->map_id, kx, ky, 100.f);
+    alloc_mob(sim, MobID::kFallenKing, kx, ky, NULL_ENTITY, [](Entity &mob) {
+        mob.score_reward = MOB_DATA[MobID::kFallenKing].xp;
+        BitMath::set(mob.flags, EntityFlags::kHasCulling);
+        mob.detection_radius = 1400.f;
+        mob.zone = 5; // palace zone index (not zone-count tracked)
+    });
+    ever_spawned = true;
+    respawn_ticks = 0;
+}
+
 void Simulation::on_tick() {
     spatial_hash.refresh(ARENA_WIDTH, ARENA_HEIGHT);
+    ensure_fallen_king(this);
     if (frand() < 1.0f / TPS) {
         for (uint32_t i = 0; i < 10; ++i) {
             Vector v;

@@ -3,13 +3,16 @@
 #include <Server/EntityFunctions.hh>
 #include <Server/Spawn.hh>
 #include <Shared/Entity.hh>
+#include <Shared/Map.hh>
 #include <Shared/Simulation.hh>
 #include <Shared/StaticData.hh>
+
+#include <Helpers/Math.hh>
 
 #include <cmath>
 
 static void _focus_lose_clause(Entity &ent, Vector const &v) {
-    if (v.magnitude() > 1.5 * ent.detection_radius) ent.target = NULL_ENTITY;
+    if (v.magnitude() > 1.35f * ent.detection_radius) ent.target = NULL_ENTITY;
 }
 
 static void default_tick_idle(Simulation *sim, Entity &ent) {
@@ -112,6 +115,326 @@ static void tick_default_aggro(Simulation *sim, Entity &ent, float speed) {
     }
 }
 
+static void tick_flee(Simulation *sim, Entity &ent, float speed) {
+    if (sim->ent_alive(ent.target)) {
+        Entity &target = sim->get_ent(ent.target);
+        Vector v(ent.get_x() - target.get_x(), ent.get_y() - target.get_y());
+        _focus_lose_clause(ent, v);
+        v.set_magnitude(PLAYER_ACCELERATION * speed);
+        ent.acceleration = v;
+        ent.set_angle(v.angle());
+        return;
+    } else {
+        if (!(ent.target == NULL_ENTITY)) {
+            ent.ai_state = AIState::kIdle;
+            ent.ai_tick = 0;
+        }
+        ent.target = find_nearest_enemy(sim, ent, ent.detection_radius + ent.get_radius());
+        tick_default_passive(sim, ent);
+    }
+}
+
+static void tick_mimic_wake(Simulation *sim, Entity &ent, float speed) {
+    if (sim->ent_alive(ent.target)) {
+        // Short lunge then recover
+        if (ent.ai_state == 2) {
+            if (ent.ai_tick > (game_tick_t)(0.35f * TPS)) {
+                ent.ai_state = 3;
+                ent.ai_tick = 0;
+            }
+            return;
+        }
+        if (ent.ai_state == 3) {
+            ent.acceleration.set(0, 0);
+            if (ent.ai_tick > (game_tick_t)(1.2f * TPS)) {
+                ent.ai_state = AIState::kBasicAggro;
+                ent.ai_tick = 0;
+            }
+            return;
+        }
+        Entity &target = sim->get_ent(ent.target);
+        Vector v(target.get_x() - ent.get_x(), target.get_y() - ent.get_y());
+        float dist = v.magnitude();
+        if (dist < 220.f && ent.ai_tick > (game_tick_t)(1.0f * TPS)) {
+            v.set_magnitude(PLAYER_ACCELERATION * 2.4f);
+            ent.acceleration = v;
+            ent.velocity = v * 0.6f;
+            ent.set_angle(v.angle());
+            ent.ai_state = 2;
+            ent.ai_tick = 0;
+            return;
+        }
+        tick_default_aggro(sim, ent, speed);
+        return;
+    }
+    if (!(ent.target == NULL_ENTITY)) {
+        ent.ai_state = AIState::kIdle;
+        ent.ai_tick = 0;
+    }
+    EntityID enemy = find_nearest_enemy(sim, ent, ent.detection_radius);
+    if (sim->ent_alive(enemy)) {
+        ent.target = enemy;
+        ent.ai_state = AIState::kBasicAggro;
+        tick_default_aggro(sim, ent, speed);
+    } else {
+        ent.target = NULL_ENTITY;
+        // Stay still while disguised
+        ent.acceleration.set(0, 0);
+    }
+}
+
+static void _fire_missile_fan(Simulation *sim, Entity &ent, float base_ang,
+                              uint32_t count, float spread, float dmg, float life_s) {
+    for (uint32_t i = 0; i < count; ++i) {
+        float ang = base_ang;
+        if (count > 1)
+            ang += -spread * 0.5f + spread * ((float)i / (float)(count - 1));
+        Entity &missile = alloc_petal(sim, PetalID::kMissile, ent);
+        missile.damage = dmg;
+        missile.health = missile.max_health = 8.f;
+        missile.friction = DEFAULT_FRICTION;
+        BitMath::set(missile.flags, EntityFlags::kIsDetached);
+        entity_set_despawn_tick(missile, (game_tick_t)(life_s * TPS));
+        missile.set_angle(ang);
+        missile.velocity.unit_normal(ang).set_magnitude(14.f * PLAYER_ACCELERATION);
+    }
+}
+
+static uint32_t _count_children(Simulation *sim, EntityID parent) {
+    uint32_t n = 0;
+    sim->for_each<kMob>([&](Simulation *s, Entity &m) {
+        if (m.get_parent() == parent && s->ent_alive(m.id)) ++n;
+    });
+    return n;
+}
+
+static void _clamp_to_disk(Entity &ent, float cx, float cy, float max_r) {
+    Vector d(ent.get_x() - cx, ent.get_y() - cy);
+    float m = d.magnitude();
+    if (m > max_r) {
+        d.set_magnitude(max_r);
+        ent.set_x(cx + d.x);
+        ent.set_y(cy + d.y);
+        ent.velocity *= 0.3f;
+    }
+}
+
+// ai_state: 0 chase, 1 windup, 2 dash
+static void tick_charge_mob(Simulation *sim, Entity &ent, float chase_spd,
+                            float dash_spd, float windup_s, float dash_s, float cd_s) {
+    if (!sim->ent_alive(ent.target)) {
+        if (!(ent.target == NULL_ENTITY)) {
+            ent.ai_state = AIState::kIdle;
+            ent.ai_tick = 0;
+            ent.target = NULL_ENTITY;
+        }
+        ent.target = find_nearest_enemy(sim, ent, ent.detection_radius + ent.get_radius());
+        tick_default_passive(sim, ent);
+        return;
+    }
+    Entity &target = sim->get_ent(ent.target);
+    Vector v(target.get_x() - ent.get_x(), target.get_y() - ent.get_y());
+    _focus_lose_clause(ent, v);
+    if (!sim->ent_alive(ent.target)) return;
+    float dist = v.magnitude();
+    ent.set_angle(v.angle());
+    if (ent.ai_state == 1) {
+        ent.acceleration.set(0, 0);
+        if (ent.ai_tick >= (game_tick_t)(windup_s * TPS)) {
+            ent.ai_state = 2;
+            ent.ai_tick = 0;
+            ent.heading_angle = v.angle();
+        }
+        return;
+    }
+    if (ent.ai_state == 2) {
+        Vector dash;
+        dash.unit_normal(ent.heading_angle).set_magnitude(PLAYER_ACCELERATION * dash_spd);
+        ent.acceleration = dash;
+        if (ent.ai_tick >= (game_tick_t)(dash_s * TPS)) {
+            ent.ai_state = 0;
+            ent.ai_tick = 0;
+            ent.secondary_reload = (game_tick_t)(cd_s * TPS);
+        }
+        return;
+    }
+    if (ent.secondary_reload > 0) --ent.secondary_reload;
+    if (ent.secondary_reload == 0 && dist < 700.f && dist > 80.f) {
+        ent.ai_state = 1;
+        ent.ai_tick = 0;
+        ent.acceleration.set(0, 0);
+        return;
+    }
+    v.set_magnitude(PLAYER_ACCELERATION * chase_spd);
+    ent.acceleration = v;
+}
+
+static void tick_thorn_bug(Simulation *sim, Entity &ent) {
+    if (sim->ent_alive(ent.target)) {
+        Entity &target = sim->get_ent(ent.target);
+        Vector v(target.get_x() - ent.get_x(), target.get_y() - ent.get_y());
+        _focus_lose_clause(ent, v);
+        float dist = v.magnitude();
+        if (dist > 280.f) {
+            v.set_magnitude(PLAYER_ACCELERATION * 0.7f);
+            ent.acceleration = v;
+        } else {
+            ent.acceleration.set(0, 0);
+        }
+        ent.set_angle(v.angle());
+        if (ent.ai_tick >= (game_tick_t)(2.2f * TPS) && dist < 900.f) {
+            ent.ai_tick = 0;
+            _fire_missile_fan(sim, ent, ent.get_angle(), 6, (float)(2.0 * M_PI), 9.f, 2.2f);
+        }
+        return;
+    }
+    if (!(ent.target == NULL_ENTITY)) {
+        ent.ai_state = AIState::kIdle;
+        ent.ai_tick = 0;
+        ent.target = NULL_ENTITY;
+    }
+    ent.target = find_nearest_enemy(sim, ent, ent.detection_radius);
+    tick_default_passive(sim, ent);
+}
+
+static void tick_phantom_orb(Simulation *sim, Entity &ent) {
+    if (sim->ent_alive(ent.target)) {
+        Entity &target = sim->get_ent(ent.target);
+        Vector v(target.get_x() - ent.get_x(), target.get_y() - ent.get_y());
+        _focus_lose_clause(ent, v);
+        float dist = v.magnitude();
+        // Blink every ~2.8s to a nearby clear point toward/around the target
+        if (ent.ai_tick >= (game_tick_t)(2.8f * TPS)) {
+            ent.ai_tick = 0;
+            float ang = v.angle() + (frand() - 0.5f) * 1.8f;
+            float leap = 280.f + frand() * 220.f;
+            float nx = ent.get_x() + cosf(ang) * leap;
+            float ny = ent.get_y() + sinf(ang) * leap;
+            nx = fclamp(nx, ent.get_radius() + 40.f, ARENA_WIDTH - ent.get_radius() - 40.f);
+            ny = fclamp(ny, ent.get_radius() + 40.f, ARENA_HEIGHT - ent.get_radius() - 40.f);
+            if (!Map::circle_hits_impassable(sim->map_id, nx, ny, ent.get_radius() + 8.f)) {
+                ent.set_x(nx);
+                ent.set_y(ny);
+                ent.velocity.set(0, 0);
+            }
+        }
+        v.set_magnitude(PLAYER_ACCELERATION * (dist < 200.f ? 1.35f : 1.1f));
+        ent.acceleration = v;
+        ent.set_angle(v.angle());
+        return;
+    }
+    if (!(ent.target == NULL_ENTITY)) {
+        ent.ai_state = AIState::kIdle;
+        ent.ai_tick = 0;
+        ent.target = NULL_ENTITY;
+    }
+    ent.target = find_nearest_enemy(sim, ent, ent.detection_radius + ent.get_radius());
+    tick_default_passive(sim, ent);
+}
+
+// Palace boss arena center (must match gen_royal palace coords)
+static float const kKingArenaX = ARENA_WIDTH * 0.5f + 4200.f;
+static float const kKingArenaY = ARENA_HEIGHT * 0.5f - 1800.f;
+static float const kKingArenaR = 1900.f;
+
+static void tick_fallen_king(Simulation *sim, Entity &ent) {
+    _clamp_to_disk(ent, kKingArenaX, kKingArenaY, kKingArenaR);
+    float hp = ent.max_health > 0.f ? ent.health / ent.max_health : 0.f;
+    uint8_t phase = hp > 0.70f ? 1 : (hp > 0.35f ? 2 : 3);
+    float chase = phase == 1 ? 0.75f : (phase == 2 ? 0.85f : 1.0f);
+    float skill_cd = phase == 1 ? 2.4f : (phase == 2 ? 1.9f : 1.45f);
+
+    if (!sim->ent_alive(ent.target)) {
+        if (!(ent.target == NULL_ENTITY)) {
+            ent.ai_state = 0;
+            ent.ai_tick = 0;
+            ent.target = NULL_ENTITY;
+        }
+        ent.target = find_nearest_enemy(sim, ent, ent.detection_radius + ent.get_radius());
+        if (!sim->ent_alive(ent.target)) {
+            tick_default_passive(sim, ent);
+            return;
+        }
+    }
+    Entity &target = sim->get_ent(ent.target);
+    Vector v(target.get_x() - ent.get_x(), target.get_y() - ent.get_y());
+    _focus_lose_clause(ent, v);
+    if (!sim->ent_alive(ent.target)) return;
+    float dist = v.magnitude();
+    ent.set_angle(v.angle());
+
+    // ai_state 1 = charge windup, 2 = charging
+    if (ent.ai_state == 1) {
+        ent.acceleration.set(0, 0);
+        if (ent.ai_tick >= (game_tick_t)(0.55f * TPS)) {
+            ent.ai_state = 2;
+            ent.ai_tick = 0;
+            ent.heading_angle = v.angle();
+            // Second charge in phase 3 queued via secondary_reload flag bit
+            if (phase >= 3) ent.secondary_reload = 1;
+        }
+        return;
+    }
+    if (ent.ai_state == 2) {
+        Vector dash;
+        dash.unit_normal(ent.heading_angle).set_magnitude(PLAYER_ACCELERATION * 2.6f);
+        ent.acceleration = dash;
+        if (ent.ai_tick >= (game_tick_t)(0.45f * TPS)) {
+            if (phase >= 3 && ent.secondary_reload == 1) {
+                // Immediate second charge toward current target
+                ent.secondary_reload = 0;
+                ent.ai_state = 1;
+                ent.ai_tick = 0;
+                return;
+            }
+            ent.ai_state = 0;
+            ent.ai_tick = 0;
+        }
+        return;
+    }
+
+    // Periodic skills
+    if (ent.ai_tick >= (game_tick_t)(skill_cd * TPS)) {
+        ent.ai_tick = 0;
+        float roll = frand();
+        if (roll < 0.40f && dist < 1100.f) {
+            // Charge (telegraph via windup stillness)
+            ent.ai_state = 1;
+            return;
+        }
+        if (roll < 0.75f) {
+            uint32_t n = phase == 1 ? 3 : (phase == 2 ? 8 : 10);
+            float spread = phase == 1 ? 0.9f : (float)(2.0 * M_PI);
+            _fire_missile_fan(sim, ent, v.angle(), n, spread, 12.f + phase * 2.f, 2.5f);
+        } else if (phase >= 2) {
+            uint32_t kids = _count_children(sim, ent.id);
+            uint32_t cap = phase >= 3 ? 4 : 3;
+            if (kids < cap) {
+                MobID::T sid = phase >= 3 ? MobID::kSpearSentinel : MobID::kShieldSentinel;
+                float ox = ent.get_x() + (frand() - 0.5f) * 200.f;
+                float oy = ent.get_y() + (frand() - 0.5f) * 200.f;
+                Entity &spawned = alloc_mob(sim, sid, ox, oy, ent.get_team(), [](Entity &m) {
+                    m.score_reward = MOB_DATA[m.get_mob_id()].xp / 2;
+                    BitMath::set(m.flags, EntityFlags::kHasCulling);
+                    BitMath::set(m.flags, EntityFlags::kDieOnParentDeath);
+                    BitMath::set(m.flags, EntityFlags::kNoDrops);
+                });
+                spawned.set_parent(ent.id);
+                spawned.target = ent.target;
+                entity_set_despawn_tick(spawned, 25 * TPS);
+            }
+        }
+    }
+
+    if (dist > 120.f) {
+        v.set_magnitude(PLAYER_ACCELERATION * chase);
+        ent.acceleration = v;
+    } else {
+        ent.acceleration.set(0, 0);
+    }
+    _clamp_to_disk(ent, kKingArenaX, kKingArenaY, kKingArenaR);
+}
+
 static void tick_bee_passive(Simulation *sim, Entity &ent) {
     switch(ent.ai_state) {
         case AIState::kIdle: {
@@ -141,33 +464,70 @@ static void tick_bee_passive(Simulation *sim, Entity &ent) {
     }
 }
 
+// ai_state: 0 chase/ready, 2 windup, 3 post-shot cooldown
 static void tick_hornet_aggro(Simulation *sim, Entity &ent) {
     if (sim->ent_alive(ent.target)) {
         Entity &target = sim->get_ent(ent.target);
         Vector v(target.get_x() - ent.get_x(), target.get_y() - ent.get_y());
         _focus_lose_clause(ent, v);
+        if (!sim->ent_alive(ent.target)) {
+            ent.ai_state = AIState::kIdle;
+            ent.ai_tick = 0;
+            return;
+        }
         float dist = v.magnitude();
+        ent.set_angle(v.angle());
+
+        if (ent.ai_state == 2) {
+            // Windup: slight retreat, then fire
+            if (dist > 1.f) {
+                Vector back = v;
+                back.set_magnitude(-0.15f * PLAYER_ACCELERATION);
+                ent.acceleration = back;
+            } else {
+                ent.acceleration.set(0, 0);
+            }
+            if (ent.ai_tick >= (game_tick_t)(0.45f * TPS)) {
+                ent.ai_tick = 0;
+                ent.ai_state = 3;
+                Entity &missile = alloc_petal(sim, PetalID::kMissile, ent);
+                missile.damage = 14;
+                missile.health = missile.max_health = 12;
+                missile.friction = DEFAULT_FRICTION;
+                entity_set_despawn_tick(missile, 3 * TPS);
+                missile.set_angle(ent.get_angle());
+                missile.velocity.unit_normal(ent.get_angle()).set_magnitude(15 * PLAYER_ACCELERATION);
+                Vector kb;
+                kb.unit_normal(ent.get_angle() - M_PI).set_magnitude(2.5f * PLAYER_ACCELERATION);
+                ent.velocity += kb;
+            }
+            return;
+        }
+
+        if (ent.ai_state == 3) {
+            if (dist > 300) {
+                v.set_magnitude(PLAYER_ACCELERATION * 0.975f);
+                ent.acceleration = v;
+            } else {
+                ent.acceleration.set(0, 0);
+            }
+            if (ent.ai_tick >= (game_tick_t)(1.2f * TPS)) {
+                ent.ai_state = 0;
+                ent.ai_tick = 0;
+            }
+            return;
+        }
+
+        // Chase / ready
         if (dist > 300) {
-            v.set_magnitude(PLAYER_ACCELERATION * 0.975);
+            v.set_magnitude(PLAYER_ACCELERATION * 0.975f);
             ent.acceleration = v;
         } else {
-            ent.acceleration.set(0,0);
+            ent.acceleration.set(0, 0);
         }
-        ent.set_angle(v.angle());
-        if (ent.ai_tick >= 1.5 * TPS && dist < 800) {
+        if (dist < 800 && ent.ai_tick >= (game_tick_t)(0.35f * TPS)) {
+            ent.ai_state = 2;
             ent.ai_tick = 0;
-
-            Entity &missile = alloc_petal(sim, PetalID::kMissile, ent);
-            missile.damage = 10;
-            missile.health = missile.max_health = 10;
-            missile.friction = DEFAULT_FRICTION;
-
-            entity_set_despawn_tick(missile, 3 * TPS);
-            missile.set_angle(ent.get_angle());
-            missile.velocity.unit_normal(ent.get_angle()).set_magnitude(15 * PLAYER_ACCELERATION);
-            Vector kb;
-            kb.unit_normal(ent.get_angle() - M_PI).set_magnitude(2.5 * PLAYER_ACCELERATION);
-            ent.velocity += kb;            
         }
         return;
     } else {
@@ -177,7 +537,7 @@ static void tick_hornet_aggro(Simulation *sim, Entity &ent) {
             ent.target = NULL_ENTITY;
         }
         ent.target = find_nearest_enemy(sim, ent, ent.detection_radius);
-        tick_bee_passive(sim, ent);;
+        tick_bee_passive(sim, ent);
     }
 }
 
@@ -454,6 +814,42 @@ void tick_ai_behavior(Simulation *sim, Entity &ent) {
             break;
         case MobID::kDigger:
             tick_digger(sim, ent);
+            break;
+        case MobID::kWanderingGuard:
+            tick_default_aggro(sim, ent, 1.05f);
+            break;
+        case MobID::kStoneBeetle:
+            tick_default_aggro(sim, ent, 0.75f);
+            break;
+        case MobID::kRustMite:
+            tick_default_aggro(sim, ent, 1.25f);
+            break;
+        case MobID::kMimicChest:
+            tick_mimic_wake(sim, ent, 1.0f);
+            break;
+        case MobID::kCoinBeetle:
+            tick_flee(sim, ent, 1.3f);
+            break;
+        case MobID::kRoyalBee:
+            tick_charge_mob(sim, ent, 1.1f, 2.2f, 0.35f, 0.4f, 2.5f);
+            break;
+        case MobID::kThornBug:
+            tick_thorn_bug(sim, ent);
+            break;
+        case MobID::kShieldSentinel:
+            tick_default_aggro(sim, ent, 0.8f);
+            break;
+        case MobID::kSpearSentinel:
+            tick_charge_mob(sim, ent, 0.95f, 2.8f, 0.5f, 0.35f, 2.8f);
+            break;
+        case MobID::kPhantomOrb:
+            tick_phantom_orb(sim, ent);
+            break;
+        case MobID::kFallenKnight:
+            tick_charge_mob(sim, ent, 0.9f, 2.5f, 0.45f, 0.4f, 2.2f);
+            break;
+        case MobID::kFallenKing:
+            tick_fallen_king(sim, ent);
             break;
         default:
             break;

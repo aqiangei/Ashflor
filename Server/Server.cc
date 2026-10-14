@@ -9,10 +9,16 @@
 
 #include <chrono>
 #include <iostream>
+#include <new>
+
+static bool was_draining = false;
 
 namespace Server {
     uint8_t OUTGOING_PACKET[MAX_PACKET_LEN] = {0};
-    std::array<GameInstance, MapID::kNumMaps> games;
+    GameInstance *games = nullptr;
+    volatile sig_atomic_t is_draining = 0;
+    bool is_stopping = false;
+    uint32_t player_count = 0;
 }
 
 using namespace Server;
@@ -34,8 +40,12 @@ Client *Server::client_by_camera(Simulation *sim, EntityID const &id) {
 void Server::tick() {
     using namespace std::chrono_literals;
     auto start = std::chrono::steady_clock::now();
-    for (uint8_t i = 0; i < MapID::kNumMaps; ++i)
+    uint32_t online = 0;
+    for (uint8_t i = 0; i < MapID::kNumMaps; ++i) {
         Server::games[i].tick();
+        online += (uint32_t) Server::games[i].clients.size();
+    }
+    Server::player_count = online;
     static uint32_t lb_flush_ticks = 0;
     if (++lb_flush_ticks >= 25) { // ~1s at 25 TPS
         lb_flush_ticks = 0;
@@ -58,11 +68,22 @@ void Server::tick() {
     auto end = std::chrono::steady_clock::now();
     std::chrono::duration<double, std::milli> tick_time = end - start;
     if (tick_time > 5ms) std::cout << "tick took " << tick_time << '\n';
+
+    if (Server::is_draining && !was_draining) {
+        was_draining = true;
+        std::cout << "draining...\n";
+        AccountStore::save();
+        LeaderboardStore::flush();
+    }
+    if (Server::is_draining && !Server::is_stopping && Server::player_count == 0)
+        Server::stop();
 }
 
 void Server::init() {
     AccountStore::load();
     LeaderboardStore::load();
+    if (Server::games == nullptr)
+        Server::games = new GameInstance[MapID::kNumMaps];
     for (uint8_t i = 0; i < MapID::kNumMaps; ++i)
         Server::games[i].init(i);
     Server::run();

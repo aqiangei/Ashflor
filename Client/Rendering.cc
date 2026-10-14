@@ -11,8 +11,15 @@
 
 #include <Shared/Map.hh>
 #include <Shared/StaticData.hh>
+#include <Shared/Talent.hh>
+
+#include <Helpers/Math.hh>
 
 #include <cmath>
+
+#ifndef M_PI
+#define M_PI 3.14159265358979323846
+#endif
 
 void _apply_damage_filter(Renderer &ctx, Entity const &ent) {
     ctx.set_global_alpha(1 - ent.deletion_animation);
@@ -81,6 +88,34 @@ void Game::render_game() {
             renderer.line_to(rightX, newTopY);
         }
         renderer.stroke();
+    }
+    // Spin-rate hint ring around self while adjusting (Q/E hold or drag wheel)
+    if (alive() && Game::rot_hint_opacity > 0.02f) {
+        Entity const &player = simulation.get_ent(player_id);
+        float t = Game::rot_speed_f / (float) Talent::kRotSettingMax;
+        float alpha = fclamp(Game::rot_hint_opacity, 0.f, 1.f);
+        float pr = player.get_radius() + 28.f + 10.f * t;
+        float spin = (float) (Game::timestamp * 0.0035 * (0.35 + t * 1.85));
+        RenderContext hint_ctx(&renderer);
+        renderer.set_global_alpha(alpha * 0.85f);
+        renderer.set_stroke(0xff66c2ff);
+        renderer.set_line_width(3.5f);
+        renderer.begin_path();
+        renderer.partial_arc(player.get_x(), player.get_y(), pr,
+            -M_PI / 2, -M_PI / 2 + 2 * M_PI * t, 0);
+        renderer.stroke();
+        renderer.set_stroke(0xffffffff);
+        renderer.set_line_width(2.5f);
+        renderer.round_line_cap();
+        renderer.begin_path();
+        renderer.move_to(
+            player.get_x() + cosf(spin) * (pr - 10.f),
+            player.get_y() + sinf(spin) * (pr - 10.f));
+        renderer.line_to(
+            player.get_x() + cosf(spin) * (pr + 4.f),
+            player.get_y() + sinf(spin) * (pr + 4.f));
+        renderer.stroke();
+        renderer.set_global_alpha(1.f);
     }
     // Antenna / FOV helper — thin ray toward cursor (default on)
     if (alive() && Input::movement_helper && !Input::is_mobile) {

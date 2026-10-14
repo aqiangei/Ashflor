@@ -2,12 +2,14 @@
 #include <Client/Ui/InGame/Loadout.hh>
 
 #include <Client/Ui/Button.hh>
+#include <Client/Ui/Chrome.hh>
 #include <Client/Ui/Container.hh>
 #include <Client/Ui/DynamicText.hh>
 #include <Client/Ui/Extern.hh>
 #include <Client/Ui/ScrollContainer.hh>
 #include <Client/Ui/StaticIcon.hh>
 #include <Client/Ui/StaticText.hh>
+#include <Client/Ui/TextInput.hh>
 
 #include <Client/Assets/Assets.hh>
 #include <Client/Render/Renderer.hh>
@@ -47,6 +49,15 @@ static bool petal_equipped(PetalID::T id) {
 // Layout: primary [0,n) · secondary 副槽 [n, 2n) · pure bag [2n, n+MAX)
 // Bag panel only shows pure bag — never secondary.
 
+static uint8_t bag_stack_mode = 1; // 1 = collapse identical petals to xN
+static std::string bag_search_text;
+
+static uint8_t bag_ui_open() {
+    return Game::game_panel == Game::kPanelInventory
+        && Game::should_render_game_ui()
+        && (Game::alive() || Game::on_game_screen);
+}
+
 static uint8_t bag_pure_count() {
     if (Game::loadout_count >= MAX_SLOT_COUNT) return 0;
     return (uint8_t) (MAX_SLOT_COUNT - Game::loadout_count);
@@ -84,7 +95,30 @@ static uint8_t bag_is_stack_head(uint8_t bag_index) {
     return 1;
 }
 
-// Bag grid cell — click = equip to bottom bar; drag = drop onto bottom equip slots
+static uint8_t bag_name_matches(PetalID::T id) {
+    if (bag_search_text.empty()) return 1;
+    if (id == PetalID::kNone || id >= PetalID::kNumPetals) return 0;
+    char const *nm = I18n::petal_name(id);
+    if (nm == nullptr) nm = PETAL_DATA[id].name;
+    // Case-insensitive substring
+    std::string hay = nm;
+    std::string needle = bag_search_text;
+    for (char &c : hay) if (c >= 'A' && c <= 'Z') c = (char) (c - 'A' + 'a');
+    for (char &c : needle) if (c >= 'A' && c <= 'Z') c = (char) (c - 'A' + 'a');
+    return hay.find(needle) != std::string::npos;
+}
+
+static uint8_t bag_slot_visible(uint8_t idx) {
+    if (!bag_ui_open() || idx >= bag_pure_count()) return 0;
+    PetalID::T id = bag_slot_id(idx);
+    if (id == PetalID::kNone) return 0;
+    if (bag_stack_mode && !bag_is_stack_head(idx)) return 0;
+    return bag_name_matches(id);
+}
+
+// Bag grid cell — mousedown starts hold-drag immediately (ghost follows finger);
+// click (small move) = auto-equip + close bag; drag release = drop on loadout
+// (owned by UiLoadoutPetal once selected).
 class InventoryBagSlot final : public Element {
     uint8_t bag_index; // 0 .. bag_pure_count()-1 → static 2*loadout_count + bag_index
     uint8_t dragging;
@@ -95,9 +129,7 @@ public:
         : Element(64, 72, { .no_animation = 1 }),
           bag_index(idx), dragging(0), drag_touch((uint32_t)-1),
           press_x(0), press_y(0) {
-        style.should_render = [idx](){
-            return Game::alive() && idx < bag_pure_count() && bag_is_stack_head(idx);
-        };
+        style.should_render = [idx](){ return bag_slot_visible(idx); };
         style.animate = [this](Element *, Renderer &) {
             if (!dragging) return;
             float mx = Input::mouse_x;
@@ -121,40 +153,22 @@ public:
                 dragging = 0;
                 drag_touch = (uint32_t)-1;
                 if (dist < kClickSlop) {
+                    // Click: take ownership so UiLoadoutPetal won't also act
                     if (p != nullptr && p->selected) {
                         --Ui::UiLoadout::num_petals_selected;
                         p->selected = 0;
                         p->style.layer = 0;
                         p->persistent_touch_id = (uint32_t)-1;
                     }
-                    // Primary L→R, then secondary L→R; fly if equipped, silent if full
-                    ui_auto_equip_from_bag(static_pos, screen_x, screen_y);
+                    if (ui_auto_equip_from_bag(static_pos, screen_x, screen_y))
+                        Game::close_game_panel();
                     return;
                 }
-                if (p != nullptr && p->selected) {
-                    uint8_t tgt = find_loadout_drop_target(mx, my);
-                    if (tgt != (uint8_t)-1) {
-                        if (tgt == 2 * MAX_SLOT_COUNT)
-                            ui_delete_petal(static_pos);
-                        else {
-                            uint8_t st = loadout_dynamic_to_static(tgt);
-                            if (st != static_pos)
-                                ui_swap_petals(st, static_pos);
-                        }
-                    }
-                    if (p->selected) {
-                        --Ui::UiLoadout::num_petals_selected;
-                        p->selected = 0;
-                    }
-                    p->style.layer = 0;
-                    p->persistent_touch_id = (uint32_t)-1;
-                }
+                // Drag release: UiLoadoutPetal animate owns drop/swap/delete
                 return;
             }
-            if (dist >= kClickSlop && p != nullptr
-                && Game::cached_loadout[static_pos] != PetalID::kNone) {
-                if (!p->selected)
-                    begin_petal_drag(static_pos, drag_touch);
+            // Keep ghost snapped to pointer while holding (UiLoadoutPetal also lerps)
+            if (p != nullptr && p->selected) {
                 p->style.layer = 1;
                 p->x = (mx - Ui::window_width / 2) / Ui::scale;
                 p->y = (my - Ui::window_height / 2) / Ui::scale;
@@ -174,43 +188,45 @@ public:
     }
     void on_render(Renderer &ctx) override {
         PetalID::T pid = id();
-        ctx.set_fill(0xff3ecf6e);
-        ctx.set_stroke(0xff2a9a4a);
-        ctx.set_line_width(1.5f);
-        ctx.begin_path();
-        ctx.round_rect(-width / 2, -height / 2, width, height, 4);
-        ctx.fill();
-        ctx.stroke();
+        uint32_t fill = Chrome::kPanelInset;
+        if (!bag_stack_mode && pid != PetalID::kNone && pid < PetalID::kNumPetals) {
+            uint8_t r = PETAL_DATA[pid].rarity;
+            if (r < RarityID::kNumRarities)
+                fill = (RARITY_COLORS[r] & 0x00ffffff) | 0xdd000000;
+        }
+        Chrome::draw_plate(ctx, width, height, fill, 3.f, 4.f);
         if (pid == PetalID::kNone || pid >= PetalID::kNumPetals) return;
         if (dragging) ctx.set_global_alpha(0.4f);
         {
             RenderContext c(&ctx);
             ctx.translate(0, -8);
-            // Half previous bag icon size (was 96/60)
             ctx.scale(48.f / 60.f);
             draw_loadout_background(ctx, pid);
         }
-        uint32_t stack = bag_stack_count(pid);
+        uint32_t stack = bag_stack_mode ? bag_stack_count(pid) : 1;
         if (stack > 1) {
             std::string badge = std::format("x{}", stack);
             float bx = width / 2 - 12;
             float by = -height / 2 + 10;
             ctx.set_fill(0xe0000000);
             ctx.begin_path();
-            ctx.round_rect(bx - 11, by - 8, 22, 16, 4);
+            ctx.round_rect(bx - 12, by - 9, 24, 18, 2);
             ctx.fill();
             {
                 RenderContext c(&ctx);
                 ctx.translate(bx, by);
                 ctx.center_text_align();
                 ctx.center_text_baseline();
-                ctx.draw_text(badge.c_str(), { .fill = 0xffffffff, .size = 11, .stroke_scale = 0 });
+                ctx.draw_text(badge.c_str(), {
+                    .fill = Chrome::kGold, .size = 13, .stroke_scale = 0.2f
+                });
             }
         }
-        ctx.translate(0, height / 2 - 10);
-        ctx.set_fill(0xffffffff);
-        ctx.draw_text(PETAL_DATA[pid].name, { .size = 10 });
-        ctx.translate(0, -(height / 2 - 10));
+        ctx.translate(0, height / 2 - 11);
+        ctx.draw_text(I18n::petal_name(pid), {
+            .fill = Chrome::kTitle, .size = 12, .stroke_scale = 0.2f
+        });
+        ctx.translate(0, -(height / 2 - 11));
     }
     void on_event(uint8_t event) override {
         PetalID::T pid = id();
@@ -226,6 +242,12 @@ public:
                     press_y = iter->second.y;
                 }
             }
+            // Hold-drag immediately so the ghost follows without waiting for slop
+            uint8_t static_pos = bag_slot_static(bag_index);
+            if (static_pos < Game::loadout_count + MAX_SLOT_COUNT
+                && static_pos < 2 * MAX_SLOT_COUNT
+                && Game::cached_loadout[static_pos] != PetalID::kNone)
+                begin_petal_drag(static_pos, touch_id);
             rendering_tooltip = 0;
             return;
         }
@@ -277,13 +299,12 @@ public:
 
 // Drawer: slides up from above the bottom-left buttons
 static Element *make_drawer(std::vector<Element *> children, uint8_t panel_id) {
-    Element *elt = new Ui::VContainer(children, 14, 6, {
-        .fill = 0xd0181818,
-        .line_width = 4,
-        .round_radius = 8,
+    Element *elt = new Ui::VContainer(children, 16, 10, {
+        .fill = Chrome::kPanelDeep,
+        .line_width = 7,
+        .round_radius = 4,
         .animate = [](Element *elt, Renderer &ctx){
-            // Slide up (closed: fully below)
-            ctx.translate(0, (1.f - (float) elt->animation) * (elt->height + 12.f));
+            ctx.translate(0, (1.f - (float) elt->animation) * (elt->height + 16.f));
         },
         .should_render = [panel_id](){
             return Game::game_panel == panel_id
@@ -293,8 +314,9 @@ static Element *make_drawer(std::vector<Element *> children, uint8_t panel_id) {
         .h_justify = Style::Left,
         .v_justify = Style::Bottom
     });
-    elt->x = 56; // right of vertical side buttons
-    elt->y = -12;
+    // Sit clear of side plaques (humanized: not jammed into loadout)
+    elt->x = Input::is_mobile ? 92.f : 72.f;
+    elt->y = -20;
     if (panel_id < 5) Ui::game_panel_roots[panel_id] = elt;
     return elt;
 }
@@ -662,33 +684,37 @@ static void iconpark_gift(Renderer &ctx) {
 }
 
 Element *Ui::make_game_side_buttons() {
-    // Vertical column against left wall (bottom) — IconPark glyphs
+    // Vertical column against left wall (bottom) — IconPark glyphs.
+    // Size bumped further on mobile by Button::apply_mobile_touch_size (44→64).
+    float const gap = Input::is_mobile ? 10.f : 6.f;
+    // Stone plaques — muted earth tones, not candy bubbles
     Element *elt = new Ui::VContainer({
-        new Ui::Button(44, 44,
+        new Ui::Button(48, 48,
             iconpark_side_icon(iconpark_backpack),
             on_inventory_btn, inventory_active,
-            { .fill = 0xff5a9fdb, .line_width = 3, .round_radius = 8 }),
-        new Ui::Button(44, 44,
+            { .fill = Chrome::kBtnSlate, .line_width = 5, .round_radius = 3 }),
+        new Ui::Button(48, 48,
             iconpark_side_icon(iconpark_star),
             on_talents_btn, talents_active,
-            { .fill = 0xff9b6bdb, .line_width = 3, .round_radius = 8 }),
-        new Ui::Button(44, 44,
+            { .fill = Chrome::kBtnBronze, .line_width = 5, .round_radius = 3 }),
+        new Ui::Button(48, 48,
             iconpark_side_icon(iconpark_merge),
             on_craft_btn, craft_active,
-            { .fill = 0xff1dd129, .line_width = 3, .round_radius = 8 }),
-        new Ui::Button(44, 44,
+            { .fill = Chrome::kBtnMoss, .line_width = 5, .round_radius = 3 }),
+        new Ui::Button(48, 48,
             iconpark_side_icon(iconpark_gift),
             on_special_btn, special_active,
-            { .fill = 0xffe0a030, .line_width = 3, .round_radius = 8 })
-    }, 6, 6, {
+            { .fill = Chrome::kBtnClay, .line_width = 5, .round_radius = 3 })
+    }, gap, gap, {
         .should_render = [](){
-            return Game::alive() && Game::should_render_game_ui();
+            return Game::should_render_game_ui()
+                && (Game::alive() || Game::on_game_screen);
         },
         .h_justify = Style::Left,
         .v_justify = Style::Bottom
     });
-    elt->x = 4;
-    elt->y = -8;
+    elt->x = Input::is_mobile ? 10.f : 8.f;
+    elt->y = -24; // lift clear of loadout bar
     Ui::game_side_buttons_root = elt;
     return elt;
 }
@@ -696,56 +722,80 @@ Element *Ui::make_game_side_buttons() {
 static void on_close_inventory(Element *, uint8_t e) {
     if (e == Ui::kClick) Game::close_game_panel();
 }
+static void on_compact_bag(Element *, uint8_t e) {
+    if (e == Ui::kClick) ui_compact_backpack();
+}
 
 Element *Ui::make_inventory_panel() {
-    // Fixed-width panel; bag grid scrolls vertically inside
     Element *body = new Ui::VContainer({
-        new Ui::Element(kBagPanelW, 1), // lock panel width
+        new Ui::Element(kBagPanelW, 1),
         new Ui::HFlexContainer(
-            new Ui::DynamicText(22, [](){ return I18n::tr(I18n::kPanelInventory); }, {
-                .fill = 0xffffffff
+            new Ui::DynamicText(26, [](){ return I18n::tr(I18n::kPanelInventory); }, {
+                .fill = Chrome::kTitle
             }),
-            new Ui::Button(32, 32,
-                new Ui::DynamicText(16, [](){ return std::string{"X"}; }),
+            new Ui::Button(36, 36,
+                new Ui::DynamicText(18, [](){ return std::string{"X"}; }),
                 on_close_inventory, nullptr,
-                { .fill = 0xffe03a3a, .line_width = 3, .round_radius = 6 }),
-            0, 8, {}
+                { .fill = Chrome::kBtnDanger, .line_width = 5, .round_radius = 3 }),
+            0, 10, {}
         ),
-        new Ui::DynamicText(13, [](){
+        new Ui::DynamicText(15, [](){
             return I18n::use_chinese
-                ? std::format("钱币 {}　点击装备 · 同种堆叠 · 装备拖出回背包", Game::coins)
-                : std::format("Coins {}  click=equip · stacks · drag out unequips", Game::coins);
-        }, { .fill = 0xffffd24a }),
+                ? std::format("钱币 {}　·　点击装备　·　按住拖到槽　·　丢弃扔地", Game::coins)
+                : std::format("Coins {} · click=equip · hold-drag · drop=ground", Game::coins);
+        }, { .fill = Chrome::kGold }),
+        new Ui::HContainer({
+            new Ui::ToggleButton(32, &bag_stack_mode),
+            new Ui::DynamicText(15, [](){
+                return I18n::use_chinese
+                    ? (bag_stack_mode ? "堆叠" : "展开")
+                    : (bag_stack_mode ? "Stack" : "Expand");
+            }, { .fill = Chrome::kBody }),
+            new Ui::TextInput(bag_search_text, 168, 32, 24, {
+                .fill = Chrome::kPanelInset, .line_width = 4, .round_radius = 3, .no_animation = 1
+            }),
+            new Ui::Button(84, 32,
+                new Ui::DynamicText(14, [](){
+                    return I18n::use_chinese ? "整理" : "Compact";
+                }),
+                on_compact_bag, nullptr,
+                { .fill = Chrome::kBtnBronze, .line_width = 5, .round_radius = 3 })
+        }, 0, 10, { .h_justify = Style::Left, .no_animation = 1 }),
         make_bag_scroll(),
-        new Ui::DynamicText(11, [](){
+        new Ui::DynamicText(13, [](){
             uint32_t bank = 0, bag = 0;
             for (PetalID::T id = 1; id < PetalID::kNumPetals; ++id) {
                 bank += Game::craft_bank[id];
                 bag += Game::craft_bag_count(id);
             }
             return I18n::use_chinese
-                ? std::format("材料库 {} · 可合成背包 {}（C）", bank, bag)
-                : std::format("bank {} · craftable bag {} (C)", bank, bag);
-        }, { .fill = 0xffdddddd })
-    }, 14, 8, {
-        .fill = 0xe0286a9e,
-        .line_width = 5,
-        .round_radius = 10,
+                ? std::format("材料库 {}　·　可合成背包 {}（C）", bank, bag)
+                : std::format("Bank {} · craftable bag {} (C)", bank, bag);
+        }, { .fill = Chrome::kMuted })
+    }, 16, 10, {
+        .fill = Chrome::kPanelDeep,
+        .line_width = 7,
+        .round_radius = 4,
         .animate = [](Element *elt, Renderer &ctx){
-            // Keep fixed outer size so scroll area does not resize the chrome
-            elt->width = kBagPanelW + 28.f;
-            ctx.translate(0, (1.f - (float) elt->animation) * (elt->height + 20.f));
+            elt->width = kBagPanelW + 32.f;
+            ctx.translate(0, (1.f - (float) elt->animation) * (elt->height + 24.f));
+            if (Ui::UiLoadout::num_petals_selected != 0
+                && loadout_drag_over_bag(Input::mouse_x, Input::mouse_y)) {
+                ctx.set_global_alpha(0.4f + 0.12f * (float) sin(Game::timestamp / 140.0));
+                ctx.set_stroke(Chrome::kRimBrass);
+                ctx.set_line_width(5);
+                ctx.begin_path();
+                ctx.round_rect(-elt->width / 2, -elt->height / 2, elt->width, elt->height, 4);
+                ctx.stroke();
+                ctx.set_global_alpha(1.f);
+            }
         },
-        .should_render = [](){
-            return Game::game_panel == Game::kPanelInventory
-                && Game::alive()
-                && Game::should_render_game_ui();
-        },
+        .should_render = [](){ return bag_ui_open(); },
         .h_justify = Style::Left,
         .v_justify = Style::Bottom
     });
-    body->x = 56;
-    body->y = -12;
+    body->x = Input::is_mobile ? 92.f : 72.f;
+    body->y = -20;
     Ui::game_panel_roots[Game::kPanelInventory] = body;
     return body;
 }
@@ -767,51 +817,51 @@ static void on_talent_rot(Element *, uint8_t e) {
 
 Element *Ui::make_talents_panel() {
     return make_drawer({
-        new Ui::DynamicText(20, [](){ return I18n::tr(I18n::kPanelTalents); }, {
-            .fill = 0xffffffff, .h_justify = Style::Left
+        new Ui::DynamicText(24, [](){ return I18n::tr(I18n::kPanelTalents); }, {
+            .fill = Chrome::kTitle, .h_justify = Style::Left
         }),
-        new Ui::DynamicText(13, [](){
+        new Ui::DynamicText(15, [](){
             uint32_t lv = talent_player_level();
             uint32_t free = Talent::points_free(lv, Game::talent_hp, Game::talent_rot);
             uint8_t slots = Talent::max_rank(lv);
             return I18n::use_chinese
-                ? std::format("可用点数 {}　槽位上限 {}（每 10 级 +1）", free, slots)
-                : std::format("{} pts · max rank {} (unlock +1 / 10 lv)", free, slots);
-        }, { .fill = 0xfff0d878, .h_justify = Style::Left }),
-        new Ui::DynamicText(12, [](){
+                ? std::format("可用点数 {}　·　槽位上限 {}（每 10 级 +1）", free, slots)
+                : std::format("{} pts · max rank {} (+1 / 10 lv)", free, slots);
+        }, { .fill = Chrome::kGold, .h_justify = Style::Left }),
+        new Ui::DynamicText(14, [](){
             return I18n::use_chinese
                 ? "每级 +1 点，每 10 级额外 +10 点。点击加点。"
                 : "+1 pt/level, +10 pts every 10 levels. Click to invest.";
-        }, { .fill = 0xffbbbbbb, .h_justify = Style::Left }),
+        }, { .fill = Chrome::kMuted, .h_justify = Style::Left }),
         new Ui::HContainer({
-            new Ui::Button(150, 56,
+            new Ui::Button(158, 60,
                 new Ui::VContainer({
-                    new Ui::DynamicText(14, [](){
+                    new Ui::DynamicText(16, [](){
                         return I18n::use_chinese ? "体魄" : "Vitality";
-                    }, { .fill = 0xffffffff }),
-                    new Ui::DynamicText(12, [](){
+                    }, { .fill = Chrome::kTitle }),
+                    new Ui::DynamicText(14, [](){
                         return std::format("Lv{}  +{:.0f}HP",
                             (int) Game::talent_hp,
                             Talent::health_bonus(Game::talent_hp));
-                    }, { .fill = 0xffa8e6a8 })
-                }, 0, 2, {}),
+                    }, { .fill = Chrome::kBody })
+                }, 0, 3, {}),
                 on_talent_hp, nullptr,
-                { .fill = 0xff3a6b4a, .line_width = 3, .round_radius = 6 }),
-            new Ui::Button(150, 56,
+                { .fill = Chrome::kBtnMoss, .line_width = 5, .round_radius = 3 }),
+            new Ui::Button(158, 60,
                 new Ui::VContainer({
-                    new Ui::DynamicText(14, [](){
+                    new Ui::DynamicText(16, [](){
                         return I18n::use_chinese ? "转速" : "Spin";
-                    }, { .fill = 0xffffffff }),
-                    new Ui::DynamicText(12, [](){
+                    }, { .fill = Chrome::kTitle }),
+                    new Ui::DynamicText(14, [](){
                         return std::format("Lv{}  +{:.1f}rad/s",
                             (int) Game::talent_rot,
                             Talent::rot_bonus(Game::talent_rot));
-                    }, { .fill = 0xffa8d4e6 })
-                }, 0, 2, {}),
+                    }, { .fill = Chrome::kBody })
+                }, 0, 3, {}),
                 on_talent_rot, nullptr,
-                { .fill = 0xff3a5a7a, .line_width = 3, .round_radius = 6 })
-        }, 0, 10, {}),
-        new Ui::DynamicText(11, [](){
+                { .fill = Chrome::kBtnSlate, .line_width = 5, .round_radius = 3 })
+        }, 0, 12, {}),
+        new Ui::DynamicText(13, [](){
             uint32_t lv = talent_player_level();
             uint8_t nh = (uint8_t) (Game::talent_hp + 1);
             uint8_t nr = (uint8_t) (Game::talent_rot + 1);
@@ -827,48 +877,48 @@ Element *Ui::make_talents_panel() {
                     ? std::format("转速下级需 {} 点", Talent::rank_cost(nr))
                     : std::format("Spin next: {} pts", Talent::rank_cost(nr)));
             return a + "　·　" + b;
-        }, { .fill = 0xffcccccc, .h_justify = Style::Left }),
-        new Ui::DynamicText(11, [](){
+        }, { .fill = Chrome::kBody, .h_justify = Style::Left }),
+        new Ui::DynamicText(13, [](){
             return I18n::use_chinese
-                ? "局内用 Q / E 调转速圆轮（槽右侧）"
-                : "In-game: Q/E adjust the spin wheel (right of slots)";
-        }, { .fill = 0xff999999, .h_justify = Style::Left })
+                ? "局内：按住 Q/E 调速，或拖动槽右侧圆轮"
+                : "In-game: hold Q/E or drag the spin wheel";
+        }, { .fill = Chrome::kMuted, .h_justify = Style::Left })
     }, Game::kPanelTalents);
 }
 
 Element *Ui::make_craft_panel() {
     Element *elt = new Ui::VContainer({
         new Ui::HFlexContainer(
-            new Ui::DynamicText(22, [](){ return I18n::tr(I18n::kPanelCraft); }, {
-                .fill = 0xffffffff
+            new Ui::DynamicText(26, [](){ return I18n::tr(I18n::kPanelCraft); }, {
+                .fill = Chrome::kTitle
             }),
             new Ui::HContainer({
-                new Ui::Button(88, 28,
-                    new Ui::DynamicText(12, [](){
+                new Ui::Button(100, 34,
+                    new Ui::DynamicText(14, [](){
                         return I18n::use_chinese ? "全部合成" : "Craft All";
                     }),
                     on_craft_all, nullptr,
-                    { .fill = 0xff555555, .line_width = 3, .round_radius = 4 }),
-                new Ui::Button(32, 28,
-                    new Ui::DynamicText(14, [](){ return std::string{"X"}; }),
+                    { .fill = Chrome::kBtnBronze, .line_width = 5, .round_radius = 3 }),
+                new Ui::Button(36, 34,
+                    new Ui::DynamicText(16, [](){ return std::string{"X"}; }),
                     on_close_craft, nullptr,
-                    { .fill = 0xffe03a3a, .line_width = 3, .round_radius = 4 })
-            }, 0, 6, {}),
-            0, 8, {}
+                    { .fill = Chrome::kBtnDanger, .line_width = 5, .round_radius = 3 })
+            }, 0, 8, {}),
+            0, 10, {}
         ),
         new Ui::HContainer({
             new CraftTrayView(),
             new Ui::VContainer({
-                new Ui::Button(96, 36,
-                    new Ui::DynamicText(16, [](){
+                new Ui::Button(108, 42,
+                    new Ui::DynamicText(18, [](){
                         return I18n::use_chinese ? "合成" : "Craft";
                     }),
                     on_craft_once, nullptr,
-                    { .fill = 0xff444444, .line_width = 3, .round_radius = 4 }),
-                new Ui::DynamicText(11, [](){
+                    { .fill = Chrome::kBtnMoss, .line_width = 5, .round_radius = 3 }),
+                new Ui::DynamicText(14, [](){
                     if (Game::craft_tray_id == PetalID::kNone)
                         return I18n::use_chinese
-                            ? std::string{"点击下方花瓣放入合成区（每次+5）"}
+                            ? std::string{"点击下方花瓣放入（每次+5）"}
                             : std::string{"Click petals below (+5 each)"};
                     uint8_t r = PETAL_DATA[Game::craft_tray_id].rarity;
                     float p = Craft::success_chance(r) * 100.f;
@@ -877,24 +927,24 @@ Element *Ui::make_craft_panel() {
                             I18n::rarity_name((uint8_t) (r + 1)), p)
                         : std::format("5→{} {:.0f}% · Shift+Alt=all",
                             I18n::rarity_name((uint8_t) (r + 1)), p);
-                }, { .fill = 0xff222222, .h_justify = Style::Left })
-            }, 8, 8, { .h_justify = Style::Left })
-        }, 0, 12, { .h_justify = Style::Left }),
-        new Ui::DynamicText(11, [](){
+                }, { .fill = Chrome::kGold, .h_justify = Style::Left })
+            }, 10, 10, { .h_justify = Style::Left })
+        }, 0, 14, { .h_justify = Style::Left }),
+        new Ui::DynamicText(13, [](){
             return I18n::use_chinese
-                ? "仅显示背包/材料库已有花瓣 · 五个相同合成更高一级 · Shift+Alt 放满"
-                : "Only owned petals (bag+bank) · 5→next rarity · Shift+Alt=all";
-        }, { .fill = 0xff333333, .h_justify = Style::Left }),
+                ? "仅显示已有花瓣 · 五个相同合成更高一级 · Shift+Alt 放满"
+                : "Owned only · 5→next rarity · Shift+Alt=all";
+        }, { .fill = Chrome::kMuted, .h_justify = Style::Left }),
         make_craft_material_grid(),
-        new Ui::DynamicText(12, [](){ return Game::craft_status; }, {
-            .fill = 0xff553300, .h_justify = Style::Left
+        new Ui::DynamicText(14, [](){ return Game::craft_status; }, {
+            .fill = Chrome::kGold, .h_justify = Style::Left
         })
-    }, 14, 8, {
-        .fill = 0xf0d9c9a8,
-        .line_width = 5,
-        .round_radius = 10,
+    }, 16, 10, {
+        .fill = Chrome::kPanelDeep,
+        .line_width = 7,
+        .round_radius = 4,
         .animate = [](Element *elt, Renderer &ctx){
-            ctx.translate(0, (1.f - (float) elt->animation) * (elt->height + 12.f));
+            ctx.translate(0, (1.f - (float) elt->animation) * (elt->height + 16.f));
         },
         .should_render = [](){
             return Game::game_panel == Game::kPanelCraft
@@ -904,59 +954,59 @@ Element *Ui::make_craft_panel() {
         .h_justify = Style::Left,
         .v_justify = Style::Bottom
     });
-    elt->x = 56;
-    elt->y = -12;
+    elt->x = Input::is_mobile ? 92.f : 72.f;
+    elt->y = -20;
     Ui::game_panel_roots[Game::kPanelCraft] = elt;
     return elt;
 }
 
 Element *Ui::make_special_craft_panel() {
     return make_drawer({
-        new Ui::DynamicText(20, [](){ return I18n::tr(I18n::kPanelSpecial); }, {
-            .fill = 0xffffffff, .h_justify = Style::Left
+        new Ui::DynamicText(24, [](){ return I18n::tr(I18n::kPanelSpecial); }, {
+            .fill = Chrome::kTitle, .h_justify = Style::Left
         }),
-        new Ui::DynamicText(14, [](){
+        new Ui::DynamicText(16, [](){
             return I18n::use_chinese
                 ? std::format("钱币：{}", Game::coins)
                 : std::format("Coins: {}", Game::coins);
-        }, { .fill = 0xffffd24a, .h_justify = Style::Left }),
-        new Ui::DynamicText(12, [](){
+        }, { .fill = Chrome::kGold, .h_justify = Style::Left }),
+        new Ui::DynamicText(14, [](){
             return I18n::use_chinese
                 ? "特殊花瓣商店（买完进背包；绿框=已装备主手）"
                 : "Special shop (buys → bag; green = equipped)";
-        }, { .fill = 0xffcccccc, .h_justify = Style::Left }),
+        }, { .fill = Chrome::kMuted, .h_justify = Style::Left }),
         new Ui::HContainer({
             new SpecialPetalCard(PetalID::kAntennae),
             new SpecialPetalCard(PetalID::kAccelerator),
             new SpecialPetalCard(PetalID::kMagnet)
-        }, 0, 10, { .h_justify = Style::Left }),
+        }, 0, 12, { .h_justify = Style::Left }),
         new Ui::HContainer({
-            new Ui::Button(110, 28,
-                new Ui::DynamicText(11, [](){
+            new Ui::Button(118, 34,
+                new Ui::DynamicText(13, [](){
                     return I18n::use_chinese
                         ? std::format("触角·{}币", Craft::buy_special_cost(PetalID::kAntennae))
                         : std::format("Ant·{}", Craft::buy_special_cost(PetalID::kAntennae));
                 }),
                 on_buy_antennae, nullptr,
-                { .fill = 0xff9b6bdb, .line_width = 3, .round_radius = 4 }),
-            new Ui::Button(110, 28,
-                new Ui::DynamicText(11, [](){
+                { .fill = Chrome::kBtnBronze, .line_width = 5, .round_radius = 3 }),
+            new Ui::Button(118, 34,
+                new Ui::DynamicText(13, [](){
                     return I18n::use_chinese
                         ? std::format("加速·{}币", Craft::buy_special_cost(PetalID::kAccelerator))
                         : std::format("Accel·{}", Craft::buy_special_cost(PetalID::kAccelerator));
                 }),
                 on_buy_accelerator, nullptr,
-                { .fill = 0xff5a9fdb, .line_width = 3, .round_radius = 4 }),
-            new Ui::Button(110, 28,
-                new Ui::DynamicText(11, [](){
+                { .fill = Chrome::kBtnSlate, .line_width = 5, .round_radius = 3 }),
+            new Ui::Button(118, 34,
+                new Ui::DynamicText(13, [](){
                     return I18n::use_chinese
                         ? std::format("磁铁·{}币", Craft::buy_special_cost(PetalID::kMagnet))
                         : std::format("Mag·{}", Craft::buy_special_cost(PetalID::kMagnet));
                 }),
                 on_buy_magnet, nullptr,
-                { .fill = 0xffe0a030, .line_width = 3, .round_radius = 4 })
-        }, 0, 6, { .h_justify = Style::Left }),
-        new Ui::DynamicText(12, [](){
+                { .fill = Chrome::kBtnClay, .line_width = 5, .round_radius = 3 })
+        }, 0, 8, { .h_justify = Style::Left }),
+        new Ui::DynamicText(14, [](){
             return I18n::use_chinese
                 ? std::format("装备中：触角 {}　加速 {}　磁铁 {}",
                     petal_equipped(PetalID::kAntennae) ? "开" : "关",
@@ -966,14 +1016,14 @@ Element *Ui::make_special_craft_panel() {
                     petal_equipped(PetalID::kAntennae) ? "ON" : "off",
                     petal_equipped(PetalID::kAccelerator) ? "ON" : "off",
                     petal_equipped(PetalID::kMagnet) ? "ON" : "off");
-        }, { .fill = 0xffffffff, .h_justify = Style::Left }),
-        new Ui::DynamicText(11, [](){
+        }, { .fill = Chrome::kBody, .h_justify = Style::Left }),
+        new Ui::DynamicText(13, [](){
             return I18n::use_chinese
-                ? "从背包拖到主手栏生效。也可在 C 制作里用钱币买高等级花瓣。"
-                : "Drag bag → primary to equip. Or buy high rarities in C craft.";
-        }, { .fill = 0xffbbbbbb, .h_justify = Style::Left }),
-        new Ui::DynamicText(12, [](){ return Game::craft_status; }, {
-            .fill = 0xffffe0a0, .h_justify = Style::Left
+                ? "从背包拖到主手栏生效。也可在 C 制作里买高等级花瓣。"
+                : "Drag bag → primary to equip. Or buy rarities in C craft.";
+        }, { .fill = Chrome::kMuted, .h_justify = Style::Left }),
+        new Ui::DynamicText(14, [](){ return Game::craft_status; }, {
+            .fill = Chrome::kGold, .h_justify = Style::Left
         })
     }, Game::kPanelSpecial);
 }

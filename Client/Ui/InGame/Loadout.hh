@@ -67,16 +67,22 @@ namespace Ui {
 
     void forward_secondary_select();
     void backward_secondary_select();
-    void ui_delete_petal(uint8_t);
+    void ui_delete_petal(uint8_t); // drop on ground (wire: kPetalDelete)
     void ui_swap_petals(uint8_t, uint8_t);
     // Bag click: primary L→R then secondary L→R; fly hint; 0 if full
     uint8_t ui_auto_equip_from_bag(uint8_t bag_pos, float screen_x, float screen_y);
     // Click primary↔paired secondary (equip out / retract)
     void ui_toggle_petal_slot(uint8_t static_pos);
-    // Move equipped petal into first empty backpack slot (prefer paired)
+    // Move equipped petal into first empty pure backpack slot
     uint8_t ui_unequip_to_backpack(uint8_t static_pos);
+    // Pack pure-bag slots left (no gaps)
+    void ui_compact_backpack();
+    // Abort in-flight petal drag without swapping (blur / visibility)
+    void cancel_petal_drags();
     // Returns dynamic loadout slot index under (x,y), or 0xFF if none
     uint8_t find_loadout_drop_target(float x, float y);
     uint8_t loadout_dynamic_to_static(uint8_t dynamic_pos);
     void begin_petal_drag(uint8_t static_pos, uint32_t touch_id);
+    // True while a loadout petal is held over the open inventory panel
+    uint8_t loadout_drag_over_bag(float x, float y);
 }

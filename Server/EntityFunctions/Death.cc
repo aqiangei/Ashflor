@@ -102,9 +102,25 @@ void entity_on_death(Simulation *sim, Entity const &ent) {
         if (!natural_despawn && !(BitMath::at(ent.flags, EntityFlags::kNoDrops))) {
             struct MobData const &mob_data = MOB_DATA[ent.get_mob_id()];
             std::vector<PetalID::T> success_drops = {};
+            // Guaranteed first roll + rarity-scaled bonus rolls (research: multi-drop feel)
             PetalID::T chosen = _roll_mob_drop(sim, ent.get_mob_id());
             if (chosen != PetalID::kNone)
                 success_drops.push_back(chosen);
+            float p2 = 0.22f + 0.04f * (float) mob_data.rarity;
+            if (success_drops.size() < MAX_DROPS_PER_MOB && frand() < p2) {
+                PetalID::T extra = _roll_mob_drop(sim, ent.get_mob_id());
+                if (extra != PetalID::kNone)
+                    success_drops.push_back(extra);
+            }
+            if (mob_data.rarity >= RarityID::kEpic
+                && success_drops.size() < MAX_DROPS_PER_MOB) {
+                float p3 = 0.08f + 0.02f * (float) mob_data.rarity;
+                if (frand() < p3) {
+                    PetalID::T extra = _roll_mob_drop(sim, ent.get_mob_id());
+                    if (extra != PetalID::kNone)
+                        success_drops.push_back(extra);
+                }
+            }
             EntityID drop_team = NULL_ENTITY;
             if (sim->ent_exists(ent.last_damaged_by))
                 drop_team = sim->get_ent(ent.last_damaged_by).get_team();
@@ -132,62 +148,59 @@ void entity_on_death(Simulation *sim, Entity const &ent) {
         }
 
     } else if (ent.has_component(kPetal)) {
-        if (ent.get_petal_id() == PetalID::kWeb || ent.get_petal_id() == PetalID::kTriweb)
+        if (petal_name_is(ent.get_petal_id(), "Web"))
             alloc_web(sim, 100, ent);
     } else if (ent.has_component(kFlower)) {
-        // Preserve slot indices so backpack survives respawn (spawn reads
-        // camera[0..loadout) = primary, camera[loadout..loadout+8) = bag).
+        // Peaceful title leave (kNoDrops): full inventory keep, no ground drops / corpse
+        if (BitMath::at(ent.flags, EntityFlags::kNoDrops) && sim->ent_alive(ent.get_parent())) {
+            Entity &camera = sim->get_ent(ent.get_parent());
+            uint32_t const total_slots = ent.get_loadout_count() + MAX_SLOT_COUNT;
+            uint32_t level = score_to_level(ent.get_score());
+            if (level < 1) level = 1;
+            if (level > MAX_LEVEL) level = MAX_LEVEL;
+            for (uint32_t i = 0; i < 2 * MAX_SLOT_COUNT; ++i)
+                PetalTracker::remove_petal(sim, camera.get_inventory(i));
+            camera.set_respawn_level((uint8_t) level);
+            for (uint32_t i = 0; i < 2 * MAX_SLOT_COUNT; ++i)
+                camera.set_inventory(i, PetalID::kNone);
+            for (uint32_t i = 0; i < total_slots && i < 2 * MAX_SLOT_COUNT; ++i) {
+                PetalID::T id = ent.get_loadout_ids(i);
+                PetalTracker::remove_petal(sim, id);
+                if (id == PetalID::kNone || id >= PetalID::kNumPetals) continue;
+                camera.set_inventory(i, id);
+                PetalTracker::add_petal(sim, id);
+            }
+            uint32_t primary = loadout_slots_at_level(level);
+            for (uint32_t i = 0; i < primary; ++i) {
+                if (camera.get_inventory(i) != PetalID::kNone) continue;
+                camera.set_inventory(i, PetalID::kBasic);
+                PetalTracker::add_petal(sim, PetalID::kBasic);
+            }
+            camera.set_killed_by("");
+            if (Client *owner = Server::client_by_camera(sim, camera.id)) {
+                AccountStore::capture(owner);
+                Party::clear_corpse(owner);
+                owner->play_name.clear();
+            }
+            return;
+        }
+        // No ground drops on player death — keep full loadout + bag.
+        // Slot layout preserved for respawn (camera[0..loadout)=primary, rest=bag).
         uint32_t const total_slots = ent.get_loadout_count() + MAX_SLOT_COUNT;
         std::vector<PetalID::T> slot_petals(total_slots, PetalID::kNone);
-        std::vector<uint8_t> slot_keep(total_slots, 0);
         for (uint32_t i = 0; i < total_slots; ++i) {
             DEBUG_ONLY(assert(ent.get_loadout_ids(i) < PetalID::kNumPetals));
             PetalID::T id = ent.get_loadout_ids(i);
             PetalTracker::remove_petal(sim, id);
             slot_petals[i] = id;
-            if (id != PetalID::kNone && id != PetalID::kBasic && frand() < 0.95)
-                slot_keep[i] = 1;
         }
-        // Deleted/overwritten petals: keep as extra bag candidates (append later)
         std::vector<PetalID::T> deleted_keep = {};
         for (uint32_t i = 0; i < ent.deleted_petals.size(); ++i) {
             DEBUG_ONLY(assert(ent.deleted_petals[i] < PetalID::kNumPetals));
             PetalTracker::remove_petal(sim, ent.deleted_petals[i]);
-            if (ent.deleted_petals[i] != PetalID::kNone && ent.deleted_petals[i] != PetalID::kBasic && frand() < 0.95)
+            if (ent.deleted_petals[i] != PetalID::kNone && ent.deleted_petals[i] != PetalID::kBasic)
                 deleted_keep.push_back(ent.deleted_petals[i]);
         }
-
-        // Ground drops: up to 3 rarest kept petals (prefer higher rarity)
-        std::vector<uint32_t> drop_candidates = {};
-        for (uint32_t i = 0; i < total_slots; ++i)
-            if (slot_keep[i]) drop_candidates.push_back(i);
-        std::sort(drop_candidates.begin(), drop_candidates.end(), [&](uint32_t a, uint32_t b) {
-            return PETAL_DATA[slot_petals[a]].rarity < PETAL_DATA[slot_petals[b]].rarity;
-        });
-        std::vector<PetalID::T> success_drops = {};
-        uint32_t numDrops = drop_candidates.size();
-        if (numDrops > 3) numDrops = 3;
-        for (uint32_t n = 0; n < numDrops; ++n) {
-            uint32_t slot = drop_candidates.back();
-            drop_candidates.pop_back();
-            PetalID::T p_id = slot_petals[slot];
-            slot_keep[slot] = 0;
-            if (PETAL_DATA[p_id].rarity >= RarityID::kRare && frand() < 0.05) p_id = PetalID::kPollen;
-            success_drops.push_back(p_id);
-        }
-        // Also allow deleted petals to drop (same rarity sort, fill remaining)
-        if (success_drops.size() < 3 && !deleted_keep.empty()) {
-            std::sort(deleted_keep.begin(), deleted_keep.end(), [](PetalID::T a, PetalID::T b) {
-                return PETAL_DATA[a].rarity < PETAL_DATA[b].rarity;
-            });
-            while (success_drops.size() < 3 && !deleted_keep.empty()) {
-                PetalID::T p_id = deleted_keep.back();
-                deleted_keep.pop_back();
-                if (PETAL_DATA[p_id].rarity >= RarityID::kRare && frand() < 0.05) p_id = PetalID::kPollen;
-                success_drops.push_back(p_id);
-            }
-        }
-        _alloc_drops(sim, success_drops, ent.get_x(), ent.get_y(), ent.get_team());
         if (!sim->ent_alive(ent.get_parent()))
             return;
         Entity &camera = sim->get_ent(ent.get_parent());
@@ -202,6 +215,7 @@ void entity_on_death(Simulation *sim, Entity const &ent) {
             camera.set_inventory(i, PetalID::kNone);
 
         auto put_in_backpack = [&](PetalID::T id) {
+            if (id == PetalID::kNone) return;
             uint32_t dest = primary_slots;
             while (dest < primary_slots + MAX_SLOT_COUNT
                 && dest < 2 * MAX_SLOT_COUNT
@@ -213,17 +227,17 @@ void entity_on_death(Simulation *sim, Entity const &ent) {
             camera.set_inventory(dest, id);
         };
 
-        // 1) Kept primary petals that still fit stay in primary slots
+        // 1) Primary petals that still fit stay in primary slots
         for (uint32_t i = 0; i < ent.get_loadout_count() && i < primary_slots; ++i) {
-            if (!slot_keep[i]) continue;
+            if (slot_petals[i] == PetalID::kNone) continue;
             PetalTracker::add_petal(sim, slot_petals[i]);
             camera.set_inventory(i, slot_petals[i]);
         }
-        // 2) Overflow primary + old backpack + leftover deleted → backpack (order preserved)
+        // 2) Overflow primary + backpack + deleted → backpack (order preserved)
         for (uint32_t i = primary_slots; i < ent.get_loadout_count(); ++i)
-            if (slot_keep[i]) put_in_backpack(slot_petals[i]);
+            put_in_backpack(slot_petals[i]);
         for (uint32_t i = ent.get_loadout_count(); i < total_slots; ++i)
-            if (slot_keep[i]) put_in_backpack(slot_petals[i]);
+            put_in_backpack(slot_petals[i]);
         for (PetalID::T id : deleted_keep)
             put_in_backpack(id);
         // 3) Fill empty primary with Basics

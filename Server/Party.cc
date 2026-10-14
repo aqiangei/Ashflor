@@ -316,6 +316,11 @@ static void do_revive(Client *dead) {
     float x = dead->corpse_x;
     float y = dead->corpse_y;
     Party::clear_corpse(dead);
+    // Same stale-player clear as kClientSpawn — corpse revive must not keep a deleting flower
+    if (sim->ent_exists(camera.get_player()) && !sim->ent_alive(camera.get_player())) {
+        sim->request_delete(camera.get_player());
+        camera.set_player(NULL_ENTITY);
+    }
     Entity &player = alloc_player(sim, camera.get_team());
     player_spawn_at(sim, camera, player, x, y);
     Party::apply_team(dead);

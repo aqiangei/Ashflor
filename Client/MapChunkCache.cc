@@ -56,8 +56,12 @@ bool feature_intersects(TerrainFeature const &f, float left, float top, float ri
 
 void paint_static(Renderer &renderer, uint8_t mid, uint32_t difficulty,
                   float leftX, float topY, float rightX, float bottomY) {
+    // Paint only concentric difficulty rings (first 4). Specialty eco-pockets
+    // drive spawns but must not paint flat color rectangles — terrain forms zones.
     MapZones const &zones = map_zones(mid);
-    for (ZoneDefinition const &def : zones) {
+    uint32_t ring_n = zones.size() < 4 ? zones.size() : 4;
+    for (uint32_t i = 0; i < ring_n; ++i) {
+        ZoneDefinition const &def = zones[i];
         if (def.right <= leftX || def.left >= rightX || def.bottom <= topY || def.top >= bottomY)
             continue;
         renderer.set_fill(def.color);
@@ -260,25 +264,52 @@ void MapChunkCache::draw(Renderer &target, uint8_t map_id, uint32_t difficulty,
         paint_static(target, map_id, difficulty, left, top, right, bottom);
         return;
     }
+
+    // Amortize chunk baking: switching maps (e.g. Polar) used to bake the whole
+    // viewport in one frame and freeze the title→game transition on the main thread.
+    size_t const bake_budget = mobile ? 1u : 2u;
+    size_t baked = 0;
+    uint8_t missing = 0;
+
     for (int y = y0; y <= y1; ++y) {
         for (int x = x0; x <= x1; ++x) {
             auto it = std::find_if(chunks.begin(), chunks.end(), [=](Chunk const &c) {
                 return c.x == x && c.y == y;
             });
-            if (it == chunks.end()) {
-                if (chunks.size() == limit) {
-                    it = std::min_element(chunks.begin(), chunks.end(), [](Chunk const &a, Chunk const &b) {
-                        return a.used < b.used;
-                    });
-                    it->x = x;
-                    it->y = y;
-                } else {
-                    chunks.push_back({x, y, 0, std::make_unique<Renderer>()});
-                    it = chunks.end() - 1;
-                }
-                render_chunk(*it, map_id, difficulty);
+            if (it != chunks.end()) {
+                it->used = frame;
+                continue;
             }
+            missing = 1;
+            if (baked >= bake_budget) continue;
+            if (chunks.size() == limit) {
+                it = std::min_element(chunks.begin(), chunks.end(), [](Chunk const &a, Chunk const &b) {
+                    return a.used < b.used;
+                });
+                it->x = x;
+                it->y = y;
+            } else {
+                chunks.push_back({x, y, 0, std::make_unique<Renderer>()});
+                it = chunks.end() - 1;
+            }
+            render_chunk(*it, map_id, difficulty);
             it->used = frame;
+            ++baked;
+        }
+    }
+
+    if (missing) {
+        // Uncached tiles this frame — one viewport paint (not N× chunk paints)
+        paint_static(target, map_id, difficulty, left, top, right, bottom);
+        return;
+    }
+
+    for (int y = y0; y <= y1; ++y) {
+        for (int x = x0; x <= x1; ++x) {
+            auto it = std::find_if(chunks.begin(), chunks.end(), [=](Chunk const &c) {
+                return c.x == x && c.y == y;
+            });
+            if (it == chunks.end()) continue;
             target.draw_image_at(*it->canvas,
                                  (float)(x * kChunkSize - kChunkPad),
                                  (float)(y * kChunkSize - kChunkPad));

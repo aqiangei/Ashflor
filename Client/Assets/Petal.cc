@@ -4,10 +4,23 @@
 #include <Client/StaticData.hh>
 
 #include <cmath>
+#include <cstring>
+
+// Ladder variants share art with the first petal of the same English name.
+static PetalID::T petal_art_base(PetalID::T id) {
+    if (id == PetalID::kNone || id >= PetalID::kNumPetals) return id;
+    char const *name = PETAL_DATA[id].name;
+    for (PetalID::T i = 1; i < id; ++i) {
+        if (std::strcmp(PETAL_DATA[i].name, name) == 0)
+            return i;
+    }
+    return id;
+}
 
 void draw_static_petal_single(PetalID::T id, Renderer &ctx) {
     float r = PETAL_DATA[id].radius;
-    switch(id) {
+    PetalID::T art = petal_art_base(id);
+    switch(art) {
         case PetalID::kNone:
             break;
         case PetalID::kDandelion:
@@ -959,6 +972,291 @@ void draw_static_petal_single(PetalID::T id, Renderer &ctx) {
             ctx.qcurve_to(15,-8,5,8);
             ctx.qcurve_to(0,2,-5,8);
             ctx.fill();
+            ctx.stroke();
+            break;
+        case PetalID::kIronGuard:
+            ctx.scale(r / 17.f);
+            ctx.set_fill(0xffA9B8C7);
+            ctx.set_stroke(0xff35495E);
+            ctx.set_line_width(3);
+            ctx.round_line_join();
+            ctx.begin_path();
+            ctx.round_rect(-12.5f, -15, 25, 30, 4);
+            ctx.fill();
+            ctx.stroke();
+            ctx.set_stroke(0xff35495E);
+            ctx.set_line_width(2);
+            ctx.begin_path();
+            ctx.round_rect(-9, -11, 18, 22, 3);
+            ctx.stroke();
+            ctx.set_fill(0xffE6C56C);
+            ctx.set_stroke(0xff35495E);
+            ctx.set_line_width(1.5f);
+            ctx.begin_path();
+            ctx.arc(0, 0, 5);
+            ctx.fill();
+            ctx.stroke();
+            break;
+        case PetalID::kRustNeedle:
+            ctx.scale(r / 10.f);
+            ctx.set_fill(0xffC57A45);
+            ctx.set_stroke(0xff6D402C);
+            ctx.set_line_width(2.5f);
+            ctx.round_line_join();
+            ctx.begin_path();
+            ctx.arc(-8, 0, 4);
+            ctx.fill();
+            ctx.stroke();
+            ctx.begin_path();
+            ctx.move_to(-4, 3);
+            ctx.line_to(10, 0);
+            ctx.line_to(-4, -3);
+            ctx.close_path();
+            ctx.fill();
+            ctx.stroke();
+            ctx.set_fill(0xffD8DADD);
+            ctx.begin_path();
+            ctx.move_to(10, 0);
+            ctx.line_to(6, 1.5f);
+            ctx.line_to(6, -1.5f);
+            ctx.close_path();
+            ctx.fill();
+            break;
+        case PetalID::kAncientCoin:
+            ctx.scale(r / 13.f);
+            ctx.set_fill(0xffE8B947);
+            ctx.set_stroke(0xff8E6828);
+            ctx.set_line_width(3);
+            ctx.begin_path();
+            ctx.arc(0, 0, 13);
+            ctx.fill();
+            ctx.stroke();
+            ctx.set_stroke(0xffFFF0A3);
+            ctx.set_line_width(2);
+            ctx.begin_path();
+            ctx.arc(0, 0, 9);
+            ctx.stroke();
+            ctx.set_stroke(0xff8E6828);
+            ctx.set_line_width(2.5f);
+            ctx.begin_path();
+            ctx.move_to(-6, 3);
+            ctx.line_to(0, -5);
+            ctx.line_to(6, 3);
+            ctx.stroke();
+            break;
+        case PetalID::kRoyalRose:
+            ctx.scale(r / 14.f);
+            ctx.set_fill(0xff4F9A5B);
+            ctx.set_stroke(0xff28583B);
+            ctx.set_line_width(2);
+            ctx.begin_path();
+            ctx.ellipse(-10, 0, 6, 10);
+            ctx.ellipse(10, 0, 6, 10);
+            ctx.fill();
+            ctx.stroke();
+            ctx.set_fill(0xffD95363);
+            ctx.set_stroke(0xff7C2C42);
+            ctx.set_line_width(2.5f);
+            for (uint32_t i = 0; i < 5; ++i) {
+                float a = (float) i * 2.f * (float) M_PI / 5.f - (float) M_PI / 2.f;
+                ctx.begin_path();
+                ctx.arc(cosf(a) * 9.f, sinf(a) * 9.f, 6);
+                ctx.fill();
+                ctx.stroke();
+            }
+            ctx.set_fill(0xff7C2C42);
+            ctx.begin_path();
+            ctx.arc(0, 0, 5);
+            ctx.fill();
+            break;
+        case PetalID::kRoyalSpear:
+            ctx.scale(r / 17.f);
+            ctx.set_stroke(0xffC9A45A);
+            ctx.set_line_width(4.5f);
+            ctx.round_line_cap();
+            ctx.begin_path();
+            ctx.move_to(-23, 0);
+            ctx.line_to(18, 0);
+            ctx.stroke();
+            ctx.set_fill(0xffD96558);
+            ctx.set_stroke(0xff813B38);
+            ctx.set_line_width(1.5f);
+            ctx.begin_path();
+            ctx.move_to(10, 5);
+            ctx.line_to(10, -5);
+            ctx.line_to(4, 0);
+            ctx.close_path();
+            ctx.fill();
+            ctx.stroke();
+            ctx.set_fill(0xffE5E9ED);
+            ctx.set_stroke(0xff77562F);
+            ctx.set_line_width(2.5f);
+            ctx.begin_path();
+            ctx.move_to(25, 0);
+            ctx.line_to(15, 5);
+            ctx.line_to(15, -5);
+            ctx.close_path();
+            ctx.fill();
+            ctx.stroke();
+            break;
+        case PetalID::kCrownFragment:
+            ctx.scale(r / 15.f);
+            ctx.set_fill(0xffE3B95C);
+            ctx.set_stroke(0xff76552C);
+            ctx.set_line_width(2.5f);
+            ctx.round_line_join();
+            ctx.begin_path();
+            ctx.move_to(-8, 10);
+            ctx.line_to(-12, -4);
+            ctx.line_to(0, -12);
+            ctx.line_to(14, -2);
+            ctx.line_to(10, 12);
+            ctx.close_path();
+            ctx.fill();
+            ctx.stroke();
+            ctx.set_fill(0xffD84D5B);
+            ctx.set_stroke(0xff76552C);
+            ctx.set_line_width(1.5f);
+            ctx.begin_path();
+            ctx.arc(1, 2, 4);
+            ctx.fill();
+            ctx.stroke();
+            break;
+        case PetalID::kRoyalBanner:
+            ctx.scale(r / 15.f);
+            ctx.set_stroke(0xffD6B46A);
+            ctx.set_line_width(4);
+            ctx.round_line_cap();
+            ctx.begin_path();
+            ctx.move_to(-12, -18);
+            ctx.line_to(-12, 18);
+            ctx.stroke();
+            ctx.set_fill(0xffC94D4C);
+            ctx.set_stroke(0xff6E3034);
+            ctx.set_line_width(2.5f);
+            ctx.begin_path();
+            ctx.move_to(-12, -14);
+            ctx.line_to(12, -10);
+            ctx.line_to(8, 0);
+            ctx.line_to(12, 10);
+            ctx.line_to(-12, 14);
+            ctx.close_path();
+            ctx.fill();
+            ctx.stroke();
+            ctx.set_stroke(0xffF1D68A);
+            ctx.set_line_width(2);
+            ctx.begin_path();
+            ctx.move_to(-4, -4);
+            ctx.line_to(0, -8);
+            ctx.line_to(4, -4);
+            ctx.line_to(0, 0);
+            ctx.close_path();
+            ctx.stroke();
+            break;
+        case PetalID::kStoneHeart:
+            ctx.scale(r / 15.f);
+            ctx.set_fill(0xff969C9A);
+            ctx.set_stroke(0xff444D4A);
+            ctx.set_line_width(3);
+            ctx.begin_path();
+            ctx.move_to(0, 12);
+            ctx.qcurve_to(-14, 4, -10, -6);
+            ctx.qcurve_to(-5, -14, 0, -8);
+            ctx.qcurve_to(5, -14, 10, -6);
+            ctx.qcurve_to(14, 4, 0, 12);
+            ctx.fill();
+            ctx.stroke();
+            ctx.set_stroke(0xff6C7470);
+            ctx.set_line_width(2.5f);
+            ctx.begin_path();
+            ctx.move_to(-2, -2);
+            ctx.line_to(4, 6);
+            ctx.stroke();
+            break;
+        case PetalID::kPhantomEye:
+            ctx.scale(r / 12.f);
+            ctx.set_fill(0xffC8B5E8);
+            ctx.set_stroke(0xff5D447D);
+            ctx.set_line_width(2.5f);
+            ctx.begin_path();
+            ctx.ellipse(0, 0, 14, 9);
+            ctx.fill();
+            ctx.stroke();
+            ctx.set_fill(0xff58317F);
+            ctx.begin_path();
+            ctx.arc(2, 0, 6);
+            ctx.fill();
+            ctx.set_fill(0xffffffff);
+            ctx.begin_path();
+            ctx.arc(4, -2, 2);
+            ctx.fill();
+            break;
+        case PetalID::kGuardEgg:
+            ctx.scale(r / 14.f);
+            ctx.set_fill(0xffD4DBE2);
+            ctx.set_stroke(0xff697C8E);
+            ctx.set_line_width(3);
+            ctx.begin_path();
+            ctx.ellipse(0, 0, 11, 15);
+            ctx.fill();
+            ctx.stroke();
+            ctx.set_fill(0xff527DB0);
+            ctx.set_stroke(0xff697C8E);
+            ctx.set_line_width(2);
+            ctx.begin_path();
+            ctx.round_rect(-5, -7, 10, 12, 3);
+            ctx.fill();
+            ctx.stroke();
+            break;
+        case PetalID::kThornTrap:
+            ctx.scale(r / 14.f);
+            ctx.set_fill(0xff75B96C);
+            ctx.set_stroke(0xff28583B);
+            ctx.set_line_width(2);
+            ctx.round_line_join();
+            for (uint32_t i = 0; i < 4; ++i) {
+                float a = (float) i * (float) M_PI / 2.f;
+                float bx = cosf(a) * 10.f;
+                float by = sinf(a) * 10.f;
+                float tx = cosf(a) * 18.f;
+                float ty = sinf(a) * 18.f;
+                float px = -sinf(a) * 4.f;
+                float py = cosf(a) * 4.f;
+                ctx.begin_path();
+                ctx.move_to(bx + px, by + py);
+                ctx.line_to(tx, ty);
+                ctx.line_to(bx - px, by - py);
+                ctx.close_path();
+            }
+            ctx.fill();
+            ctx.stroke();
+            ctx.set_fill(0xff4D915B);
+            ctx.set_stroke(0xff28583B);
+            ctx.set_line_width(3);
+            ctx.begin_path();
+            ctx.arc(0, 0, 10);
+            ctx.fill();
+            ctx.stroke();
+            ctx.set_fill(0xffA0C77A);
+            ctx.begin_path();
+            ctx.arc(0, 0, 5);
+            ctx.fill();
+            break;
+        case PetalID::kKingsOath:
+            ctx.scale(r / 16.f);
+            ctx.set_fill(0xff913C4C);
+            ctx.set_stroke(0xffE0B762);
+            ctx.set_line_width(4);
+            ctx.begin_path();
+            ctx.arc(0, 0, 16);
+            ctx.fill();
+            ctx.stroke();
+            ctx.set_stroke(0xffF1D68A);
+            ctx.set_line_width(2.5f);
+            ctx.begin_path();
+            ctx.move_to(-5, 3);
+            ctx.line_to(0, -6);
+            ctx.line_to(5, 3);
             ctx.stroke();
             break;
         default:

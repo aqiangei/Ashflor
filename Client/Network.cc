@@ -237,7 +237,8 @@ void Game::on_message(uint8_t *ptr, uint32_t len) {
 void Game::send_inputs() {
     Writer writer(static_cast<uint8_t *>(OUTGOING_PACKET));
     writer.write<uint8_t>(Serverbound::kClientInput);
-    if (Input::freeze_input || Game::pause_menu_open || Game::chat_open
+    // Chat stays open while moving with the mouse — only pause / leave / freeze block motion
+    if (Input::freeze_input || Game::pause_menu_open
         || Game::leave_confirm_open || Game::game_panel_blocking()) {
         writer.write<float>(0);
         writer.write<float>(0);
@@ -282,12 +283,23 @@ void Game::send_chat() {
 void Game::spawn_in() {
     Writer writer(static_cast<uint8_t *>(OUTGOING_PACKET));
     if (Game::alive()) return;
+    // Debounce rapid Continue / Enter / auto-respawn taps (mobile double-fire)
+    static double last_spawn_req = -1e9;
+    if (timestamp - last_spawn_req < 350.0) return;
+    last_spawn_req = timestamp;
+    // Intentional spawn from title / death Continue — cancel soft-leave guard
+    leaving_to_title = 0;
     // Death "Continue" and title Spawn both go through here: leave death UI then spawn
     if (Game::on_game_screen != 0) {
         Game::on_game_screen = 0;
         awaiting_party_revive = 0;
         revive_progress = 0;
     }
+    // Drop stale touches so joystick / attack don't carry into the next life
+    Input::touches.clear();
+    Input::game_inputs.x = 0;
+    Input::game_inputs.y = 0;
+    Input::game_inputs.flags = 0;
     if (!socket.ready) return;
     // Do not enter as a guest while the saved account session is being checked.
     if (pending_auto_login || (session_token != 0 && !account_logged_in)) return;
@@ -368,7 +380,9 @@ void Game::delete_petal(uint8_t pos) {
 
 void Game::swap_petals(uint8_t pos1, uint8_t pos2) {
     Writer writer(static_cast<uint8_t *>(OUTGOING_PACKET));
-    if (!Game::alive()) return;
+    // Alive: flower loadout. Dead/title: camera inventory (server handles both).
+    if (!socket.ready || !simulation_ready) return;
+    if (!simulation.ent_exists(camera_id)) return;
     writer.write<uint8_t>(Serverbound::kPetalSwap);
     writer.write<uint8_t>(pos1);
     writer.write<uint8_t>(pos2);
@@ -418,7 +432,7 @@ uint32_t Game::craft_bag_count(PetalID::T id) {
     if (id == PetalID::kNone || id >= PetalID::kNumPetals) return 0;
     if (loadout_count == 0 || loadout_count > MAX_SLOT_COUNT) return 0;
     uint32_t n = 0;
-    // Secondary [n, 2n) + pure bag [2n, n+MAX) — same pool bag panel uses for stacks
+    // Secondary [n,2n) + pure bag [2n, n+MAX) — craftable pool (not primary)
     uint32_t begin = loadout_count;
     uint32_t end = loadout_count + MAX_SLOT_COUNT;
     if (end > 2 * MAX_SLOT_COUNT) end = 2 * MAX_SLOT_COUNT;

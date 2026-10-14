@@ -12,8 +12,10 @@
 #include <Shared/Binary.hh>
 #include <Shared/Entity.hh>
 #include <Shared/Map.hh>
+#include <Shared/StaticData.hh>
 
 #include <array>
+#include <vector>
 
 static void _update_client(Simulation *sim, Client *client) {
     if (client == nullptr) return;
@@ -84,14 +86,69 @@ void GameInstance::init(uint8_t id) {
     simulation.arena_info.set_map_id(id);
     for (uint32_t i = 0; i < ENTITY_CAP / 2; ++i)
         Map::spawn_random_mob(&simulation, frand() * ARENA_WIDTH, frand() * ARENA_HEIGHT);
+    // Fill empty maps with a few AI flowers (zorr-style bot MVP)
+    constexpr uint32_t kBotCount = 6;
+    for (uint32_t i = 0; i < kBotCount; ++i) {
+        Entity &cam = alloc_cpu_camera(&simulation, NULL_ENTITY);
+        Entity &player = alloc_player(&simulation, cam.get_team());
+        player_spawn(&simulation, cam, player);
+        static char const *names[] = {
+            "Bot-Alpha", "Bot-Beta", "Bot-Gamma", "Bot-Delta",
+            "Bot-Echo", "Bot-Foxtrot"
+        };
+        player.set_name(names[i % 6]);
+    }
     #ifdef GAMEMODE_TDM
     team_manager.add_team(ColorID::kBlue);
     team_manager.add_team(ColorID::kRed);
     #endif
 }
 
+static void process_map_portals(GameInstance *game) {
+    if (game == nullptr) return;
+    // Snapshot clients — transfer mutates the set
+    std::vector<Client *> snap(game->clients.begin(), game->clients.end());
+    for (Client *client : snap) {
+        if (client == nullptr || client->game != game) continue;
+        if (!game->simulation.ent_exists(client->camera)) continue;
+        Entity &cam = game->simulation.get_ent(client->camera);
+        if (!game->simulation.ent_alive(cam.get_player())) continue;
+        Entity &player = game->simulation.get_ent(cam.get_player());
+        if (player.immunity_ticks > 0) continue;
+        float px = player.get_x();
+        float py = player.get_y();
+        for (MapPortalDef const &p : MAP_PORTALS) {
+            if (p.from_map != game->map_id) continue;
+            float dx = px - p.x;
+            float dy = py - p.y;
+            if (dx * dx + dy * dy > p.radius * p.radius) continue;
+            if (p.to_map >= MapID::kNumMaps) continue;
+            GameInstance *dest = &Server::games[p.to_map];
+            std::string name = player.get_name();
+            // Do NOT reuse old-map team EntityID — teams are per-simulation.
+            game->transfer_client(client, dest);
+            if (client->game != dest) break;
+            if (!dest->simulation.ent_exists(client->camera)) break;
+            Entity &ncam = dest->simulation.get_ent(client->camera);
+            if (dest->simulation.ent_exists(ncam.get_player()))
+                dest->simulation.request_delete(ncam.get_player());
+            Entity &nplayer = alloc_player(&dest->simulation, ncam.get_team());
+            float dxp = p.dest_x, dyp = p.dest_y;
+            Map::resolve_circle_terrain(dest->map_id, dxp, dyp, BASE_FLOWER_RADIUS + 8);
+            player_spawn_at(&dest->simulation, ncam, nplayer, dxp, dyp);
+            nplayer.set_name(name);
+            client->play_name = name;
+            // Long enough to walk off hub before another portal can fire
+            nplayer.immunity_ticks = (game_tick_t)(4.0f * TPS);
+            Party::apply_team(client);
+            break;
+        }
+    }
+}
+
 void GameInstance::tick() {
     simulation.tick();
+    process_map_portals(this);
     Party::tick(this);
     Guild::tick(this);
     for (Client *client : clients)

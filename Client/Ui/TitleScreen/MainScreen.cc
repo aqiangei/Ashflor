@@ -1,6 +1,7 @@
 #include <Client/Ui/TitleScreen/TitleScreen.hh>
 
 #include <Client/Ui/Button.hh>
+#include <Client/Ui/Chrome.hh>
 #include <Client/Ui/Choose.hh>
 #include <Client/Ui/Container.hh>
 #include <Client/Ui/DynamicText.hh>
@@ -40,10 +41,26 @@ static void select_map_ocean(Element *, uint8_t e) {
 static void select_map_polar(Element *, uint8_t e) {
     if (e == Ui::kClick) Game::selected_map = MapID::kPolar;
 }
+static void select_map_jungle(Element *, uint8_t e) {
+    if (e == Ui::kClick) Game::selected_map = MapID::kJungle;
+}
+static void select_map_ant_hell(Element *, uint8_t e) {
+    if (e == Ui::kClick) Game::selected_map = MapID::kAntHell;
+}
+static void select_map_volcano(Element *, uint8_t e) {
+    if (e == Ui::kClick) Game::selected_map = MapID::kVolcano;
+}
+static void select_map_royal(Element *, uint8_t e) {
+    if (e == Ui::kClick) Game::selected_map = MapID::kRoyalCapital;
+}
 static bool darken_map_garden() { return Game::selected_map != MapID::kGarden; }
 static bool darken_map_desert() { return Game::selected_map != MapID::kDesert; }
 static bool darken_map_ocean() { return Game::selected_map != MapID::kOcean; }
 static bool darken_map_polar() { return Game::selected_map != MapID::kPolar; }
+static bool darken_map_jungle() { return Game::selected_map != MapID::kJungle; }
+static bool darken_map_ant_hell() { return Game::selected_map != MapID::kAntHell; }
+static bool darken_map_volcano() { return Game::selected_map != MapID::kVolcano; }
+static bool darken_map_royal() { return Game::selected_map != MapID::kRoyalCapital; }
 
 static Element *make_map_select_button(
     uint8_t map_id,
@@ -92,27 +109,33 @@ static Element *make_title_respawn_preview() {
                 return I18n::format_respawn_level(Game::respawn_level);
             }, { .fill = 0xffffffff, .no_animation = 1 }),
             new Ui::DynamicText(16, [](){ return I18n::tr(I18n::kWith); }, {
-                .fill = 0xffffffff,
-                .should_render = [](){
-                    if (!Game::simulation.ent_exists(Game::camera_id)) return false;
-                    return Game::simulation.get_ent(Game::camera_id).get_inventory(0) > PetalID::kBasic;
-                }
+                .fill = 0xffffffff
             })
         }, 0, 6, { .h_justify = Style::Left }),
+        new Ui::DynamicText(13, [](){
+            return I18n::use_chinese
+                ? "点击两个槽位交换装备（出生前可整理）"
+                : "Tap two slots to swap before spawning";
+        }, { .fill = 0xffcccccc, .h_justify = Style::Left }),
         new Ui::HContainer(
             Ui::make_range(0, MAX_SLOT_COUNT, [](uint32_t i){
                 return (Element *) (new Ui::TitlePetalSlot((uint8_t) i));
             }),
-            0, 10, { .h_justify = Style::Left }
+            0, 8, { .h_justify = Style::Left }
         ),
         new Ui::HContainer(
             Ui::make_range(MAX_SLOT_COUNT, 2 * MAX_SLOT_COUNT, [](uint32_t i){
                 return (Element *) (new Ui::TitlePetalSlot((uint8_t) i));
             }),
-            0, 10, { .h_justify = Style::Left }
+            0, 8, { .h_justify = Style::Left }
         )
-    }, 10, 10, {
-        .should_render = [](){ return Game::respawn_level > 1; },
+    }, 10, 8, {
+        .should_render = [](){
+            return !Game::alive()
+                && Game::simulation_ready
+                && Game::simulation.ent_exists(Game::camera_id)
+                && (Game::respawn_level > 1 || Game::guest_save_valid || Game::account_logged_in);
+        },
         .no_animation = 1
     });
 }
@@ -136,7 +159,7 @@ Element *Ui::make_title_input_box() {
                     return I18n::use_chinese
                         ? std::string{"游客模式 · 本机进度"}
                         : std::string{"Guest mode · local progress"};
-                }, { .fill = 0xfff4e9b3 }),
+                }, { .fill = Chrome::kGold }),
                 // Logged in: account name. Guest: fixed assigned id (no free-form name).
                 new Ui::Choose(
                     new Ui::VContainer({
@@ -144,17 +167,17 @@ Element *Ui::make_title_input_box() {
                             return I18n::use_chinese
                                 ? std::string{"游客固定编号（不可自定义）"}
                                 : std::string{"Guest id (fixed, not editable)"};
-                        }, { .fill = 0xffdddddd }),
+                        }, { .fill = Chrome::kMuted }),
                         new Ui::HContainer({
                             new Ui::DynamicText(28, [](){
                                 Game::ensure_guest_id();
                                 return Game::guest_id;
-                            }, { .fill = 0xffffd24a }),
-                            new Ui::Button(110, 36,
+                            }, { .fill = Chrome::kGold }),
+                            new Ui::Button(110, 38,
                                 new Ui::DynamicText(25, [](){ return I18n::tr(I18n::kSpawn); }),
                                 [](Element *, uint8_t e){ if (e == Ui::kClick) Game::spawn_in(); },
                                 [](){ return Game::in_game() != 0; },
-                                { .fill = 0xff1dd129, .line_width = 5, .round_radius = 3 }
+                                { .fill = Chrome::kBtnMoss, .line_width = 5, .round_radius = Chrome::kRadius }
                             )
                         }, 0, 14, {})
                     }, 8, 8, { .no_animation = 1 }),
@@ -163,16 +186,16 @@ Element *Ui::make_title_input_box() {
                             return I18n::use_chinese
                                 ? std::string{"游戏名（账号）"}
                                 : std::string{"Game name (account)"};
-                        }, { .fill = 0xffdddddd }),
+                        }, { .fill = Chrome::kMuted }),
                         new Ui::HContainer({
                             new Ui::DynamicText(32, [](){ return Game::username; }, {
-                                .fill = 0xffffffff
+                                .fill = Chrome::kTitle
                             }),
-                            new Ui::Button(110, 36,
+                            new Ui::Button(110, 38,
                                 new Ui::DynamicText(25, [](){ return I18n::tr(I18n::kSpawn); }),
                                 [](Element *, uint8_t e){ if (e == Ui::kClick) Game::spawn_in(); },
                                 [](){ return Game::in_game() != 0; },
-                                { .fill = 0xff1dd129, .line_width = 5, .round_radius = 3 }
+                                { .fill = Chrome::kBtnMoss, .line_width = 5, .round_radius = Chrome::kRadius }
                             )
                         }, 0, 14, {})
                     }, 8, 8, { .no_animation = 1 }),
@@ -188,16 +211,22 @@ Element *Ui::make_title_input_box() {
                     new Ui::HContainer({
                         make_map_select_button(MapID::kGarden, 0xff1ea761, select_map_garden, darken_map_garden),
                         make_map_select_button(MapID::kDesert, 0xffdecf7c, select_map_desert, darken_map_desert),
-                        make_map_select_button(MapID::kOcean, 0xff2e86ab, select_map_ocean, darken_map_ocean)
-                    }, 0, 12, {}),
-                    make_map_select_button(MapID::kPolar, 0xff8ecae6, select_map_polar, darken_map_polar)
+                        make_map_select_button(MapID::kOcean, 0xff2e86ab, select_map_ocean, darken_map_ocean),
+                        make_map_select_button(MapID::kPolar, 0xff8ecae6, select_map_polar, darken_map_polar)
+                    }, 0, 10, {}),
+                    new Ui::HContainer({
+                        make_map_select_button(MapID::kJungle, 0xff2d6a4f, select_map_jungle, darken_map_jungle),
+                        make_map_select_button(MapID::kAntHell, 0xffa98467, select_map_ant_hell, darken_map_ant_hell),
+                        make_map_select_button(MapID::kVolcano, 0xffe76f51, select_map_volcano, darken_map_volcano),
+                        make_map_select_button(MapID::kRoyalCapital, 0xffc4a35a, select_map_royal, darken_map_royal)
+                    }, 0, 10, {})
                 }, 10, 10, { .no_animation = 1 }),
                 new Ui::Element(0, 14),
                 new Ui::Choose(
                     new Ui::VContainer({
                         new Ui::Choose(
                             new Ui::HContainer({
-                                new Ui::Button(100, 36,
+                                new Ui::Button(100, 38,
                                     new Ui::DynamicText(16, [](){ return I18n::tr(I18n::kLogin); }),
                                     [](Element *, uint8_t e){
                                         if (e == Ui::kClick) {
@@ -206,9 +235,9 @@ Element *Ui::make_title_input_box() {
                                         }
                                     },
                                     nullptr,
-                                    { .fill = 0xff5a9fdb, .line_width = 4, .round_radius = 3 }
+                                    { .fill = Chrome::kBtnSlate, .line_width = 5, .round_radius = Chrome::kRadius }
                                 ),
-                                new Ui::Button(100, 36,
+                                new Ui::Button(100, 38,
                                     new Ui::DynamicText(16, [](){ return I18n::tr(I18n::kRegister); }),
                                     [](Element *, uint8_t e){
                                         if (e == Ui::kClick) {
@@ -217,17 +246,17 @@ Element *Ui::make_title_input_box() {
                                         }
                                     },
                                     nullptr,
-                                    { .fill = 0xff1dd129, .line_width = 4, .round_radius = 3 }
+                                    { .fill = Chrome::kBtnMoss, .line_width = 5, .round_radius = Chrome::kRadius }
                                 )
                             }, 0, 12, {}),
                             new Ui::HContainer({
-                                new Ui::Button(120, 36,
+                                new Ui::Button(120, 38,
                                     new Ui::DynamicText(16, [](){ return I18n::tr(I18n::kLogout); }),
                                     [](Element *, uint8_t e){
                                         if (e == Ui::kClick) Game::account_logout();
                                     },
                                     nullptr,
-                                    { .fill = 0xffc44b4b, .line_width = 4, .round_radius = 3 }
+                                    { .fill = Chrome::kBtnDanger, .line_width = 5, .round_radius = Chrome::kRadius }
                                 )
                             }, 0, 12, {}),
                             [](){ return Game::account_logged_in != 0; }
@@ -240,7 +269,7 @@ Element *Ui::make_title_input_box() {
                                     : std::string{"Account progress saved automatically"};
                             if (!Game::account_status.empty()) return Game::account_status;
                             return std::string{I18n::tr(I18n::kGuestHint)};
-                        }, { .fill = 0xffdddddd })
+                        }, { .fill = Chrome::kMuted })
                     }, 10, 8, { .no_animation = 1 }),
                     new Ui::VContainer({
                         new Ui::DynamicText(16, [](){
@@ -249,8 +278,8 @@ Element *Ui::make_title_input_box() {
                         new Ui::HContainer({
                             new Ui::DynamicText(14, [](){ return I18n::tr(I18n::kUsername); }),
                             new Ui::TextInput(Game::username, 220, 32, MAX_USERNAME_LENGTH, {
-                                .line_width = 4,
-                                .round_radius = 4,
+                                .line_width = 5,
+                                .round_radius = Chrome::kRadius,
                                 .should_render = [](){
                                     return Game::auth_panel != 0
                                         && !Game::in_game() && Game::transition_circle <= 0;
@@ -260,8 +289,8 @@ Element *Ui::make_title_input_box() {
                         new Ui::HContainer({
                             new Ui::DynamicText(14, [](){ return I18n::tr(I18n::kPassword); }),
                             (auth_password_input = new Ui::TextInput(Game::password, 188, 32, MAX_PASSWORD_LENGTH, {
-                                .line_width = 4,
-                                .round_radius = 4,
+                                .line_width = 5,
+                                .round_radius = Chrome::kRadius,
                                 .should_render = [](){
                                     return Game::auth_panel != 0
                                         && !Game::in_game() && Game::transition_circle <= 0;
@@ -279,11 +308,11 @@ Element *Ui::make_title_input_box() {
                                         !auth_password_input->password_is_masked());
                                 },
                                 nullptr,
-                                { .fill = 0xff666666, .line_width = 3, .round_radius = 4 }
+                                { .fill = Chrome::kBtnIron, .line_width = 4, .round_radius = Chrome::kRadius }
                             )
                         }, 0, 6, {}),
                         new Ui::HContainer({
-                            new Ui::Button(100, 36,
+                            new Ui::Button(100, 38,
                                 new Ui::DynamicText(16, [](){
                                     return I18n::tr(Game::auth_panel == 2 ? I18n::kRegister : I18n::kLogin);
                                 }),
@@ -292,15 +321,15 @@ Element *Ui::make_title_input_box() {
                                         Game::account_auth(Game::auth_panel == 2);
                                 },
                                 nullptr,
-                                { .fill = 0xff1dd129, .line_width = 4, .round_radius = 3 }
+                                { .fill = Chrome::kBtnMoss, .line_width = 5, .round_radius = Chrome::kRadius }
                             ),
-                            new Ui::Button(100, 36,
+                            new Ui::Button(100, 38,
                                 new Ui::DynamicText(16, [](){ return I18n::tr(I18n::kLeaveNo); }),
                                 [](Element *, uint8_t e){
                                     if (e == Ui::kClick) Game::auth_panel = 0;
                                 },
                                 nullptr,
-                                { .fill = 0xff5a9fdb, .line_width = 4, .round_radius = 3 }
+                                { .fill = Chrome::kBtnSlate, .line_width = 5, .round_radius = Chrome::kRadius }
                             )
                         }, 0, 12, {}),
                         new Ui::DynamicText(13, [](){
@@ -440,48 +469,48 @@ Element *Ui::make_panel_buttons() {
     }, 28, 28);
 
     Element *elt = new Ui::HContainer({
-        new Ui::Button(48, 48, settings_icon,
+        new Ui::Button(50, 50, settings_icon,
             [](Element *, uint8_t e){
                 if (e == Ui::kClick) open_title_panel(Panel::kSettings, Panel::settings);
             },
             [](){ return Ui::panel_open == Panel::kSettings; },
-            { .fill = 0xff6a6a6a, .line_width = 4, .round_radius = 10 }
+            { .fill = Chrome::kBtnIron, .line_width = 5, .round_radius = 3 }
         ),
-        new Ui::Button(48, 48, mob_icon,
+        new Ui::Button(50, 50, mob_icon,
             [](Element *, uint8_t e){
                 if (e == Ui::kClick) open_title_panel(Panel::kMobs, Panel::mob_gallery);
             },
             [](){ return Ui::panel_open == Panel::kMobs; },
-            { .fill = 0xff6db36d, .line_width = 4, .round_radius = 10 }
+            { .fill = Chrome::kBtnMoss, .line_width = 5, .round_radius = 3 }
         ),
-        new Ui::Button(48, 48, trophy_icon,
+        new Ui::Button(50, 50, trophy_icon,
             [](Element *, uint8_t e){
                 if (e == Ui::kClick) open_title_panel(Panel::kLeaderboard, Panel::leaderboard);
             },
             [](){ return Ui::panel_open == Panel::kLeaderboard; },
-            { .fill = 0xffd94a4a, .line_width = 4, .round_radius = 10 }
+            { .fill = Chrome::kBtnClay, .line_width = 5, .round_radius = 3 }
         ),
-        new Ui::Button(48, 48, petal_icon,
+        new Ui::Button(50, 50, petal_icon,
             [](Element *, uint8_t e){
                 if (e == Ui::kClick) open_title_panel(Panel::kPetals, Panel::petal_gallery);
             },
             [](){ return Ui::panel_open == Panel::kPetals; },
-            { .fill = 0xff5aad5a, .line_width = 4, .round_radius = 10 }
+            { .fill = Chrome::kBtnBronze, .line_width = 5, .round_radius = 3 }
         ),
-        new Ui::Button(48, 48, book_icon,
+        new Ui::Button(50, 50, book_icon,
             [](Element *, uint8_t e){
                 if (e == Ui::kClick) open_title_panel(Panel::kChangelog, Panel::changelog);
             },
             [](){ return Ui::panel_open == Panel::kChangelog; },
-            { .fill = 0xff7ec850, .line_width = 4, .round_radius = 10 }
+            { .fill = Chrome::kBtnSlate, .line_width = 5, .round_radius = 3 }
         ),
-    }, 10, 8, {
+    }, 12, 10, {
         .should_render = [](){ return Game::should_render_title_ui(); },
         .h_justify = Style::Left,
         .v_justify = Style::Top
     });
-    elt->x = 8;
-    elt->y = 8;
+    elt->x = 12;
+    elt->y = 12;
     Ui::panel_buttons_root = elt;
     return elt;
 }
@@ -569,7 +598,7 @@ Element *Ui::make_github_link_button() {
                 if (e == Ui::kClick) DOM::open_page("https://github.com/aqiangei/ashflor");
             },
             nullptr,
-            { .fill = 0xff333333, .line_width = 4, .round_radius = 4 }
+            { .fill = Chrome::kBtnIron, .line_width = 5, .round_radius = Chrome::kRadius }
         )
     }, 10, 10, { .h_justify = Style::Right, .v_justify = Style::Top });
     return elt;

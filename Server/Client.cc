@@ -173,7 +173,12 @@ Client::Client() : game(nullptr) {}
 
 void Client::init() {
     DEBUG_ONLY(assert(game == nullptr);)
-    Server::games[MapID::kGarden].add_client(this);    
+    // Zero-downtime deploy: refuse new sessions while draining so nginx can flip to the new build
+    if (Server::is_draining) {
+        disconnect(CloseReason::kOutdated, "Outdated Version");
+        return;
+    }
+    Server::games[MapID::kGarden].add_client(this);
 }
 
 void Client::remove() {
@@ -252,11 +257,15 @@ void Client::on_message(WebSocket *ws, std::string_view message, uint64_t code) 
             )) return;
             float x = reader.read<float>();
             float y = reader.read<float>();
+            // Reject NaN/Inf: comparisons alone let NaN into acceleration and
+            // poison motion until the whole arena freezes (esp. after mobile respawns).
+            if (!is_finite(x) || !is_finite(y)) break;
             if (x == 0 && y == 0) player.acceleration.set(0,0);
             else {
                 if (std::abs(x) > 5e3 || std::abs(y) > 5e3) break;
                 Vector accel(x,y);
                 float m = accel.magnitude();
+                if (!is_finite(m)) break;
                 if (m > 200) accel.set_magnitude(PLAYER_ACCELERATION);
                 else accel.set_magnitude(m / 200 * PLAYER_ACCELERATION);
                 player.acceleration = accel;
@@ -409,6 +418,7 @@ void Client::on_message(WebSocket *ws, std::string_view message, uint64_t code) 
             break;
         }
         case Serverbound::kPetalDelete: {
+            // Wire name kept; behavior = drop petal on ground for others to pick up
             if (!client->alive()) break;
             Simulation *simulation = &client->game->simulation;
             Entity &camera = simulation->get_ent(client->camera);
@@ -417,17 +427,17 @@ void Client::on_message(WebSocket *ws, std::string_view message, uint64_t code) 
             uint8_t pos = reader.read<uint8_t>();
             if (pos >= MAX_SLOT_COUNT + player.get_loadout_count()) break;
             PetalID::T old_id = player.get_loadout_ids(pos);
-            if (old_id != PetalID::kNone && old_id != PetalID::kBasic) {
-                uint8_t rarity = PETAL_DATA[old_id].rarity;
-                player.set_score(player.get_score() + RARITY_TO_XP[rarity]);
-                if (player.deleted_petals.size() == player.deleted_petals.capacity())
-                    PetalTracker::remove_petal(simulation, player.deleted_petals[0]);
-                player.deleted_petals.push_back(old_id);
-                player.set_loadout_ids(pos, PetalID::kNone);
-                bank_petal(client, old_id);
-                break;
-            }
+            if (old_id == PetalID::kNone || old_id >= PetalID::kNumPetals) break;
             player.set_loadout_ids(pos, PetalID::kNone);
+            // Tracker: leave loadout → world drop (alloc_drop adds)
+            PetalTracker::remove_petal(simulation, old_id);
+            Entity &drop = alloc_drop(simulation, old_id, NULL_ENTITY);
+            drop.set_x(player.get_x());
+            drop.set_y(player.get_y());
+            drop.velocity.unit_normal(frand() * 2 * (float) M_PI).set_magnitude(40);
+            // Brief global immunity so dropper does not instantly re-pick
+            drop.immunity_ticks = TPS;
+            AccountStore::capture(client);
             break;
         }
         case Serverbound::kPetalCraft: {
@@ -525,18 +535,29 @@ void Client::on_message(WebSocket *ws, std::string_view message, uint64_t code) 
             break;
         }
         case Serverbound::kPetalSwap: {
-            if (!client->alive()) break;
-            Simulation *simulation = &client->game->simulation;
-            Entity &camera = simulation->get_ent(client->camera);
-            Entity &player = simulation->get_ent(camera.get_player());
+            // Alive: flower loadout. Dead/title: camera inventory (respawn layout).
             if (client->check_invalid(validator.validate_uint8() && validator.validate_uint8())) return;
             uint8_t pos1 = reader.read<uint8_t>();
-            if (pos1 >= MAX_SLOT_COUNT + player.get_loadout_count()) break;
             uint8_t pos2 = reader.read<uint8_t>();
-            if (pos2 >= MAX_SLOT_COUNT + player.get_loadout_count()) break;
-            PetalID::T tmp = player.get_loadout_ids(pos1);
-            player.set_loadout_ids(pos1, player.get_loadout_ids(pos2));
-            player.set_loadout_ids(pos2, tmp);
+            if (!client->game || !client->game->simulation.ent_exists(client->camera)) break;
+            Simulation *simulation = &client->game->simulation;
+            Entity &camera = simulation->get_ent(client->camera);
+            if (client->alive()) {
+                Entity &player = simulation->get_ent(camera.get_player());
+                if (pos1 >= MAX_SLOT_COUNT + player.get_loadout_count()) break;
+                if (pos2 >= MAX_SLOT_COUNT + player.get_loadout_count()) break;
+                PetalID::T tmp = player.get_loadout_ids(pos1);
+                player.set_loadout_ids(pos1, player.get_loadout_ids(pos2));
+                player.set_loadout_ids(pos2, tmp);
+            } else {
+                uint32_t primary = loadout_slots_at_level(camera.get_respawn_level());
+                uint32_t lim = primary + MAX_SLOT_COUNT;
+                if (lim > 2 * MAX_SLOT_COUNT) lim = 2 * MAX_SLOT_COUNT;
+                if (pos1 >= lim || pos2 >= lim) break;
+                PetalID::T tmp = camera.get_inventory(pos1);
+                camera.set_inventory(pos1, camera.get_inventory(pos2));
+                camera.set_inventory(pos2, tmp);
+            }
             AccountStore::capture(client);
             break;
         }
@@ -604,6 +625,24 @@ void Client::on_message(WebSocket *ws, std::string_view message, uint64_t code) 
         }
         case Serverbound::kGuildLeave: {
             Guild::leave(client);
+            break;
+        }
+        case Serverbound::kClientLeave: {
+            // Return to title without closing the WebSocket
+            if (client->game == nullptr) break;
+            Simulation *simulation = &client->game->simulation;
+            if (!simulation->ent_exists(client->camera)) break;
+            Entity &camera = simulation->get_ent(client->camera);
+            Party::clear_corpse(client);
+            if (simulation->ent_alive(camera.get_player())) {
+                Entity &player = simulation->get_ent(camera.get_player());
+                BitMath::set(player.flags, EntityFlags::kNoDrops);
+                simulation->request_delete(player.id);
+            }
+            AccountStore::capture(client);
+            Party::leave(client);
+            client->play_name.clear();
+            Party::send_update(client);
             break;
         }
         case Serverbound::kAccountLogout: {

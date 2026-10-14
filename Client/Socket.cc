@@ -1,4 +1,5 @@
 #include <Client/Socket.hh>
+#include <Client/DOM.hh>
 #include <Client/Game.hh>
 #include <Client/I18n.hh>
 
@@ -47,7 +48,7 @@ extern "C" {
                 // 1006 = tab backgrounded / network drop
                 // 1001 / 1012 = server going away / service restart (redeploy)
                 char const *zh = (len == 4003)
-                    ? "客户端版本过旧，请 Ctrl+F5 强制刷新"
+                    ? "客户端版本过旧，正在自动刷新…"
                     : (len == 1006)
                         ? "已切到后台或网络中断，正在重连"
                         : (len == 1001 || len == 1012)
@@ -56,10 +57,12 @@ extern "C" {
                 EM_ASM({
                     if (Module.showReconnectOverlay)
                         Module.showReconnectOverlay(UTF8ToString($0));
-                    // Slow auto-retry on outdated so Ctrl+F5 tip stays readable
+                    // Slow auto-retry on outdated so tip stays readable before reload
                     if ($1 === 4003 && Module._ashflorSetReconnectDelay)
                         Module._ashflorSetReconnectDelay(8000);
                 }, zh, (int) len);
+                if (len == CloseReason::kOutdated)
+                    DOM::update_client(1200);
             }
             free(reason);
         }

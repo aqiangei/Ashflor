@@ -46,7 +46,8 @@ enum Serverbound {
     kInviteRespond, // type, accept(0/1), from_name
     kGuildCreate,   // guild name
     kGuildInvite,   // target player name
-    kGuildLeave
+    kGuildLeave,
+    kClientLeave // voluntary return to title — keep WS, despawn flower only
 };
 
 enum CraftMode : uint8_t {

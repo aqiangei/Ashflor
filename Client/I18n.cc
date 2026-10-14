@@ -18,11 +18,15 @@ static char const *const RARITY_ZH[RarityID::kNumRarities] = {
 };
 
 static char const *const ZONE_ZH[] = {
-    "花园", "沙漠", "海洋", "极地"
+    "花园", "沙漠", "海洋", "雪原", "丛林", "蚁穴", "火山", "王城"
 };
 
 static char const *const MAP_EN[] = {
-    "Garden", "Desert", "Ocean", "Polar"
+    "Garden", "Desert", "Ocean", "Snow", "Jungle", "Ant Hell", "Volcano", "Royal Capital"
+};
+
+static char const *const ROYAL_ZONE_ZH[] = {
+    "外城防线", "王城街区", "皇家花园", "皇家兵营", "王城废墟", "王宫核心"
 };
 
 static char const *const EN[I18n::kCount] = {
@@ -82,7 +86,7 @@ static char const *const EN[I18n::kCount] = {
     "MOVE RIGHT →",
     "You are overleveled for this zone",
     "You will be unable to attack",
-    "Delete",
+    "Drop",
     "Lvl {} Flower",
     "Extra petal slot at level {}",
     "Unnamed",
@@ -161,10 +165,12 @@ static char const *const EN[I18n::kCount] = {
     "Craft failed… materials lost",
     "Success! Got {}",
     "Exchanged for {}",
-    "Trash (T) or full bag pickup banks materials; craft uses bag + bank",
+    "Drop slot throws petals on the ground; T unequips; craft uses bag + bank",
     "That name is in use or reserved for an account",
     "Swap attack/defend (LMB↔RMB, Space↔Shift)",
     "Swap attack/defend (same as above)",
+    "Touch controls (joystick + A/B)",
+    "Fullscreen",
 };
 
 static char const *const ZH[I18n::kCount] = {
@@ -224,7 +230,7 @@ static char const *const ZH[I18n::kCount] = {
     "向右移动 →",
     "你在此区域等级过高",
     "你将无法攻击",
-    "删除",
+    "丢弃",
     "{} 级花朵",
     "额外花瓣槽位解锁等级 {}",
     "未命名",
@@ -303,10 +309,12 @@ static char const *const ZH[I18n::kCount] = {
     "合成失败，材料已消耗",
     "成功！获得 {}",
     "直兑获得 {}",
-    "按 T 丢弃或背包满拾取会进材料库；合成用背包+材料库数量",
+    "丢弃槽扔到地上可捡；T 卸回背包；合成用背包+材料库",
     "该昵称已被使用或是注册账号名",
     "交换攻击/防御（左键↔右键，空格↔Shift）",
     "交换攻击/防御（同上，开一个即可）",
+    "触控操作（摇杆 + 攻防键）",
+    "全屏",
 };
 
 char const *I18n::tr(Str id) {
@@ -351,7 +359,12 @@ char const *I18n::zone_name(uint32_t zone_index) {
     if (zone_index >= zones.size()) return "";
     // Single-zone maps: show the world name on the minimap
     if (zones.size() == 1) return map_name(mid);
-    if (use_chinese && zone_index < 4) return ZONE_ZH[zone_index];
+    if (use_chinese && mid == MapID::kRoyalCapital
+        && zone_index < sizeof(ROYAL_ZONE_ZH) / sizeof(ROYAL_ZONE_ZH[0]))
+        return ROYAL_ZONE_ZH[zone_index];
+    // Ring templates share biome label — prefer Chinese map name for first rings
+    if (use_chinese && zone_index < 4 && mid != MapID::kRoyalCapital)
+        return map_name(mid);
     return zones[zone_index].name;
 }
 

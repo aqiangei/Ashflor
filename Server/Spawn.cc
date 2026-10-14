@@ -7,6 +7,9 @@
 #include <Shared/Map.hh>
 #include <Shared/Simulation.hh>
 #include <Shared/StaticData.hh>
+#include <Shared/StaticDefinitions.hh>
+
+#include <Helpers/Bits.hh>
 
 #include <cmath>
 
@@ -217,8 +220,10 @@ Entity &alloc_cpu_camera(Simulation *sim, EntityID const team) {
     ent.add_component(kRelations);
 
     ent.set_fov(BASE_FOV);
-    ent.set_respawn_level(frand() * 30);
-    ent.set_team(team);
+    ent.set_respawn_level(1 + (uint32_t) (frand() * 25));
+    // Own team so mobs aggro (NULL_ENTITY would be friendly with wild mobs)
+    ent.set_team(team == NULL_ENTITY ? ent.id : team);
+    BitMath::set(ent.flags, EntityFlags::kCPUControlled);
     ent.set_color(ColorID::kGray);
     
     //need to auto add to petaltracker

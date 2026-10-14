@@ -1,5 +1,6 @@
 #include <Client/Game.hh>
 
+#include <Client/DOM.hh>
 #include <Client/Debug.hh>
 #include <Client/Input.hh>
 #include <Client/Particle.hh>
@@ -13,6 +14,9 @@
 #include <Shared/Binary.hh>
 #include <Shared/Config.hh>
 #include <Shared/StaticData.hh>
+#include <Shared/Talent.hh>
+
+#include <Helpers/Math.hh>
 
 #include <cmath>
 #include <cstdlib>
@@ -63,6 +67,7 @@ namespace Game {
     uint8_t loadout_count = 5;
     uint8_t simulation_ready = 0;
     uint8_t on_game_screen = 0;
+    uint8_t leaving_to_title = 0;
     uint8_t show_debug = 0;
     uint8_t selected_map = MapID::kGarden;
     uint8_t minimap_expanded = 0;
@@ -102,6 +107,9 @@ namespace Game {
     uint8_t talent_hp = 0;
     uint8_t talent_rot = 0;
     uint8_t rot_speed_setting = 7;
+    float rot_speed_f = 7.f;
+    float rot_hint_opacity = 0.f;
+    double rot_hint_stamp = 0;
     uint8_t craft_selected_rarity = 0;
     PetalID::T craft_tray_id = PetalID::kNone;
     uint32_t craft_tray_count = 0;
@@ -109,6 +117,25 @@ namespace Game {
 }
 
 using namespace Game;
+
+void Game::nudge_rot_speed(float delta) {
+    rot_speed_f = fclamp(rot_speed_f + delta, 0.f, (float) Talent::kRotSettingMax);
+    rot_speed_setting = (uint8_t) lroundf(rot_speed_f);
+    if (rot_speed_setting > Talent::kRotSettingMax)
+        rot_speed_setting = Talent::kRotSettingMax;
+    rot_hint_opacity = 1.f;
+    rot_hint_stamp = timestamp;
+}
+
+void Game::set_rot_speed_from_frac(float frac01) {
+    frac01 = fclamp(frac01, 0.f, 1.f);
+    rot_speed_f = frac01 * (float) Talent::kRotSettingMax;
+    rot_speed_setting = (uint8_t) lroundf(rot_speed_f);
+    if (rot_speed_setting > Talent::kRotSettingMax)
+        rot_speed_setting = Talent::kRotSettingMax;
+    rot_hint_opacity = 1.f;
+    rot_hint_stamp = timestamp;
+}
 
 static uint8_t guest_id_char_ok(char c) {
     if (c >= 'A' && c <= 'Z') return (c != 'I' && c != 'O') ? 1 : 0;
@@ -149,6 +176,8 @@ std::string const &Game::guest_play_name() {
 
 void Game::init() {
     Input::is_mobile = check_mobile();
+    Input::request_mobile = Input::is_mobile; // overridden by Storage if saved
+    DOM::cache_client();
     Storage::retrieve();
     reset();
     title_ui_window.add_child(
@@ -286,14 +315,17 @@ void Game::init() {
         var proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
         return stringToNewUTF8(proto + '//' + location.host);
     });
-    std::string ws_url = dyn_url ? dyn_url : WS_URL;
+    std::string ws_url = dyn_url ? std::string(dyn_url) : std::string(WS_URL);
     free(dyn_url);
+    // ?v=VERSION_HASH lets nginx map sticky traffic during zero-downtime deploys
+    ws_url += "?v=" + std::to_string(VERSION_HASH);
     socket.connect(ws_url);
 }
 
 void Game::reset() {
     simulation_ready = 0;
     on_game_screen = 0;
+    leaving_to_title = 0;
     pause_menu_open = 0;
     leave_confirm_open = 0;
     game_panel = 0;
@@ -409,10 +441,9 @@ void Game::open_chat() {
     if (!alive() || pause_menu_open || leave_confirm_open) return;
     close_game_panel();
     chat_open = 1;
+    // Keep mouse aim / attack; drop held letter keys so they don't leak into binds
     Input::keys_held.clear();
-    Input::game_inputs.x = 0;
-    Input::game_inputs.y = 0;
-    Input::game_inputs.flags = 0;
+    Input::keys_held_this_tick.clear();
     if (Ui::TextInput *input = Ui::chat_text_input())
         input->focus();
 }
@@ -569,10 +600,18 @@ void Game::return_to_title() {
     invite_from.clear();
     pause_menu_open = 0;
     leave_confirm_open = 0;
+    leaving_to_title = 1;
     on_game_screen = 0;
+    awaiting_party_revive = 0;
+    revive_progress = 0;
     camera_zoom = 1.f;
     speech_bubbles.clear();
-    socket.disconnect();
+    // Keep WebSocket — soft-despawn flower only (was close 1000 "leave")
+    if (socket.ready) {
+        Writer writer(static_cast<uint8_t *>(OUTGOING_PACKET));
+        writer.write<uint8_t>(Serverbound::kClientLeave);
+        socket.send(writer.packet, writer.at - writer.packet);
+    }
 }
 
 uint8_t Game::alive() {
@@ -609,7 +648,7 @@ void Game::tick(double time) {
     double tick_start = Debug::get_timestamp();
     Game::timestamp = time;
     Ui::dt = time - g_last_time;
-    Ui::lerp_amount = 1 - pow(1 - 0.2, Ui::dt * 60 / 1000);
+    Ui::lerp_amount = 1 - pow(1 - 0.24, Ui::dt * 60 / 1000);
     g_last_time = time;
     simulation.tick();
     
@@ -625,7 +664,10 @@ void Game::tick(double time) {
     double b = Ui::window_height / 1080;
     Ui::scale = std::max(a, b);
     if (alive()) {
-        on_game_screen = 1;
+        // Soft-leave must keep on_game_screen=0 until flower despawns; otherwise
+        // death UI appears and Enter/"Continue" looks like an instant revive.
+        if (!leaving_to_title)
+            on_game_screen = 1;
         player_id = simulation.get_ent(camera_id).get_player();
         Entity const &player = simulation.get_ent(player_id);
         Game::loadout_count = player.get_loadout_count();
@@ -640,6 +682,26 @@ void Game::tick(double time) {
         overlevel_timer = 0;
         pause_menu_open = 0;
         leave_confirm_open = 0;
+        // Dead / title: clear movement so mobile joystick / attack can't leak
+        // NaN-ish or stuck inputs into the next spawn packet.
+        Input::game_inputs.x = 0;
+        Input::game_inputs.y = 0;
+        Input::game_inputs.flags = 0;
+        // Sync camera inventory so death/title bag + loadout edit stay accurate
+        if (simulation.ent_exists(camera_id)) {
+            Entity const &camera = simulation.get_ent(camera_id);
+            Game::loadout_count = (uint8_t) loadout_slots_at_level(camera.get_respawn_level());
+            for (uint32_t i = 0; i < MAX_SLOT_COUNT + Game::loadout_count
+                && i < 2 * MAX_SLOT_COUNT; ++i) {
+                cached_loadout[i] = camera.get_inventory(i);
+                if (cached_loadout[i] < PetalID::kNumPetals)
+                    Game::seen_petals[cached_loadout[i]] = 1;
+            }
+        }
+        if (leaving_to_title) {
+            on_game_screen = 0;
+            leaving_to_title = 0; // flower gone — title UI; death Continue stays hidden via on_game_screen
+        }
         if (chat_open) close_chat();
     }
 
@@ -697,13 +759,17 @@ void Game::tick(double time) {
         renderer.set_global_alpha(0.85);
         renderer.translate(renderer.width/2,renderer.height/2);
         renderer.draw_image(game_ui_renderer);
-    // Number keys: 1:1 swap primary[i] ↔ secondary[i]. R = swap all. T = trash. Q/E = spin rate.
+    // Number keys: 1:1 swap primary[i] ↔ secondary[i]. R = swap all. T = unequip.
+    // Q/E = hold for continuous linear spin rate (not discrete taps).
     if (!Game::pause_menu_open && !Game::chat_open && !Game::leave_confirm_open
             && !Game::game_panel_blocking()) {
-            if (Input::keys_held_this_tick.contains('Q') && Game::rot_speed_setting > 0)
-                --Game::rot_speed_setting;
-            if (Input::keys_held_this_tick.contains('E') && Game::rot_speed_setting < 10)
-                ++Game::rot_speed_setting;
+            float const rot_rate = 4.5f; // levels / second while held
+            float dt_s = (float) (Ui::dt / 1000.0);
+            if (dt_s > 0.05f) dt_s = 0.05f;
+            if (Input::keys_held.contains('Q'))
+                Game::nudge_rot_speed(-rot_rate * dt_s);
+            if (Input::keys_held.contains('E'))
+                Game::nudge_rot_speed(+rot_rate * dt_s);
             if (Input::keys_held_this_tick.contains('R'))
                 Game::swap_all_petals();
             for (uint8_t i = 0; i < Game::loadout_count; ++i) {
@@ -716,11 +782,15 @@ void Game::tick(double time) {
                 Ui::ui_swap_petals(i, sec);
                 break;
             }
+            // T = unequip selected secondary (or primary if keyed) → backpack
             if (Input::keys_held_this_tick.contains('T')
                 && Ui::UiLoadout::selected_with_keys < MAX_SLOT_COUNT) {
                 uint8_t sec = (uint8_t) (Game::loadout_count + Ui::UiLoadout::selected_with_keys);
                 if (Game::cached_loadout[sec] != PetalID::kNone)
-                    Ui::ui_delete_petal(sec);
+                    Ui::ui_unequip_to_backpack(sec);
+                else if (Ui::UiLoadout::selected_with_keys < Game::loadout_count
+                    && Game::cached_loadout[Ui::UiLoadout::selected_with_keys] != PetalID::kNone)
+                    Ui::ui_unequip_to_backpack(Ui::UiLoadout::selected_with_keys);
                 Ui::UiLoadout::selected_with_keys = MAX_SLOT_COUNT;
             }
         }
@@ -732,11 +802,18 @@ void Game::tick(double time) {
     if (Game::timestamp - Ui::UiLoadout::last_key_select > 5000)
         Ui::UiLoadout::selected_with_keys = MAX_SLOT_COUNT;
     slot_indicator_opacity = lerp(slot_indicator_opacity, Ui::UiLoadout::selected_with_keys != MAX_SLOT_COUNT, Ui::lerp_amount);
+    // Fade hint ring after last adjust (wheel drag or Q/E)
+    if (rot_hint_opacity > 0.f && timestamp - rot_hint_stamp > 120) {
+        float decay = (float) pow(0.88, Ui::dt * 60 / 1000);
+        rot_hint_opacity *= decay;
+        if (rot_hint_opacity < 0.02f) rot_hint_opacity = 0.f;
+    }
 
     other_ui_window.render(renderer);
 
     //no rendering past this point
-    if (!Input::is_mobile) {
+    // Touch HUD owns movement/flags when Request Mobile is on
+    if (!Input::mobile_controls()) {
         if (Input::keyboard_movement) {
             Input::game_inputs.x = 300 * (Input::keys_held.contains('D') - Input::keys_held.contains('A') + Input::keys_held.contains(39) - Input::keys_held.contains(37));
             Input::game_inputs.y = 300 * (Input::keys_held.contains('S') - Input::keys_held.contains('W') + Input::keys_held.contains(40) - Input::keys_held.contains(38));
@@ -770,12 +847,7 @@ void Game::tick(double time) {
         cycle_chat_channel();
     if (chat_menu_open && BitMath::at(Input::mouse_buttons_released, Input::LeftMouse))
         close_chat_menu();
-    // Click outside chat input while typing → blur / cancel
-    if (chat_open && BitMath::at(Input::mouse_buttons_pressed, Input::LeftMouse) && !chat_menu_open) {
-        Ui::TextInput *input = Ui::chat_text_input();
-        if (input == nullptr || !input->contains_screen_point(Input::mouse_x, Input::mouse_y))
-            close_chat();
-    }
+    // Chat stays open while aiming/attacking with the mouse; Esc closes (not click-outside)
     // Click outside any open popup / drawer → close it
     Ui::try_close_popups_outside_click();
     if (Input::keys_held_this_tick.contains(27) && Game::alive()) {
@@ -785,21 +857,26 @@ void Game::tick(double time) {
         else if (game_panel != kPanelNone) close_game_panel();
         else toggle_pause();
     }
-    if (Game::alive() && !chat_open && !leave_confirm_open) {
+    // B opens bag on death screen too (camera inventory edit before respawn)
+    if (!chat_open && !leave_confirm_open
+        && (Game::alive() || Game::on_game_screen)) {
         if (Input::keys_held_this_tick.contains('B'))
             toggle_game_panel(kPanelInventory);
-        else if (Input::keys_held_this_tick.contains('Z'))
-            toggle_game_panel(kPanelTalents);
-        else if (Input::keys_held_this_tick.contains('C'))
-            toggle_game_panel(kPanelCraft);
-        else if (Input::keys_held_this_tick.contains('V'))
-            toggle_game_panel(kPanelSpecial);
+        if (Game::alive()) {
+            if (Input::keys_held_this_tick.contains('Z'))
+                toggle_game_panel(kPanelTalents);
+            else if (Input::keys_held_this_tick.contains('C'))
+                toggle_game_panel(kPanelCraft);
+            else if (Input::keys_held_this_tick.contains('V'))
+                toggle_game_panel(kPanelSpecial);
+        }
     }
+    // Main Enter and NumpadEnter both map to '\r': focus chat, or send if already open
     if (Input::keys_held_this_tick.contains('\r')) {
         if (Game::alive()) {
             if (chat_open) send_chat();
             else if (!pause_menu_open && !leave_confirm_open) open_chat();
-        } else {
+        } else if (!leaving_to_title) {
             Game::spawn_in();
         }
     }

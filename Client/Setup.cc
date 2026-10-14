@@ -4,10 +4,15 @@
 #include <Client/Game.hh>
 #include <Client/Input.hh>
 #include <Client/Storage.hh>
+#include <Client/Ui/InGame/Loadout.hh>
 
 #include <unordered_map>
 
 #include <emscripten.h>
+
+extern "C" void EMSCRIPTEN_KEEPALIVE ashflor_cancel_petal_drags() {
+    Ui::cancel_petal_drags();
+}
 
 static char _get_key_from_code(std::string const &code) {
     static std::unordered_map<std::string, char> const KEYCODE_MAP = 
@@ -19,6 +24,7 @@ static char _get_key_from_code(std::string const &code) {
         {"Delete", 46},{"Digit0", '0'},{"Digit1", '1'},{"Digit2", '2'},
         {"Digit3", '3'},{"Digit4", '4'},{"Digit5", '5'},{"Digit6", '6'},
         {"Digit7", '7'},{"Digit8", '8'},{"Digit9", '9'},{"Enter", '\r'},
+        {"NumpadEnter", '\r'},
         {"Equal", '='},{"Escape", 27},{"F1", 112},{"F10", 121},
         {"F11", 122},{"F12", 123},{"F2", 113},{"F3", 114},
         {"F4", 115},{"F5", 116},{"F6", 117},{"F7", 118},{"F8", 119},
@@ -98,13 +104,15 @@ int setup_inputs() {
     EM_ASM({
         window.addEventListener("keydown", (e) => {
             const typing = e.target && (e.target.tagName === "INPUT" || e.target.tagName === "TEXTAREA");
-            if (typing && e.code !== "Escape" && e.code !== "Enter" && e.code !== "Tab") return;
-            if (typing && (e.code === "Escape" || e.code === "Enter" || e.code === "Tab")) e.preventDefault();
+            const pass = e.code === "Escape" || e.code === "Enter" || e.code === "NumpadEnter" || e.code === "Tab";
+            if (typing && !pass) return;
+            if (typing && pass) e.preventDefault();
             !e.repeat && _key_event(stringToNewUTF8(e.code), 0);
         });
         window.addEventListener("keyup", (e) => {
             const typing = e.target && (e.target.tagName === "INPUT" || e.target.tagName === "TEXTAREA");
-            if (typing && e.code !== "Escape" && e.code !== "Enter" && e.code !== "Tab") return;
+            const pass = e.code === "Escape" || e.code === "Enter" || e.code === "NumpadEnter" || e.code === "Tab";
+            if (typing && !pass) return;
             !e.repeat && _key_event(stringToNewUTF8(e.code), 1);
         });
         window.addEventListener("contextmenu", (e) => { e.preventDefault(); });
@@ -147,6 +155,20 @@ int setup_inputs() {
             e.preventDefault();
             _wheel_event(e.deltaY);
         }, { passive: false });
+        // Blur / tab-hide: abort petal drag so the next click cannot drop stale state
+        window.addEventListener("blur", () => {
+            if (typeof _ashflor_cancel_petal_drags === "function")
+                _ashflor_cancel_petal_drags();
+            else if (typeof Module !== "undefined" && Module["_ashflor_cancel_petal_drags"])
+                Module["_ashflor_cancel_petal_drags"]();
+        });
+        document.addEventListener("visibilitychange", () => {
+            if (document.visibilityState !== "hidden") return;
+            if (typeof _ashflor_cancel_petal_drags === "function")
+                _ashflor_cancel_petal_drags();
+            else if (typeof Module !== "undefined" && Module["_ashflor_cancel_petal_drags"])
+                Module["_ashflor_cancel_petal_drags"]();
+        });
     });
     return 0;
 }

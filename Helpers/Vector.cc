@@ -67,17 +67,21 @@ float Vector::angle() const {
 }
 
 Vector &Vector::normalize() {
-    if (x == 0 && y == 0) return *this;
     float mag = magnitude();
+    // NaN check first: under -ffast-math, mag==0 is also true for NaN
+    if (!is_finite(mag)) { x = 0; y = 0; return *this; }
+    if (mag == 0.f) return *this;
     x /= mag;
     y /= mag;
     return *this;
 }
 
 Vector &Vector::set_magnitude(float v) {
-    normalize();
-    x *= v;
-    y *= v;
+    float mag = magnitude();
+    if (!is_finite(mag)) { x = 0; y = 0; return *this; }
+    if (mag == 0.f) return *this;
+    x = x / mag * v;
+    y = y / mag * v;
     return *this;
 }
 

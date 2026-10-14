@@ -3,6 +3,9 @@
     <head>
         <meta charset="utf-8">
         <meta http-equiv="Cache-Control" content="no-cache">
+        <link rel="preconnect" href="https://fonts.googleapis.com">
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@700;800;900&display=swap" rel="stylesheet">
         <style>
             * {
                 margin: 0px;
@@ -13,7 +16,8 @@
                 width: 100%;
                 height: 100%;
                 background: #0a0a0a;
-                font-family: "Microsoft YaHei", "PingFang SC", "Noto Sans SC", Ubuntu, system-ui, sans-serif;
+                font-family: "Noto Sans SC", "Microsoft YaHei", "PingFang SC", system-ui, sans-serif;
+                font-weight: 800;
             }
             /* Font probe only — must never show as a "loading page" */
             #font-loader {
@@ -22,6 +26,8 @@
                 top: -9999px;
                 visibility: hidden;
                 pointer-events: none;
+                font-family: "Noto Sans SC", "Microsoft YaHei", sans-serif;
+                font-weight: 800;
             }
             #canvas {
                 position: absolute;
@@ -263,7 +269,7 @@
         <div id="reconnect-score">得分 0</div>
         <canvas id="mini-game" width="420" height="340"></canvas>
     </div>
-    <div id="font-loader" style="font-family: 'Noto Sans SC', 'Microsoft YaHei', Ubuntu;">加载中 你好 hello!</div>
+    <div id="font-loader" style="font-family: 'Noto Sans SC', 'Microsoft YaHei', sans-serif; font-weight: 800;">加载中 你好 hello!</div>
     <canvas id="canvas" width="0" height="0"></canvas>
     <script>
         (function () {
@@ -328,7 +334,20 @@
         })();
 
         document.addEventListener("DOMContentLoaded", () => {
-            var cacheV = '21475';
+            // deploy.sh sed-replaces versionHash; localStorage keeps assets sticky after first good load
+            var versionHash = '0';
+            var cacheV = (function () {
+                try {
+                    return localStorage['version_hash'] || versionHash;
+                } catch (e) {
+                    return versionHash;
+                }
+            })();
+            window.onerror = window.onunhandledrejection = function () {
+                if (versionHash === '0') return;
+                try { delete window.localStorage['version_hash']; } catch (e) {}
+                window.location.reload();
+            };
             var hidden = false;
             var loadingEl = document.getElementById("loading");
             var trackEl = document.getElementById("loading-track");

@@ -18,6 +18,7 @@ namespace Input {
     uint8_t invert_attack = 0;
     uint8_t invert_defend = 0;
     uint8_t is_mobile = 0;
+    uint8_t request_mobile = 0;
     std::unordered_set<char> keys_held;
     std::unordered_set<char> keys_held_this_tick;
     std::unordered_map<uint32_t, Touch> touches;

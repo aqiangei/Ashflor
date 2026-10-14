@@ -1,6 +1,7 @@
 #include <Client/DOM.hh>
 
 #include <Helpers/UTF8.hh>
+#include <Shared/Config.hh>
 
 #include <emscripten.h>
 
@@ -14,7 +15,8 @@ void DOM::create_text_input(char const *name, uint32_t max_len, uint8_t password
         elem.style.position = "absolute";
         // Above #canvas (z-index:1) so typed text is visible and clickable
         elem.style.zIndex = "5";
-        elem.style["font-family"] = "\"Noto Sans SC\", \"Microsoft YaHei\", Ubuntu, sans-serif";
+        elem.style["font-family"] = "\"Noto Sans SC\", \"Microsoft YaHei\", \"Segoe UI\", sans-serif";
+        elem.style["font-weight"] = "700";
         elem.style.display = 'none';
         elem.style["border-width"] = "0px";
         elem.style.background = "transparent";
@@ -27,6 +29,11 @@ void DOM::create_text_input(char const *name, uint32_t max_len, uint8_t password
         elem.maxLength = ($1).toString();
         elem.setAttribute("spellcheck", "false");
         elem.setAttribute("autocomplete", $2 ? "current-password" : "off");
+        elem.setAttribute("autocapitalize", "off");
+        elem.setAttribute("autocorrect", "off");
+        elem.setAttribute("enterkeyhint", $2 ? "done" : "go");
+        // ≥16px prevents iOS page-zoom on focus (florr_clone mobile_text_input)
+        elem.style["font-size"] = "16px";
         document.body.appendChild(elem);
     },
     name, max_len * 2, (int) password);
@@ -75,7 +82,9 @@ void DOM::update_pos_and_dimension(char const *name, float x, float y, float w, 
             elem.style.top = ($2 - $4 / 2) / devicePixelRatio + "px";
             elem.style.width = ($3 / devicePixelRatio - 10) + "px";
             elem.style.height = $4 / devicePixelRatio + "px";
-            elem.style["font-size"] = $4 / devicePixelRatio * 0.66 + "px";
+            // Keep ≥16px on mobile so iOS never zooms the page
+            const fs = Math.max(16, $4 / devicePixelRatio * 0.66);
+            elem.style["font-size"] = fs + "px";
         },
         name, x, y, w, h);
 }
@@ -114,7 +123,8 @@ void DOM::focus_element(char const *name) {
     EM_ASM({
         const elem = document.getElementById(UTF8ToString($0));
         if (!elem) return;
-        elem.focus();
+        // Synchronous focus from tap/click opens the mobile soft keyboard
+        elem.focus({ preventScroll: true });
         try { elem.setSelectionRange(elem.value.length, elem.value.length); } catch (e) {}
     }, name);
 }
@@ -123,5 +133,42 @@ void DOM::blur_active() {
     EM_ASM({
         if (document.activeElement && document.activeElement.blur)
             document.activeElement.blur();
+    });
+}
+
+void DOM::cache_client() {
+    EM_ASM({
+        try {
+            window.localStorage["version_hash"] = $0.toString();
+        } catch (e) {}
+        window.onerror = window.onunhandledrejection = null;
+    }, (double) VERSION_HASH);
+}
+
+void DOM::update_client(float delay_ms) {
+    EM_ASM({
+        try {
+            delete window.localStorage["version_hash"];
+        } catch (e) {}
+        window.onbeforeunload = null;
+        setTimeout(function () {
+            window.location.reload();
+        }, $0);
+    }, delay_ms);
+}
+
+void DOM::toggle_fullscreen() {
+    EM_ASM({
+        try {
+            if (!document.fullscreenElement && !document.webkitFullscreenElement) {
+                var el = document.documentElement;
+                if (el.requestFullscreen) el.requestFullscreen();
+                else if (el.webkitRequestFullscreen) el.webkitRequestFullscreen();
+            } else if (document.exitFullscreen) {
+                document.exitFullscreen();
+            } else if (document.webkitExitFullscreen) {
+                document.webkitExitFullscreen();
+            }
+        } catch (e) {}
     });
 }

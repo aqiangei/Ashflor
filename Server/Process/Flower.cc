@@ -59,7 +59,7 @@ static struct PlayerBuffs _get_petal_passive_buffs(Simulation *sim, Entity &play
         if (slot_petal_id == PetalID::kYinYang)
             ++buffs.yinyang_count;
         if (!player.loadout[i].already_spawned) continue;
-        if (slot_petal_id == PetalID::kLeaf) 
+        if (petal_name_is(slot_petal_id, "Leaf")) 
             buffs.heal += attrs.constant_heal / TPS;
         else if (slot_petal_id == PetalID::kYucca && BitMath::at(player.input, InputFlags::kDefending) && !BitMath::at(player.input, InputFlags::kAttacking)) 
             buffs.heal += attrs.constant_heal / TPS;
@@ -69,6 +69,17 @@ static struct PlayerBuffs _get_petal_passive_buffs(Simulation *sim, Entity &play
         player.poison_armor = std::fmax(player.poison_armor, attrs.poison_armor / TPS);
         if (slot_petal_id == PetalID::kPoisonCactus)
             buffs.is_poisonous = 1;
+        // King's Oath v2-lite: low-HP damage surge (global feel via damage_factor)
+        if (slot_petal_id == PetalID::kKingsOath
+            && player.max_health > 0.f
+            && player.health / player.max_health < 0.35f)
+            buffs.damage_factor *= 1.35f;
+        // Royal Banner v2-lite: spin / pressure buff for the wearer
+        if (slot_petal_id == PetalID::kRoyalBanner)
+            buffs.extra_rot += 1.2f;
+        // Phantom Eye v2-lite: slight damage amp while equipped
+        if (slot_petal_id == PetalID::kPhantomEye)
+            buffs.damage_factor *= 1.08f;
     }
     return buffs;
 }
@@ -243,18 +254,18 @@ void tick_player_behavior(Simulation *sim, Entity &player) {
                     if (rotation_count > 0)
                         wanting.unit_normal(2 * M_PI * rot_pos / rotation_count + player.heading_angle);
 
-                    float range = rotation_center.r + 40;
+                    float range = rotation_center.r + PETAL_ORBIT_IDLE;
                     if (BitMath::at(player.input, InputFlags::kAttacking)) { 
                         if (petal_data.attributes.defend_only == 0) 
-                            range = rotation_center.r + 100 + buffs.extra_range; 
-                        if (petal.get_petal_id() == PetalID::kWing) {
+                            range = rotation_center.r + PETAL_ORBIT_ATTACK + buffs.extra_range; 
+                        if (petal_name_is(petal.get_petal_id(), "Wing")) {
                             float wave = sinf((float) petal.lifetime / (0.4 * TPS));
                             wave = wave * wave;
-                            range += wave * 120;
+                            range += wave * PETAL_WING_WAVE_EXTRA;
                         }
                     }
                     else if (BitMath::at(player.input, InputFlags::kDefending)) 
-                        range = rotation_center.r + 15;
+                        range = rotation_center.r + PETAL_ORBIT_DEFEND;
                     wanting *= range;
                     if (petal_data.attributes.clump_radius > 0) {
                         Vector secondary;

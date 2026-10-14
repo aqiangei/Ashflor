@@ -1,5 +1,6 @@
 #include <Client/Ui/TitleScreen/TitleScreen.hh>
 
+#include <Client/Ui/Chrome.hh>
 #include <Client/Ui/Container.hh>
 #include <Client/Ui/DynamicText.hh>
 #include <Client/Ui/StaticText.hh>
@@ -12,6 +13,7 @@
 
 #include <algorithm>
 #include <cstring>
+#include <string>
 
 using namespace Ui;
 
@@ -93,7 +95,12 @@ static Element *make_mob_card(MobID::T id) {
                 new Ui::DynamicText(18, [id](){ return I18n::mob_name(id); }, { .fill = 0xffffffff, .h_justify = Style::Left }),
                 new Ui::DynamicText(14, [id](){ return I18n::rarity_name(MOB_DATA[id].rarity); }, { .fill = RARITY_COLORS[MOB_DATA[id].rarity], .h_justify = Style::Left }),
                 new Ui::Element(0,2),
-                new Ui::DynamicText(14, [id](){ return I18n::mob_desc(id); }, { .fill = 0xffffffff, .h_justify = Style::Left })
+                new Ui::DynamicText(14, [id](){ return I18n::mob_desc(id); }, { .fill = 0xffffffff, .h_justify = Style::Left }),
+                new Ui::DynamicText(12, [](){
+                    return I18n::use_chinese
+                        ? std::string("属性随地图难度缩放")
+                        : std::string("Stats scale with map zone difficulty");
+                }, { .fill = 0xffaaaaaa, .h_justify = Style::Left })
             }, 0, 5),
             new GalleryMob(id, 60),
             10, 10
@@ -139,9 +146,9 @@ Element *Ui::make_mob_gallery() {
         new Ui::DynamicText(25, [](){ return I18n::tr(I18n::kMobGallery); }),
         make_scroll()
     }, 15, 10, { 
-        .fill = 0xff5a9fdb,
-        .line_width = 7,
-        .round_radius = 6,
+        .fill = Chrome::kPanelDeep,
+        .line_width = 6,
+        .round_radius = Chrome::kRadius,
         .animate = [](Element *elt, Renderer &ctx){
             elt->y = Game::alive() ? 170.f : 68.f;
             ctx.translate(0, (elt->animation - 1) * elt->height);

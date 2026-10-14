@@ -15,4 +15,9 @@ namespace DOM {
     void open_page(char const *);
     void focus_element(char const *);
     void blur_active();
+    // Persist VERSION_HASH so locateFile / script URLs keep matching after first load
+    void cache_client();
+    // Clear hash + hard reload (outdated client / bad wasm)
+    void update_client(float delay_ms);
+    void toggle_fullscreen();
 }

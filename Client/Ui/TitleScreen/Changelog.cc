@@ -1,5 +1,6 @@
 #include <Client/Ui/TitleScreen/TitleScreen.hh>
 
+#include <Client/Ui/Chrome.hh>
 #include <Client/Ui/Container.hh>
 #include <Client/Ui/DynamicText.hh>
 #include <Client/Ui/Extern.hh>
@@ -42,8 +43,50 @@ static Element *make_entries(std::initializer_list<std::pair<char const *, char 
 
 static Element *make_changelog_contents() {
     Element *elt = new Ui::VContainer({
+        make_date("2026年10月14日", "October 14th 2026"),
+        make_entries({
+            {"王城 Boss：堕落国王三阶段（冲锋/弹幕/召唤）；王宫常驻刷新",
+             "Royal Boss: Fallen King 3-phase (charge/barrage/summons); palace respawn"},
+            {"王城 AI：拟态扑击、枪卫突刺、幽影闪现、荆棘弹、盾面减伤、铁卫拦弹",
+             "Royal AI: mimic lunge, spear thrust, phantom blink, thorn missiles, shield DR, Iron Guard intercept"},
+            {"场内传送：花园/沙漠↔王城，王城北门→火山（站门点自动切图）",
+             "Field portals: Garden/Desert↔Royal, Royal north→Volcano"},
+            {"王城可进：六区城墙迷宫；标题选图；外城出生；王城怪/瓣 v1",
+             "Royal Capital: 6-zone wall mazes; title select; outer spawn; royal mobs/petals v1"},
+            {"丛林可玩：密林迷宫/沼河/树根/树心；蜘蛛蜈蚣黄蜂池 → Web·Stinger 线",
+             "Jungle live: canopy mazes, swamp rivers, roots, tree-heart; spider/centipede/hornet loot"},
+            {"七大地貌全开：花园/沙漠/海洋/雪原/丛林/蚁穴/火山；地形自然围合 Zone",
+             "All 7 biomes: Garden/Desert/Ocean/Snow/Jungle/Ant Hell/Volcano; terrain-formed zones"},
+            {"地表不再画生态口袋色块；各地貌专属刷怪生态区（花田/珊瑚/蚁后巢等）",
+             "No flat eco-pocket paints; per-biome spawn ecosystems (meadow/coral/queen nest…)"},
+            {"地图大改：宽廊道螺旋山谷 + 多人刷怪带 / 少人攻坚圈；每图独立布局",
+             "Map redesign: wide spiral valleys, farm lanes & push pockets; per-biome layouts"},
+            {"设置/暂停：触控操作开关；固定摇杆 + 圆形攻防键",
+             "Request Mobile toggle; fixed joystick + circular A/B"},
+            {"输入框防 iOS 缩放；标题屏点击槽位交换装备",
+             "iOS input zoom fix; title-screen tap-to-swap loadout"},
+            {"地形 CCD 防穿墙；装备槽稀有度底色；空服 AI Bot",
+             "Terrain CCD; rarity-tinted slots; AI bots fill empty maps"},
+            {"移动端放大全部按钮触控区；摇杆避让左下侧栏",
+             "Larger mobile touch targets; joystick clears side buttons"},
+            {"重生防卡死：拒 NaN 输入、运动自愈、重生防抖清触控",
+             "Respawn anti-freeze: reject NaN input, heal motion, debounce+clear touches"},
+        }),
+        make_divider(),
         make_date("2026年10月12日", "October 12th 2026"),
         make_entries({
+            {"进极地等地图不再首帧卡死（地图块分帧烘焙）",
+             "Entering Polar/other maps no longer freezes (chunk bake amortized)"},
+            {"聊天时可鼠标移动；主键盘与小键盘 Enter 均可聚焦/发送",
+             "Chat while mouse-moving; both Enter keys focus/send chat"},
+            {"转速：按住 Q/E 线性调速；移动端可拖圆轮；提示圆环联动",
+             "Spin: hold Q/E to ramp; drag wheel on mobile; linked hint ring"},
+            {"死亡不再掉落花瓣，装备与背包全保留",
+             "Death no longer drops petals; loadout and bag kept"},
+            {"退回主页软离场：不断 WebSocket，保留花瓣",
+             "Soft leave to title: keep WebSocket and inventory"},
+            {"地形碰撞贴合锯齿岸线（与绘制共用轮廓）",
+             "Terrain collision follows jagged shore outline"},
             {"断线/重部署等待页 + 接花瓣小游戏",
              "Reconnect wait screen with petal-catch mini-game"},
             {"地形锯齿岸线 / 弯曲河流 / 螺旋·方·圆占位（参考 florr_clone-web）",
@@ -147,9 +190,9 @@ Element *Ui::make_changelog() {
         new Ui::DynamicText(25, [](){ return I18n::tr(I18n::kChangelog); }),
         make_changelog_contents()
     }, 15, 10, {
-        .fill = 0xff5a9fdb,
-        .line_width = 7,
-        .round_radius = 6,
+        .fill = Chrome::kPanelDeep,
+        .line_width = 6,
+        .round_radius = Chrome::kRadius,
         .animate = [](Element *elt, Renderer &ctx){
             elt->y = Game::alive() ? 170.f : 68.f;
             ctx.translate(0, (elt->animation - 1) * elt->height);

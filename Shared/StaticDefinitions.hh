@@ -19,8 +19,9 @@ inline uint32_t const MINIMAP_PLAYER_CAP = 128;
 inline uint32_t const MAX_PETALS_IN_CLUMP = 4;
 inline uint32_t const MAX_DIFFICULTY = 3;
 inline uint32_t const MAX_DROPS_PER_MOB = 6;
-inline uint32_t const MAX_ZONES_PER_MAP = 8;
-inline uint32_t const MAX_TERRAIN_PER_MAP = 96;
+// Concept maps need many specialty Zone AABBs + large terrain pieces
+inline uint32_t const MAX_ZONES_PER_MAP = 48;
+inline uint32_t const MAX_TERRAIN_PER_MAP = 192;
 inline uint32_t const TERRAIN_OUTLINE_MAX = 72;
 
 namespace MapID {
@@ -28,7 +29,11 @@ namespace MapID {
         kGarden = 0,
         kDesert,
         kOcean,
-        kPolar,
+        kPolar,   // Snow / 雪原
+        kJungle,
+        kAntHell,
+        kVolcano,
+        kRoyalCapital, // 王城 — append only
         kNumMaps
     };
 }
@@ -76,6 +81,23 @@ namespace MapTheme {
     inline uint32_t const POLAR_HILL = 0xff6c757d;
     inline uint32_t const POLAR_WATER = 0xff4cc9f0;
     inline uint32_t const POLAR_CHANNEL = 0x99caf0f8;
+    inline uint32_t const JUNGLE_GROUND = 0xff2d6a4f;
+    inline uint32_t const JUNGLE_HILL = 0xff1b4332;
+    inline uint32_t const JUNGLE_WATER = 0xff40916c;
+    inline uint32_t const JUNGLE_CHANNEL = 0x9995d5b2;
+    inline uint32_t const ANT_GROUND = 0xffa98467;
+    inline uint32_t const ANT_HILL = 0xff6f4518;
+    inline uint32_t const ANT_WATER = 0xff582f0e;
+    inline uint32_t const ANT_CHANNEL = 0x99b08968;
+    inline uint32_t const VOLCANO_GROUND = 0xff3d405b;
+    inline uint32_t const VOLCANO_HILL = 0xff1a1a2e;
+    inline uint32_t const VOLCANO_WATER = 0xffe76f51; // lava
+    inline uint32_t const VOLCANO_CHANNEL = 0x99f4a261;
+    // Royal Capital — stone plaza / palace wall / moat / carpet channel
+    inline uint32_t const ROYAL_GROUND = 0xff9aa3ad;
+    inline uint32_t const ROYAL_HILL = 0xff5c6670;
+    inline uint32_t const ROYAL_WATER = 0xff4a6d8c;
+    inline uint32_t const ROYAL_CHANNEL = 0x99c94d4c;
     inline uint32_t const WEAVE_LIGHT = 0x28ffffff;
     inline uint32_t const WEAVE_DARK = 0x18000000;
 }
@@ -143,6 +165,63 @@ namespace PetalID {
         kGoldenLeaf,
         kAccelerator,
         kMagnet,
+        // Royal Capital petals (append only; v1 data-driven / v2 systems later)
+        kIronGuard,
+        kRustNeedle,
+        kAncientCoin,
+        kRoyalRose,
+        kRoyalSpear,
+        kCrownFragment,
+        kRoyalBanner,
+        kStoneHeart,
+        kPhantomEye,
+        kGuardEgg,
+        kThornTrap,
+        kKingsOath,
+        // Rarity ladders (same English name; append only for craft_result)
+        kBasicUnusual,
+        kBasicRare,
+        kBasicEpic,
+        kBasicLegendary,
+        kBasicMythic,
+        kStingerRare,
+        kStingerEpic,
+        kStingerMythic,
+        kRoseRare,
+        kRoseEpic,
+        kRoseLegendary,
+        kRoseMythic,
+        kLeafRare,
+        kLeafEpic,
+        kLeafLegendary,
+        kLeafMythic,
+        kIrisRare,
+        kIrisEpic,
+        kIrisLegendary,
+        kIrisMythic,
+        kWingUnusual,
+        kWingEpic,
+        kWingLegendary,
+        kWingMythic,
+        kMissileUnusual,
+        kMissileEpic,
+        kMissileLegendary,
+        kMissileMythic,
+        kBubbleUnusual,
+        kBubbleEpic,
+        kBubbleLegendary,
+        kBubbleMythic,
+        kFasterUnusual,
+        kFasterEpic,
+        kFasterLegendary,
+        kFasterMythic,
+        kRockUnusual,
+        kRockEpic,
+        kRockLegendary,
+        kRockMythic,
+        kWebUnusual,
+        kWebEpic,
+        kWebMythic,
         kNumPetals
     };
 };
@@ -174,6 +253,20 @@ namespace MobID {
         kShinyLadybug,
         kSquare,
         kDigger,
+        // Royal Capital mobs (append only)
+        kWanderingGuard,
+        kStoneBeetle,
+        kRustMite,
+        kMimicChest,
+        kCoinBeetle,
+        kRoyalBee,
+        kThornBug,
+        kShieldSentinel,
+        kSpearSentinel,
+        kPhantomOrb,
+        kFallenKnight,
+        // Boss — Slice C full AI; Slice B may omit from zone spawns
+        kFallenKing,
         kNumMobs
     };
 };

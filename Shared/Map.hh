@@ -23,6 +23,8 @@ namespace Map {
     extern uint8_t in_no_attack_zone(uint8_t map_id, float x, float y);
     /* Push circle out of impassable terrain; returns whether a correction was applied */
     extern uint8_t resolve_circle_terrain(uint8_t map_id, float &x, float &y, float radius);
+    /* Continuous move: subdivide ox,oy → x,y so fast entities cannot tunnel hills */
+    extern void ccd_move_circle(uint8_t map_id, float &x, float &y, float ox, float oy, float radius);
 
     // Procedural outline / centerline (client fill + minimap). Returns point count.
     extern float terrain_hash(uint32_t seed, uint32_t i);
@@ -36,4 +38,7 @@ namespace Map {
     extern void spawn_random_mob(Simulation *, float, float);
     extern bool find_spawn_location(Simulation *, float, Vector &);
     #endif
+
+    // Walkable BFS from spawn — returns how many of the sampled goals are reachable.
+    extern uint32_t sample_connectivity(uint8_t map_id, float step = 200.f);
 }

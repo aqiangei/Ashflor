@@ -66,7 +66,7 @@ namespace I18n {
         kMoveRight,
         kOverleveled,
         kUnableAttack,
-        kDelete,
+        kDelete, // legacy key; UI shows Drop (地上)
         kLvlFlower,
         kExtraSlotAt,
         kUnnamed,
@@ -149,6 +149,8 @@ namespace I18n {
         kSpawnNameTaken,
         kInvertAttack,
         kInvertDefend,
+        kRequestMobile,
+        kFullscreen,
         kCount
     };
 

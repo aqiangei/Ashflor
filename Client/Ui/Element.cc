@@ -1,5 +1,6 @@
 #include <Client/Ui/Element.hh>
 
+#include <Client/Ui/Chrome.hh>
 #include <Client/Ui/Extern.hh>
 
 #include <Client/Game.hh>
@@ -101,15 +102,25 @@ void Element::render(Renderer &ctx) {
 
 void Element::on_render(Renderer &ctx) {
     if (style.fill != 0x00000000) {
-        ctx.set_fill(Renderer::HSV(style.fill, style.stroke_hsv));
-        ctx.begin_path();
-        ctx.round_rect(-width / 2, -height / 2, width, height, style.round_radius);
-        ctx.fill();
-        if (style.fill >= 0xff000000) {
-            ctx.set_fill(style.fill);
+        // Thick-rim panels use carved plate chrome; thin fills stay simple
+        if (style.line_width >= 4.f && (style.fill & 0xff000000) >= 0xc0000000) {
+            float radius = style.round_radius;
+            if (radius > 5.f) radius = 5.f;
+            Chrome::draw_plate(ctx, width, height, style.fill | 0xff000000,
+                               radius > 0 ? radius : Chrome::kRadius,
+                               style.line_width);
+        } else {
+            ctx.set_fill(Renderer::HSV(style.fill, style.stroke_hsv));
             ctx.begin_path();
-            ctx.rect(-width / 2 + style.line_width, -height / 2 + style.line_width, width - 2 * style.line_width, height - 2 * style.line_width);
+            ctx.round_rect(-width / 2, -height / 2, width, height, style.round_radius);
             ctx.fill();
+            if (style.fill >= 0xff000000) {
+                ctx.set_fill(style.fill);
+                ctx.begin_path();
+                ctx.rect(-width / 2 + style.line_width, -height / 2 + style.line_width,
+                         width - 2 * style.line_width, height - 2 * style.line_width);
+                ctx.fill();
+            }
         }
     }
 }

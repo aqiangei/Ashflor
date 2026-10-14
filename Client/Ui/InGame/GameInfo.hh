@@ -42,15 +42,18 @@ namespace Ui {
     };
 
     class MobileJoyStick final : public Element {
-        float joystick_x;
-        float joystick_y;
         float joystick_radius;
+        float base_x;
+        float base_y;
+        float knob_x;
+        float knob_y;
         uint32_t persistent_touch_id;
         uint8_t is_pressed;
     public:
         MobileJoyStick(float, float, float);
         virtual void on_render(Renderer &) override;
         virtual void on_event(uint8_t) override;
+        virtual void poll_events(ScreenEvent const &) override;
     };
 
     Element *make_leaderboard();

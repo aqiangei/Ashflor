@@ -3,6 +3,7 @@
 #include <Client/Game.hh>
 #include <Client/I18n.hh>
 #include <Client/Ui/Button.hh>
+#include <Client/Ui/Chrome.hh>
 #include <Client/Ui/DynamicText.hh>
 #include <Client/Ui/Container.hh>
 #include <Client/Ui/StaticText.hh>
@@ -63,9 +64,12 @@ Element *Ui::make_death_main_screen() {
         145,
         40,
         new Ui::DynamicText(28, [](){ return I18n::tr(I18n::kContinue); }),
-        [](Element *elt, uint8_t e){ if (e == Ui::kClick && !Game::alive()) Game::spawn_in(); },
-        [](){ return !Game::alive(); },
-        {.fill = 0xff1dd129, .line_width = 5, .round_radius = 3 }
+        [](Element *elt, uint8_t e){
+            if (e == Ui::kClick && !Game::alive() && !Game::leaving_to_title)
+                Game::spawn_in();
+        },
+        [](){ return !Game::alive() && !Game::leaving_to_title; },
+        {.fill = Chrome::kBtnMoss, .line_width = 5, .round_radius = Chrome::kRadius }
     );
     Ui::Element *container = new Ui::VContainer({
         new Ui::DynamicText(25, [](){ return I18n::tr(I18n::kKilledBy); }),
@@ -93,6 +97,10 @@ Element *Ui::make_death_main_screen() {
         new Ui::DynamicText(14, [](){ return I18n::tr(I18n::kOrPressEnterContinue); })
     }, 0, 10, { .animate = [](Element *elt, Renderer &ctx) {
         ctx.translate(0, (elt->animation - 1) * ctx.height * 0.6);
-    }, .should_render = [](){ return !Game::alive() && Game::should_render_game_ui(); } });
+    }, .should_render = [](){
+        // Soft-leave keeps on_game_screen=0 so we never flash death → Continue → revive
+        return !Game::alive() && Game::on_game_screen
+            && !Game::leaving_to_title && Game::should_render_game_ui();
+    } });
     return container;
 }

@@ -42,7 +42,11 @@ namespace Input {
     // Either flag means full swap: attack↔defend bindings (kept in sync in Game.cc)
     extern uint8_t invert_attack;
     extern uint8_t invert_defend;
-    extern uint8_t is_mobile;
+    extern uint8_t is_mobile;       // UA / device probe
+    // User preference (florr_clone "Request Mobile"): show touch HUD even on desktop
+    extern uint8_t request_mobile;
+    // True when joystick / A-B / touch-sized buttons should be active
+    inline uint8_t mobile_controls() { return request_mobile; }
     //use these for game inputs that can be held down
     extern std::unordered_set<char> keys_held;
     extern std::unordered_set<char> keys_held_this_tick;

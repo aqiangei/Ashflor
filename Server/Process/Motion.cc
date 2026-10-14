@@ -3,6 +3,9 @@
 #include <Shared/Entity.hh>
 #include <Shared/Map.hh>
 #include <Shared/Simulation.hh>
+#include <Shared/StaticData.hh>
+
+#include <Helpers/Math.hh>
 
 #include <cmath>
 
@@ -10,6 +13,24 @@ constexpr float BASE_TPS = 20;
 
 void tick_entity_motion(Simulation *sim, Entity &ent) {
     if (ent.pending_delete) return;
+    // Self-heal NaN/Inf physics (from florr_incremental): one poisoned entity
+    // otherwise freezes the arena / breaks spatial hash after respawns.
+    if (!is_finite(ent.get_x()) || !is_finite(ent.get_y())) {
+        ent.set_x(ent.get_radius());
+        ent.set_y(ent.get_radius());
+    }
+    if (!is_finite(ent.velocity.x) || !is_finite(ent.velocity.y))
+        ent.velocity.set(0, 0);
+    if (!is_finite(ent.acceleration.x) || !is_finite(ent.acceleration.y))
+        ent.acceleration.set(0, 0);
+    if (!is_finite(ent.collision_velocity.x) || !is_finite(ent.collision_velocity.y))
+        ent.collision_velocity.set(0, 0);
+    if (!is_finite(ent.friction)) ent.friction = DEFAULT_FRICTION;
+    if (!is_finite(ent.speed_ratio)) ent.speed_ratio = 1;
+
+    float const ox = ent.get_x();
+    float const oy = ent.get_y();
+
     if (ent.slow_ticks > 0) {
         ent.speed_ratio *= 0.5;
         --ent.slow_ticks;
@@ -40,7 +61,11 @@ void tick_entity_motion(Simulation *sim, Entity &ent) {
         float x = ent.get_x();
         float y = ent.get_y();
         float r = ent.get_radius();
-        Map::resolve_circle_terrain(sim->map_id, x, y, r);
+        if (!is_finite(x) || !is_finite(y) || !is_finite(r)) {
+            x = r = BASE_FLOWER_RADIUS;
+            y = BASE_FLOWER_RADIUS;
+        }
+        Map::ccd_move_circle(sim->map_id, x, y, ox, oy, r);
         x = fclamp(x, r, ARENA_WIDTH - r);
         y = fclamp(y, r, ARENA_HEIGHT - r);
         ent.set_x(x);

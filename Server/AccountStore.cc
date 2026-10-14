@@ -188,19 +188,32 @@ void AccountStore::load() {
             std::vector<uint64_t> rest;
             uint64_t v = 0;
             while (ls >> v) rest.push_back(v);
-            if (rest.size() >= PetalID::kNumPetals) {
-                for (uint32_t i = 0; i < PetalID::kNumPetals; ++i)
+            // craft_bank grew when Royal petals were appended; accept prior length.
+            uint32_t bank_n = PetalID::kNumPetals;
+            // Accept saves from before rarity ladders (+43) and/or Royal petals (+12)
+            constexpr uint32_t kLadderAdded = 43;
+            constexpr uint32_t kRoyalAdded = 12;
+            uint32_t const prev_ladder = PetalID::kNumPetals > kLadderAdded
+                ? (uint32_t)(PetalID::kNumPetals - kLadderAdded) : PetalID::kNumPetals;
+            uint32_t const prev_royal = prev_ladder > kRoyalAdded
+                ? prev_ladder - kRoyalAdded : prev_ladder;
+            if (rest.size() < bank_n && rest.size() >= prev_ladder)
+                bank_n = prev_ladder;
+            else if (rest.size() < bank_n && rest.size() >= prev_royal)
+                bank_n = prev_royal;
+            if (rest.size() >= bank_n) {
+                for (uint32_t i = 0; i < bank_n; ++i)
                     acc.craft_bank[i] = (uint32_t) rest[i];
-                if (rest.size() > PetalID::kNumPetals)
-                    acc.coins = (uint32_t) rest[PetalID::kNumPetals];
-                if (rest.size() > PetalID::kNumPetals + 1)
-                    acc.craft_attempts = (uint32_t) rest[PetalID::kNumPetals + 1];
-                if (rest.size() > PetalID::kNumPetals + 2)
-                    acc.talent_hp = (uint8_t) std::min<uint64_t>(rest[PetalID::kNumPetals + 2], 99);
-                if (rest.size() > PetalID::kNumPetals + 3)
-                    acc.talent_rot = (uint8_t) std::min<uint64_t>(rest[PetalID::kNumPetals + 3], 99);
-                if (rest.size() > PetalID::kNumPetals + 4)
-                    acc.session_hash = rest[PetalID::kNumPetals + 4];
+                if (rest.size() > bank_n)
+                    acc.coins = (uint32_t) rest[bank_n];
+                if (rest.size() > bank_n + 1)
+                    acc.craft_attempts = (uint32_t) rest[bank_n + 1];
+                if (rest.size() > bank_n + 2)
+                    acc.talent_hp = (uint8_t) std::min<uint64_t>(rest[bank_n + 2], 99);
+                if (rest.size() > bank_n + 3)
+                    acc.talent_rot = (uint8_t) std::min<uint64_t>(rest[bank_n + 3], 99);
+                if (rest.size() > bank_n + 4)
+                    acc.session_hash = rest[bank_n + 4];
             } else if (rest.size() >= RarityID::kNumRarities) {
                 // Legacy rarity buckets → park counts on first petal of that rarity
                 for (uint8_t r = 0; r < RarityID::kNumRarities; ++r) {

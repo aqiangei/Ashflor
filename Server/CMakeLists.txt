@@ -55,6 +55,8 @@ if(WASM_SERVER)
 else()
     set(SOURCES ${SOURCES} Native.cc)
 endif()
+# Large bosses / wide magnet pulls — default ON for ashflor
+option(GENERAL_SPATIAL_HASH "Canonical spatial hash (large entities)" ON)
 if(GENERAL_SPATIAL_HASH)
     set(SOURCES ${SOURCES} SpatialHashCanonical.cc)
 else()
@@ -65,8 +67,15 @@ set(CMAKE_CXX_FLAGS "-std=c++20 -DSERVERSIDE=1")
 if (TDM)
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DGAMEMODE_TDM=1")
 endif()
+option(USE_CODEPOINT_LEN "Measure strings by Unicode codepoints" ON)
 if (USE_CODEPOINT_LEN)
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DUSE_CODEPOINT_LEN=1")
+endif()
+if (VERSION_HASH)
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DVERSION_HASH=${VERSION_HASH}ull")
+endif()
+if (SERVER_PORT)
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DSERVER_PORT=${SERVER_PORT}")
 endif()
 if(DEBUG)
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -gdwarf-4 -DDEBUG=1")
@@ -79,7 +88,12 @@ if(WASM_SERVER)
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DWASM_SERVER=1")
     add_link_options(
         -sEXIT_RUNTIME=0
-        -sEXPORTED_FUNCTIONS=_main,_on_connect,_on_disconnect,_tick,_on_message,_malloc,_free
+        # 8 maps × Simulation(ENTITY_CAP≈8192) needs a large static BSS + growth headroom
+        -sALLOW_MEMORY_GROWTH=1
+        -sINITIAL_MEMORY=536870912
+        -sMAXIMUM_MEMORY=2147483648
+        -sSTACK_SIZE=2097152
+        -sEXPORTED_FUNCTIONS=_main,_on_connect,_on_disconnect,_tick,_on_message,_sigusr2,_malloc,_free
         --js-library=${CMAKE_CURRENT_SOURCE_DIR}/node_fs_library.js
     )
     if (NOT DEBUG) 
