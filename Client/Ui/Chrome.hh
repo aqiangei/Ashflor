@@ -7,18 +7,18 @@ namespace Ui {
     class Element;
 }
 
-// AshFlor shared UI chrome — heavy plate / brass rim (not candy bubbles)
+// AshFlor shared UI chrome — soft rounded surfaces, no flashy brass rims
 namespace Ui::Chrome {
     // Surfaces
-    inline constexpr uint32_t kPanelDeep   = 0xf2141a12; // almost-opaque olive black
-    inline constexpr uint32_t kPanelFace   = 0xff2a3226;
+    inline constexpr uint32_t kPanelDeep   = 0xf01c2418;
+    inline constexpr uint32_t kPanelFace   = 0xff2a3428;
     inline constexpr uint32_t kPanelInset  = 0xff1a2218;
-    inline constexpr uint32_t kRimBrass    = 0xffc9a24a;
+    inline constexpr uint32_t kRimBrass    = 0xffc9a24a; // kept for rare accents only
     inline constexpr uint32_t kRimDark     = 0xff080a06;
     // Ink
-    inline constexpr uint32_t kTitle       = 0xfff3ebe0;
-    inline constexpr uint32_t kBody        = 0xffddd2c0;
-    inline constexpr uint32_t kMuted       = 0xffa89878;
+    inline constexpr uint32_t kTitle       = 0xfff5f0e8;
+    inline constexpr uint32_t kBody        = 0xffe4ddd0;
+    inline constexpr uint32_t kMuted       = 0xffb0a490;
     inline constexpr uint32_t kGold        = 0xffe8c86a;
     // Action stones (muted, desaturated)
     inline constexpr uint32_t kBtnMoss     = 0xff3e5a38;
@@ -29,10 +29,10 @@ namespace Ui::Chrome {
     inline constexpr uint32_t kBtnIron     = 0xff3c403c;
     inline constexpr uint32_t kBtnDanger   = 0xff8a3030;
 
-    inline constexpr float kRadius = 3.f;
-    inline constexpr float kRim = 6.f;
+    inline constexpr float kRadius = 14.f;
+    inline constexpr float kRim = 0.f;
 
-    // Beveled plate: dark outer + brass stroke + face + top sheen
+    // Soft rounded plate: fill + light shadow, no outer border stroke
     void draw_plate(Renderer &ctx, float w, float h, uint32_t face,
                     float radius = kRadius, float rim = kRim);
 }

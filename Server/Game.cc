@@ -84,10 +84,13 @@ void GameInstance::init(uint8_t id) {
     map_id = id;
     simulation.map_id = id;
     simulation.arena_info.set_map_id(id);
-    for (uint32_t i = 0; i < ENTITY_CAP / 2; ++i)
+    // Density-capped fill (was ENTITY_CAP/2 = 4096 attempts × 8 maps → boot+CPU hog).
+    // Zone caps inside spawn_random_mob still apply; this only limits attempts.
+    constexpr uint32_t kInitSpawnAttempts = 720;
+    for (uint32_t i = 0; i < kInitSpawnAttempts; ++i)
         Map::spawn_random_mob(&simulation, frand() * ARENA_WIDTH, frand() * ARENA_HEIGHT);
-    // Fill empty maps with a few AI flowers (zorr-style bot MVP)
-    constexpr uint32_t kBotCount = 6;
+    // Light bot fill — 8 maps × 6 bots was ~48 AI flowers every tick (node pegged at 100%)
+    constexpr uint32_t kBotCount = 2;
     for (uint32_t i = 0; i < kBotCount; ++i) {
         Entity &cam = alloc_cpu_camera(&simulation, NULL_ENTITY);
         Entity &player = alloc_player(&simulation, cam.get_team());

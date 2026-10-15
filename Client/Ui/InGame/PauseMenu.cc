@@ -42,7 +42,7 @@ Element *Ui::make_pause_menu() {
                 if (e == Ui::kClick) Game::pause_menu_open = 0;
             },
             nullptr,
-            { .fill = Chrome::kBtnMoss, .line_width = 6, .round_radius = Chrome::kRadius }
+            { .fill = Chrome::kBtnMoss, .line_width = 0, .round_radius = Chrome::kRadius }
         ),
         new Ui::Button(320, 56,
             new Ui::DynamicText(22, [](){ return I18n::tr(I18n::kPartyInviteNear); }),
@@ -50,7 +50,7 @@ Element *Ui::make_pause_menu() {
                 if (e == Ui::kClick) Game::party_invite_nearest();
             },
             nullptr,
-            { .fill = Chrome::kBtnSlate, .line_width = 6, .round_radius = Chrome::kRadius }
+            { .fill = Chrome::kBtnSlate, .line_width = 0, .round_radius = Chrome::kRadius }
         ),
         new Ui::Button(320, 56,
             new Ui::DynamicText(22, [](){ return I18n::tr(I18n::kPartyLeave); }),
@@ -58,7 +58,7 @@ Element *Ui::make_pause_menu() {
                 if (e == Ui::kClick) Game::party_leave();
             },
             [](){ return Game::party_member_count == 0; },
-            { .fill = Chrome::kBtnIron, .line_width = 6, .round_radius = Chrome::kRadius }
+            { .fill = Chrome::kBtnIron, .line_width = 0, .round_radius = Chrome::kRadius }
         ),
         new Ui::DynamicText(20, [](){
             return I18n::use_chinese ? std::string{"—— 操作 ——"} : std::string{"— Controls —"};
@@ -73,16 +73,14 @@ Element *Ui::make_pause_menu() {
                 if (e == Ui::kClick) DOM::toggle_fullscreen();
             },
             nullptr,
-            { .fill = Chrome::kBtnSlate, .line_width = 6, .round_radius = Chrome::kRadius }
+            { .fill = Chrome::kBtnSlate, .line_width = 0, .round_radius = Chrome::kRadius }
         ),
         new Ui::DynamicText(18, [](){ return I18n::tr(I18n::kEscHint); }, {
             .fill = Chrome::kBody,
             .h_justify = Style::Left
         })
-    }, 28, 16, {
-        .fill = Chrome::kPanelDeep,
-        .line_width = 6,
-        .round_radius = Chrome::kRadius,
+    }, 28, 14, {
+        .fill = Chrome::kPanelDeep, .line_width = 0, .round_radius = Chrome::kRadius,
         .should_render = [](){
             return Game::pause_menu_open && Game::alive() && Game::should_render_game_ui();
         },
@@ -90,7 +88,7 @@ Element *Ui::make_pause_menu() {
         .v_justify = Style::Top
     });
     elt->x = 16;
-    elt->y = 72;
+    elt->y = 64;
     Ui::pause_menu_root = elt;
     return elt;
 }
@@ -122,7 +120,7 @@ Element *Ui::make_game_topbar() {
             if (e == Ui::kClick) Game::toggle_pause();
         },
         nullptr,
-        { .fill = Chrome::kBtnIron, .line_width = 5, .round_radius = Chrome::kRadius }
+        { .fill = Chrome::kBtnIron, .line_width = 0, .round_radius = Chrome::kRadius }
     );
 
     Element *mob_icon = new Ui::StaticIcon([](Element *elt, Renderer &ctx){
@@ -166,7 +164,7 @@ Element *Ui::make_game_topbar() {
             }
         },
         [](){ return Ui::panel_open == Panel::kMobs; },
-        { .fill = Chrome::kBtnMoss, .line_width = 5, .round_radius = Chrome::kRadius }
+        { .fill = Chrome::kBtnMoss, .line_width = 0, .round_radius = Chrome::kRadius }
     );
 
     Element *trophy_btn = new Ui::Button(40, 40, trophy_icon,
@@ -177,7 +175,7 @@ Element *Ui::make_game_topbar() {
             }
         },
         [](){ return Ui::panel_open == Panel::kLeaderboard; },
-        { .fill = Chrome::kBtnClay, .line_width = 5, .round_radius = Chrome::kRadius }
+        { .fill = Chrome::kBtnClay, .line_width = 0, .round_radius = Chrome::kRadius }
     );
 
     Element *changelog_icon = new Ui::StaticIcon([](Element *elt, Renderer &ctx){
@@ -214,7 +212,7 @@ Element *Ui::make_game_topbar() {
             }
         },
         [](){ return Ui::panel_open == Panel::kChangelog; },
-        { .fill = Chrome::kBtnBronze, .line_width = 5, .round_radius = Chrome::kRadius }
+        { .fill = Chrome::kBtnBronze, .line_width = 0, .round_radius = Chrome::kRadius }
     );
 
     Element *exit_btn = new Ui::Button(40, 40,
@@ -243,7 +241,7 @@ Element *Ui::make_game_topbar() {
             Input::game_inputs.flags = 0;
         },
         nullptr,
-        { .fill = Chrome::kBtnDanger, .line_width = 5, .round_radius = Chrome::kRadius }
+        { .fill = Chrome::kBtnDanger, .line_width = 0, .round_radius = Chrome::kRadius }
     );
 
     Element *guild_btn = Ui::make_guild_top_button();
@@ -280,7 +278,7 @@ Element *Ui::make_leave_confirm() {
                     if (e == Ui::kClick) Game::leave_confirm_open = 0;
                 },
                 nullptr,
-                { .fill = Chrome::kBtnIron, .line_width = 5, .round_radius = Chrome::kRadius }
+                { .fill = Chrome::kBtnIron, .line_width = 0, .round_radius = Chrome::kRadius }
             ),
             new Ui::Button(110, 38,
                 new Ui::DynamicText(15, [](){ return I18n::tr(I18n::kLeaveYes); }),
@@ -288,13 +286,11 @@ Element *Ui::make_leave_confirm() {
                     if (e == Ui::kClick) Game::return_to_title();
                 },
                 nullptr,
-                { .fill = Chrome::kBtnDanger, .line_width = 5, .round_radius = Chrome::kRadius }
+                { .fill = Chrome::kBtnDanger, .line_width = 0, .round_radius = Chrome::kRadius }
             )
         }, 0, 10)
-    }, 16, 12, {
-        .fill = Chrome::kPanelDeep,
-        .line_width = 6,
-        .round_radius = Chrome::kRadius,
+    }, 18, 12, {
+        .fill = Chrome::kPanelDeep, .line_width = 0, .round_radius = Chrome::kRadius,
         .should_render = [](){
             return Game::leave_confirm_open && Game::alive() && Game::should_render_game_ui();
         }

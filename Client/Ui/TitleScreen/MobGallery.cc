@@ -147,10 +147,10 @@ Element *Ui::make_mob_gallery() {
         make_scroll()
     }, 15, 10, { 
         .fill = Chrome::kPanelDeep,
-        .line_width = 6,
+        .line_width = 0,
         .round_radius = Chrome::kRadius,
         .animate = [](Element *elt, Renderer &ctx){
-            elt->y = Game::alive() ? 170.f : 68.f;
+            elt->y = Game::alive() ? 170.f : 84.f;
             ctx.translate(0, (elt->animation - 1) * elt->height);
         },
         .should_render = [](){
@@ -162,7 +162,7 @@ Element *Ui::make_mob_gallery() {
         .v_justify = Style::Top
     });
     elt->x = 12;
-    elt->y = 68;
+    elt->y = 84;
     if (Ui::Panel::mob_gallery == nullptr)
         Ui::Panel::mob_gallery = elt;
     else

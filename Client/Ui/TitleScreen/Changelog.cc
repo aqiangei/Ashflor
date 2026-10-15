@@ -45,6 +45,10 @@ static Element *make_changelog_contents() {
     Element *elt = new Ui::VContainer({
         make_date("2026年10月15日", "October 15th 2026"),
         make_entries({
+            {"移动端摇杆：触摸处浮现（非固定）；A/B 加大",
+             "Mobile stick: float under finger (not fixed); larger A/B"},
+            {"服端降载：空图降频、少 Bot、启动刷怪次数封顶（修复全域卡顿）",
+             "Server load: throttle empty maps, fewer bots, capped init spawns"},
             {"移动端：背包槽拖放/堆叠展开；DPR 上限 2；槽位乐观同步",
              "Mobile: bag slot drag/stack; DPR capped at 2; optimistic loadout sync"},
             {"关闭玩家/Bot 互伤（含花瓣与召唤物）；仍可打怪与 Digger",
@@ -211,10 +215,10 @@ Element *Ui::make_changelog() {
         make_changelog_contents()
     }, 15, 10, {
         .fill = Chrome::kPanelDeep,
-        .line_width = 6,
+        .line_width = 0,
         .round_radius = Chrome::kRadius,
         .animate = [](Element *elt, Renderer &ctx){
-            elt->y = Game::alive() ? 170.f : 68.f;
+            elt->y = Game::alive() ? 170.f : 84.f;
             ctx.translate(0, (elt->animation - 1) * elt->height);
         },
         .should_render = [](){
@@ -226,7 +230,7 @@ Element *Ui::make_changelog() {
         .v_justify = Style::Top
     });
     elt->x = 12;
-    elt->y = 68;
+    elt->y = 84;
     Ui::Panel::changelog = elt;
     return elt;
 }

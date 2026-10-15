@@ -77,10 +77,10 @@ Element *Ui::make_leaderboard() {
         , 8, 4, { .h_justify = Style::Left })
     }, 16, 8, {
         .fill = Chrome::kPanelDeep,
-        .line_width = 6,
+        .line_width = 0,
         .round_radius = Chrome::kRadius,
         .animate = [](Element *elt, Renderer &ctx){
-            elt->y = Game::alive() ? 170.f : 68.f;
+            elt->y = Game::alive() ? 170.f : 84.f;
             ctx.translate(0, (elt->animation - 1) * elt->height);
         },
         .should_render = [](){
@@ -92,7 +92,7 @@ Element *Ui::make_leaderboard() {
         .v_justify = Style::Top
     });
     elt->x = 12;
-    elt->y = 68;
+    elt->y = 84;
     // Title copy first; in-game copy tracked as alt for click-outside hit tests
     if (Ui::Panel::leaderboard == nullptr)
         Ui::Panel::leaderboard = elt;

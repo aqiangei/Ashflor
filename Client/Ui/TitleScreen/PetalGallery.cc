@@ -88,7 +88,7 @@ Element *Ui::make_petal_gallery() {
         make_scroll()
     }, 15, 10, { 
         .fill = Chrome::kPanelDeep,
-        .line_width = 6,
+        .line_width = 0,
         .round_radius = Chrome::kRadius,
         .animate = [](Element *elt, Renderer &ctx){
             ctx.translate(0, (elt->animation - 1) * elt->height);
@@ -100,7 +100,7 @@ Element *Ui::make_petal_gallery() {
         .v_justify = Style::Top
     });
     elt->x = 12;
-    elt->y = 68;
+    elt->y = 84;
     Ui::Panel::petal_gallery = elt;
     return elt;
 }

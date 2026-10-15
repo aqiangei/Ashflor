@@ -69,7 +69,7 @@ Element *Ui::make_death_main_screen() {
                 Game::spawn_in();
         },
         [](){ return !Game::alive() && !Game::leaving_to_title; },
-        {.fill = Chrome::kBtnMoss, .line_width = 5, .round_radius = Chrome::kRadius }
+        {.fill = Chrome::kBtnMoss, .line_width = 0, .round_radius = Chrome::kRadius }
     );
     Ui::Element *container = new Ui::VContainer({
         new Ui::DynamicText(25, [](){ return I18n::tr(I18n::kKilledBy); }),

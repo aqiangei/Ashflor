@@ -136,9 +136,9 @@ Element *Ui::make_chat_panel() {
     for (uint32_t i = 0; i < Game::CHAT_HISTORY; ++i)
         lines.push_back(new ChatLineElement(i));
 
-    chat_input = new ChatTextInput(Game::chat_draft, 280, 28, MAX_CHAT_LENGTH, {
-        .line_width = 3,
-        .round_radius = 4,
+    chat_input = new ChatTextInput(Game::chat_draft, 280, 32, MAX_CHAT_LENGTH, {
+        .line_width = 0,
+        .round_radius = Chrome::kRadius,
         .should_render = [](){
             return Game::alive() && Game::should_render_game_ui();
         }
@@ -155,9 +155,9 @@ Element *Ui::make_chat_panel() {
         chat_input
     }, 0, 6, { .h_justify = Style::Left }));
 
-    Element *elt = new Ui::VContainer(lines, 8, 3, {
-        .fill = 0x66000000,
-        .round_radius = 6,
+    Element *elt = new Ui::VContainer(lines, 10, 4, {
+        .fill = 0x88000000,
+        .round_radius = Chrome::kRadius,
         .should_render = [](){
             return Game::should_render_game_ui() && Game::alive();
         },
@@ -165,8 +165,8 @@ Element *Ui::make_chat_panel() {
         .v_justify = Style::Bottom
     });
     // Right of vertical B/Z/C/V column (~44+pad), sit on bottom edge
-    elt->x = 64;
-    elt->y = -10;
+    elt->x = 72;
+    elt->y = -16;
     return elt;
 }
 
@@ -181,7 +181,7 @@ Element *Ui::make_chat_context_menu() {
                 if (e == Ui::kClick) Game::chat_menu_invite();
             },
             nullptr,
-            { .fill = Chrome::kBtnSlate, .line_width = 4, .round_radius = Chrome::kRadius }
+            { .fill = Chrome::kBtnSlate, .line_width = 0, .round_radius = Chrome::kRadius }
         ),
         new Ui::Button(150, 28,
             new Ui::DynamicText(13, [](){ return I18n::tr(I18n::kChatInviteGuild); }),
@@ -189,7 +189,7 @@ Element *Ui::make_chat_context_menu() {
                 if (e == Ui::kClick) Game::chat_menu_invite_guild();
             },
             nullptr,
-            { .fill = Chrome::kBtnBronze, .line_width = 4, .round_radius = Chrome::kRadius }
+            { .fill = Chrome::kBtnBronze, .line_width = 0, .round_radius = Chrome::kRadius }
         ),
         new Ui::Button(150, 28,
             new Ui::DynamicText(13, [](){ return I18n::tr(I18n::kChatWhisper); }),
@@ -197,12 +197,10 @@ Element *Ui::make_chat_context_menu() {
                 if (e == Ui::kClick) Game::chat_menu_whisper();
             },
             nullptr,
-            { .fill = Chrome::kBtnIron, .line_width = 4, .round_radius = Chrome::kRadius }
+            { .fill = Chrome::kBtnIron, .line_width = 0, .round_radius = Chrome::kRadius }
         )
     }, 8, 6, {
-        .fill = Chrome::kPanelDeep,
-        .line_width = 5,
-        .round_radius = Chrome::kRadius,
+        .fill = Chrome::kPanelDeep, .line_width = 0, .round_radius = Chrome::kRadius,
         .animate = [](Element *elt, Renderer &) {
             elt->x = Game::chat_menu_x / Ui::scale;
             elt->y = Game::chat_menu_y / Ui::scale;

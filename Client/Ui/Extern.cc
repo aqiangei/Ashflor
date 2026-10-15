@@ -58,7 +58,7 @@ namespace Ui {
         if (pg == nullptr) return;
         pg->x = 12;
         // Below status bar in-game; under title icons on home
-        pg->y = Game::alive() ? 170.f : 68.f;
+        pg->y = Game::alive() ? 170.f : 84.f;
     }
 
     static bool hit_element(Element *elt, float x, float y) {

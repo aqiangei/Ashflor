@@ -152,8 +152,8 @@ UiLoadoutSlot::UiLoadoutSlot(uint8_t pos) : Element(70, 70, { .fill = 0xffeeeeee
     // Secondary row: smaller slots, still 1:1 under primary
     if (pos >= MAX_SLOT_COUNT && pos < 2 * MAX_SLOT_COUNT)
         width = height = 48;
-    style.line_width = width / 12;
-    style.round_radius = width / 20;
+    style.line_width = 0;
+    style.round_radius = width * 0.22f;
     style.should_render = [=](){
         if (pos < MAX_SLOT_COUNT)
             return pos < Game::loadout_count;
@@ -208,8 +208,8 @@ void UiLoadoutSlot::on_render(Renderer &ctx) {
 UiDeleteSlot::UiDeleteSlot() : UiLoadoutSlot(2 * MAX_SLOT_COUNT) {
     width = height = 56;
     style.fill = 0xffcf8888;
-    style.line_width = width / 12;
-    style.round_radius = width / 20;
+    style.line_width = 0;
+    style.round_radius = width * 0.22f;
     delete_text_opacity.set(0);
     style.animate = [&](Element *, Renderer &) {
         delete_text_opacity.set(Ui::UiLoadout::num_petals_selected != 0 || Ui::UiLoadout::selected_with_keys != MAX_SLOT_COUNT);

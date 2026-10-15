@@ -61,7 +61,7 @@ Element *Ui::make_settings_panel() {
                 if (e == Ui::kClick) DOM::toggle_fullscreen();
             },
             nullptr,
-            { .fill = Chrome::kBtnSlate, .line_width = 4, .round_radius = Chrome::kRadius }
+            { .fill = Chrome::kBtnSlate, .line_width = 0, .round_radius = Chrome::kRadius }
         ),
         new Ui::DynamicText(12, [](){ return I18n::tr(I18n::kMadeBy); }, {
             .fill = Chrome::kMuted
@@ -71,7 +71,7 @@ Element *Ui::make_settings_panel() {
         })
     }, 20, 10, {
         .fill = Chrome::kPanelDeep,
-        .line_width = 6,
+        .line_width = 0,
         .round_radius = Chrome::kRadius,
         .animate = [](Element *elt, Renderer &ctx){
             ctx.translate(0, (elt->animation - 1) * elt->height);
@@ -83,7 +83,7 @@ Element *Ui::make_settings_panel() {
         .v_justify = Style::Top
     });
     elt->x = 12;
-    elt->y = 68;
+    elt->y = 84;
     Ui::Panel::settings = elt;
     return elt;
 }

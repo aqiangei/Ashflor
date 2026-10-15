@@ -40,8 +40,15 @@ Client *Server::client_by_camera(Simulation *sim, EntityID const &id) {
 void Server::tick() {
     using namespace std::chrono_literals;
     auto start = std::chrono::steady_clock::now();
+    static uint32_t tick_n = 0;
+    ++tick_n;
     uint32_t online = 0;
     for (uint8_t i = 0; i < MapID::kNumMaps; ++i) {
+        // Empty maps (no WS clients): tick at 1/3 rate. Bots/mobs stay alive but
+        // 8 full sims/frame was burning the single-thread WASM server (~140ms/tick).
+        if (Server::games[i].clients.empty() && ((tick_n + i) % 3) != 0) {
+            continue;
+        }
         Server::games[i].tick();
         online += (uint32_t) Server::games[i].clients.size();
     }
@@ -67,7 +74,8 @@ void Server::tick() {
     }
     auto end = std::chrono::steady_clock::now();
     std::chrono::duration<double, std::milli> tick_time = end - start;
-    if (tick_time > 5ms) std::cout << "tick took " << tick_time << '\n';
+    // 20 TPS budget ≈ 50ms; log only when we actually miss the frame
+    if (tick_time > 40ms) std::cout << "tick took " << tick_time << '\n';
 
     if (Server::is_draining && !was_draining) {
         was_draining = true;

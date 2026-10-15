@@ -186,8 +186,8 @@ static void make_petal_tooltip(PetalID::T id) {
         new Ui::DynamicText(12, [id](){ return I18n::petal_desc(id); }, { .fill = 0xffffffff, .h_justify = Style::Left }),
         DEBUG_ONLY(make_petal_stat_container(id))
     }, 5, 2);
-    tooltip->style.fill = 0x80000000;
-    tooltip->style.round_radius = 6;
+    tooltip->style.fill = 0xb01c2418;
+    tooltip->style.round_radius = 12;
     tooltip->refactor();
     Ui::UiLoadout::petal_tooltips[id] = tooltip;
 }

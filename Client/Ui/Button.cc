@@ -4,6 +4,8 @@
 #include <Client/Ui/Extern.hh>
 #include <Client/Input.hh>
 
+#include <cmath>
+
 using namespace Ui;
 
 // Enlarge compact controls on touch devices so they meet ~48–64pt targets
@@ -51,16 +53,13 @@ void Button::on_render(Renderer &ctx) {
         else if (focus_state == kMouseHover)
             face = Renderer::HSV(face, 1.12f);
         float radius = style.round_radius > 0 ? style.round_radius : Chrome::kRadius;
-        // Cap bubble radius — prefer carved slab over candy pill
-        if (radius > 6.f) radius = 6.f;
-        float rim = style.line_width > 0 ? style.line_width : Chrome::kRim;
-        if (rim < 4.f) rim = 4.f;
-        Chrome::draw_plate(ctx, width, height, face, radius, rim);
+        if (radius > 20.f) radius = 20.f;
+        Chrome::draw_plate(ctx, width, height, face, radius, style.line_width);
         if (focus_state == kMouseDown) {
-            ctx.set_fill(0x30000000);
+            ctx.set_fill(0x28000000);
             ctx.begin_path();
-            ctx.rect(-width / 2 + rim * 0.7f, -height / 2 + rim * 0.7f,
-                     width - rim * 1.4f, height - rim * 1.4f);
+            ctx.round_rect(-width / 2 + 2.f, -height / 2 + 2.f,
+                           width - 4.f, height - 4.f, fmax(4.f, radius - 2.f));
             ctx.fill();
         }
     }
@@ -80,7 +79,7 @@ void Button::poll_events(ScreenEvent const &event) {
 }
 
 ToggleButton::ToggleButton(float w, uint8_t *t) : 
-    Element(w,w,{ .fill = Chrome::kBtnIron, .stroke_hsv = 0.4, .line_width = 5, .round_radius = 3 }), toggler(t) {
+    Element(w,w,{ .fill = Chrome::kBtnIron, .stroke_hsv = 0.4, .line_width = 0, .round_radius = Chrome::kRadius }), toggler(t) {
     apply_mobile_touch_size(width, height);
     lerp_toggle = 0;
 }
@@ -88,12 +87,11 @@ ToggleButton::ToggleButton(float w, uint8_t *t) :
 void ToggleButton::on_render(Renderer &ctx) {
     lerp_toggle = lerp(lerp_toggle, *toggler, Ui::lerp_amount * 2);
     uint32_t face = Renderer::MIX(Chrome::kBtnIron, Chrome::kBtnMoss, lerp_toggle);
-    Chrome::draw_plate(ctx, width, height, face, 3.f, 5.f);
-    // Inner marker
-    float m = width * 0.28f;
+    Chrome::draw_plate(ctx, width, height, face, Chrome::kRadius, 0.f);
+    float m = width * 0.26f;
     ctx.set_fill(*toggler ? Chrome::kGold : 0x66ffffff);
     ctx.begin_path();
-    ctx.rect(-m / 2, -m / 2, m, m);
+    ctx.round_rect(-m / 2, -m / 2, m, m, 4.f);
     ctx.fill();
 }
 

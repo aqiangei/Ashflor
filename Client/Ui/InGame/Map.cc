@@ -77,12 +77,12 @@ void Minimap::refactor() {
 void Minimap::on_render(Renderer &ctx) {
     ctx.set_fill(0xe0111111);
     ctx.begin_path();
-    ctx.round_rect(-width / 2, -height / 2, width, height, 3);
+    ctx.round_rect(-width / 2, -height / 2, width, height, 12);
     ctx.fill();
-    ctx.set_line_width(2.5f);
-    ctx.set_stroke(0xffeeeeee);
+    ctx.set_line_width(1.5f);
+    ctx.set_stroke(0x66ffffff);
     ctx.begin_path();
-    ctx.round_rect(-width / 2, -height / 2, width, height, 3);
+    ctx.round_rect(-width / 2, -height / 2, width, height, 12);
     ctx.stroke();
 
     // Always full arena — 1:1 with world

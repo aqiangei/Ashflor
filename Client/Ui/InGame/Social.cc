@@ -65,19 +65,17 @@ Element *Ui::make_invite_toast() {
                     if (e == Ui::kClick) Game::invite_respond(1);
                 },
                 nullptr,
-                { .fill = Chrome::kBtnMoss, .line_width = 4, .round_radius = Chrome::kRadius }),
+                { .fill = Chrome::kBtnMoss, .line_width = 0, .round_radius = Chrome::kRadius }),
             new Ui::Button(88, 30,
                 new Ui::DynamicText(13, [](){ return I18n::tr(I18n::kInviteReject); }),
                 [](Element *, uint8_t e){
                     if (e == Ui::kClick) Game::invite_respond(0);
                 },
                 nullptr,
-                { .fill = Chrome::kBtnDanger, .line_width = 4, .round_radius = Chrome::kRadius })
+                { .fill = Chrome::kBtnDanger, .line_width = 0, .round_radius = Chrome::kRadius })
         }, 0, 8, { .h_justify = Style::Left })
     }, 12, 8, {
-        .fill = Chrome::kPanelDeep,
-        .line_width = 5,
-        .round_radius = Chrome::kRadius,
+        .fill = Chrome::kPanelDeep, .line_width = 0, .round_radius = Chrome::kRadius,
         .animate = [](Element *elt, Renderer &ctx){
             ctx.translate((1.f - (float) elt->animation) * -40.f, 0);
         },
@@ -92,14 +90,14 @@ Element *Ui::make_invite_toast() {
     });
     // Below topbar row (gear ~40 + pad)
     elt->x = 12;
-    elt->y = 58;
+    elt->y = 64;
     return elt;
 }
 
 Element *Ui::make_guild_panel() {
-    Element *name_input = new Ui::TextInput(Game::guild_create_draft, 160, 28, 12, {
-        .line_width = 2,
-        .round_radius = 4,
+    Element *name_input = new Ui::TextInput(Game::guild_create_draft, 160, 32, 12, {
+        .line_width = 0,
+        .round_radius = Chrome::kRadius,
         .should_render = [](){
             return Game::guild_panel_open && Game::guild_name.empty();
         }
@@ -116,7 +114,7 @@ Element *Ui::make_guild_panel() {
                     if (e == Ui::kClick) Game::close_guild_panel();
                 },
                 nullptr,
-                { .fill = Chrome::kBtnDanger, .line_width = 4, .round_radius = Chrome::kRadius }),
+                { .fill = Chrome::kBtnDanger, .line_width = 0, .round_radius = Chrome::kRadius }),
             0, 8, {}
         ),
         new Ui::DynamicText(13, []() -> std::string {
@@ -147,9 +145,7 @@ Element *Ui::make_guild_panel() {
                 },
                 nullptr,
                 {
-                    .fill = Chrome::kBtnMoss,
-                    .line_width = 4,
-                    .round_radius = Chrome::kRadius,
+                    .fill = Chrome::kBtnMoss, .line_width = 0, .round_radius = Chrome::kRadius,
                     .should_render = [](){ return Game::guild_name.empty(); }
                 })
         }, 0, 8, { .h_justify = Style::Left }),
@@ -160,9 +156,7 @@ Element *Ui::make_guild_panel() {
             },
             nullptr,
             {
-                .fill = Chrome::kBtnIron,
-                .line_width = 4,
-                .round_radius = Chrome::kRadius,
+                .fill = Chrome::kBtnIron, .line_width = 0, .round_radius = Chrome::kRadius,
                 .should_render = [](){ return !Game::guild_name.empty(); }
             }),
         new Ui::DynamicText(11, [](){
@@ -171,9 +165,7 @@ Element *Ui::make_guild_panel() {
                 : "Right-click a chat name → guild / party / whisper";
         }, { .fill = Chrome::kMuted, .h_justify = Style::Left })
     }, 14, 8, {
-        .fill = Chrome::kPanelDeep,
-        .line_width = 6,
-        .round_radius = Chrome::kRadius,
+        .fill = Chrome::kPanelDeep, .line_width = 0, .round_radius = Chrome::kRadius,
         .animate = [](Element *elt, Renderer &ctx){
             ctx.translate(0, (1.f - (float) elt->animation) * -20.f);
         },
@@ -187,7 +179,7 @@ Element *Ui::make_guild_panel() {
         .layer = 1
     });
     elt->x = 12;
-    elt->y = 58;
+    elt->y = 64;
     return elt;
 }
 
@@ -204,6 +196,6 @@ Element *Ui::make_guild_top_button() {
             }
         },
         [](){ return Game::guild_panel_open != 0; },
-        { .fill = Chrome::kBtnSlate, .line_width = 5, .round_radius = Chrome::kRadius }
+        { .fill = Chrome::kBtnSlate, .line_width = 0, .round_radius = Chrome::kRadius }
     );
 }

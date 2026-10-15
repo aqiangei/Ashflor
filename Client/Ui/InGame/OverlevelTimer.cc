@@ -38,7 +38,7 @@ Element *Ui::make_overlevel_indicator() {
         new OverlevelTimer(50)
     }, 10, 20, {
         .fill = 0x40000000,
-        .round_radius = 5,
+        .round_radius = 12,
         .animate = [](Element *elt, Renderer &ctx){
             ctx.set_global_alpha(elt->animation);
         },

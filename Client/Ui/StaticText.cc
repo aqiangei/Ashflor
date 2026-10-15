@@ -12,7 +12,7 @@ StaticText::StaticText(float font_size, std::string const &str, Style s) :
 Element(Renderer::get_ascii_text_size(str.c_str()) * font_size, font_size, s), text(std::move(str)) {}
 
 void StaticText::on_render(Renderer &ctx) {
-    ctx.draw_text(text.c_str(), { .fill = style.fill, .size = height, .stroke_scale = 0.12 });
+    ctx.draw_text(text.c_str(), { .fill = style.fill, .size = height, .stroke_scale = 0.08 });
 }
 
 static std::vector<std::string> _split_by_spaces(std::string const &str) {

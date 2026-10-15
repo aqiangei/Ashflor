@@ -181,14 +181,7 @@ void Game::init() {
     DOM::cache_client();
     Storage::retrieve();
     reset();
-    title_ui_window.add_child(
-        [](){ 
-            Ui::Element *elt = new Ui::StaticText(60, "ashflor.io");
-            elt->x = 0;
-            elt->y = -270;
-            return elt;
-        }()
-    );
+    // Brand lives inside make_title_input_box so it cannot overlap the form
     title_ui_window.add_child(
         Ui::make_title_input_box()
     );

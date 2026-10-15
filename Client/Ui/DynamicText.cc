@@ -16,10 +16,9 @@ void DynamicText::refactor() {
 }
 
 void DynamicText::on_render(Renderer &ctx) {
-    // Thicker outline so labels read as carved plates, not hairline UI
     ctx.draw_text(text.c_str(), {
         .fill = style.fill,
         .size = height,
-        .stroke_scale = 0.22f
+        .stroke_scale = 0.12f
     });
 }

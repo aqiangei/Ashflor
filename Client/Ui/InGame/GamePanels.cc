@@ -207,7 +207,7 @@ public:
             if (r < RarityID::kNumRarities)
                 fill = (RARITY_COLORS[r] & 0x00ffffff) | 0xdd000000;
         }
-        Chrome::draw_plate(ctx, width, height, fill, 3.f, 4.f);
+        Chrome::draw_plate(ctx, width, height, fill, Chrome::kRadius, 0.f);
         if (pid == PetalID::kNone || pid >= PetalID::kNumPetals) return;
         if (dragging) ctx.set_global_alpha(0.4f);
         {
@@ -223,7 +223,7 @@ public:
             float by = -height / 2 + 10;
             ctx.set_fill(0xe0000000);
             ctx.begin_path();
-            ctx.round_rect(bx - 12, by - 9, 24, 18, 2);
+            ctx.round_rect(bx - 12, by - 9, 24, 18, 8);
             ctx.fill();
             {
                 RenderContext c(&ctx);
@@ -231,13 +231,13 @@ public:
                 ctx.center_text_align();
                 ctx.center_text_baseline();
                 ctx.draw_text(badge.c_str(), {
-                    .fill = Chrome::kGold, .size = 13, .stroke_scale = 0.2f
+                    .fill = Chrome::kGold, .size = 13, .stroke_scale = 0.1f
                 });
             }
         }
         ctx.translate(0, height / 2 - 11);
         ctx.draw_text(I18n::petal_name(pid), {
-            .fill = Chrome::kTitle, .size = 12, .stroke_scale = 0.2f
+            .fill = Chrome::kTitle, .size = 12, .stroke_scale = 0.1f
         });
         ctx.translate(0, -(height / 2 - 11));
     }
@@ -282,10 +282,10 @@ public:
         draw_loadout_background(ctx, petal_id);
         if (petal_equipped(petal_id)) {
             ctx.scale(60.f / width);
-            ctx.set_stroke(0xff3ecf8e);
-            ctx.set_line_width(3);
+            ctx.set_stroke(0xaa3ecf8e);
+            ctx.set_line_width(2.5f);
             ctx.begin_path();
-            ctx.round_rect(-width / 2 - 2, -height / 2 - 2, width + 4, height + 4, 5);
+            ctx.round_rect(-width / 2 - 2, -height / 2 - 2, width + 4, height + 4, 10);
             ctx.stroke();
         }
     }
@@ -312,10 +312,10 @@ public:
 
 // Drawer: slides up from above the bottom-left buttons
 static Element *make_drawer(std::vector<Element *> children, uint8_t panel_id) {
-    Element *elt = new Ui::VContainer(children, 16, 10, {
+    Element *elt = new Ui::VContainer(children, 18, 12, {
         .fill = Chrome::kPanelDeep,
-        .line_width = 7,
-        .round_radius = 4,
+        .line_width = 0,
+        .round_radius = Chrome::kRadius,
         .animate = [](Element *elt, Renderer &ctx){
             ctx.translate(0, (1.f - (float) elt->animation) * (elt->height + 16.f));
         },
@@ -419,7 +419,7 @@ public:
             float y = cy + std::sin(ang) * rad;
             ctx.set_fill(0xffc4b59a);
             ctx.begin_path();
-            ctx.round_rect(x - slot / 2, y - slot / 2, slot, slot, 4);
+            ctx.round_rect(x - slot / 2, y - slot / 2, slot, slot, 10);
             ctx.fill();
             if (Game::craft_tray_id != PetalID::kNone && Game::craft_tray_count > i) {
                 RenderContext guard(&ctx);
@@ -484,7 +484,7 @@ public:
         if (petal_id == PetalID::kNone || petal_id >= PetalID::kNumPetals) {
             ctx.set_fill(0xffb7a88c);
             ctx.begin_path();
-            ctx.round_rect(-width / 2, -height / 2, width, height, 3);
+            ctx.round_rect(-width / 2, -height / 2, width, height, 10);
             ctx.fill();
             return;
         }
@@ -497,10 +497,10 @@ public:
             draw_loadout_background(ctx, petal_id);
         }
         if (selected) {
-            ctx.set_stroke(0xff00e5ff);
-            ctx.set_line_width(3);
+            ctx.set_stroke(0xaa3ecf8e);
+            ctx.set_line_width(2.5f);
             ctx.begin_path();
-            ctx.round_rect(-width / 2, -height / 2, width, height, 3);
+            ctx.round_rect(-width / 2, -height / 2, width, height, 10);
             ctx.stroke();
         }
         {
@@ -707,19 +707,19 @@ Element *Ui::make_game_side_buttons() {
         new Ui::Button(48, 48,
             iconpark_side_icon(iconpark_backpack),
             on_inventory_btn, inventory_active,
-            { .fill = Chrome::kBtnSlate, .line_width = 5, .round_radius = 3 }),
+            { .fill = Chrome::kBtnSlate, .line_width = 0, .round_radius = Chrome::kRadius }),
         new Ui::Button(48, 48,
             iconpark_side_icon(iconpark_star),
             on_talents_btn, talents_active,
-            { .fill = Chrome::kBtnBronze, .line_width = 5, .round_radius = 3 }),
+            { .fill = Chrome::kBtnBronze, .line_width = 0, .round_radius = Chrome::kRadius }),
         new Ui::Button(48, 48,
             iconpark_side_icon(iconpark_merge),
             on_craft_btn, craft_active,
-            { .fill = Chrome::kBtnMoss, .line_width = 5, .round_radius = 3 }),
+            { .fill = Chrome::kBtnMoss, .line_width = 0, .round_radius = Chrome::kRadius }),
         new Ui::Button(48, 48,
             iconpark_side_icon(iconpark_gift),
             on_special_btn, special_active,
-            { .fill = Chrome::kBtnClay, .line_width = 5, .round_radius = 3 })
+            { .fill = Chrome::kBtnClay, .line_width = 0, .round_radius = Chrome::kRadius })
     }, gap, gap, {
         .should_render = [](){
             return Game::should_render_game_ui()
@@ -751,7 +751,7 @@ Element *Ui::make_inventory_panel() {
             new Ui::Button(36, 36,
                 new Ui::DynamicText(18, [](){ return std::string{"X"}; }),
                 on_close_inventory, nullptr,
-                { .fill = Chrome::kBtnDanger, .line_width = 5, .round_radius = 3 }),
+                { .fill = Chrome::kBtnDanger, .line_width = 0, .round_radius = Chrome::kRadius }),
             0, 10, {}
         ),
         new Ui::DynamicText(15, [](){
@@ -767,14 +767,14 @@ Element *Ui::make_inventory_panel() {
                     : (bag_stack_mode ? "Stack" : "Expand");
             }, { .fill = Chrome::kBody }),
             new Ui::TextInput(bag_search_text, Input::is_mobile ? 120.f : 168.f, 32, 24, {
-                .fill = Chrome::kPanelInset, .line_width = 4, .round_radius = 3, .no_animation = 1
+                .fill = Chrome::kPanelInset, .line_width = 0, .round_radius = Chrome::kRadius, .no_animation = 1
             }),
             new Ui::Button(Input::is_mobile ? 96.f : 84.f, 32,
                 new Ui::DynamicText(14, [](){
                     return I18n::use_chinese ? "整理" : "Compact";
                 }),
                 on_compact_bag, nullptr,
-                { .fill = Chrome::kBtnBronze, .line_width = 5, .round_radius = 3 })
+                { .fill = Chrome::kBtnBronze, .line_width = 0, .round_radius = Chrome::kRadius })
         }, 0, 10, { .h_justify = Style::Left, .no_animation = 1 }),
         make_bag_scroll(),
         new Ui::DynamicText(13, [](){
@@ -787,10 +787,10 @@ Element *Ui::make_inventory_panel() {
                 ? std::format("材料库 {}　·　可合成背包 {}（C）", bank, bag)
                 : std::format("Bank {} · craftable bag {} (C)", bank, bag);
         }, { .fill = Chrome::kMuted })
-    }, 16, 10, {
+    }, 18, 12, {
         .fill = Chrome::kPanelDeep,
-        .line_width = 7,
-        .round_radius = 4,
+        .line_width = 0,
+        .round_radius = Chrome::kRadius,
         // Mobile: snap open (slide lerp felt like “scale lag” on bag expand)
         .animate = [](Element *elt, Renderer &ctx){
             elt->width = (Input::is_mobile ? 360.f : kBagPanelW) + 32.f;
@@ -807,10 +807,10 @@ Element *Ui::make_inventory_panel() {
             if (Ui::UiLoadout::num_petals_selected != 0
                 && loadout_drag_over_bag(mx, my)) {
                 ctx.set_global_alpha(0.4f + 0.12f * (float) sin(Game::timestamp / 140.0));
-                ctx.set_stroke(Chrome::kRimBrass);
-                ctx.set_line_width(5);
+                ctx.set_stroke(0x88ffffff);
+                ctx.set_line_width(3);
                 ctx.begin_path();
-                ctx.round_rect(-elt->width / 2, -elt->height / 2, elt->width, elt->height, 4);
+                ctx.round_rect(-elt->width / 2, -elt->height / 2, elt->width, elt->height, Chrome::kRadius);
                 ctx.stroke();
                 ctx.set_global_alpha(1.f);
             }
@@ -872,7 +872,7 @@ Element *Ui::make_talents_panel() {
                     }, { .fill = Chrome::kBody })
                 }, 0, 3, {}),
                 on_talent_hp, nullptr,
-                { .fill = Chrome::kBtnMoss, .line_width = 5, .round_radius = 3 }),
+                { .fill = Chrome::kBtnMoss, .line_width = 0, .round_radius = Chrome::kRadius }),
             new Ui::Button(158, 60,
                 new Ui::VContainer({
                     new Ui::DynamicText(16, [](){
@@ -885,7 +885,7 @@ Element *Ui::make_talents_panel() {
                     }, { .fill = Chrome::kBody })
                 }, 0, 3, {}),
                 on_talent_rot, nullptr,
-                { .fill = Chrome::kBtnSlate, .line_width = 5, .round_radius = 3 })
+                { .fill = Chrome::kBtnSlate, .line_width = 0, .round_radius = Chrome::kRadius })
         }, 0, 12, {}),
         new Ui::DynamicText(13, [](){
             uint32_t lv = talent_player_level();
@@ -924,11 +924,11 @@ Element *Ui::make_craft_panel() {
                         return I18n::use_chinese ? "全部合成" : "Craft All";
                     }),
                     on_craft_all, nullptr,
-                    { .fill = Chrome::kBtnBronze, .line_width = 5, .round_radius = 3 }),
+                    { .fill = Chrome::kBtnBronze, .line_width = 0, .round_radius = Chrome::kRadius }),
                 new Ui::Button(36, 34,
                     new Ui::DynamicText(16, [](){ return std::string{"X"}; }),
                     on_close_craft, nullptr,
-                    { .fill = Chrome::kBtnDanger, .line_width = 5, .round_radius = 3 })
+                    { .fill = Chrome::kBtnDanger, .line_width = 0, .round_radius = Chrome::kRadius })
             }, 0, 8, {}),
             0, 10, {}
         ),
@@ -940,7 +940,7 @@ Element *Ui::make_craft_panel() {
                         return I18n::use_chinese ? "合成" : "Craft";
                     }),
                     on_craft_once, nullptr,
-                    { .fill = Chrome::kBtnMoss, .line_width = 5, .round_radius = 3 }),
+                    { .fill = Chrome::kBtnMoss, .line_width = 0, .round_radius = Chrome::kRadius }),
                 new Ui::DynamicText(14, [](){
                     if (Game::craft_tray_id == PetalID::kNone)
                         return I18n::use_chinese
@@ -965,10 +965,10 @@ Element *Ui::make_craft_panel() {
         new Ui::DynamicText(14, [](){ return Game::craft_status; }, {
             .fill = Chrome::kGold, .h_justify = Style::Left
         })
-    }, 16, 10, {
+    }, 18, 12, {
         .fill = Chrome::kPanelDeep,
-        .line_width = 7,
-        .round_radius = 4,
+        .line_width = 0,
+        .round_radius = Chrome::kRadius,
         .animate = [](Element *elt, Renderer &ctx){
             ctx.translate(0, (1.f - (float) elt->animation) * (elt->height + 16.f));
         },
@@ -1014,7 +1014,7 @@ Element *Ui::make_special_craft_panel() {
                         : std::format("Ant·{}", Craft::buy_special_cost(PetalID::kAntennae));
                 }),
                 on_buy_antennae, nullptr,
-                { .fill = Chrome::kBtnBronze, .line_width = 5, .round_radius = 3 }),
+                { .fill = Chrome::kBtnBronze, .line_width = 0, .round_radius = Chrome::kRadius }),
             new Ui::Button(118, 34,
                 new Ui::DynamicText(13, [](){
                     return I18n::use_chinese
@@ -1022,7 +1022,7 @@ Element *Ui::make_special_craft_panel() {
                         : std::format("Accel·{}", Craft::buy_special_cost(PetalID::kAccelerator));
                 }),
                 on_buy_accelerator, nullptr,
-                { .fill = Chrome::kBtnSlate, .line_width = 5, .round_radius = 3 }),
+                { .fill = Chrome::kBtnSlate, .line_width = 0, .round_radius = Chrome::kRadius }),
             new Ui::Button(118, 34,
                 new Ui::DynamicText(13, [](){
                     return I18n::use_chinese
@@ -1030,7 +1030,7 @@ Element *Ui::make_special_craft_panel() {
                         : std::format("Mag·{}", Craft::buy_special_cost(PetalID::kMagnet));
                 }),
                 on_buy_magnet, nullptr,
-                { .fill = Chrome::kBtnClay, .line_width = 5, .round_radius = 3 })
+                { .fill = Chrome::kBtnClay, .line_width = 0, .round_radius = Chrome::kRadius })
         }, 0, 8, { .h_justify = Style::Left }),
         new Ui::DynamicText(14, [](){
             return I18n::use_chinese
