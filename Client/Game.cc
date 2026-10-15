@@ -9,6 +9,7 @@
 #include <Client/Storage.hh>
 #include <Client/Ui/Extern.hh>
 #include <Client/Ui/InGame/GameInfo.hh>
+#include <Client/Ui/InGame/Loadout.hh>
 #include <Client/Ui/TextInput.hh>
 
 #include <Shared/Binary.hh>
@@ -648,7 +649,8 @@ void Game::tick(double time) {
     double tick_start = Debug::get_timestamp();
     Game::timestamp = time;
     Ui::dt = time - g_last_time;
-    Ui::lerp_amount = 1 - pow(1 - 0.24, Ui::dt * 60 / 1000);
+    // Slightly snappier entity lerp (was 0.24); still smooth under variable dt
+    Ui::lerp_amount = 1 - pow(1 - 0.28, Ui::dt * 60 / 1000);
     g_last_time = time;
     simulation.tick();
     
@@ -671,9 +673,20 @@ void Game::tick(double time) {
         player_id = simulation.get_ent(camera_id).get_player();
         Entity const &player = simulation.get_ent(player_id);
         Game::loadout_count = player.get_loadout_count();
-        for (uint32_t i = 0; i < MAX_SLOT_COUNT + Game::loadout_count; ++i) {
-            cached_loadout[i] = player.get_loadout_ids(i);
-            Game::seen_petals[cached_loadout[i]] = 1;
+        // Keep optimistic swaps until the server snapshot catches up — otherwise
+        // every frame stomps bag/slot UI mid-drag (esp. mobile tap-to-equip).
+        for (uint32_t i = 0; i < MAX_SLOT_COUNT + Game::loadout_count
+            && i < 2 * MAX_SLOT_COUNT; ++i) {
+            PetalID::T server_id = player.get_loadout_ids(i);
+            Ui::UiLoadoutPetal *slot = Ui::UiLoadout::petal_slots[i];
+            if (slot != nullptr && slot->no_change_ticks > 0) {
+                if (server_id == cached_loadout[i])
+                    slot->no_change_ticks = 0;
+            } else {
+                cached_loadout[i] = server_id;
+            }
+            if (cached_loadout[i] < PetalID::kNumPetals)
+                Game::seen_petals[cached_loadout[i]] = 1;
         }
         score = player.get_score();
         overlevel_timer = player.get_overlevel_timer();
@@ -693,7 +706,17 @@ void Game::tick(double time) {
             Game::loadout_count = (uint8_t) loadout_slots_at_level(camera.get_respawn_level());
             for (uint32_t i = 0; i < MAX_SLOT_COUNT + Game::loadout_count
                 && i < 2 * MAX_SLOT_COUNT; ++i) {
-                cached_loadout[i] = camera.get_inventory(i);
+                PetalID::T server_id = camera.get_inventory(i);
+                Ui::UiLoadoutPetal *slot = Ui::UiLoadout::petal_slots[i];
+                // Dead UI does not run LoadoutPetal should_render — tick down here
+                if (slot != nullptr && slot->no_change_ticks > 0) {
+                    if (server_id == cached_loadout[i])
+                        slot->no_change_ticks = 0;
+                    else if (--slot->no_change_ticks == 0)
+                        cached_loadout[i] = server_id;
+                } else {
+                    cached_loadout[i] = server_id;
+                }
                 if (cached_loadout[i] < PetalID::kNumPetals)
                     Game::seen_petals[cached_loadout[i]] = 1;
             }
@@ -715,10 +738,13 @@ void Game::tick(double time) {
     }
 
     //event poll
+    // Mobile: deliver every active touch every frame so the element that already
+    // captured it can keep `focused`. New captures are gated on !saturated inside
+    // Element::poll_events — skipping saturated here made joystick/A/B lose focus
+    // after one frame and zeroed movement.
     if (Input::is_mobile) {
         for (auto &x : Input::touches) {
             Input::Touch const &touch = x.second;
-            if (touch.saturated) continue;
             Game::poll_ui_event({ .id = touch.id, .x = touch.x, .y = touch.y, .press = 1 });
         }
     }
@@ -818,8 +844,19 @@ void Game::tick(double time) {
             Input::game_inputs.x = 300 * (Input::keys_held.contains('D') - Input::keys_held.contains('A') + Input::keys_held.contains(39) - Input::keys_held.contains(37));
             Input::game_inputs.y = 300 * (Input::keys_held.contains('S') - Input::keys_held.contains('W') + Input::keys_held.contains(40) - Input::keys_held.contains(38));
         } else {
-           Input::game_inputs.x = (Input::mouse_x - renderer.width / 2) / Ui::scale;
-           Input::game_inputs.y = (Input::mouse_y - renderer.height / 2) / Ui::scale;
+            // Soft mouse magnitude: near-cursor fine control, saturates by 200 (server full accel)
+            float mx = (Input::mouse_x - renderer.width / 2) / Ui::scale;
+            float my = (Input::mouse_y - renderer.height / 2) / Ui::scale;
+            float dist = std::hypot(mx, my);
+            if (dist <= 1e-3f) {
+                Input::game_inputs.x = 0;
+                Input::game_inputs.y = 0;
+            } else {
+                float capped = dist >= 200.f ? 200.f : 200.f * std::pow(dist / 200.f, 0.9f);
+                float s = capped / dist;
+                Input::game_inputs.x = mx * s;
+                Input::game_inputs.y = my * s;
+            }
         }
         // primary = Space / LMB; secondary = Shift / RMB (RMB suppressed while chat RMB menu open)
         uint8_t primary = Input::keys_held.contains(' ')

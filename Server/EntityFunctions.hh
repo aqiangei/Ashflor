@@ -11,6 +11,10 @@ void inflict_heal(Simulation *, Entity &, float);
 
 void entity_on_death(Simulation *, Entity const &);
 
+// True for real players / CPU bots, their petals, and flower-owned summons.
+// False for wild mobs and digger (kFlower without camera parent).
+bool is_player_faction(Simulation *, Entity const &);
+
 EntityID find_nearest_enemy(Simulation *, Entity const &, float);
 
 void entity_set_despawn_tick(Entity &, game_tick_t);

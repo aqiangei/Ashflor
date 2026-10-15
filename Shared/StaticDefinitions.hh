@@ -222,6 +222,21 @@ namespace PetalID {
         kWebUnusual,
         kWebEpic,
         kWebMythic,
+        // Jungle petals (append only; after rarity ladders so ladder IDs stay stable)
+        kLeafBlade,
+        kJungleNeedle,
+        kEmeraldShell,
+        kVineWhip,
+        kSpiderFang,
+        kPoisonSpore,
+        kThornRing,
+        kMantisClaw,
+        kToxicHeart,
+        kSporeCloud,
+        kAncientSeed,
+        kHeartwood,
+        // Append-only ladder fill (Epic→Legendary was skipping; craft looks up by name+rarity)
+        kStingerLegendary,
         kNumPetals
     };
 };
@@ -267,6 +282,20 @@ namespace MobID {
         kFallenKnight,
         // Boss — Slice C full AI; Slice B may omit from zone spawns
         kFallenKing,
+        // Jungle mobs (append only)
+        kLeafBeetle,
+        kJungleMite,
+        kVineBug,
+        kJungleSpider,
+        kEmeraldMantis,
+        kPoisonToad,
+        kSporeMushroom,
+        kCarnivorousPlant,
+        kRiverCrab,
+        kStoneGuardian,
+        kJungleWasp,
+        // Boss — Heart of Jungle (v1 elite_tank)
+        kAncientTreant,
         kNumMobs
     };
 };

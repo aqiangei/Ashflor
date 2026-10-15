@@ -88,9 +88,38 @@ static void ensure_fallen_king(Simulation *sim) {
     respawn_ticks = 0;
 }
 
+static void ensure_ancient_treant(Simulation *sim) {
+    if (sim->map_id != MapID::kJungle) return;
+    static bool ever_spawned = false;
+    static int32_t respawn_ticks = 0;
+    bool alive = false;
+    sim->for_each<kMob>([&](Simulation *, Entity &m) {
+        if (m.get_mob_id() == MobID::kAncientTreant && !m.pending_delete) alive = true;
+    });
+    if (alive) return;
+    if (ever_spawned) {
+        if (respawn_ticks <= 0)
+            respawn_ticks = 45 * (int32_t)TPS;
+        if (--respawn_ticks > 0) return;
+    }
+    // Heart of Jungle — north of spawn plaza
+    float kx = ARENA_WIDTH * 0.5f;
+    float ky = ARENA_HEIGHT * 0.5f - 4200.f;
+    Map::resolve_circle_terrain(sim->map_id, kx, ky, 120.f);
+    alloc_mob(sim, MobID::kAncientTreant, kx, ky, NULL_ENTITY, [](Entity &mob) {
+        mob.score_reward = MOB_DATA[MobID::kAncientTreant].xp;
+        BitMath::set(mob.flags, EntityFlags::kHasCulling);
+        mob.detection_radius = 1400.f;
+        mob.zone = 0;
+    });
+    ever_spawned = true;
+    respawn_ticks = 0;
+}
+
 void Simulation::on_tick() {
     spatial_hash.refresh(ARENA_WIDTH, ARENA_HEIGHT);
     ensure_fallen_king(this);
+    ensure_ancient_treant(this);
     if (frand() < 1.0f / TPS) {
         for (uint32_t i = 0; i < 10; ++i) {
             Vector v;

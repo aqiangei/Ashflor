@@ -279,15 +279,19 @@ void player_spawn(Simulation *sim, Entity &camera, Entity &player) {
         spawn_x = MAP_SPAWN_X + (frand() - 0.5f) * 240.f;
         spawn_y = MAP_SPAWN_Y + (frand() - 0.5f) * 240.f;
     } else {
+        // Checkpoint-like: tight bias to suitable-zone center so mid/high-level
+        // respawns stay near progress band (not full-zone lottery).
         ZoneDefinition const &zone = map_zones(sim->map_id)[
             Map::get_suitable_difficulty_zone(sim->map_id, power)];
-        spawn_x = lerp(zone.left, zone.right, frand());
-        spawn_y = lerp(zone.top, zone.bottom, frand());
-        for (uint32_t tries = 0; tries < 24; ++tries) {
+        float zw = zone.right - zone.left;
+        float zh = zone.bottom - zone.top;
+        spawn_x = 0.5f * (zone.left + zone.right) + (frand() - 0.5f) * 0.22f * zw;
+        spawn_y = 0.5f * (zone.top + zone.bottom) + (frand() - 0.5f) * 0.22f * zh;
+        for (uint32_t tries = 0; tries < 28; ++tries) {
             if (!Map::circle_hits_impassable(sim->map_id, spawn_x, spawn_y, BASE_FLOWER_RADIUS + 8))
                 break;
-            spawn_x = lerp(zone.left, zone.right, frand());
-            spawn_y = lerp(zone.top, zone.bottom, frand());
+            spawn_x = 0.5f * (zone.left + zone.right) + (frand() - 0.5f) * 0.40f * zw;
+            spawn_y = 0.5f * (zone.top + zone.bottom) + (frand() - 0.5f) * 0.40f * zh;
         }
     }
     Map::resolve_circle_terrain(sim->map_id, spawn_x, spawn_y, BASE_FLOWER_RADIUS + 8);

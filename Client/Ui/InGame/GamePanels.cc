@@ -148,7 +148,7 @@ public:
                 || static_pos >= 2 * MAX_SLOT_COUNT) { dragging = 0; return; }
             UiLoadoutPetal *p = Ui::UiLoadout::petal_slots[static_pos];
             float dist = std::hypot(mx - press_x, my - press_y);
-            constexpr float kClickSlop = 14.f;
+            float const kClickSlop = Input::pointer_slop();
             if (released) {
                 dragging = 0;
                 drag_touch = (uint32_t)-1;
@@ -177,8 +177,21 @@ public:
     }
     void refactor() override {
         visible = style.should_render();
-        width = 64.f;
-        height = 72.f;
+        // Larger cells on mobile so stack/expand reflow stays tappable
+        width = Input::is_mobile ? 72.f : 64.f;
+        height = Input::is_mobile ? 80.f : 72.f;
+    }
+    void poll_events(ScreenEvent const &event) override {
+        if (!Input::is_mobile) {
+            Element::poll_events(event);
+            return;
+        }
+        float const ow = width, oh = height;
+        width = ow + 12.f;
+        height = oh + 12.f;
+        Element::poll_events(event);
+        width = ow;
+        height = oh;
     }
     uint8_t slot_static() const {
         return bag_slot_static(bag_index);
@@ -323,11 +336,13 @@ static Element *make_drawer(std::vector<Element *> children, uint8_t panel_id) {
 
 static constexpr float kBagPanelW = 420.f;
 static constexpr float kBagScrollH = 360.f;
+static constexpr float kBagScrollHMobile = 280.f;
 
 static Element *make_bag_scroll() {
-    // Half-size cells → denser 5-col grid; wheel always scrolls while bag open
+    // Mobile: 4 cols + taller cells; desktop keeps denser 5-col grid
     std::vector<Element *> rows;
-    constexpr uint8_t kCols = 5;
+    uint8_t const kCols = Input::is_mobile ? 4 : 5;
+    float const scroll_h = Input::is_mobile ? kBagScrollHMobile : kBagScrollH;
     uint8_t row_count = (MAX_SLOT_COUNT + kCols - 1) / kCols;
     for (uint8_t row = 0; row < row_count; ++row) {
         std::vector<Element *> cells;
@@ -339,7 +354,7 @@ static Element *make_bag_scroll() {
         rows.push_back(new Ui::HContainer(cells, 0, 6, { .no_animation = 1 }));
     }
     Element *grid = new Ui::VContainer(rows, 0, 6, { .no_animation = 1 });
-    auto *scroll = new Ui::ScrollContainer(grid, kBagScrollH);
+    auto *scroll = new Ui::ScrollContainer(grid, scroll_h);
     scroll->always_capture_wheel = 1;
     return scroll;
 }
@@ -745,16 +760,16 @@ Element *Ui::make_inventory_panel() {
                 : std::format("Coins {} · click=equip · hold-drag · drop=ground", Game::coins);
         }, { .fill = Chrome::kGold }),
         new Ui::HContainer({
-            new Ui::ToggleButton(32, &bag_stack_mode),
+            new Ui::ToggleButton(Input::is_mobile ? 44.f : 32.f, &bag_stack_mode),
             new Ui::DynamicText(15, [](){
                 return I18n::use_chinese
                     ? (bag_stack_mode ? "堆叠" : "展开")
                     : (bag_stack_mode ? "Stack" : "Expand");
             }, { .fill = Chrome::kBody }),
-            new Ui::TextInput(bag_search_text, 168, 32, 24, {
+            new Ui::TextInput(bag_search_text, Input::is_mobile ? 120.f : 168.f, 32, 24, {
                 .fill = Chrome::kPanelInset, .line_width = 4, .round_radius = 3, .no_animation = 1
             }),
-            new Ui::Button(84, 32,
+            new Ui::Button(Input::is_mobile ? 96.f : 84.f, 32,
                 new Ui::DynamicText(14, [](){
                     return I18n::use_chinese ? "整理" : "Compact";
                 }),
@@ -776,11 +791,21 @@ Element *Ui::make_inventory_panel() {
         .fill = Chrome::kPanelDeep,
         .line_width = 7,
         .round_radius = 4,
+        // Mobile: snap open (slide lerp felt like “scale lag” on bag expand)
         .animate = [](Element *elt, Renderer &ctx){
-            elt->width = kBagPanelW + 32.f;
-            ctx.translate(0, (1.f - (float) elt->animation) * (elt->height + 24.f));
+            elt->width = (Input::is_mobile ? 360.f : kBagPanelW) + 32.f;
+            if (!Input::is_mobile)
+                ctx.translate(0, (1.f - (float) elt->animation) * (elt->height + 24.f));
+            float mx = Input::mouse_x, my = Input::mouse_y;
+            if (Input::is_mobile && Ui::UiLoadout::num_petals_selected != 0) {
+                for (auto const &[id, touch] : Input::touches) {
+                    mx = touch.x;
+                    my = touch.y;
+                    break;
+                }
+            }
             if (Ui::UiLoadout::num_petals_selected != 0
-                && loadout_drag_over_bag(Input::mouse_x, Input::mouse_y)) {
+                && loadout_drag_over_bag(mx, my)) {
                 ctx.set_global_alpha(0.4f + 0.12f * (float) sin(Game::timestamp / 140.0));
                 ctx.set_stroke(Chrome::kRimBrass);
                 ctx.set_line_width(5);
@@ -792,7 +817,8 @@ Element *Ui::make_inventory_panel() {
         },
         .should_render = [](){ return bag_ui_open(); },
         .h_justify = Style::Left,
-        .v_justify = Style::Bottom
+        .v_justify = Style::Bottom,
+        .no_animation = Input::is_mobile ? (uint8_t) 1 : (uint8_t) 0
     });
     body->x = Input::is_mobile ? 92.f : 72.f;
     body->y = -20;

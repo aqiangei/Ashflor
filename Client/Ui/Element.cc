@@ -189,9 +189,13 @@ void Element::poll_events(ScreenEvent const &event) {
             touch_id = (uint32_t)-1;
             focused = 0;
         }
-        if (touch_id == (uint32_t)-1) {        
+        if (touch_id == (uint32_t)-1) {
             if (std::abs(event.x - screen_x) > width * Ui::scale / 2
             || std::abs(event.y - screen_y) > height * Ui::scale / 2) return;
+            // Only a fresh (unsaturated) touch may newly capture an element;
+            // saturated touches are re-delivered solely for their owner above.
+            auto claim = Input::touches.find(event.id);
+            if (claim == Input::touches.end() || claim->second.saturated) return;
             Ui::focused = this;
             touch_id = event.id;
         }

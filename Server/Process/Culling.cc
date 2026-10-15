@@ -5,7 +5,8 @@
 #include <Shared/Simulation.hh>
 #include <Shared/StaticData.hh>
 
-constexpr float CULL_EXTRA_RADIUS = 250;
+// Slightly wider AOI margin so edge entities stay simulated / less pop-in
+constexpr float CULL_EXTRA_RADIUS = 320;
 
 void tick_culling_behavior(Simulation *sim, Entity &ent) {
     float fov = fclamp(ent.get_fov(), BASE_FOV * 0.1, BASE_FOV);

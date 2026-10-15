@@ -3,9 +3,6 @@
     <head>
         <meta charset="utf-8">
         <meta http-equiv="Cache-Control" content="no-cache">
-        <link rel="preconnect" href="https://fonts.googleapis.com">
-        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-        <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@700;800;900&display=swap" rel="stylesheet">
         <style>
             * {
                 margin: 0px;
@@ -18,6 +15,8 @@
                 background: #0a0a0a;
                 font-family: "Noto Sans SC", "Microsoft YaHei", "PingFang SC", system-ui, sans-serif;
                 font-weight: 800;
+                touch-action: none;
+                overscroll-behavior: none;
             }
             /* Font probe only — must never show as a "loading page" */
             #font-loader {
@@ -40,6 +39,9 @@
                 cursor: default;
                 z-index: 1;
                 background: #000000;
+                touch-action: none;
+                -webkit-user-select: none;
+                user-select: none;
             }
             /* DOM text fields live above the canvas */
             body > input[type="text"] {
@@ -87,10 +89,16 @@
                 font-weight: 700;
                 white-space: nowrap;
                 min-height: 1.4em;
+                max-width: min(92vw, 420px);
+                text-align: center;
             }
             #loading.is-error {
                 color: #ff8a80;
                 animation: none;
+                white-space: normal;
+                line-height: 1.35;
+                padding: 0 12px;
+                overflow: visible;
             }
             #loading .label {
                 display: inline;
@@ -334,20 +342,8 @@
         })();
 
         document.addEventListener("DOMContentLoaded", () => {
-            // deploy.sh sed-replaces versionHash; localStorage keeps assets sticky after first good load
-            var versionHash = '0';
-            var cacheV = (function () {
-                try {
-                    return localStorage['version_hash'] || versionHash;
-                } catch (e) {
-                    return versionHash;
-                }
-            })();
-            window.onerror = window.onunhandledrejection = function () {
-                if (versionHash === '0') return;
-                try { delete window.localStorage['version_hash']; } catch (e) {}
-                window.location.reload();
-            };
+            // deploy-update.ps1 bumps this digits-only string each release
+            var cacheV = '21531';
             var hidden = false;
             var loadingEl = document.getElementById("loading");
             var trackEl = document.getElementById("loading-track");
@@ -642,7 +638,23 @@
                 setLoadingMessage("初始化画面", true);
             };
             Module.onAbort = function (what) {
-                setLoadingMessage("加载失败: " + String(what).slice(0, 80), false);
+                var reason = String(what == null ? "" : what).replace(/\s+/g, " ").trim();
+                if (!reason || reason === "undefined")
+                    reason = "内存不足或客户端异常，请强刷重试";
+                setLoadingMessage("加载失败：" + reason.slice(0, 120), false);
+            };
+            Module.printErr = function (text) {
+                try {
+                    console.error(text);
+                    var s = String(text || "");
+                    if (/Aborted\(/i.test(s) && !hidden) {
+                        var m = s.match(/Aborted\((.*)\)/);
+                        var detail = (m && m[1] && m[1] !== "undefined") ? m[1] : "内存不足或客户端异常";
+                        setLoadingMessage("加载失败：" + detail.slice(0, 120), false);
+                    } else if (/wasm|fetch|download|network|instantiate|Prepare/i.test(s) && !hidden) {
+                        setLoadingMessage("仍在下载客户端", true);
+                    }
+                } catch (e) {}
             };
 
             setLoadingMessage("加载中", true);
@@ -652,17 +664,25 @@
             }, 8000);
             setTimeout(function () {
                 if (!hidden) {
-                    setLoadingMessage("加载超时，请刷新或检查网络", false);
+                    setLoadingMessage("加载超时：客户端下载过慢，请切换网络后刷新", false);
                 }
-            }, 60000);
+            }, 120000);
 
-            var script = document.createElement('script');
-            script.src = 'gardn-client.js?v=' + cacheV;
-            script.async = true;
-            script.onerror = function () {
-                setLoadingMessage("加载失败：无法下载客户端脚本", false);
-            };
-            document.body.appendChild(script);
+            function loadClientScript(attempt) {
+                var script = document.createElement("script");
+                script.src = "gardn-client.js?v=" + cacheV + (attempt ? "&r=" + attempt : "");
+                script.async = true;
+                script.onerror = function () {
+                    if (attempt < 2) {
+                        setLoadingMessage("下载失败，正在重试 (" + (attempt + 1) + "/3)", true);
+                        setTimeout(function () { loadClientScript(attempt + 1); }, 900);
+                    } else {
+                        setLoadingMessage("加载失败：无法下载客户端脚本，请刷新重试", false);
+                    }
+                };
+                document.body.appendChild(script);
+            }
+            loadClientScript(0);
         });
     </script>
     </body>

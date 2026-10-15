@@ -78,12 +78,15 @@ void DOM::update_pos_and_dimension(char const *name, float x, float y, float w, 
         {
             const name = UTF8ToString($0);
             const elem = document.getElementById(name);
-            elem.style.left = ($1 - $3 / 2) / devicePixelRatio + "px";
-            elem.style.top = ($2 - $4 / 2) / devicePixelRatio + "px";
-            elem.style.width = ($3 / devicePixelRatio - 10) + "px";
-            elem.style.height = $4 / devicePixelRatio + "px";
+            const r = (typeof Module !== "undefined" && Module.ashflorDpr)
+                ? Module.ashflorDpr
+                : Math.min(window.devicePixelRatio || 1, 2);
+            elem.style.left = ($1 - $3 / 2) / r + "px";
+            elem.style.top = ($2 - $4 / 2) / r + "px";
+            elem.style.width = ($3 / r - 10) + "px";
+            elem.style.height = $4 / r + "px";
             // Keep ≥16px on mobile so iOS never zooms the page
-            const fs = Math.max(16, $4 / devicePixelRatio * 0.66);
+            const fs = Math.max(16, $4 / r * 0.66);
             elem.style["font-size"] = fs + "px";
         },
         name, x, y, w, h);

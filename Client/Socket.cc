@@ -169,7 +169,7 @@ void Socket::connect(std::string const url) {
         // App heartbeat — setInterval still fires (throttled) when rAF is frozen
         if (!Module._ashflorHbStarted) {
             Module._ashflorHbStarted = 1;
-            setInterval(sendHeartbeat, 4000);
+            setInterval(sendHeartbeat, 2500);
             document.addEventListener("visibilitychange", function() {
                 if (document.visibilityState !== "visible") return;
                 let s = Module.socket;

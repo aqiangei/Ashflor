@@ -190,14 +190,21 @@ void AccountStore::load() {
             while (ls >> v) rest.push_back(v);
             // craft_bank grew when Royal petals were appended; accept prior length.
             uint32_t bank_n = PetalID::kNumPetals;
-            // Accept saves from before rarity ladders (+43) and/or Royal petals (+12)
+            // Accept saves from before Stinger Legendary (+1), Jungle (+12), ladders (+43), Royal (+12)
+            constexpr uint32_t kStingerLegAdded = 1;
+            constexpr uint32_t kJungleAdded = 12;
             constexpr uint32_t kLadderAdded = 43;
             constexpr uint32_t kRoyalAdded = 12;
-            uint32_t const prev_ladder = PetalID::kNumPetals > kLadderAdded
-                ? (uint32_t)(PetalID::kNumPetals - kLadderAdded) : PetalID::kNumPetals;
-            uint32_t const prev_royal = prev_ladder > kRoyalAdded
-                ? prev_ladder - kRoyalAdded : prev_ladder;
-            if (rest.size() < bank_n && rest.size() >= prev_ladder)
+            uint32_t const n = (uint32_t)PetalID::kNumPetals;
+            uint32_t const prev_stinger = n > kStingerLegAdded ? n - kStingerLegAdded : n;
+            uint32_t const prev_jungle = prev_stinger > kJungleAdded ? prev_stinger - kJungleAdded : prev_stinger;
+            uint32_t const prev_ladder = prev_jungle > kLadderAdded ? prev_jungle - kLadderAdded : prev_jungle;
+            uint32_t const prev_royal = prev_ladder > kRoyalAdded ? prev_ladder - kRoyalAdded : prev_ladder;
+            if (rest.size() < bank_n && rest.size() >= prev_stinger)
+                bank_n = prev_stinger;
+            else if (rest.size() < bank_n && rest.size() >= prev_jungle)
+                bank_n = prev_jungle;
+            else if (rest.size() < bank_n && rest.size() >= prev_ladder)
                 bank_n = prev_ladder;
             else if (rest.size() < bank_n && rest.size() >= prev_royal)
                 bank_n = prev_royal;

@@ -29,6 +29,12 @@ void inflict_damage(Simulation *sim, EntityID const atk_id, EntityID const def_i
     DEBUG_ONLY(assert(!defender.pending_delete);)
     DEBUG_ONLY(assert(defender.has_component(kHealth));)
     if (defender.immunity_ticks > 0) return;
+    // No PvP: players, CPU bots, petals, and flower summons cannot hurt each other
+    if (sim->ent_alive(atk_id)) {
+        Entity &attacker = sim->get_ent(atk_id);
+        if (is_player_faction(sim, attacker) && is_player_faction(sim, defender))
+            return;
+    }
     if (type == DamageType::kContact) amt -= defender.armor;
     else if (type == DamageType::kPoison) amt -= defender.poison_armor;
     // Shield Sentinel: frontal damage reduction (~60% when hit from facing arc)

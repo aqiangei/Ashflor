@@ -4,8 +4,10 @@
 
 #include <cstdint>
 
-// Combat scaling inspired by community florr ×3-per-tier feel (AshFlor original table).
-// Common=0 → 1, Unusual→3, Rare→9, Epic→27, Legendary→81, Mythic→243; Unique≈Mythic*2.
+// Reference ×3-per-tier table (community florr feel). Petal ladders in PETAL_DATA are
+// already baked with this curve — do NOT multiply again at spawn. Use for tools /
+// new petals authored at Common base, or zone/UI display helpers.
+// Common→1, Unusual→3, Rare→9, Epic→27, Legendary→81, Mythic→243; Unique≈500.
 inline float rarity_combat_mult(uint8_t rarity) {
     static float const kMult[RarityID::kNumRarities] = {
         1.f, 3.f, 9.f, 27.f, 81.f, 243.f, 500.f

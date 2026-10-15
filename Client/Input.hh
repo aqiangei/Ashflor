@@ -47,6 +47,9 @@ namespace Input {
     extern uint8_t request_mobile;
     // True when joystick / A-B / touch-sized buttons should be active
     inline uint8_t mobile_controls() { return request_mobile; }
+    // Canvas-space click vs drag threshold (coords are already * dpr).
+    // Mobile needs ~18–25 CSS px so micro-jitter isn't treated as a drag.
+    inline float pointer_slop() { return is_mobile ? 52.f : 14.f; }
     //use these for game inputs that can be held down
     extern std::unordered_set<char> keys_held;
     extern std::unordered_set<char> keys_held_this_tick;

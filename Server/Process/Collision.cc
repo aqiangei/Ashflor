@@ -130,6 +130,9 @@ void on_collide(Simulation *sim, Entity &ent1, Entity &ent2) {
     }
 
     if (BOTH(kHealth) && !(ent1.get_team() == ent2.get_team())) {
+        // No PvP between players / CPU bots / their petals & summons
+        if (is_player_faction(sim, ent1) && is_player_faction(sim, ent2))
+            return;
         // Iron Guard intercepts enemy detached / despawning projectiles
         auto try_iron_guard = [&](Entity &guard, Entity &proj) {
             if (!guard.has_component(kPetal) || !proj.has_component(kPetal)) return false;

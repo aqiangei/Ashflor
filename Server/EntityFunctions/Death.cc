@@ -102,11 +102,11 @@ void entity_on_death(Simulation *sim, Entity const &ent) {
         if (!natural_despawn && !(BitMath::at(ent.flags, EntityFlags::kNoDrops))) {
             struct MobData const &mob_data = MOB_DATA[ent.get_mob_id()];
             std::vector<PetalID::T> success_drops = {};
-            // Guaranteed first roll + rarity-scaled bonus rolls (research: multi-drop feel)
+            // Guaranteed first roll + rarity-scaled bonus rolls (up to 4 on Unique)
             PetalID::T chosen = _roll_mob_drop(sim, ent.get_mob_id());
             if (chosen != PetalID::kNone)
                 success_drops.push_back(chosen);
-            float p2 = 0.22f + 0.04f * (float) mob_data.rarity;
+            float p2 = 0.26f + 0.045f * (float) mob_data.rarity;
             if (success_drops.size() < MAX_DROPS_PER_MOB && frand() < p2) {
                 PetalID::T extra = _roll_mob_drop(sim, ent.get_mob_id());
                 if (extra != PetalID::kNone)
@@ -114,8 +114,17 @@ void entity_on_death(Simulation *sim, Entity const &ent) {
             }
             if (mob_data.rarity >= RarityID::kEpic
                 && success_drops.size() < MAX_DROPS_PER_MOB) {
-                float p3 = 0.08f + 0.02f * (float) mob_data.rarity;
+                float p3 = 0.10f + 0.025f * (float) mob_data.rarity;
                 if (frand() < p3) {
+                    PetalID::T extra = _roll_mob_drop(sim, ent.get_mob_id());
+                    if (extra != PetalID::kNone)
+                        success_drops.push_back(extra);
+                }
+            }
+            if (mob_data.rarity >= RarityID::kLegendary
+                && success_drops.size() < MAX_DROPS_PER_MOB) {
+                float p4 = 0.05f + 0.02f * (float) (mob_data.rarity - RarityID::kLegendary);
+                if (frand() < p4) {
                     PetalID::T extra = _roll_mob_drop(sim, ent.get_mob_id());
                     if (extra != PetalID::kNone)
                         success_drops.push_back(extra);

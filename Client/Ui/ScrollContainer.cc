@@ -1,6 +1,7 @@
 #include <Client/Ui/ScrollContainer.hh>
 
 #include <Client/Ui/Extern.hh>
+#include <Client/Ui/InGame/Loadout.hh>
 #include <Client/Input.hh>
 
 #include <Helpers/Bits.hh>
@@ -41,7 +42,8 @@ void ScrollContainer::on_render(Renderer &ctx) {
             Input::wheel_delta = 0; // consume so camera zoom does not also fire
         }
         if (scroll->style.layer) lerp_scroll += (Input::mouse_y - Input::prev_mouse_y);
-        if (Input::is_mobile) {
+        // Don't scroll the bag while a petal drag is active (finger leaves cell)
+        if (Input::is_mobile && Ui::UiLoadout::num_petals_selected == 0) {
             auto iter = Input::touches.find(touch_id);
             if (iter != Input::touches.end())
                 lerp_scroll -= iter->second.dy / ratio;

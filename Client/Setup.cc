@@ -102,6 +102,9 @@ extern "C" {
 
 int setup_inputs() {
     EM_ASM({
+        // Cap DPR: full 3x canvas on phones makes Canvas2D feel lagged
+        Module.ashflorDpr = Math.min(window.devicePixelRatio || 1, 2);
+        const dpr = () => Module.ashflorDpr || Math.min(window.devicePixelRatio || 1, 2);
         window.addEventListener("keydown", (e) => {
             const typing = e.target && (e.target.tagName === "INPUT" || e.target.tagName === "TEXTAREA");
             const pass = e.code === "Escape" || e.code === "Enter" || e.code === "NumpadEnter" || e.code === "Tab";
@@ -118,31 +121,45 @@ int setup_inputs() {
         window.addEventListener("contextmenu", (e) => { e.preventDefault(); });
         window.addEventListener("mousedown", (e) => {
             //e.preventDefault();
-            _mouse_event(e.clientX * devicePixelRatio, e.clientY * devicePixelRatio, 0, +!!e.button);
+            const r = dpr();
+            _mouse_event(e.clientX * r, e.clientY * r, 0, +!!e.button);
         });
         window.addEventListener("mousemove", (e) => {
             //e.preventDefault();
-            _mouse_event(e.clientX * devicePixelRatio, e.clientY * devicePixelRatio, 1, +!!e.button);
+            const r = dpr();
+            _mouse_event(e.clientX * r, e.clientY * r, 1, +!!e.button);
         });
         window.addEventListener("mouseup", (e) => {
             //e.preventDefault();
-            _mouse_event(e.clientX * devicePixelRatio, e.clientY * devicePixelRatio, 2, +!!e.button);
+            const r = dpr();
+            _mouse_event(e.clientX * r, e.clientY * r, 2, +!!e.button);
         });
+        const touchOnField = (e) => {
+            const t = e.target;
+            return t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA");
+        };
         window.addEventListener("touchstart", (e) => {
+            if (!touchOnField(e)) e.preventDefault();
+            const r = dpr();
             for (const t of e.changedTouches)
-                _touch_event(t.clientX * devicePixelRatio, t.clientY * devicePixelRatio, 0, t.identifier);
+                _touch_event(t.clientX * r, t.clientY * r, 0, t.identifier);
         }, { passive: false });
         window.addEventListener("touchmove", (e) => {
+            if (!touchOnField(e)) e.preventDefault();
+            const r = dpr();
             for (const t of e.changedTouches)
-                _touch_event(t.clientX * devicePixelRatio, t.clientY * devicePixelRatio, 1, t.identifier);
+                _touch_event(t.clientX * r, t.clientY * r, 1, t.identifier);
         }, { passive: false });
         window.addEventListener("touchend", (e) => {
+            if (!touchOnField(e)) e.preventDefault();
+            const r = dpr();
             for (const t of e.changedTouches)
-                _touch_event(t.clientX * devicePixelRatio, t.clientY * devicePixelRatio, 2, t.identifier);
+                _touch_event(t.clientX * r, t.clientY * r, 2, t.identifier);
         }, { passive: false });
         window.addEventListener("touchcancel", (e) => {
+            const r = dpr();
             for (const t of e.changedTouches)
-                _touch_event(t.clientX * devicePixelRatio, t.clientY * devicePixelRatio, 2, t.identifier);
+                _touch_event(t.clientX * r, t.clientY * r, 2, t.identifier);
         }, { passive: false });
         window.addEventListener("paste", (e) => {
             try {
@@ -177,8 +194,10 @@ void main_loop() {
     EM_ASM({
         function loop(time)
         {
-            const width = Math.max(1, Math.round(innerWidth * devicePixelRatio));
-            const height = Math.max(1, Math.round(innerHeight * devicePixelRatio));
+            Module.ashflorDpr = Math.min(window.devicePixelRatio || 1, 2);
+            const r = Module.ashflorDpr;
+            const width = Math.max(1, Math.round(innerWidth * r));
+            const height = Math.max(1, Math.round(innerHeight * r));
             if (Module.canvas.width !== width || Module.canvas.height !== height) {
                 Module.canvas.width = width;
                 Module.canvas.height = height;
@@ -189,9 +208,13 @@ void main_loop() {
                 const samples = Module['profileFrames'];
                 samples.push(performance.now() - frameStart);
                 if (samples.length === 300) {
-                    samples.sort((a, b) => a - b);
-                    console.info('Ashflor frame work: median ' + samples[149].toFixed(1)
-                        + ' ms, P95 ' + samples[284].toFixed(1) + ' ms');
+                    const sorted = samples.slice().sort((a, b) => a - b);
+                    const med = sorted[149].toFixed(1);
+                    const p95 = sorted[284].toFixed(1);
+                    const max = sorted[299].toFixed(1);
+                    console.info('Ashflor frame work: median ' + med
+                        + ' ms, P95 ' + p95 + ' ms, max ' + max
+                        + ' ms (open with ?perf)');
                     samples.length = 0;
                 }
             }
@@ -208,8 +231,10 @@ void main_loop() {
 int setup_canvas() {
     EM_ASM({
         Module.canvas = document.getElementById("canvas");
-        Module.canvas.width = Math.max(1, Math.round(innerWidth * devicePixelRatio));
-        Module.canvas.height = Math.max(1, Math.round(innerHeight * devicePixelRatio));
+        Module.ashflorDpr = Math.min(window.devicePixelRatio || 1, 2);
+        const r = Module.ashflorDpr;
+        Module.canvas.width = Math.max(1, Math.round(innerWidth * r));
+        Module.canvas.height = Math.max(1, Math.round(innerHeight * r));
         Module.canvas.oncontextmenu = function() { return false; };
         window.onbeforeunload = function(e) { return "Are you sure?"; };
         Module.ctxs = [];

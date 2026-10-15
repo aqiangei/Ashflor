@@ -82,8 +82,11 @@ void MobileJoyStick::on_render(Renderer &ctx) {
             Input::game_inputs.x = 0;
             Input::game_inputs.y = 0;
         } else {
-            Input::game_inputs.x = dx;
-            Input::game_inputs.y = dy;
+            // Server treats magnitude >= 200 as full PLAYER_ACCELERATION.
+            // Stick radius is ~55 UI units — scale so full deflection = full speed.
+            float scale = 200.f / joystick_radius;
+            Input::game_inputs.x = dx * scale;
+            Input::game_inputs.y = dy * scale;
         }
     }
 
@@ -107,7 +110,14 @@ void MobileJoyStick::on_event(uint8_t event) {
         is_pressed = 1;
         if (Input::is_mobile)
             persistent_touch_id = touch_id;
-    } else if (event == UiEvent::kFocusLost || event == UiEvent::kClick) {
+    } else if (event == UiEvent::kClick) {
+        is_pressed = 0;
+        persistent_touch_id = (uint32_t)-1;
+    } else if (event == UiEvent::kFocusLost) {
+        // Finger still down: keep stick; release is handled in on_render.
+        if (Input::is_mobile && persistent_touch_id != (uint32_t)-1
+            && Input::touches.contains(persistent_touch_id))
+            return;
         is_pressed = 0;
         persistent_touch_id = (uint32_t)-1;
     }
@@ -196,7 +206,14 @@ public:
             held = 1;
             hold_id = Input::is_mobile ? touch_id : 0;
             BitMath::set(Input::game_inputs.flags, flag_bit);
-        } else if (event == UiEvent::kFocusLost || event == UiEvent::kClick) {
+        } else if (event == UiEvent::kClick) {
+            held = 0;
+            hold_id = (uint32_t)-1;
+            BitMath::unset(Input::game_inputs.flags, flag_bit);
+        } else if (event == UiEvent::kFocusLost) {
+            if (Input::is_mobile && hold_id != (uint32_t)-1
+                && Input::touches.contains(hold_id))
+                return;
             held = 0;
             hold_id = (uint32_t)-1;
             BitMath::unset(Input::game_inputs.flags, flag_bit);

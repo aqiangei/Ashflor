@@ -38,6 +38,26 @@ static void default_tick_idle_moving(Simulation *sim, Entity &ent) {
 
 static void default_tick_returning(Simulation *sim, Entity &ent, float speed = 1.0) {
     if (!sim->ent_alive(ent.get_parent())) {
+        // Zone-spawned wilds: walk back toward zone center (leash / deaggro)
+        if (BitMath::at(ent.flags, EntityFlags::kSpawnedFromZone)) {
+            MapZones const &zones = map_zones(sim->map_id);
+            if (ent.zone < zones.size()) {
+                ZoneDefinition const &z = zones[ent.zone];
+                float cx = 0.5f * (z.left + z.right);
+                float cy = 0.5f * (z.top + z.bottom);
+                Vector delta(cx - ent.get_x(), cy - ent.get_y());
+                float dist = delta.magnitude();
+                if (dist < 160.f || ent.ai_tick > 5 * TPS) {
+                    ent.ai_tick = 0;
+                    ent.ai_state = AIState::kIdle;
+                    return;
+                }
+                delta.set_magnitude(PLAYER_ACCELERATION * speed);
+                ent.acceleration = delta;
+                ent.set_angle(delta.angle());
+                return;
+            }
+        }
         ent.ai_tick = 0;
         ent.ai_state = AIState::kIdle;
         return;
@@ -54,6 +74,22 @@ static void default_tick_returning(Simulation *sim, Entity &ent, float speed = 1
     delta.set_magnitude(PLAYER_ACCELERATION * speed);
     ent.acceleration = delta;
     ent.set_angle(delta.angle());
+}
+
+static void _maybe_start_wild_leash(Simulation *sim, Entity &ent) {
+    if (!BitMath::at(ent.flags, EntityFlags::kSpawnedFromZone)) return;
+    if (sim->ent_alive(ent.get_parent())) return;
+    MapZones const &zones = map_zones(sim->map_id);
+    if (ent.zone >= zones.size()) return;
+    ZoneDefinition const &z = zones[ent.zone];
+    float cx = 0.5f * (z.left + z.right);
+    float cy = 0.5f * (z.top + z.bottom);
+    float leash = WILD_LEASH_MULT * (ent.detection_radius > 1.f ? ent.detection_radius : 500.f);
+    if (Vector(ent.get_x() - cx, ent.get_y() - cy).magnitude() > leash) {
+        ent.target = NULL_ENTITY;
+        ent.ai_state = AIState::kReturning;
+        ent.ai_tick = 0;
+    }
 }
 
 
@@ -100,6 +136,11 @@ static void tick_default_aggro(Simulation *sim, Entity &ent, float speed) {
         Entity &target = sim->get_ent(ent.target);
         Vector v(target.get_x() - ent.get_x(), target.get_y() - ent.get_y());
         _focus_lose_clause(ent, v);
+        if (!sim->ent_alive(ent.target)) {
+            _maybe_start_wild_leash(sim, ent);
+            tick_default_passive(sim, ent);
+            return;
+        }
         v.set_magnitude(PLAYER_ACCELERATION * speed);
         ent.acceleration = v;
         ent.set_angle(v.angle());
@@ -108,9 +149,15 @@ static void tick_default_aggro(Simulation *sim, Entity &ent, float speed) {
         if (!(ent.target == NULL_ENTITY)) {
             ent.ai_state = AIState::kIdle;
             ent.ai_tick = 0;
+            _maybe_start_wild_leash(sim, ent);
         }
-        //if (ent.ai_state != AIState::kReturning) 
+        if (ent.ai_state == AIState::kReturning) {
+            tick_default_passive(sim, ent);
+            return;
+        }
         ent.target = find_nearest_enemy(sim, ent, ent.detection_radius + ent.get_radius());
+        if (!sim->ent_alive(ent.target))
+            _maybe_start_wild_leash(sim, ent);
         tick_default_passive(sim, ent);
     }
 }
@@ -336,6 +383,96 @@ static void tick_phantom_orb(Simulation *sim, Entity &ent) {
 static float const kKingArenaX = ARENA_WIDTH * 0.5f + 4200.f;
 static float const kKingArenaY = ARENA_HEIGHT * 0.5f - 1800.f;
 static float const kKingArenaR = 1900.f;
+
+// Jungle Heart boss — phased chase / root slam (missile fan) / sapling summons
+static float const kTreantArenaX = ARENA_WIDTH * 0.5f;
+static float const kTreantArenaY = ARENA_HEIGHT * 0.5f - 4200.f;
+static float const kTreantArenaR = 1600.f;
+
+static void tick_ancient_treant(Simulation *sim, Entity &ent) {
+    _clamp_to_disk(ent, kTreantArenaX, kTreantArenaY, kTreantArenaR);
+    float hp = ent.max_health > 0.f ? ent.health / ent.max_health : 0.f;
+    uint8_t phase = hp > 0.65f ? 1 : (hp > 0.30f ? 2 : 3);
+    float chase = phase == 1 ? 0.55f : (phase == 2 ? 0.70f : 0.85f);
+    float skill_cd = phase == 1 ? 2.8f : (phase == 2 ? 2.2f : 1.7f);
+
+    if (!sim->ent_alive(ent.target)) {
+        if (!(ent.target == NULL_ENTITY)) {
+            ent.ai_state = 0;
+            ent.ai_tick = 0;
+            ent.target = NULL_ENTITY;
+        }
+        ent.target = find_nearest_enemy(sim, ent, ent.detection_radius + ent.get_radius());
+        if (!sim->ent_alive(ent.target)) {
+            tick_default_passive(sim, ent);
+            return;
+        }
+    }
+    Entity &target = sim->get_ent(ent.target);
+    Vector v(target.get_x() - ent.get_x(), target.get_y() - ent.get_y());
+    _focus_lose_clause(ent, v);
+    if (!sim->ent_alive(ent.target)) return;
+    float dist = v.magnitude();
+    ent.set_angle(v.angle());
+
+    // ai_state 1 = root windup (still), 2 = slam recover
+    if (ent.ai_state == 1) {
+        ent.acceleration.set(0, 0);
+        if (ent.ai_tick >= (game_tick_t)(0.65f * TPS)) {
+            ent.ai_state = 2;
+            ent.ai_tick = 0;
+            uint32_t n = phase == 1 ? 4 : (phase == 2 ? 7 : 10);
+            _fire_missile_fan(sim, ent, v.angle(), n, (float)(1.4 + phase * 0.35), 10.f + phase * 3.f, 2.8f);
+        }
+        return;
+    }
+    if (ent.ai_state == 2) {
+        ent.acceleration.set(0, 0);
+        if (ent.ai_tick >= (game_tick_t)(0.55f * TPS)) {
+            ent.ai_state = 0;
+            ent.ai_tick = 0;
+        }
+        return;
+    }
+
+    if (ent.ai_tick >= (game_tick_t)(skill_cd * TPS)) {
+        ent.ai_tick = 0;
+        float roll = frand();
+        if (roll < 0.45f && dist < 900.f) {
+            ent.ai_state = 1;
+            return;
+        }
+        if (roll < 0.80f || phase < 2) {
+            uint32_t n = phase + 2;
+            _fire_missile_fan(sim, ent, v.angle(), n, 0.7f + phase * 0.2f, 11.f + phase * 2.f, 2.4f);
+        } else {
+            uint32_t kids = _count_children(sim, ent.id);
+            uint32_t cap = phase >= 3 ? 4 : 3;
+            if (kids < cap) {
+                MobID::T sid = phase >= 3 ? MobID::kVineBug : MobID::kLeafBeetle;
+                float ox = ent.get_x() + (frand() - 0.5f) * 240.f;
+                float oy = ent.get_y() + (frand() - 0.5f) * 240.f;
+                Entity &spawned = alloc_mob(sim, sid, ox, oy, ent.get_team(), [](Entity &m) {
+                    m.score_reward = MOB_DATA[m.get_mob_id()].xp / 2;
+                    BitMath::set(m.flags, EntityFlags::kHasCulling);
+                    BitMath::set(m.flags, EntityFlags::kDieOnParentDeath);
+                    BitMath::set(m.flags, EntityFlags::kNoDrops);
+                });
+                spawned.set_parent(ent.id);
+                spawned.target = ent.target;
+                entity_set_despawn_tick(spawned, 22 * TPS);
+            }
+        }
+    }
+
+    if (dist > 140.f) {
+        v.set_magnitude(PLAYER_ACCELERATION * chase);
+        ent.acceleration = v;
+    } else {
+        ent.acceleration.set(0, 0);
+    }
+    _clamp_to_disk(ent, kTreantArenaX, kTreantArenaY, kTreantArenaR);
+}
 
 static void tick_fallen_king(Simulation *sim, Entity &ent) {
     _clamp_to_disk(ent, kKingArenaX, kKingArenaY, kKingArenaR);
@@ -850,6 +987,43 @@ void tick_ai_behavior(Simulation *sim, Entity &ent) {
             break;
         case MobID::kFallenKing:
             tick_fallen_king(sim, ent);
+            break;
+        case MobID::kLeafBeetle:
+            tick_default_aggro(sim, ent, 1.0f);
+            break;
+        case MobID::kJungleMite:
+            tick_default_aggro(sim, ent, 1.3f);
+            break;
+        case MobID::kVineBug:
+            tick_default_aggro(sim, ent, 0.75f);
+            break;
+        case MobID::kJungleSpider:
+            tick_default_aggro(sim, ent, 1.2f);
+            break;
+        case MobID::kEmeraldMantis:
+            tick_default_aggro(sim, ent, 0.85f);
+            break;
+        case MobID::kPoisonToad:
+            tick_default_aggro(sim, ent, 0.7f);
+            break;
+        case MobID::kSporeMushroom:
+            tick_default_aggro(sim, ent, 0.65f);
+            break;
+        case MobID::kCarnivorousPlant:
+            tick_mimic_wake(sim, ent, 0.9f);
+            break;
+        case MobID::kRiverCrab:
+            tick_default_aggro(sim, ent, 0.75f);
+            break;
+        case MobID::kStoneGuardian:
+            tick_default_aggro(sim, ent, 0.65f);
+            break;
+        case MobID::kJungleWasp:
+            // Ranged windup template (same kit as Hornet)
+            tick_hornet_aggro(sim, ent);
+            break;
+        case MobID::kAncientTreant:
+            tick_ancient_treant(sim, ent);
             break;
         default:
             break;

@@ -5,23 +5,26 @@
 uint32_t const MAX_LEVEL = 99;
 uint32_t const TPS = 20;
 
-//these two are based on the base game's 20 TPS
-float const PLAYER_ACCELERATION = 5.0f;
-float const DEFAULT_FRICTION = 1.0f/3.0f;
+// Tuned for TPS=20 (terminal ≈ accel/friction). Calibrate via screen-width crossing time.
+float const PLAYER_ACCELERATION = 5.15f;
+float const DEFAULT_FRICTION = 0.32f;
 
 float const PETAL_DISABLE_DELAY = 45.0f; //seconds
 float const SUMMON_RETREAT_RADIUS = 600.0f;
 float const DIGGER_SPAWN_CHANCE = 0.25f;
+// Wild mobs return home when beyond this multiple of detection_radius from zone center
+float const WILD_LEASH_MULT = 1.75f;
 
 float const BASE_FLOWER_RADIUS = 25.0f;
-float const BASE_PETAL_ROTATION_SPEED = 4.5f;
+float const BASE_PETAL_ROTATION_SPEED = 4.35f;
 float const BASE_FOV = 0.9f;
 float const BASE_HEALTH = 100.0f;
 float const BASE_BODY_DAMAGE = 25.0f;
 
-float const PETAL_ORBIT_IDLE = 45.0f;
-float const PETAL_ORBIT_ATTACK = 110.0f;
-float const PETAL_ORBIT_DEFEND = 12.0f;
+// Orbit extras beyond flower/moon radius (toward florr-like 40/100/15 feel)
+float const PETAL_ORBIT_IDLE = 40.0f;
+float const PETAL_ORBIT_ATTACK = 100.0f;
+float const PETAL_ORBIT_DEFEND = 15.0f;
 float const PETAL_WING_WAVE_EXTRA = 120.0f;
 
 std::array<struct PetalData, PetalID::kNumPetals> const PETAL_DATA = {{
@@ -916,7 +919,8 @@ std::array<struct PetalData, PetalID::kNumPetals> const PETAL_DATA = {{
     { .name = "Basic", .description = "A nice petal, not too strong but not too weak", .health = 2430, .damage = 2430, .radius = 10, .reload = 2.5, .count = 1, .rarity = RarityID::kMythic, .attributes = {} },
     { .name = "Stinger", .description = "It really hurts, but it's really fragile", .health = 9, .damage = 210, .radius = 7, .reload = 6.5, .count = 1, .rarity = RarityID::kRare, .attributes = {} },
     { .name = "Stinger", .description = "It really hurts, but it's really fragile", .health = 27, .damage = 630, .radius = 7, .reload = 6.5, .count = 1, .rarity = RarityID::kEpic, .attributes = {} },
-    { .name = "Stinger", .description = "It really hurts, but it's really fragile", .health = 243, .damage = 5670, .radius = 7, .reload = 6.5, .count = 3, .rarity = RarityID::kMythic, .attributes = { .clump_radius = 10 } },
+    // Mythic: ×3 from Legendary (appended kStingerLegendary); triple-clump identity
+    { .name = "Stinger", .description = "It really hurts, but it's really fragile", .health = 243, .damage = 5670, .radius = 7, .reload = 6.0, .count = 3, .rarity = RarityID::kMythic, .attributes = { .clump_radius = 10 } },
     { .name = "Rose", .description = "Its healing properties are amazing. Not so good at combat though", .health = 15, .damage = 15, .radius = 10, .reload = 3.5, .count = 1, .rarity = RarityID::kRare, .attributes = { .secondary_reload = 1.0, .burst_heal = 42, .defend_only = 1 } },
     { .name = "Rose", .description = "Its healing properties are amazing. Not so good at combat though", .health = 45, .damage = 45, .radius = 10, .reload = 3.5, .count = 1, .rarity = RarityID::kEpic, .attributes = { .secondary_reload = 1.0, .burst_heal = 126, .defend_only = 1 } },
     { .name = "Rose", .description = "Its healing properties are amazing. Not so good at combat though", .health = 135, .damage = 135, .radius = 10, .reload = 3.5, .count = 1, .rarity = RarityID::kLegendary, .attributes = { .secondary_reload = 1.0, .burst_heal = 378, .defend_only = 1 } },
@@ -952,6 +956,104 @@ std::array<struct PetalData, PetalID::kNumPetals> const PETAL_DATA = {{
     { .name = "Web", .description = "It's really sticky", .health = 3.33f, .damage = 1.67f, .radius = 10, .reload = 3.0, .count = 1, .rarity = RarityID::kUnusual, .attributes = { .secondary_reload = 0.5, .defend_only = 1 } },
     { .name = "Web", .description = "It's really sticky", .health = 30, .damage = 15, .radius = 10, .reload = 3.0, .count = 1, .rarity = RarityID::kEpic, .attributes = { .secondary_reload = 0.5, .defend_only = 1 } },
     { .name = "Web", .description = "It's really sticky", .health = 270, .damage = 135, .radius = 10, .reload = 3.0, .count = 3, .rarity = RarityID::kMythic, .attributes = { .clump_radius = 10, .secondary_reload = 0.5, .defend_only = 1 } },
+    // ---- Jungle petals (v1 data-driven) ----
+    {
+        .name = "Leaf Blade",
+        .description = "A sharp green leaf that cuts quickly",
+        .health = 7.5, .damage = 9.0, .radius = 12.0, .reload = 1.875, .count = 3,
+        .rarity = RarityID::kCommon,
+        .attributes = { .clump_radius = 10 }
+    },
+    {
+        .name = "Jungle Needle",
+        .description = "A thin toxic needle from the canopy",
+        .health = 5.5, .damage = 7.0, .radius = 10.0, .reload = 1.625, .count = 3,
+        .rarity = RarityID::kCommon,
+        .attributes = { .clump_radius = 8 }
+    },
+    {
+        .name = "Emerald Shell",
+        .description = "A sturdy emerald carapace",
+        .health = 22.0, .damage = 5.0, .radius = 17.0, .reload = 4.0, .count = 1,
+        .rarity = RarityID::kUnusual,
+        .attributes = {}
+    },
+    {
+        .name = "Vine Whip",
+        .description = "A long vine that lashes farther out",
+        .health = 8.5, .damage = 15.0, .radius = 16.0, .reload = 3.25, .count = 2,
+        .rarity = RarityID::kRare,
+        .attributes = { .clump_radius = 12, .extra_range = 40.f }
+    },
+    {
+        .name = "Spider Fang",
+        .description = "A curved fang that bites hard",
+        .health = 7.0, .damage = 17.0, .radius = 13.0, .reload = 3.75, .count = 2,
+        .rarity = RarityID::kRare,
+        .attributes = { .clump_radius = 10 }
+    },
+    {
+        .name = "Poison Spore",
+        .description = "A purple spore that poisons on contact",
+        .health = 9.0, .damage = 8.0, .radius = 12.0, .reload = 2.5, .count = 2,
+        .rarity = RarityID::kUnusual,
+        .attributes = { .clump_radius = 9, .poison_damage = { .damage = 6.0, .time = 3.0 } }
+    },
+    {
+        .name = "Thorn Ring",
+        .description = "A thorny green ring of spikes",
+        .health = 15.0, .damage = 11.0, .radius = 15.0, .reload = 3.5, .count = 2,
+        .rarity = RarityID::kRare,
+        .attributes = { .clump_radius = 11 }
+    },
+    {
+        .name = "Mantis Claw",
+        .description = "A scythe-like claw for heavy strikes",
+        .health = 9.0, .damage = 21.0, .radius = 17.0, .reload = 4.75, .count = 1,
+        .rarity = RarityID::kEpic,
+        .attributes = {}
+    },
+    {
+        .name = "Toxic Heart",
+        .description = "A hardened toxic heart that armor-plates you",
+        .health = 18.0, .damage = 6.0, .radius = 15.0, .reload = 3.75, .count = 1,
+        .rarity = RarityID::kRare,
+        .attributes = { .armor = 8 }
+    },
+    {
+        .name = "Spore Cloud",
+        .description = "A drifting cloud of damaging spores",
+        .health = 8.0, .damage = 14.0, .radius = 16.0, .reload = 4.0, .count = 1,
+        .rarity = RarityID::kEpic,
+        .attributes = {}
+    },
+    {
+        .name = "Ancient Seed",
+        .description = "Hatches a vine bug from the deep jungle",
+        .health = 11.0, .damage = 7.0, .radius = 14.0, .reload = 4.0, .count = 1,
+        .rarity = RarityID::kEpic,
+        .attributes = {
+            .secondary_reload = 2.5,
+            .defend_only = 1,
+            .rotation_style = PetalAttributes::kNoRot,
+            .spawns = MobID::kVineBug
+        }
+    },
+    {
+        .name = "Heartwood",
+        .description = "The living core of the ancient treant",
+        .health = 20.0, .damage = 18.0, .radius = 18.0, .reload = 5.0, .count = 1,
+        .rarity = RarityID::kUnique,
+        .attributes = {}
+    },
+    // Stinger Legendary fills Unusual→…→Mythic ×3 ladder (was Epic→Mythic ×9 skip)
+    {
+        .name = "Stinger",
+        .description = "It really hurts, but it's really fragile",
+        .health = 81.0, .damage = 1890.0, .radius = 7.0, .reload = 6.25, .count = 1,
+        .rarity = RarityID::kLegendary,
+        .attributes = {}
+    },
 }};
 
 std::array<struct MobData, MobID::kNumMobs> const MOB_DATA = {{
@@ -1440,18 +1542,115 @@ std::array<struct MobData, MobID::kNumMobs> const MOB_DATA = {{
         .drops = { PetalID::kCrownFragment, PetalID::kKingsOath, PetalID::kRoyalSpear },
         .attributes = { .aggro_radius = 900 }
     },
+    // ---- Jungle mobs ----
+    {
+        .name = "Leaf Beetle",
+        .description = "A beetle wearing leaf armor.",
+        .rarity = RarityID::kCommon,
+        .health = {35.0}, .damage = 10.0, .radius = {22.0}, .xp = 4,
+        .drops = { PetalID::kLeafBlade, PetalID::kEmeraldShell },
+        .attributes = { .aggro_radius = 550 }
+    },
+    {
+        .name = "Jungle Mite",
+        .description = "Small, fast, and everywhere in the undergrowth.",
+        .rarity = RarityID::kCommon,
+        .health = {14.0}, .damage = 8.0, .radius = {16.0}, .xp = 2,
+        .drops = { PetalID::kJungleNeedle, PetalID::kPoisonSpore },
+        .attributes = { .aggro_radius = 480 }
+    },
+    {
+        .name = "Vine Bug",
+        .description = "A plant bug wrapped in living vines.",
+        .rarity = RarityID::kUnusual,
+        .health = {70.0}, .damage = 12.0, .radius = {28.0}, .xp = 8,
+        .drops = { PetalID::kVineWhip, PetalID::kThornRing },
+        .attributes = { .aggro_radius = 600 }
+    },
+    {
+        .name = "Jungle Spider",
+        .description = "A canopy spider with a venomous bite.",
+        .rarity = RarityID::kUnusual,
+        .health = {45.0}, .damage = 14.0, .radius = {26.0}, .xp = 7,
+        .drops = { PetalID::kSpiderFang, PetalID::kPoisonSpore },
+        .attributes = { .aggro_radius = 650 }
+    },
+    {
+        .name = "Emerald Mantis",
+        .description = "An emerald predator with scythe limbs.",
+        .rarity = RarityID::kRare,
+        .health = {90.0}, .damage = 22.0, .radius = {37.0}, .xp = 16,
+        .drops = { PetalID::kMantisClaw, PetalID::kLeafBlade },
+        .attributes = { .aggro_radius = 700 }
+    },
+    {
+        .name = "Poison Toad",
+        .description = "A bulky toad dripping yellow toxin.",
+        .rarity = RarityID::kRare,
+        .health = {110.0}, .damage = 12.0, .radius = {34.0}, .xp = 14,
+        .drops = { PetalID::kPoisonSpore, PetalID::kToxicHeart },
+        .attributes = { .aggro_radius = 580, .poison_damage = { .damage = 5.0, .time = 3.0 } }
+    },
+    {
+        .name = "Spore Mushroom",
+        .description = "A slow mushroom that sheds spores as it walks.",
+        .rarity = RarityID::kUnusual,
+        .health = {55.0}, .damage = 9.0, .radius = {25.0}, .xp = 6,
+        .drops = { PetalID::kPoisonSpore, PetalID::kSporeCloud },
+        .attributes = { .aggro_radius = 500 }
+    },
+    {
+        .name = "Carnivorous Plant",
+        .description = "Looks like foliage until it opens its jaws.",
+        .rarity = RarityID::kRare,
+        .health = {120.0}, .damage = 18.0, .radius = {38.0}, .xp = 18,
+        .drops = { PetalID::kVineWhip, PetalID::kToxicHeart },
+        .attributes = { .aggro_radius = 620 }
+    },
+    {
+        .name = "River Crab",
+        .description = "A heavy blue-green crab of the jungle riverbanks.",
+        .rarity = RarityID::kUnusual,
+        .health = {85.0}, .damage = 15.0, .radius = {31.0}, .xp = 10,
+        .drops = { PetalID::kEmeraldShell, PetalID::kThornRing },
+        .attributes = { .aggro_radius = 560 }
+    },
+    {
+        .name = "Stone Guardian",
+        .description = "A vine-wrapped stone sentinel of the ruins.",
+        .rarity = RarityID::kEpic,
+        .health = {180.0}, .damage = 16.0, .radius = {46.0}, .xp = 28,
+        .drops = { PetalID::kAncientSeed, PetalID::kEmeraldShell },
+        .attributes = { .aggro_radius = 680 }
+    },
+    {
+        .name = "Jungle Wasp",
+        .description = "A striped wasp that never leaves the canopy alone.",
+        .rarity = RarityID::kUnusual,
+        .health = {32.0}, .damage = 20.0, .radius = {24.0}, .xp = 8,
+        .drops = { PetalID::kJungleNeedle, PetalID::kSpiderFang },
+        .attributes = { .aggro_radius = 720 }
+    },
+    {
+        .name = "Ancient Treant",
+        .description = "The living heartwood of the jungle.",
+        .rarity = RarityID::kUnique,
+        .health = {2800.0}, .damage = 26.0, .radius = {95.0}, .xp = 220,
+        .drops = { PetalID::kAncientSeed, PetalID::kHeartwood, PetalID::kVineWhip },
+        .attributes = { .aggro_radius = 900 }
+    },
 }};
 
-// Relative rarity weights for guaranteed single-drop rolls.
+// Relative rarity weights for multi-drop rolls.
 // Per-mob: only rarities present in that mob's drop table are kept, then renormalized to 1.0.
 static float const DROP_RARITY_WEIGHT[RarityID::kNumRarities] = {
-    55.0f, // Common
-    25.0f, // Unusual
-    12.0f, // Rare
-     5.5f, // Epic
-     2.0f, // Legendary
-     0.45f,// Mythic
-     0.05f // Unique
+    52.0f, // Common
+    26.0f, // Unusual
+    13.0f, // Rare
+     6.0f, // Epic
+     2.2f, // Legendary
+     0.55f,// Mythic
+     0.08f // Unique
 };
 
 std::array<StaticArray<float, MAX_DROPS_PER_MOB>, MobID::kNumMobs> const MOB_DROP_CHANCES = [](){

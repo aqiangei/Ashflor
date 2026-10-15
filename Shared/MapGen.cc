@@ -280,21 +280,28 @@ void append_biome_ecos(MapZones &zones, uint8_t map_id, ZoneDefinition const &ha
             { MobID::kAntHole, 2500 }, { MobID::kSquare, 1 }}), 2600.f, 3400.f, 1);
         break;
     case MapID::kJungle:
-        add(eco_from(soft, "Clearing", 1, 0.95f, {
-            { MobID::kBee, 130000 }, { MobID::kLadybug, 110000 }, { MobID::kSpider, 60000 },
-            { MobID::kSquare, 1 }}), 2000.f, 3400.f, 3);
-        add(eco_from(mid, "Vine Corridor", 2, 1.1f, {
-            { MobID::kSpider, 140000 }, { MobID::kHornet, 100000 }, { MobID::kCentipede, 20000 },
-            { MobID::kSquare, 1 }}), 1500.f, 2500.f, 3);
-        add(eco_from(mid, "Swamp", 2, 1.0f, {
-            { MobID::kBeetle, 100000 }, { MobID::kSpider, 90000 }, { MobID::kBee, 70000 },
-            { MobID::kSquare, 1 }}), 1400.f, 2300.f, 2);
-        add(eco_from(hard, "Toxic Grove", 3, 1.15f, {
-            { MobID::kSpider, 140000 }, { MobID::kHornet, 120000 }, { MobID::kEvilCentipede, 24000 },
-            { MobID::kDarkLadybug, 80000 }, { MobID::kSquare, 1 }}), 1100.f, 1800.f, 2);
-        add(eco_from(hard, "Tree Heart", 3, 1.25f, {
-            { MobID::kQueenAnt, 2200 }, { MobID::kMassiveBeetle, 4000 }, { MobID::kSpider, 120000 },
-            { MobID::kAntHole, 3500 }, { MobID::kSquare, 1 }}), 2600.f, 3400.f, 1);
+        // Eco pockets ≈ design zones 1–6 (rings cover Edge/Deep; wasp in every pocket)
+        add(eco_from(soft, "Jungle Edge", 1, 0.95f, {
+            { MobID::kLeafBeetle, 140000 }, { MobID::kJungleMite, 130000 }, { MobID::kVineBug, 90000 },
+            { MobID::kJungleWasp, 100000 }, { MobID::kSquare, 1 }}), 2000.f, 3400.f, 3);
+        add(eco_from(mid, "Dense Canopy", 2, 1.1f, {
+            { MobID::kLeafBeetle, 100000 }, { MobID::kJungleSpider, 130000 }, { MobID::kVineBug, 90000 },
+            { MobID::kEmeraldMantis, 70000 }, { MobID::kJungleWasp, 100000 }, { MobID::kSquare, 1 }}), 1500.f, 2500.f, 3);
+        add(eco_from(mid, "Poison Grove", 2, 1.05f, {
+            { MobID::kPoisonToad, 110000 }, { MobID::kSporeMushroom, 120000 },
+            { MobID::kCarnivorousPlant, 80000 }, { MobID::kJungleMite, 90000 },
+            { MobID::kJungleWasp, 100000 }, { MobID::kSquare, 1 }}), 1400.f, 2300.f, 2);
+        add(eco_from(mid, "Jungle River", 2, 1.0f, {
+            { MobID::kRiverCrab, 130000 }, { MobID::kPoisonToad, 100000 }, { MobID::kJungleSpider, 110000 },
+            { MobID::kJungleWasp, 100000 }, { MobID::kSquare, 1 }}), 1400.f, 2300.f, 2);
+        add(eco_from(hard, "Ancient Ruins", 3, 1.15f, {
+            { MobID::kEmeraldMantis, 110000 }, { MobID::kJungleSpider, 100000 },
+            { MobID::kStoneGuardian, 90000 }, { MobID::kCarnivorousPlant, 80000 },
+            { MobID::kJungleWasp, 100000 }, { MobID::kSquare, 1 }}), 1100.f, 1800.f, 2);
+        add(eco_from(hard, "Heart of Jungle", 3, 1.25f, {
+            { MobID::kEmeraldMantis, 100000 }, { MobID::kStoneGuardian, 110000 },
+            { MobID::kCarnivorousPlant, 100000 }, { MobID::kVineBug, 80000 },
+            { MobID::kJungleWasp, 100000 }, { MobID::kSquare, 1 }}), 2600.f, 3400.f, 1);
         break;
     case MapID::kAntHell:
         add(eco_from(soft, "Forage Halls", 1, 1.0f, {

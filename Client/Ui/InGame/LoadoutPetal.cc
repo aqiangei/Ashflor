@@ -251,11 +251,12 @@ static uint8_t dynamic_to_static(uint8_t dynamic_pos) {
 uint8_t Ui::find_loadout_drop_target(float x, float y) {
     float min_dist = 10000;
     uint8_t min_index = (uint8_t)-1;
+    float const pad = Input::is_mobile ? 36.f : 20.f;
     for (uint8_t i = 0; i < 2 * MAX_SLOT_COUNT + 1; ++i) {
         UiLoadoutSlot *slot = Ui::UiLoadout::petal_backgrounds[i];
         if (slot == nullptr) continue;
         float dist = std::max(fabsf(x - slot->screen_x), fabsf(y - slot->screen_y));
-        if (dist >= (slot->width + 20) * Ui::scale / 2) continue;
+        if (dist >= (slot->width + pad) * Ui::scale / 2) continue;
         if (dist >= min_dist) continue;
         min_dist = dist;
         min_index = i;
@@ -364,7 +365,7 @@ UiLoadoutPetal::UiLoadoutPetal(uint8_t pos) : Element(60, 60),
         if (selected && Game::alive()) {
             style.layer = 1;
             float drag_dist = std::hypot(mouse_x - press_x, mouse_y - press_y);
-            constexpr float kClickSlop = 14.f;
+            float const kClickSlop = Input::pointer_slop();
             uint8_t is_click = drag_dist < kClickSlop;
             if (released && is_click) {
                 // Tap: primary unequips to bag; secondary equips to primary

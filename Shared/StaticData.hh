@@ -14,6 +14,7 @@ extern float const PLAYER_ACCELERATION;
 extern float const DEFAULT_FRICTION;
 extern float const SUMMON_RETREAT_RADIUS;
 extern float const DIGGER_SPAWN_CHANCE;
+extern float const WILD_LEASH_MULT;
 
 extern float const BASE_FLOWER_RADIUS;
 extern float const BASE_PETAL_ROTATION_SPEED;
@@ -198,43 +199,48 @@ inline std::array const MAPS = std::to_array<MapZones>({
         }
     }),
     // ---- Jungle ----
-    // Identity vs Garden: spider/centipede/hornet heavy → Web/Stinger/Iris/Leaf gear
+    // Template rings (rewritten by build_zones + eco pockets). Jungle Wasp in every pool.
     MapZones({
         {
+            // hard / Deep
             .left = 0, .top = 0, .right = (float)ARENA_WIDTH, .bottom = (float)ARENA_HEIGHT,
             .density = 2.8f, .drop_multiplier = 0.035,
             .spawns = {
-                { MobID::kSpider, 160000 }, { MobID::kHornet, 130000 }, { MobID::kEvilCentipede, 28000 },
-                { MobID::kDarkLadybug, 90000 }, { MobID::kMassiveBeetle, 3200 },
-                { MobID::kQueenAnt, 1800 }, { MobID::kAntHole, 3500 }, { MobID::kSquare, 1 }
+                { MobID::kEmeraldMantis, 120000 }, { MobID::kStoneGuardian, 80000 },
+                { MobID::kCarnivorousPlant, 100000 }, { MobID::kVineBug, 90000 },
+                { MobID::kJungleWasp, 110000 }, { MobID::kSquare, 1 }
             },
             .difficulty = 3, .color = 0xff1b4332, .name = "Jungle Deep"
         },
         {
+            // mid
             .left = 2200, .top = 2200, .right = 15800, .bottom = 15800,
             .density = 2.6f, .drop_multiplier = 0.08,
             .spawns = {
-                { MobID::kSpider, 130000 }, { MobID::kHornet, 110000 }, { MobID::kBeetle, 70000 },
-                { MobID::kCentipede, 22000 }, { MobID::kEvilCentipede, 12000 },
-                { MobID::kAntHole, 2800 }, { MobID::kSquare, 1 }
+                { MobID::kJungleSpider, 130000 }, { MobID::kPoisonToad, 90000 },
+                { MobID::kSporeMushroom, 100000 }, { MobID::kRiverCrab, 80000 },
+                { MobID::kJungleWasp, 100000 }, { MobID::kSquare, 1 }
             },
             .difficulty = 2, .color = 0xff2d6a4f, .name = "Jungle Mid"
         },
         {
+            // soft / Edge
             .left = 4800, .top = 4800, .right = 13200, .bottom = 13200,
             .density = 2.3f, .drop_multiplier = 0.15,
             .spawns = {
-                { MobID::kBee, 120000 }, { MobID::kLadybug, 90000 }, { MobID::kSpider, 70000 },
-                { MobID::kCentipede, 18000 }, { MobID::kBeetle, 50000 }, { MobID::kSquare, 1 }
+                { MobID::kLeafBeetle, 140000 }, { MobID::kJungleMite, 130000 },
+                { MobID::kVineBug, 90000 }, { MobID::kJungleWasp, 90000 },
+                { MobID::kSquare, 1 }
             },
             .difficulty = 1, .color = 0xff40916c, .name = "Jungle Edge"
         },
         {
+            // hub
             .left = 7200, .top = 7200, .right = 10800, .bottom = 10800,
             .density = 0.22f, .drop_multiplier = 0.28,
             .spawns = {
-                { MobID::kRock, 450000 }, { MobID::kLadybug, 350000 }, { MobID::kBee, 120000 },
-                { MobID::kSquare, 1 }
+                { MobID::kLeafBeetle, 300000 }, { MobID::kJungleMite, 280000 },
+                { MobID::kJungleWasp, 150000 }, { MobID::kSquare, 1 }
             },
             .difficulty = 0, .color = MapTheme::JUNGLE_GROUND, .name = "Jungle Hub"
         }
