@@ -3,6 +3,7 @@
 
 #include <Client/Ui/Extern.hh>
 #include <Client/Game.hh>
+#include <Client/I18n.hh>
 #include <Client/Input.hh>
 
 #include <Helpers/Bits.hh>
@@ -290,7 +291,8 @@ Element *Ui::make_mobile_defend_button() {
     return elt;
 }
 
-// R: short tap = swap primary↔secondary; hold = cycle next cloud preset.
+// R: short tap = swap primary↔secondary (or cancel L-pick);
+// hold = arm L-bank pick — then tap equip slots 1..n for L1..Ln.
 class MobileSwapButton final : public Element {
     static constexpr float kRadius = 44.f;
     static constexpr double kLongMs = 380.0;
@@ -298,6 +300,22 @@ class MobileSwapButton final : public Element {
     uint8_t held;
     uint8_t long_fired;
     double press_at;
+
+    static void short_tap() {
+        if (Game::mobile_l_preset_pick) {
+            Game::mobile_l_preset_pick = 0;
+            Game::loadout_preset_status.clear();
+            return;
+        }
+        Game::swap_all_petals();
+    }
+
+    static void arm_l_pick() {
+        Game::mobile_l_preset_pick = 1;
+        Game::loadout_preset_status = I18n::use_chinese
+            ? "点槽切 L 背包：当前为 L1，其它首次为空（再点 R 取消）"
+            : "Tap slot for L bag: current=L1, others start empty (R cancels)";
+    }
 public:
     MobileSwapButton()
         : Element(kRadius * 2.4f, kRadius * 2.4f, {
@@ -310,7 +328,7 @@ public:
 
     void finish_press() {
         if (!held) return;
-        if (!long_fired) Game::swap_all_petals();
+        if (!long_fired) short_tap();
         held = 0;
         hold_id = (uint32_t)-1;
         long_fired = 0;
@@ -328,7 +346,7 @@ public:
                 float ex = end->second.x - screen_x, ey = end->second.y - screen_y;
                 if (sx * sx + sy * sy <= hit * hit
                     && ex * ex + ey * ey <= hit * hit) {
-                    Game::swap_all_petals();
+                    short_tap();
                     break;
                 }
             }
@@ -343,7 +361,7 @@ public:
         if (held && down && !long_fired
             && Game::timestamp - press_at >= kLongMs) {
             long_fired = 1;
-            Game::cycle_next_loadout_preset();
+            arm_l_pick();
         }
         // Direct-capture mobile path never gets Element kClick — release here.
         if (held && !down)
@@ -353,7 +371,8 @@ public:
             fill_t = (float) ((Game::timestamp - press_at) / kLongMs);
             if (fill_t > 1.f) fill_t = 1.f;
         }
-        ctx.set_fill(down || long_fired ? 0x77ffffff : style.fill);
+        uint8_t armed = Game::mobile_l_preset_pick;
+        ctx.set_fill(armed ? 0x99c9a227 : (down || long_fired ? 0x77ffffff : style.fill));
         ctx.begin_path();
         ctx.arc(0, 0, kRadius);
         ctx.fill();
@@ -370,13 +389,20 @@ public:
             ctx.fill();
             ctx.set_global_alpha(1.f);
         }
+        if (armed) {
+            ctx.set_stroke(0xffffe08a);
+            ctx.set_line_width(5);
+            ctx.begin_path();
+            ctx.arc(0, 0, kRadius + 2.f);
+            ctx.stroke();
+        }
         ctx.set_stroke(0xaaffffff);
         ctx.set_line_width(4);
         ctx.begin_path();
         ctx.arc(0, 0, kRadius);
         ctx.stroke();
         ctx.set_fill(0xffffffff);
-        ctx.draw_text("R", { .size = kRadius * 0.72f });
+        ctx.draw_text(armed ? "L" : "R", { .size = kRadius * 0.72f });
     }
 
     void on_event(uint8_t event) override {

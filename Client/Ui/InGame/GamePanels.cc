@@ -516,13 +516,58 @@ public:
 };
 
 // Material cell: click = +5, hold accelerates, Shift+Alt = dump all
+// Same English name + rarity can collide (Dahlia vs RoseRare, etc.). Prefer an
+// owned copy; otherwise the highest id (append-only ladder fill).
+static PetalID::T resolve_craft_family_petal(char const *name, uint8_t rarity) {
+    if (name == nullptr || rarity >= RarityID::kNumRarities) return PetalID::kNone;
+    PetalID::T best_owned = PetalID::kNone;
+    PetalID::T best_any = PetalID::kNone;
+    uint32_t best_owned_n = 0;
+    for (uint32_t raw = 1; raw < (uint32_t) PetalID::kNumPetals; ++raw) {
+        PetalID::T id = (PetalID::T) raw;
+        if (Recipe::is_bag_only(id)) continue;
+        if (PETAL_DATA[id].rarity != rarity) continue;
+        if (PETAL_DATA[id].name == nullptr) continue;
+        if (std::strcmp(PETAL_DATA[id].name, name) != 0) continue;
+        if (best_any == PetalID::kNone || id > best_any) best_any = id;
+        uint32_t n = Game::craft_owned(id);
+        if (n == 0) continue;
+        if (n > best_owned_n || (n == best_owned_n && id > best_owned)) {
+            best_owned = id;
+            best_owned_n = n;
+        }
+    }
+    return best_owned != PetalID::kNone ? best_owned : best_any;
+}
+
+static uint8_t craft_family_any_owned(char const *name) {
+    if (name == nullptr) return 0;
+    for (uint32_t raw = 1; raw < (uint32_t) PetalID::kNumPetals; ++raw) {
+        PetalID::T id = (PetalID::T) raw;
+        if (Recipe::is_bag_only(id)) continue;
+        if (PETAL_DATA[id].name == nullptr) continue;
+        if (std::strcmp(PETAL_DATA[id].name, name) != 0) continue;
+        if (Game::craft_owned(id) > 0) return 1;
+    }
+    return 0;
+}
+
 class CraftMatCell final : public Element {
-    PetalID::T petal_id;
+    char const *family_name;
+    uint8_t rarity;
     float hold_timer = 0;
     float hold_interval = 0.28f;
     uint8_t holding = 0;
+
+    PetalID::T current_id() const {
+        if (family_name == nullptr) return PetalID::kNone;
+        PetalID::T id = resolve_craft_family_petal(family_name, rarity);
+        // Never paint an unowned collision winner — empty plate instead.
+        if (id == PetalID::kNone || Game::craft_owned(id) == 0) return PetalID::kNone;
+        return id;
+    }
 public:
-    CraftMatCell(PetalID::T id)
+    CraftMatCell(char const *name, uint8_t r)
         : Element(64, 66, {
             // Always occupy the column so rarity columns line up across rows.
             // Death screen keeps craft UI open (same as bag / specials).
@@ -530,13 +575,18 @@ public:
                 return Game::alive() || Game::on_game_screen;
             },
             .no_animation = 1
-        }), petal_id(id) {
+        }), family_name(name), rarity(r) {
         style.animate = [this](Element *, Renderer &){
             if (!holding) return;
             if (!(focus_state == kMouseDown)) {
                 holding = 0;
                 hold_timer = 0;
                 hold_interval = 0.28f;
+                return;
+            }
+            PetalID::T petal_id = current_id();
+            if (petal_id == PetalID::kNone) {
+                holding = 0;
                 return;
             }
             hold_timer += (float) (Ui::dt / 1000.0);
@@ -552,9 +602,8 @@ public:
         };
     }
     void on_render(Renderer &ctx) override {
-        uint32_t owned = (petal_id == PetalID::kNone || petal_id >= PetalID::kNumPetals)
-            ? 0 : Game::craft_owned(petal_id);
-        if (owned == 0) {
+        PetalID::T petal_id = current_id();
+        if (petal_id == PetalID::kNone) {
             ctx.set_fill(Chrome::kPanelInset);
             ctx.begin_path();
             ctx.round_rect(-width / 2, -height / 2, width, height, 6);
@@ -602,8 +651,8 @@ public:
         }
     }
     void on_event(uint8_t event) override {
-        if (petal_id == PetalID::kNone || petal_id >= PetalID::kNumPetals) return;
-        if (Game::craft_owned(petal_id) == 0) return;
+        PetalID::T petal_id = current_id();
+        if (petal_id == PetalID::kNone) return;
         if (event == kMouseDown) {
             if (Game::craft_available(petal_id) == 0) return;
             if (shift_alt_held()) {
@@ -642,47 +691,32 @@ public:
 
 static Element *make_craft_material_grid() {
     // One row per petal name. Columns are rarities left → right (Common…Unique).
-    // Missing rarities stay as empty cells so every row is the same length.
-    struct Family {
-        char const *name;
-        std::array<PetalID::T, RarityID::kNumRarities> ids;
-    };
-    std::vector<Family> families;
+    // Cells resolve the owned id at draw time (name collisions like Dahlia/RoseRare).
+    std::vector<char const *> family_names;
     for (uint32_t raw = 1; raw < (uint32_t) PetalID::kNumPetals; ++raw) {
         PetalID::T id = (PetalID::T) raw;
         if (Recipe::is_bag_only(id)) continue;
         char const *name = PETAL_DATA[id].name;
         uint8_t r = PETAL_DATA[id].rarity;
         if (name == nullptr || r >= RarityID::kNumRarities) continue;
-        Family *fam = nullptr;
-        for (Family &f : families) {
-            if (std::strcmp(f.name, name) == 0) { fam = &f; break; }
+        uint8_t seen = 0;
+        for (char const *n : family_names) {
+            if (std::strcmp(n, name) == 0) { seen = 1; break; }
         }
-        if (fam == nullptr) {
-            families.push_back(Family{ name, {} });
-            fam = &families.back();
-            fam->ids.fill(PetalID::kNone);
-        }
-        fam->ids[r] = id;
+        if (!seen) family_names.push_back(name);
     }
-    std::stable_sort(families.begin(), families.end(), [](Family const &a, Family const &b){
-        return std::strcmp(a.name, b.name) < 0;
+    std::stable_sort(family_names.begin(), family_names.end(), [](char const *a, char const *b){
+        return std::strcmp(a, b) < 0;
     });
     std::vector<Element *> vrows;
-    for (Family const &fam : families) {
-        std::array<PetalID::T, RarityID::kNumRarities> ids = fam.ids;
+    for (char const *name : family_names) {
         std::vector<Element *> cells;
         for (uint8_t r = 0; r < RarityID::kNumRarities; ++r)
-            cells.push_back(new CraftMatCell(ids[r]));
-        cells.push_back(new CraftMatCell(PetalID::kNone));
+            cells.push_back(new CraftMatCell(name, r));
+        // Spacer keeps column alignment with older layout.
+        cells.push_back(new CraftMatCell(nullptr, 0));
         vrows.push_back(new Ui::HContainer(cells, 0, 4, {
-            .should_render = [ids](){
-                for (uint8_t r = 0; r < RarityID::kNumRarities; ++r) {
-                    PetalID::T id = ids[r];
-                    if (id != PetalID::kNone && Game::craft_owned(id) > 0) return true;
-                }
-                return false;
-            },
+            .should_render = [name](){ return craft_family_any_owned(name); },
             .h_justify = Style::Left,
             .no_animation = 1
         }));
@@ -997,8 +1031,8 @@ Element *Ui::make_presets_panel() {
         }, { .fill = Chrome::kMuted }),
         new Ui::DynamicText(13, [](){
             return I18n::use_chinese
-                ? std::string{"手机 R：点按换主副槽　·　长按循环下一方案"}
-                : std::string{"Mobile R: tap swap-all · hold next preset"};
+                ? std::string{"手机 R：长按后点槽切 L 背包（当前→L1，其它首次空）"}
+                : std::string{"Mobile R: hold then tap L bag (current→L1, others start empty)"};
         }, { .fill = Chrome::kMuted }),
         new Ui::VContainer(rows, 0, 6, { .no_animation = 1 }),
         new Ui::Button(180, 44,
@@ -1276,9 +1310,30 @@ Element *Ui::make_boost_panel() {
     return elt;
 }
 
-// Assembly workshop (V): A + B = Result [hammer], bottom-left drawer like backpack.
-static uint8_t recipe_filter_tier = 0; // 0 base · 3 special · 255 all
+// Assembly workshop (V): A + B = Result [hammer] — matches craft mockup.
+// Tiers: 0 基础 · 1 跨图 · 2 传说 · 3 超级(coin shop)
+static uint8_t recipe_filter_tier = 0;
 static uint16_t recipe_selected = 0;
+static constexpr uint8_t kRecipeTierCount = 4;
+
+static char const *recipe_tier_label() {
+    if (I18n::use_chinese) {
+        switch (recipe_filter_tier) {
+            case 0: return "基础";
+            case 1: return "跨图";
+            case 2: return "传说";
+            case 3: return "超级";
+            default: return "基础";
+        }
+    }
+    switch (recipe_filter_tier) {
+        case 0: return "Base";
+        case 1: return "Cross";
+        case 2: return "Legend";
+        case 3: return "Super";
+        default: return "Base";
+    }
+}
 
 static uint8_t recipe_can_craft(uint16_t idx) {
     if (idx >= Recipe::recipe_count()) return 0;
@@ -1287,6 +1342,17 @@ static uint8_t recipe_can_craft(uint16_t idx) {
         if (Game::craft_owned(rec.ingredients[i].id) < rec.ingredients[i].count)
             return 0;
     return 1;
+}
+
+// Hide recipes whose ingredients the player has never obtained — otherwise the
+// assemble book lists dozens of mats/results that look like "nonexistent" petals.
+static uint8_t recipe_has_any_mat(uint16_t idx) {
+    if (idx >= Recipe::recipe_count()) return 0;
+    Recipe::Def const &rec = Recipe::recipe_at(idx);
+    if (rec.ingredient_count == 0) return 0;
+    for (uint8_t i = 0; i < rec.ingredient_count; ++i)
+        if (Game::craft_owned(rec.ingredients[i].id) > 0) return 1;
+    return 0;
 }
 
 class RecipePetalChip final : public Element {
@@ -1298,14 +1364,15 @@ public:
         : Element(72, 84, { .no_animation = 1 }),
           petal_id(id), need(n), show_need(with_need) {}
     void on_render(Renderer &ctx) override {
-        uint32_t fill = Chrome::kPanelInset;
-        uint8_t rarity = 0;
-        if (petal_id != PetalID::kNone && petal_id < PetalID::kNumPetals) {
-            rarity = PETAL_DATA[petal_id].rarity;
-            if (rarity < RarityID::kNumRarities) fill = RARITY_COLORS[rarity];
-        }
         uint32_t owned = (petal_id < PetalID::kNumPetals) ? Game::craft_owned(petal_id) : 0;
-        if (show_need && owned < need) fill = 0xff5a5a5a;
+        uint8_t enough = !show_need || owned >= need;
+        uint32_t fill = 0xff4a4a4a; // missing mat — dark grey like mockup
+        if (petal_id != PetalID::kNone && petal_id < PetalID::kNumPetals) {
+            if (enough) {
+                // Light green plate when mats are ready
+                fill = show_need ? 0xff7dff9a : RARITY_COLORS[PETAL_DATA[petal_id].rarity];
+            }
+        }
         Chrome::draw_plate(ctx, width, height, fill, Chrome::kRadius, 0.f);
         if (petal_id == PetalID::kNone || petal_id >= PetalID::kNumPetals) return;
         {
@@ -1318,11 +1385,11 @@ public:
         }
         ctx.translate(0, height / 2 - 28);
         ctx.draw_text(I18n::petal_name(petal_id), {
-            .fill = Chrome::kTitle, .size = 12, .stroke_scale = 0.1f
+            .fill = 0xffffffff, .size = 12, .stroke_scale = 0.1f
         });
         if (show_need) {
             ctx.translate(0, 16);
-            uint32_t col = owned >= need ? 0xff7CFF8A : 0xffff6b6b;
+            uint32_t col = enough ? 0xff1a7a2a : 0xffff5555;
             ctx.draw_text(std::format("x{} / x{}", need, owned).c_str(), {
                 .fill = col, .size = 12, .stroke_scale = 0.1f
             });
@@ -1344,13 +1411,12 @@ public:
     explicit RecipeRow(uint16_t idx)
         : Element(510, 96, { .no_animation = 1 }), recipe_index(idx) {
         style.should_render = [idx](){
-            if (Game::game_panel != Game::kPanelSpecial) return 0;
-            if (!Game::should_render_game_ui()) return 0;
-            if (idx >= Recipe::recipe_count()) return 0;
-            if (recipe_filter_tier != 255
-                && Recipe::recipe_at(idx).tier != recipe_filter_tier)
-                return 0;
-            return 1;
+            if (Game::game_panel != Game::kPanelSpecial) return false;
+            if (!Game::should_render_game_ui()) return false;
+            if (idx >= Recipe::recipe_count()) return false;
+            if (Recipe::recipe_at(idx).tier != recipe_filter_tier)
+                return false;
+            return recipe_has_any_mat(idx) || recipe_can_craft(idx);
         };
     }
     void refactor() override {
@@ -1363,11 +1429,11 @@ public:
         Recipe::Def const &rec = Recipe::recipe_at(recipe_index);
         uint8_t can = recipe_can_craft(recipe_index);
         uint8_t sel = recipe_selected == recipe_index;
-        Chrome::draw_plate(ctx, width, height,
-            sel ? 0xff3ecf8e : Chrome::kPanelFace, Chrome::kRadius, 0.f);
+        // Dark row plate; selected = neon green rim (mockup)
+        Chrome::draw_plate(ctx, width, height, 0xff2a6a6c, Chrome::kRadius, 0.f);
         if (sel) {
             ctx.set_stroke(0xff7CFF8A);
-            ctx.set_line_width(3.f);
+            ctx.set_line_width(3.5f);
             ctx.begin_path();
             ctx.round_rect(-width / 2, -height / 2, width, height, Chrome::kRadius);
             ctx.stroke();
@@ -1413,14 +1479,14 @@ public:
                 .fill = can ? Chrome::kGold : 0xffffaaaa, .size = 11, .stroke_scale = 0.1f
             });
         }
-        // Hammer craft button
+        // Hammer craft button (right)
         {
             RenderContext c(&ctx);
             float bx = width / 2 - 42;
             ctx.translate(bx, 0);
             Chrome::draw_plate(ctx, 56, 56,
-                can ? Chrome::kBtnMoss : Chrome::kBtnIron, Chrome::kRadius, 0.f);
-            ctx.set_fill(0xffffe066);
+                can ? 0xff5a5a5a : 0xff3a3a3a, Chrome::kRadius, 0.f);
+            ctx.set_fill(can ? 0xffffe066 : 0xff888888);
             ctx.begin_path();
             ctx.move_to(-10, 8);
             ctx.line_to(12, -10);
@@ -1428,18 +1494,19 @@ public:
             ctx.line_to(-6, 12);
             ctx.close_path();
             ctx.fill();
-            ctx.set_fill(0xffc98418);
+            ctx.set_fill(can ? 0xffc98418 : 0xff555555);
             ctx.begin_path();
             ctx.round_rect(-4, 6, 8, 16, 2);
             ctx.fill();
         }
     }
     void on_event(uint8_t event) override {
-        if (event == kClick) {
-            recipe_selected = recipe_index;
-            if (recipe_can_craft(recipe_index))
-                Game::craft_recipe(recipe_index);
-        }
+        if (event != kClick) return;
+        recipe_selected = recipe_index;
+        // Only the hammer zone crafts (right ~70px), like the mockup.
+        float local_x = (Input::mouse_x - screen_x) / (float) Ui::scale;
+        if (local_x > width / 2 - 70.f && recipe_can_craft(recipe_index))
+            Game::craft_recipe(recipe_index);
     }
 };
 
@@ -1449,34 +1516,27 @@ static Element *make_recipe_scroll() {
     for (uint16_t i = 0; i < n; ++i)
         rows.push_back(new RecipeRow(i));
     Element *list = new Ui::VContainer(rows, 0, 8, { .no_animation = 1 });
-    float scroll_h = Input::is_mobile ? 360.f : 520.f;
+    float scroll_h = Input::is_mobile ? 320.f : 460.f;
     auto *scroll = new BagScroll(list, scroll_h);
     scroll->always_capture_wheel = 1;
     return scroll;
 }
 
-static void on_recipe_tier_base(Element *, uint8_t e) {
-    if (e == Ui::kClick) recipe_filter_tier = 0;
+static void on_recipe_tier_prev(Element *, uint8_t e) {
+    if (e != Ui::kClick) return;
+    recipe_filter_tier = (uint8_t) ((recipe_filter_tier + kRecipeTierCount - 1) % kRecipeTierCount);
 }
-static void on_recipe_tier_cross(Element *, uint8_t e) {
-    if (e == Ui::kClick) recipe_filter_tier = 1;
-}
-static void on_recipe_tier_legend(Element *, uint8_t e) {
-    if (e == Ui::kClick) recipe_filter_tier = 2;
-}
-static void on_recipe_tier_special(Element *, uint8_t e) {
-    if (e == Ui::kClick) recipe_filter_tier = 3;
-}
-static void on_recipe_tier_all(Element *, uint8_t e) {
-    if (e == Ui::kClick) recipe_filter_tier = 255;
+static void on_recipe_tier_next(Element *, uint8_t e) {
+    if (e != Ui::kClick) return;
+    recipe_filter_tier = (uint8_t) ((recipe_filter_tier + 1) % kRecipeTierCount);
 }
 
 Element *Ui::make_special_craft_panel() {
-    return make_drawer({
+    Element *elt = make_drawer({
         new Ui::HFlexContainer(
-            new Ui::DynamicText(26, [](){
+            new Ui::DynamicText(28, [](){
                 return I18n::use_chinese ? "组装" : "Assemble";
-            }, { .fill = Chrome::kTitle }),
+            }, { .fill = 0xffffffff }),
             new Ui::Button(36, 36,
                 new Ui::DynamicText(18, [](){ return std::string{"X"}; }),
                 [](Element *, uint8_t e){
@@ -1485,52 +1545,36 @@ Element *Ui::make_special_craft_panel() {
                 { .fill = Chrome::kBtnDanger, .line_width = 0, .round_radius = Chrome::kRadius }),
             0, 10, {}
         ),
-        new Ui::DynamicText(14, [](){
-            uint32_t n = Game::craft_owned(PetalID::kCoin);
-            return I18n::use_chinese
-                ? std::format("钱币花瓣：{}　原料与成品都在背包里", n)
-                : std::format("Coin petals: {} · mats & results live in bag", n);
-        }, { .fill = Chrome::kGold, .h_justify = Style::Left }),
-        new Ui::HContainer({
-            new Ui::Button(72, 36,
-                new Ui::DynamicText(13, [](){ return I18n::use_chinese ? "基础" : "Base"; },
-                    { .fill = 0xffffffff }),
-                on_recipe_tier_base,
-                [](){ return recipe_filter_tier != 0; },
-                { .fill = Chrome::kBtnMoss, .line_width = 0, .round_radius = Chrome::kRadius }),
-            new Ui::Button(72, 36,
-                new Ui::DynamicText(13, [](){ return I18n::use_chinese ? "跨图" : "Cross"; },
-                    { .fill = 0xffffffff }),
-                on_recipe_tier_cross,
-                [](){ return recipe_filter_tier != 1; },
-                { .fill = Chrome::kBtnClay, .line_width = 0, .round_radius = Chrome::kRadius }),
-            new Ui::Button(72, 36,
-                new Ui::DynamicText(13, [](){ return I18n::use_chinese ? "传说" : "Legend"; },
-                    { .fill = 0xffffffff }),
-                on_recipe_tier_legend,
-                [](){ return recipe_filter_tier != 2; },
-                { .fill = Chrome::kBtnStone, .line_width = 0, .round_radius = Chrome::kRadius }),
-            new Ui::Button(72, 36,
-                new Ui::DynamicText(13, [](){ return I18n::use_chinese ? "特殊" : "Shop"; },
-                    { .fill = 0xffffffff }),
-                on_recipe_tier_special,
-                [](){ return recipe_filter_tier != 3; },
-                { .fill = Chrome::kBtnSlate, .line_width = 0, .round_radius = Chrome::kRadius }),
-            new Ui::Button(72, 36,
-                new Ui::DynamicText(13, [](){ return I18n::use_chinese ? "全部" : "All"; },
-                    { .fill = 0xffffffff }),
-                on_recipe_tier_all,
-                [](){ return recipe_filter_tier != 255; },
-                { .fill = Chrome::kBtnBronze, .line_width = 0, .round_radius = Chrome::kRadius }),
-        }, 0, 6, { .h_justify = Style::Left }),
         make_recipe_scroll(),
+        // Bottom pager: ◀  超级  ▶  (matches mockup)
+        new Ui::HContainer({
+            new Ui::Button(48, 44,
+                new Ui::DynamicText(22, [](){ return std::string{"◀"}; },
+                    { .fill = 0xffffffff }),
+                on_recipe_tier_prev, nullptr,
+                { .fill = Chrome::kBtnMoss, .line_width = 0, .round_radius = Chrome::kRadius }),
+            new Ui::Button(160, 44,
+                new Ui::DynamicText(18, [](){ return std::string{recipe_tier_label()}; },
+                    { .fill = 0xffffffff }),
+                [](Element *, uint8_t e){ if (e == Ui::kClick) on_recipe_tier_next(nullptr, e); },
+                nullptr,
+                { .fill = 0xff3a3a3a, .line_width = 0, .round_radius = Chrome::kRadius }),
+            new Ui::Button(48, 44,
+                new Ui::DynamicText(22, [](){ return std::string{"▶"}; },
+                    { .fill = 0xffffffff }),
+                on_recipe_tier_next, nullptr,
+                { .fill = 0xff3a3a3a, .line_width = 0, .round_radius = Chrome::kRadius }),
+        }, 0, 12, {}),
         new Ui::DynamicText(13, [](){
             return I18n::use_chinese
-                ? "材料充足时点锤头合成，成品进入背包。"
-                : "Tap the hammer when ready — result goes to bag.";
-        }, { .fill = Chrome::kMuted, .h_justify = Style::Left }),
+                ? "只显示你有材料的配方；够数点右侧锤头。原料与成品都在背包。"
+                : "Only recipes with mats you own; hammer when ready. Mats & results in bag.";
+        }, { .fill = 0xffb8e0e0, .h_justify = Style::Left }),
         new Ui::DynamicText(14, [](){ return Game::craft_status; }, {
             .fill = Chrome::kGold, .h_justify = Style::Left
         })
     }, Game::kPanelSpecial);
+    // Teal panel like the mockup (overrides warm Chrome drawer fill)
+    elt->style.fill = 0xff1e6a6c;
+    return elt;
 }

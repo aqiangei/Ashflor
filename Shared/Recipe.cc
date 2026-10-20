@@ -234,11 +234,9 @@ namespace Recipe {
 
     uint8_t is_bag_only(PetalID::T id) {
         if (id == PetalID::kNone || id >= PetalID::kNumPetals) return 1;
+        // Currency + craft mats stay in the backpack (never primary combat slots).
         if (id == PetalID::kCoin) return 1;
-        // Materials: count == 0 and not equipment petals
-        if (PETAL_DATA[id].count == 0
-            && PETAL_DATA[id].attributes.equipment == EquipmentFlags::kNone)
-            return 1;
+        if (id >= PetalID::kMatLeaf && id <= PetalID::kMatRoyalSeal) return 1;
         return 0;
     }
 }

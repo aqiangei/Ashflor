@@ -71,6 +71,15 @@ namespace Game {
     extern std::string disconnect_message;
     extern std::array<uint8_t, PetalID::kNumPetals> seen_petals;
     extern std::array<uint8_t, MobID::kNumMobs> seen_mobs;
+
+    // This-life summary (filled by kLifeSummary on death; shown top-right).
+    struct LifeEntry {
+        uint16_t id = 0;
+        uint16_t count = 0;
+    };
+    extern std::vector<LifeEntry> life_mob_kills;
+    extern std::vector<LifeEntry> life_petal_picks;
+    extern uint8_t life_summary_ready;
     
     extern double timestamp;
 
@@ -157,7 +166,7 @@ namespace Game {
 
     // Guest local progress (browser localStorage)
     extern uint8_t guest_save_valid;
-    extern uint8_t guest_level;
+    extern uint32_t guest_level;
     extern std::array<PetalID::T, 2 * MAX_SLOT_COUNT> guest_petals;
     extern std::array<uint32_t, PetalID::kNumPetals> guest_craft_bank;
     extern uint32_t guest_coins;
@@ -172,6 +181,8 @@ namespace Game {
     extern std::array<LoadoutPreset, LOADOUT_PRESET_COUNT> loadout_presets;
     extern uint8_t active_loadout_preset; // 0..19, 20 = no preset applied
     extern std::string loadout_preset_status;
+    // Mobile: sticky after long-press R — tap primary slot i → apply L(i+1)
+    extern uint8_t mobile_l_preset_pick;
     extern uint8_t rot_speed_setting; // quantized 0..10 (network)
     extern float rot_speed_f;         // smooth 0..10 (hold Q/E / touch)
     extern float rot_hint_opacity;    // world/UI hint ring while adjusting
@@ -188,6 +199,8 @@ namespace Game {
     void deposit_bank_petal(uint8_t static_pos);
     // Next non-empty cloud preset after the active one (wraps). Returns 1 if sent.
     uint8_t cycle_next_loadout_preset();
+    // Mobile L-pick: apply L bank preset for primary slot index; clears sticky. 1 if applied.
+    uint8_t try_mobile_l_preset_slot(uint8_t primary_index);
 
     void init();
     void reset();

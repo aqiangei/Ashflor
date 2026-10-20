@@ -306,6 +306,14 @@ uint8_t Party::respond(Client *target, std::string const &from_name, uint8_t acc
 void Party::on_death(Client *client, float x, float y) {
     if (client == nullptr || client->game == nullptr) return;
     clear_corpse(client);
+    client->has_death_pos = 1;
+    client->death_x = x;
+    client->death_y = y;
+    client->death_map_id = client->game->map_id;
+    Simulation *sim = &client->game->simulation;
+    Entity &camera = sim->get_ent(client->camera);
+    camera.set_camera_x(x);
+    camera.set_camera_y(y);
     if (client->party_id == 0) {
         send_update(client);
         return;
@@ -315,10 +323,6 @@ void Party::on_death(Client *client, float x, float y) {
     client->corpse_y = y;
     client->corpse_ttl = CORPSE_TTL;
     client->revive_progress = 0;
-    Simulation *sim = &client->game->simulation;
-    Entity &camera = sim->get_ent(client->camera);
-    camera.set_camera_x(x);
-    camera.set_camera_y(y);
     Entity &corpse = alloc_corpse(sim, camera.get_team(), x, y, player_name(client));
     client->corpse_id = corpse.id;
     std::string msg = "[队伍] " + player_name(client) + " 倒下了，站在尸体旁 3 秒可复活。";
@@ -337,6 +341,7 @@ static void do_revive(Client *dead) {
     Entity &camera = sim->get_ent(dead->camera);
     float x = dead->corpse_x;
     float y = dead->corpse_y;
+    dead->has_death_pos = 0;
     Party::clear_corpse(dead);
     // Same stale-player clear as kClientSpawn — corpse revive must not keep a deleting flower
     if (sim->ent_exists(camera.get_player()) && !sim->ent_alive(camera.get_player())) {
@@ -345,6 +350,7 @@ static void do_revive(Client *dead) {
     }
     Entity &player = alloc_player(sim, camera.get_team());
     player_spawn_at(sim, camera, player, x, y);
+    client_clear_life_stats(dead);
     Guild::sync_nametag(dead);
     Party::apply_team(dead);
     std::string msg = "[队伍] " + player_name(dead) + " 已被复活！";

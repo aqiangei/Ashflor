@@ -70,7 +70,7 @@ namespace Ui {
     Element *make_overlevel_indicator();
     Element *make_mobile_attack_button();
     Element *make_mobile_defend_button();
-    Element *make_mobile_swap_button(); // R: tap swap-all, long-press cycle preset
+    Element *make_mobile_swap_button(); // R: tap swap-all, long-press arm L1..Ln pick
     Element *make_mobile_joystick();
     Element *make_pause_menu();
     Element *make_game_topbar();

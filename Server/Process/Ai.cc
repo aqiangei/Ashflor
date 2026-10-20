@@ -1254,8 +1254,13 @@ void tick_ai_behavior(Simulation *sim, Entity &ent) {
     if (ent.pending_delete) return;
     if (sim->ent_alive(ent.seg_head)) return;
     ent.acceleration.set(0,0);
-    if (!sim->ent_alive(ent.target) && sim->ent_alive(ent.last_damaged_by))
-        ent.target = ent.last_damaged_by;
+    if (!sim->ent_alive(ent.target) && sim->ent_alive(ent.last_damaged_by)) {
+        // Plaza sanctuary: being hit by a player inside spawn does not start a chase.
+        Entity &attacker = sim->get_ent(ent.last_damaged_by);
+        if (!(is_player_faction(sim, attacker)
+              && Map::in_spawn_plaza(attacker.get_x(), attacker.get_y())))
+            ent.target = ent.last_damaged_by;
+    }
     if (!(ent.get_parent() == NULL_ENTITY)) {
         if (!sim->ent_alive(ent.get_parent())) {
             if (BitMath::at(ent.flags, EntityFlags::kDieOnParentDeath))
@@ -1281,10 +1286,12 @@ void tick_ai_behavior(Simulation *sim, Entity &ent) {
         ent.ai_tick = 0;
         return;
     }
-    // Outside mobs must not chase a player who is standing in the spawn plaza.
-    if (sim->ent_alive(ent.target) && !Map::in_spawn_plaza(ent.get_x(), ent.get_y())) {
+    // Spawn plaza = no-aggro zone: drop chase if the prey (player faction) is inside.
+    // Player attacks are unrestricted (not a NoAttack channel).
+    if (sim->ent_alive(ent.target) && !is_player_faction(sim, ent)) {
         Entity &prey = sim->get_ent(ent.target);
-        if (Map::in_spawn_plaza(prey.get_x(), prey.get_y()))
+        if (is_player_faction(sim, prey)
+            && Map::in_spawn_plaza(prey.get_x(), prey.get_y()))
             ent.target = NULL_ENTITY;
     }
     switch(ent.get_mob_id()) {

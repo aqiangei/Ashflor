@@ -223,43 +223,84 @@ void AccountStore::load() {
         ls >> acc.username >> pass_hash >> level;
         if (acc.username.empty() || !valid_username(acc.username)) continue;
         acc.pass_hash = pass_hash;
-        acc.level = (uint8_t) std::min<uint32_t>(std::max<uint32_t>(level, 1), MAX_LEVEL);
+        acc.level = level < 1 ? 1 : level;
         acc.petals.fill(PetalID::kNone);
         acc.craft_bank.fill(0);
         acc.coins = 0;
         acc.craft_attempts = 0;
         acc.talent_hp = 0;
         acc.talent_rot = 0;
-        for (uint32_t i = 0; i < 2 * MAX_SLOT_COUNT; ++i) {
-            unsigned int v = PetalID::kNone;
-            if (!(ls >> v)) break;
-            if (v >= PetalID::kNumPetals) v = PetalID::kNone;
-            acc.petals[i] = (PetalID::T) v;
+        // Read remaining numbers first, then split petals vs craft_bank.
+        // MAX_SLOT_COUNT grew 8→10 (petals 16→20, presets width 9→11).
+        std::vector<uint64_t> fields;
+        {
+            uint64_t fv = 0;
+            while (ls >> fv) fields.push_back(fv);
         }
         {
-            std::vector<uint64_t> rest;
-            uint64_t v = 0;
-            while (ls >> v) rest.push_back(v);
-            // craft_bank grew when Royal petals were appended; accept prior length.
-            uint32_t bank_n = PetalID::kNumPetals;
-            // Accept saves from before Fast/Heavy/Twin ladders (+14), Stinger Leg (+1), Jungle (+12), ladders (+43), Royal (+12)
+            constexpr uint32_t kPetalsNew = 2 * MAX_SLOT_COUNT;
+            constexpr uint32_t kPetalsLegacy8 = 16;
+            constexpr uint32_t kPresetNew = 1 + MAX_SLOT_COUNT;
+            constexpr uint32_t kPresetLegacy8 = 1 + 8;
+            uint32_t const n = (uint32_t) PetalID::kNumPetals;
             constexpr uint32_t kCommonLadderAdded = 14;
             constexpr uint32_t kStingerLegAdded = 1;
             constexpr uint32_t kJungleAdded = 12;
             constexpr uint32_t kLadderAdded = 43;
             constexpr uint32_t kRoyalAdded = 12;
-            uint32_t const n = (uint32_t)PetalID::kNumPetals;
-            // Coin is one appended id. A full modern line is bank + this tail.
             constexpr uint32_t kCoinAdded = 1;
-            constexpr uint32_t kAccountTail = 5 + LOADOUT_PRESET_COUNT * (1 + MAX_SLOT_COUNT) + 4;
             uint32_t const prev_coin = n > kCoinAdded ? n - kCoinAdded : n;
-            if (rest.size() == prev_coin + kAccountTail)
-                bank_n = prev_coin;
             uint32_t const prev_common = n > kCommonLadderAdded ? n - kCommonLadderAdded : n;
             uint32_t const prev_stinger = prev_common > kStingerLegAdded ? prev_common - kStingerLegAdded : prev_common;
             uint32_t const prev_jungle = prev_stinger > kJungleAdded ? prev_stinger - kJungleAdded : prev_stinger;
             uint32_t const prev_ladder = prev_jungle > kLadderAdded ? prev_jungle - kLadderAdded : prev_jungle;
             uint32_t const prev_royal = prev_ladder > kRoyalAdded ? prev_ladder - kRoyalAdded : prev_ladder;
+            uint32_t const bank_candidates[] = {
+                n, prev_coin, prev_common, prev_stinger, prev_jungle, prev_ladder, prev_royal
+            };
+
+            auto layout_ok = [&](uint32_t petal_n, uint32_t preset_w) -> bool {
+                if (fields.size() < petal_n) return false;
+                size_t rem = fields.size() - petal_n;
+                for (uint32_t bank_n : bank_candidates) {
+                    size_t const full = bank_n + 5 + LOADOUT_PRESET_COUNT * preset_w + 4;
+                    size_t const presets = bank_n + 5 + LOADOUT_PRESET_COUNT * preset_w;
+                    if (rem == full || rem == presets) return true;
+                    if (rem >= bank_n && rem <= bank_n + 5) return true;
+                }
+                // Legacy rarity-bucket saves were frozen at 7 tiers (pre-Super/Ultra).
+                if (petal_n == kPetalsLegacy8 && rem >= 7 && rem < n)
+                    return true;
+                return false;
+            };
+
+            uint32_t petal_n = kPetalsNew;
+            uint32_t preset_w = kPresetNew;
+            if (layout_ok(kPetalsNew, kPresetNew)) {
+                petal_n = kPetalsNew;
+                preset_w = kPresetNew;
+            } else if (layout_ok(kPetalsLegacy8, kPresetLegacy8)) {
+                petal_n = kPetalsLegacy8;
+                preset_w = kPresetLegacy8;
+            } else {
+                petal_n = (uint32_t) std::min<size_t>(fields.size(), kPetalsNew);
+                preset_w = kPresetNew;
+            }
+
+            for (uint32_t i = 0; i < petal_n && i < 2 * MAX_SLOT_COUNT; ++i) {
+                uint64_t v = fields[i];
+                if (v >= PetalID::kNumPetals) v = PetalID::kNone;
+                acc.petals[i] = (PetalID::T) v;
+            }
+
+            std::vector<uint64_t> rest(
+                fields.begin() + (std::ptrdiff_t) petal_n, fields.end());
+
+            uint32_t bank_n = PetalID::kNumPetals;
+            constexpr uint32_t kAccountTail = 5 + LOADOUT_PRESET_COUNT * (1 + MAX_SLOT_COUNT) + 4;
+            if (rest.size() == prev_coin + kAccountTail
+                || rest.size() == prev_coin + 5 + LOADOUT_PRESET_COUNT * preset_w + 4)
+                bank_n = prev_coin;
             if (rest.size() < bank_n && rest.size() >= prev_common)
                 bank_n = prev_common;
             else if (rest.size() < bank_n && rest.size() >= prev_stinger)
@@ -283,15 +324,17 @@ void AccountStore::load() {
                     acc.talent_rot = (uint8_t) std::min<uint64_t>(rest[bank_n + 3], 99);
                 if (rest.size() > bank_n + 4)
                     acc.session_hash = rest[bank_n + 4];
-                constexpr uint32_t preset_width = 1 + MAX_SLOT_COUNT;
-                if (rest.size() >= bank_n + 5 + LOADOUT_PRESET_COUNT * preset_width) {
+                uint32_t const preset_petal_n = preset_w > 0 ? preset_w - 1 : 0;
+                if (rest.size() >= bank_n + 5 + LOADOUT_PRESET_COUNT * preset_w) {
                     uint32_t at = bank_n + 5;
                     for (LoadoutPreset &preset : acc.loadout_presets) {
                         uint64_t slots = rest[at++];
                         preset.slot_count = slots <= MAX_SLOT_COUNT ? (uint8_t) slots : 0;
-                        for (PetalID::T &id : preset.petals) {
+                        preset.petals.fill(PetalID::kNone);
+                        for (uint32_t i = 0; i < preset_petal_n && i < MAX_SLOT_COUNT; ++i) {
                             uint64_t value = rest[at++];
-                            id = value < PetalID::kNumPetals ? (PetalID::T) value : PetalID::kNone;
+                            preset.petals[i] = value < PetalID::kNumPetals
+                                ? (PetalID::T) value : PetalID::kNone;
                         }
                     }
                     if (rest.size() >= at + 4) {
@@ -301,15 +344,15 @@ void AccountStore::load() {
                         acc.last_seen_epoch = rest[at++];
                     }
                 }
-            } else if (rest.size() >= RarityID::kNumRarities) {
-                // Legacy rarity buckets → park counts on first petal of that rarity
-                for (uint8_t r = 0; r < RarityID::kNumRarities; ++r) {
+            } else if (rest.size() >= 7) {
+                // Legacy rarity buckets (7 tiers) → park counts on first petal of that rarity
+                for (uint8_t r = 0; r < 7; ++r) {
                     PetalID::T id = Craft::first_petal_of_rarity(r);
                     if (id != PetalID::kNone)
                         acc.craft_bank[id] = (uint32_t) rest[r];
                 }
-                if (rest.size() > RarityID::kNumRarities)
-                    acc.coins = (uint32_t) rest[RarityID::kNumRarities];
+                if (rest.size() > 7)
+                    acc.coins = (uint32_t) rest[7];
             }
         }
         if (acc.coins > 0) {
@@ -327,7 +370,7 @@ void AccountStore::load() {
 
 void AccountStore::save() {
     std::ostringstream out;
-    out << "# ashflor accounts  fields: user hash level petals[16] craft_bank[N] coins craft_attempts talent_hp talent_rot session_hash presets[20][slots+8 petals] bonus_day daily_bonus offline_bonus last_seen\n";
+    out << "# ashflor accounts  fields: user hash level petals[20] craft_bank[N] coins craft_attempts talent_hp talent_rot session_hash presets[20][slots+10 petals] bonus_day daily_bonus offline_bonus last_seen\n";
     for (auto const &kv : ACCOUNTS) {
         Account const &acc = kv.second;
         out << acc.username << ' ' << acc.pass_hash << ' ' << (uint32_t) acc.level;
@@ -376,20 +419,18 @@ static void copy_progress(Account &acc, Client *client) {
     Entity &camera = sim->get_ent(client->camera);
     acc.petals.fill(PetalID::kNone);
     // Level is a high-water mark — never write a lower value back to the account.
-    uint8_t level = 1;
+    uint32_t level = 1;
     if (sim->ent_alive(camera.get_player())) {
         Entity &player = sim->get_ent(camera.get_player());
         uint32_t lv = score_to_level(player.get_score());
         if (lv < 1) lv = 1;
-        if (lv > MAX_LEVEL) lv = MAX_LEVEL;
         if (lv < camera.get_respawn_level()) lv = camera.get_respawn_level();
-        level = (uint8_t) lv;
+        level = lv;
         for (uint32_t i = 0; i < 2 * MAX_SLOT_COUNT; ++i)
             acc.petals[i] = player.get_loadout_ids(i);
     } else {
         level = camera.get_respawn_level();
         if (level < 1) level = 1;
-        if (level > MAX_LEVEL) level = MAX_LEVEL;
         for (uint32_t i = 0; i < 2 * MAX_SLOT_COUNT; ++i)
             acc.petals[i] = camera.get_inventory(i);
     }

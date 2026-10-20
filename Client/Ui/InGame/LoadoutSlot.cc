@@ -165,6 +165,14 @@ UiLoadoutSlot::UiLoadoutSlot(uint8_t pos) : Element(70, 70, { .fill = 0xffeeeeee
     Ui::UiLoadout::petal_backgrounds[pos] = this;
 }
 
+void UiLoadoutSlot::on_event(uint8_t event) {
+    // Empty primaries have no petal widget — pick mode lands here.
+    if (event != kClick && event != kMouseDown) return;
+    if (!Game::mobile_l_preset_pick) return;
+    if (position >= Game::loadout_count) return;
+    Game::try_mobile_l_preset_slot(position);
+}
+
 void UiLoadoutSlot::on_render(Renderer &ctx) {
     // Rarity-tinted slot (zorr / florr_clone loadout bar)
     uint32_t saved_fill = style.fill;
@@ -193,6 +201,27 @@ void UiLoadoutSlot::on_render(Renderer &ctx) {
             ctx.fill();
             ctx.set_global_alpha(1.f);
         }
+    }
+    // L-pick: gold ring on primary slots
+    if (Game::mobile_l_preset_pick && position < Game::loadout_count) {
+        ctx.set_stroke(0xffffe08a);
+        ctx.set_line_width(3.5f);
+        ctx.begin_path();
+        ctx.round_rect(-width / 2 - 2, -height / 2 - 2, width + 4, height + 4, style.round_radius + 2);
+        ctx.stroke();
+    }
+    if (Game::mobile_l_preset_pick && position < Game::loadout_count) {
+        ctx.set_global_alpha(1.f);
+        ctx.translate(0, -height / 2 - 16);
+        // L1..L9, L0 (matches digit keybinds)
+        char const *lab = position == 9 ? "L0" : nullptr;
+        std::string lab_buf;
+        if (lab == nullptr) {
+            lab_buf = std::format("L{}", position + 1);
+            lab = lab_buf.c_str();
+        }
+        ctx.draw_text(lab, { .fill = 0xffffe08a, .size = 15 });
+        return;
     }
     if (Game::slot_indicator_opacity < 0.01) return;
     if (position < Game::loadout_count) {

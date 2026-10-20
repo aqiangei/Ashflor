@@ -656,6 +656,12 @@ void UiLoadoutPetal::poll_events(ScreenEvent const &event) {
 
 void UiLoadoutPetal::on_event(uint8_t event) {
     if (Game::alive() && event == kMouseDown) {
+        // Sticky L-pick (mobile long-press R): slot index → L bank, no drag.
+        if (Game::mobile_l_preset_pick && static_pos < Game::loadout_count) {
+            Game::try_mobile_l_preset_slot(static_pos);
+            rendering_tooltip = 0;
+            return;
+        }
         if (!selected) {
             ++Ui::UiLoadout::num_petals_selected;
             press_x = Input::mouse_x;

@@ -15,6 +15,8 @@
 
 #include <Helpers/Bits.hh>
 
+#include <string>
+
 using namespace Ui;
 
 static TextInput *chat_input = nullptr;
@@ -138,13 +140,38 @@ Element *Ui::make_chat_panel() {
     for (uint32_t i = 0; i < Game::CHAT_HISTORY; ++i)
         lines.push_back(new ChatLineElement(i));
 
-    chat_input = new ChatTextInput(Game::chat_draft, 280, 32, MAX_CHAT_LENGTH, {
+    uint8_t const mobile = Input::is_mobile;
+    float const input_w = mobile ? 200.f : 260.f;
+    float const input_h = mobile ? 36.f : 32.f;
+    chat_input = new ChatTextInput(Game::chat_draft, input_w, input_h, MAX_CHAT_LENGTH, {
         .line_width = 0,
         .round_radius = Chrome::kRadius,
         .should_render = [](){
             return Game::alive() && Game::should_render_game_ui();
         }
     });
+
+    Element *send_btn = new Ui::Button(
+        mobile ? 56.f : 52.f, input_h,
+        new Ui::DynamicText(mobile ? 15.f : 14.f, [](){
+            return I18n::use_chinese ? std::string{"发送"} : std::string{"Send"};
+        }),
+        [](Element *, uint8_t e){
+            if (e != Ui::kClick) return;
+            if (!Game::chat_open) Game::open_chat();
+            Game::send_chat();
+        },
+        nullptr,
+        {
+            .fill = Chrome::kBtnMoss,
+            .line_width = 0,
+            .round_radius = Chrome::kRadius,
+            .should_render = [](){
+                return Game::alive() && Game::should_render_game_ui()
+                    && Game::chat_open;
+            }
+        }
+    );
 
     lines.push_back(new Ui::HContainer({
         new Ui::DynamicText(13, [](){ return channel_bracket_label(); }, {
@@ -154,7 +181,8 @@ Element *Ui::make_chat_panel() {
             },
             .should_render = [](){ return Game::alive(); }
         }),
-        chat_input
+        chat_input,
+        send_btn
     }, 0, 6, { .h_justify = Style::Left }));
 
     Element *elt = new Ui::VContainer(lines, 10, 4, {
@@ -167,7 +195,7 @@ Element *Ui::make_chat_panel() {
         .v_justify = Style::Bottom
     });
     // Right of vertical B/Z/C/V column (~44+pad), sit on bottom edge
-    elt->x = 72;
+    elt->x = mobile ? 64.f : 72.f;
     elt->y = -16;
     return elt;
 }

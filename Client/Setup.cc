@@ -109,6 +109,8 @@ int setup_inputs() {
         Module.ashflorDpr = Math.min(window.devicePixelRatio || 1, 2);
         const dpr = () => Module.ashflorDpr || Math.min(window.devicePixelRatio || 1, 2);
         window.addEventListener("keydown", (e) => {
+            // IME composition (Chinese etc.): don't steal Enter / don't send chat mid-compose
+            if (e.isComposing || e.keyCode === 229) return;
             const typing = e.target && (e.target.tagName === "INPUT" || e.target.tagName === "TEXTAREA");
             const pass = e.code === "Escape" || e.code === "Enter" || e.code === "NumpadEnter" || e.code === "Tab";
             if (typing && !pass) return;
@@ -116,6 +118,7 @@ int setup_inputs() {
             !e.repeat && _key_event(stringToNewUTF8(e.code), 0);
         });
         window.addEventListener("keyup", (e) => {
+            if (e.isComposing || e.keyCode === 229) return;
             const typing = e.target && (e.target.tagName === "INPUT" || e.target.tagName === "TEXTAREA");
             const pass = e.code === "Escape" || e.code === "Enter" || e.code === "NumpadEnter" || e.code === "Tab";
             if (typing && !pass) return;

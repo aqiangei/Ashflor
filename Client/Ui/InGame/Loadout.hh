@@ -12,6 +12,7 @@ namespace Ui {
         UiLoadoutSlot(uint8_t);
 
         virtual void on_render(Renderer &) override;
+        virtual void on_event(uint8_t) override;
     };
 
     class UiDeleteSlot final : public UiLoadoutSlot {

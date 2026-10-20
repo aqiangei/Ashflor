@@ -120,6 +120,29 @@ void inflict_damage(Simulation *sim, EntityID const atk_id, EntityID const def_i
     }
     defender.last_damaged_by = attacker.base_entity;
 
+    // Private loot: record each damaging player/party (team id) as a claim unit.
+    if (defender.has_component(kMob) && type != DamageType::kReflect) {
+        EntityID flower_id = NULL_ENTITY;
+        if (attacker.has_component(kFlower))
+            flower_id = atk_id;
+        else if (attacker.has_component(kPetal) && sim->ent_alive(attacker.get_parent()))
+            flower_id = attacker.get_parent();
+        if (sim->ent_alive(flower_id)) {
+            Entity &flower = sim->get_ent(flower_id);
+            if (flower.has_component(kFlower)) {
+                EntityID team = flower.get_team();
+                if (!team.null()) {
+                    uint8_t found = 0;
+                    for (uint8_t i = 0; i < defender.loot_claim_n; ++i) {
+                        if (defender.loot_claim_teams[i] == team) { found = 1; break; }
+                    }
+                    if (!found && defender.loot_claim_n < 16)
+                        defender.loot_claim_teams[defender.loot_claim_n++] = team;
+                }
+            }
+        }
+    }
+
     if (type == DamageType::kContact && defender.poison_ticks < attacker.poison_damage.time * TPS) {
         defender.poison_ticks = attacker.poison_damage.time * TPS;
         defender.poison_inflicted = attacker.poison_damage.damage / TPS;

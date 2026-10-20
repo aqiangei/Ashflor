@@ -12,70 +12,80 @@
 #include <Client/I18n.hh>
 #include <Client/Input.hh>
 
+#include <string>
+#include <vector>
+
 using namespace Ui;
 
+static Element *settings_toggle_row(uint8_t *flag, I18n::Str label, float toggle, float text) {
+    return new Ui::HContainer({
+        new Ui::ToggleButton(toggle, flag),
+        new Ui::DynamicText(text, [label](){ return I18n::tr(label); }, {
+            .fill = Chrome::kBody,
+            .h_justify = Style::Left
+        })
+    }, 0, 8, { .h_justify = Style::Left });
+}
+
 Element *Ui::make_settings_panel() {
+    uint8_t const mobile = Input::is_mobile;
+    float const toggle = mobile ? 28.f : 30.f;
+    float const label = mobile ? 14.f : 16.f;
+    float const pad = mobile ? 14.f : 20.f;
+    float const gap = mobile ? 8.f : 10.f;
+
+    auto row = [&](uint8_t *flag, I18n::Str text) {
+        return settings_toggle_row(flag, text, toggle, label);
+    };
+
+    std::vector<Element *> toggles = {
+        row(&I18n::use_chinese, I18n::kLanguage),
+        row(&Input::keyboard_movement, I18n::kKeyboardMovement),
+        row(&Input::movement_helper, I18n::kMovementHelper),
+        row(&Input::invert_attack, I18n::kInvertAttack),
+        row(&Input::invert_defend, I18n::kInvertDefend),
+        row(&Input::request_mobile, I18n::kRequestMobile),
+        row(&Game::show_debug, I18n::kDebugStats),
+    };
+
+    Element *toggles_block = nullptr;
+    if (mobile) {
+        // Two short columns so the sheet fits the phone viewport.
+        size_t mid = (toggles.size() + 1) / 2;
+        std::vector<Element *> left(toggles.begin(), toggles.begin() + (std::ptrdiff_t) mid);
+        std::vector<Element *> right(toggles.begin() + (std::ptrdiff_t) mid, toggles.end());
+        toggles_block = new Ui::HContainer({
+            new Ui::VContainer(left, 0, 8, { .h_justify = Style::Left, .no_animation = 1 }),
+            new Ui::VContainer(right, 0, 8, { .h_justify = Style::Left, .no_animation = 1 })
+        }, 0, 14, { .h_justify = Style::Left, .no_animation = 1 });
+    } else {
+        toggles_block = new Ui::VContainer(toggles, 0, gap, {
+            .h_justify = Style::Left, .no_animation = 1
+        });
+    }
+
     Element *elt = new Ui::VContainer({
-        new Ui::DynamicText(25, [](){ return I18n::tr(I18n::kSettings); }, {
+        new Ui::DynamicText(mobile ? 22.f : 25.f, [](){ return I18n::tr(I18n::kSettings); }, {
             .fill = Chrome::kTitle
         }),
-        new Ui::HContainer({
-            new Ui::ToggleButton(30, &I18n::use_chinese),
-            new Ui::DynamicText(16, [](){ return I18n::tr(I18n::kLanguage); }, {
-                .fill = Chrome::kBody
-            })
-        }, 0, 10, {.h_justify = Style::Left }),
-        new Ui::HContainer({
-            new Ui::ToggleButton(30, &Input::keyboard_movement),
-            new Ui::DynamicText(16, [](){ return I18n::tr(I18n::kKeyboardMovement); }, {
-                .fill = Chrome::kBody
-            })
-        }, 0, 10, {.h_justify = Style::Left }),
-        new Ui::HContainer({
-            new Ui::ToggleButton(30, &Input::movement_helper),
-            new Ui::DynamicText(16, [](){ return I18n::tr(I18n::kMovementHelper); }, {
-                .fill = Chrome::kBody
-            })
-        }, 0, 10, {.h_justify = Style::Left }),
-        new Ui::HContainer({
-            new Ui::ToggleButton(30, &Input::invert_attack),
-            new Ui::DynamicText(16, [](){ return I18n::tr(I18n::kInvertAttack); }, {
-                .fill = Chrome::kBody
-            })
-        }, 0, 10, {.h_justify = Style::Left }),
-        new Ui::HContainer({
-            new Ui::ToggleButton(30, &Input::invert_defend),
-            new Ui::DynamicText(16, [](){ return I18n::tr(I18n::kInvertDefend); }, {
-                .fill = Chrome::kBody
-            })
-        }, 0, 10, {.h_justify = Style::Left }),
-        new Ui::HContainer({
-            new Ui::ToggleButton(30, &Input::request_mobile),
-            new Ui::DynamicText(16, [](){ return I18n::tr(I18n::kRequestMobile); }, {
-                .fill = Chrome::kBody
-            })
-        }, 0, 10, {.h_justify = Style::Left }),
-        new Ui::HContainer({
-            new Ui::ToggleButton(30, &Game::show_debug),
-            new Ui::DynamicText(16, [](){ return I18n::tr(I18n::kDebugStats); }, {
-                .fill = Chrome::kBody
-            })
-        }, 0, 10, {.h_justify = Style::Left }),
-        new Ui::Button(220, 36,
-            new Ui::DynamicText(16, [](){ return I18n::tr(I18n::kFullscreen); }),
+        toggles_block,
+        new Ui::Button(mobile ? 160.f : 220.f, mobile ? 34.f : 36.f,
+            new Ui::DynamicText(mobile ? 15.f : 16.f, [](){ return I18n::tr(I18n::kFullscreen); }),
             [](Element *, uint8_t e){
                 if (e == Ui::kClick) DOM::toggle_fullscreen();
             },
             nullptr,
             { .fill = Chrome::kBtnSlate, .line_width = 0, .round_radius = Chrome::kRadius }
         ),
-        new Ui::DynamicText(12, [](){ return I18n::tr(I18n::kMadeBy); }, {
-            .fill = Chrome::kMuted
-        }),
-        new Ui::DynamicText(12, [](){ return I18n::tr(I18n::kAssetCredits); }, {
-            .fill = Chrome::kMuted
+        new Ui::DynamicText(mobile ? 17.f : 16.f, [](){
+            return I18n::use_chinese
+                ? std::string{"交流 QQ 群：227990150"}
+                : std::string{"QQ group: 227990150"};
+        }, { .fill = Chrome::kGold, .h_justify = Style::Left }),
+        new Ui::DynamicText(mobile ? 15.f : 14.f, [](){ return I18n::tr(I18n::kMadeBy); }, {
+            .fill = Chrome::kMuted, .h_justify = Style::Left
         })
-    }, 20, 10, {
+    }, pad, gap, {
         .fill = Chrome::kPanelDeep,
         .line_width = 0,
         .round_radius = Chrome::kRadius,
@@ -89,7 +99,7 @@ Element *Ui::make_settings_panel() {
         .v_justify = Style::Top
     });
     elt->x = 12;
-    elt->y = 84;
+    elt->y = mobile ? 72.f : 84.f;
     Ui::Panel::settings = elt;
     return elt;
 }

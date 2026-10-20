@@ -10,28 +10,31 @@
 #include <vector>
 
 namespace Craft {
+    // Indexed by from-rarity. Mythic→Unique was tabled but previously capped off.
     static float const SUCCESS[RarityID::kNumRarities - 1] = {
-        0.64f,
-        0.36f,
-        0.18f,
-        0.09f,
-        0.04f,
-        0.015f
+        0.64f,   // Common → Unusual
+        0.36f,   // Unusual → Rare
+        0.18f,   // Rare → Epic
+        0.09f,   // Epic → Legendary
+        0.04f,   // Legendary → Mythic
+        0.015f,  // Mythic → Unique
+        0.008f,  // Unique → Super
+        0.004f   // Super → Ultra
     };
 
     static float const FARM_SEC[RarityID::kNumRarities] = {
-        8.f, 28.f, 140.f, 700.f, 2800.f, 9000.f, 28000.f
+        8.f, 28.f, 140.f, 700.f, 2800.f, 9000.f, 28000.f, 70000.f, 160000.f
     };
 
     static uint32_t const COIN_BASE[RarityID::kNumRarities] = {
-        1, 4, 12, 35, 90, 220, 550
+        1, 4, 12, 35, 90, 220, 550, 1400, 3500
     };
     static uint32_t const COIN_SPREAD[RarityID::kNumRarities] = {
-        2, 4, 10, 25, 60, 140, 350
+        2, 4, 10, 25, 60, 140, 350, 800, 2000
     };
 
     static uint32_t const BUY_RARITY[RarityID::kNumRarities] = {
-        8, 25, 90, 320, 1200, 4800, 18000
+        8, 25, 90, 320, 1200, 4800, 18000, 60000, 200000
     };
 
     float success_chance(uint8_t from_rarity) {
@@ -89,18 +92,24 @@ namespace Craft {
     static PetalID::T find_same_name_at_rarity(PetalID::T from, uint8_t rarity) {
         if (from == PetalID::kNone || from >= PetalID::kNumPetals) return PetalID::kNone;
         char const *name = PETAL_DATA[from].name;
+        if (name == nullptr) return PetalID::kNone;
+        // Several legacy petals share an English name with the rarity ladder
+        // (Dahlia/RoseRare, Tringer/StingerLegendary, …). Prefer the highest
+        // id — append-only ladder fills come last and are the craft target.
+        PetalID::T best = PetalID::kNone;
         for (uint32_t id = 1; id < (uint32_t) PetalID::kNumPetals; ++id) {
             if (PETAL_DATA[id].rarity != rarity) continue;
-            if (std::strcmp(PETAL_DATA[id].name, name) == 0)
-                return (PetalID::T) id;
+            if (PETAL_DATA[id].name == nullptr) continue;
+            if (std::strcmp(PETAL_DATA[id].name, name) != 0) continue;
+            if (best == PetalID::kNone || id > best) best = (PetalID::T) id;
         }
-        return PetalID::kNone;
+        return best;
     }
 
     uint8_t can_upgrade_petal(PetalID::T id) {
         if (id == PetalID::kNone || id >= PetalID::kNumPetals) return 0;
         uint8_t r = PETAL_DATA[id].rarity;
-        if (r >= RarityID::kUnique - 1) return 0;
+        if (r >= RarityID::kNumRarities - 1) return 0;
         return find_same_name_at_rarity(id, (uint8_t) (r + 1)) != PetalID::kNone;
     }
 

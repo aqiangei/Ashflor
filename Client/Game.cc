@@ -63,6 +63,9 @@ namespace Game {
     std::string disconnect_message;
     std::array<uint8_t, PetalID::kNumPetals> seen_petals;
     std::array<uint8_t, MobID::kNumMobs> seen_mobs;
+    std::vector<LifeEntry> life_mob_kills;
+    std::vector<LifeEntry> life_petal_picks;
+    uint8_t life_summary_ready = 0;
     std::array<PetalID::T, 2 * MAX_SLOT_COUNT> cached_loadout = {PetalID::kNone};
 
     double timestamp = 0;
@@ -117,7 +120,7 @@ namespace Game {
     std::array<uint32_t, PetalID::kNumPetals> craft_bank = {};
     uint32_t coins = 0;
     uint8_t guest_save_valid = 0;
-    uint8_t guest_level = 1;
+    uint32_t guest_level = 1;
     std::array<PetalID::T, 2 * MAX_SLOT_COUNT> guest_petals = {PetalID::kNone};
     std::array<uint32_t, PetalID::kNumPetals> guest_craft_bank = {};
     uint32_t guest_coins = 0;
@@ -132,6 +135,7 @@ namespace Game {
     std::array<LoadoutPreset, LOADOUT_PRESET_COUNT> loadout_presets = {};
     uint8_t active_loadout_preset = LOADOUT_PRESET_COUNT;
     std::string loadout_preset_status;
+    uint8_t mobile_l_preset_pick = 0;
     uint8_t rot_speed_setting = 7;
     float rot_speed_f = 7.f;
     float rot_hint_opacity = 0.f;
@@ -275,6 +279,9 @@ void Game::init() {
         Ui::make_stat_screen()
     );
     game_ui_window.add_child(
+        Ui::make_death_life_summary()
+    );
+    game_ui_window.add_child(
         Ui::make_game_topbar()
     );
     // In-game copies of title panels (title window is skipped while playing)
@@ -416,6 +423,7 @@ void Game::reset() {
     loadout_presets = {};
     active_loadout_preset = LOADOUT_PRESET_COUNT;
     loadout_preset_status.clear();
+    mobile_l_preset_pick = 0;
     craft_tray_id = PetalID::kNone;
     craft_tray_count = 0;
     simulation.reset();
@@ -430,9 +438,9 @@ void Game::send_guest_progress() {
         socket.send(writer.packet, writer.at - writer.packet);
         return;
     }
-    writer.write<uint8_t>(guest_level < 1 ? 1 : guest_level);
+    writer.write<uint32_t>(guest_level < 1 ? 1 : guest_level);
     for (uint32_t i = 0; i < 2 * MAX_SLOT_COUNT; ++i)
-        writer.write<uint8_t>(guest_petals[i]);
+        writer.write<PetalID::T>(guest_petals[i]);
     for (uint32_t i = 0; i < PetalID::kNumPetals; ++i)
         writer.write<uint32_t>(guest_craft_bank[i]);
     writer.write<uint32_t>(guest_coins);
@@ -448,7 +456,7 @@ void Game::sync_guest_progress() {
     guest_talent_hp = talent_hp;
     guest_talent_rot = talent_rot;
     if (alive()) {
-        uint8_t lv = (uint8_t) std::min<uint32_t>(score_to_level(score), 255);
+        uint32_t lv = score_to_level(score);
         if (lv < 1) lv = 1;
         // High-water mark — never let a mid-life sync drop stored guest level.
         if (lv > guest_level || !guest_save_valid) guest_level = lv;
@@ -458,7 +466,7 @@ void Game::sync_guest_progress() {
     } else if (simulation.ent_exists(camera_id)) {
         // Dead: camera inventory preserves slot layout (primary + backpack).
         Entity const &camera = simulation.get_ent(camera_id);
-        uint8_t lv = camera.get_respawn_level();
+        uint32_t lv = camera.get_respawn_level();
         if (lv < 1) lv = 1;
         if (lv > guest_level || !guest_save_valid) guest_level = lv;
         for (uint32_t i = 0; i < 2 * MAX_SLOT_COUNT; ++i)
@@ -733,6 +741,11 @@ void Game::tick(double time) {
         // death UI appears and Enter/"Continue" looks like an instant revive.
         if (!leaving_to_title)
             on_game_screen = 1;
+        if (life_summary_ready) {
+            life_summary_ready = 0;
+            life_mob_kills.clear();
+            life_petal_picks.clear();
+        }
         player_id = simulation.get_ent(camera_id).get_player();
         Entity const &player = simulation.get_ent(player_id);
         Game::loadout_count = player.get_loadout_count();
@@ -928,7 +941,10 @@ void Game::tick(double time) {
         
     if (Game::timestamp - Ui::UiLoadout::last_key_select > 5000)
         Ui::UiLoadout::selected_with_keys = MAX_SLOT_COUNT;
-    slot_indicator_opacity = lerp(slot_indicator_opacity, Ui::UiLoadout::selected_with_keys != MAX_SLOT_COUNT, Ui::lerp_amount);
+    if (!alive()) mobile_l_preset_pick = 0;
+    slot_indicator_opacity = lerp(slot_indicator_opacity,
+        Ui::UiLoadout::selected_with_keys != MAX_SLOT_COUNT || mobile_l_preset_pick,
+        Ui::lerp_amount);
     // Fade hint ring after last adjust (wheel drag or Q/E)
     if (rot_hint_opacity > 0.f && timestamp - rot_hint_stamp > 120) {
         float decay = (float) pow(0.88, Ui::dt * 60 / 1000);
@@ -1007,11 +1023,15 @@ void Game::tick(double time) {
                 toggle_game_panel(kPanelSpecial);
         }
     }
-    // Main Enter and NumpadEnter both map to '\r': focus chat, or send if already open
-    if (Input::keys_held_this_tick.contains('\r')) {
+    // Enter: canvas '\r', or DOM overlay Enter / soft-keyboard Send (text_enter_pressed)
+    uint8_t const enter = Input::keys_held_this_tick.contains('\r') || DOM::text_enter_pressed;
+    DOM::text_enter_pressed = 0;
+    if (enter) {
         if (Game::alive()) {
             if (chat_open) send_chat();
-            else if (!pause_menu_open && !leave_confirm_open) open_chat();
+            else if (!pause_menu_open && !leave_confirm_open
+                && Ui::active_text_input() == nullptr)
+                open_chat();
         } else if (!leaving_to_title) {
             Game::spawn_in();
         }

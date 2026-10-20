@@ -39,9 +39,14 @@ public:
     uint32_t stat_messages = 0; // chat messages sent
     uint32_t stat_kills = 0;    // players killed
     uint32_t stat_crafts = 0;   // craft attempts
+    // This-life tallies — reset on spawn, sent on death for the summary panels.
+    std::array<uint16_t, MobID::kNumMobs> life_mob_kills = {};
+    std::array<uint16_t, PetalID::kNumPetals> life_petal_picks = {};
     uint8_t talent_hp = 0;
     uint8_t talent_rot = 0;
     std::array<LoadoutPreset, LOADOUT_PRESET_COUNT> loadout_presets = {};
+    // 0..19 active cloud preset; LOADOUT_PRESET_COUNT = none yet
+    uint8_t active_loadout_preset = LOADOUT_PRESET_COUNT;
     uint32_t bonus_day = 0;
     uint32_t daily_bonus_seconds = 0;
     uint32_t offline_bonus_seconds = 0;
@@ -64,6 +69,11 @@ public:
     uint32_t corpse_ttl = 0;
     uint32_t revive_progress = 0;
     EntityID corpse_id = NULL_ENTITY;
+    // Solo/party: death site for Continue respawn (kept after corpse TTL expires)
+    uint8_t has_death_pos = 0;
+    float death_x = 0;
+    float death_y = 0;
+    uint8_t death_map_id = 0;
     Client();
     void init();
     void remove();
@@ -85,6 +95,10 @@ void client_sync_craft(Client *);
 void client_tick_bonus(Client *);
 // Move the session counters of a client into the leaderboard store
 void client_flush_stats(Client *);
+void client_clear_life_stats(Client *);
+void client_credit_mob_kill(Client *, MobID::T);
+void client_credit_petal_pick(Client *, PetalID::T);
+void client_send_life_summary(Client *);
 
 #ifdef WASM_SERVER
 class WebSocket {

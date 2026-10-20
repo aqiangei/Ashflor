@@ -4,6 +4,8 @@
 #include <string>
 
 namespace DOM {
+    // Set by overlay <input> Enter / soft-keyboard Send; consumed each tick.
+    extern uint8_t text_enter_pressed;
     // password=1 → type=password (masked)
     void create_text_input(char const *, uint32_t, uint8_t password = 0);
     void set_input_password(char const *, uint8_t password);

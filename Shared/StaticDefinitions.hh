@@ -115,7 +115,7 @@ namespace DamageType {
 }
 
 namespace PetalID {
-    typedef uint8_t T;
+    typedef uint16_t T;
     enum : T {
         kNone,
         kBasic,
@@ -373,6 +373,49 @@ namespace PetalID {
         kWorldTreeSeed,
         kSkyblade,
         kChaosPrism,
+        // Super/Ultra ladders (append-only; Unique→Super→Ultra craft)
+        kBasicUnique,
+        kBasicSuper,
+        kBasicUltra,
+        kStingerUnique,
+        kStingerSuper,
+        kStingerUltra,
+        kRoseUnique,
+        kRoseSuper,
+        kRoseUltra,
+        kLeafUnique,
+        kLeafSuper,
+        kLeafUltra,
+        kIrisUnique,
+        kIrisSuper,
+        kIrisUltra,
+        kWingUnique,
+        kWingSuper,
+        kWingUltra,
+        kMissileUnique,
+        kMissileSuper,
+        kMissileUltra,
+        kBubbleUnique,
+        kBubbleSuper,
+        kBubbleUltra,
+        kFasterUnique,
+        kFasterSuper,
+        kFasterUltra,
+        kRockUnique,
+        kRockSuper,
+        kRockUltra,
+        kWebUnique,
+        kWebSuper,
+        kWebUltra,
+        kLightUnique,
+        kLightSuper,
+        kLightUltra,
+        kHeavyUnique,
+        kHeavySuper,
+        kHeavyUltra,
+        kTwinUnique,
+        kTwinSuper,
+        kTwinUltra,
         kNumPetals
     };
 };
@@ -500,6 +543,8 @@ namespace RarityID {
         kLegendary,
         kMythic,
         kUnique,
+        kSuper,
+        kUltra,
         kNumRarities
     };
 };

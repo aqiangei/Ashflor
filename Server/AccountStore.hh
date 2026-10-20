@@ -18,7 +18,7 @@ class Entity;
 struct Account {
     std::string username;
     uint64_t pass_hash = 0;
-    uint8_t level = 1;
+    uint32_t level = 1;
     std::array<PetalID::T, 2 * MAX_SLOT_COUNT> petals = {};
     std::array<uint32_t, PetalID::kNumPetals> craft_bank = {};
     uint32_t coins = 0;

@@ -11,11 +11,14 @@
 #include <Shared/Config.hh>
 #include <Shared/Craft.hh>
 #include <Shared/Recipe.hh>
+#include <Shared/StaticData.hh>
 #include <Shared/StaticDefinitions.hh>
 #include <Shared/Talent.hh>
 
+#include <algorithm>
 #include <cmath>
 #include <format>
+#include <string>
 
 using namespace Game;
 
@@ -24,7 +27,7 @@ void Game::on_message(uint8_t *ptr, uint32_t len) {
     switch(reader.read<uint8_t>()) {
         case Clientbound::kAccountResult: {
             uint8_t result = reader.read<uint8_t>();
-            uint8_t level = reader.read<uint8_t>();
+            uint32_t level = reader.read<uint32_t>();
             account_logged_in = (result == AccountResultCode::kAccountOk);
             uint8_t was_auto = pending_auto_login;
             pending_auto_login = 0;
@@ -49,13 +52,13 @@ void Game::on_message(uint8_t *ptr, uint32_t len) {
                 Game::respawn_level = level < 1 ? 1 : level;
                 auth_panel = 0;
                 for (uint32_t i = 0; i < 2 * MAX_SLOT_COUNT; ++i) {
-                    PetalID::T id = reader.read<uint8_t>();
+                    PetalID::T id = reader.read<PetalID::T>();
                     if (id < PetalID::kNumPetals && id != PetalID::kNone)
                         Game::seen_petals[id] = 1;
                 }
             } else {
                 for (uint32_t i = 0; i < 2 * MAX_SLOT_COUNT; ++i)
-                    reader.read<uint8_t>();
+                    reader.read<PetalID::T>();
             }
             for (uint32_t i = 0; i < PetalID::kNumPetals; ++i)
                 craft_bank[i] = reader.read<uint32_t>();
@@ -114,7 +117,7 @@ void Game::on_message(uint8_t *ptr, uint32_t len) {
         }
         case Clientbound::kCraftUpdate: {
             uint8_t result = reader.read<uint8_t>();
-            PetalID::T petal = reader.read<uint8_t>();
+            PetalID::T petal = reader.read<PetalID::T>();
             for (uint32_t i = 0; i < PetalID::kNumPetals; ++i)
                 craft_bank[i] = reader.read<uint32_t>();
             coins = reader.read<uint32_t>();
@@ -189,7 +192,7 @@ void Game::on_message(uint8_t *ptr, uint32_t len) {
                 preset.slot_count = reader.read<uint8_t>();
                 if (preset.slot_count > MAX_SLOT_COUNT) preset.slot_count = 0;
                 for (PetalID::T &id : preset.petals) {
-                    id = reader.read<uint8_t>();
+                    id = reader.read<PetalID::T>();
                     if (id >= PetalID::kNumPetals) id = PetalID::kNone;
                 }
             }
@@ -200,10 +203,19 @@ void Game::on_message(uint8_t *ptr, uint32_t len) {
             else if (result == kPresetApplied || result == kPresetAppliedAdjusted
                 || result == kPresetAppliedBanked) {
                 active_loadout_preset = index;
-                if (result == kPresetAppliedBanked)
+                if (result == kPresetAppliedBanked) {
+                    char const *bank = index >= 10 ? "L" : "K";
+                    uint8_t const digit = (uint8_t) ((index % 10) + 1);
+                    char const *d = digit == 10 ? "0" : nullptr;
+                    std::string dbuf;
+                    if (d == nullptr) {
+                        dbuf = std::to_string(digit);
+                        d = dbuf.c_str();
+                    }
                     loadout_preset_status = I18n::use_chinese
-                        ? std::format("方案 {} 已切换", index + 1)
-                        : std::format("Preset {} equipped", index + 1);
+                        ? std::format("已切到空的 {}{}（离开前的配装已自动保存）", bank, d)
+                        : std::format("Empty {}{} (previous loadout auto-saved)", bank, d);
+                }
                 else if (result == kPresetAppliedAdjusted)
                     loadout_preset_status = I18n::use_chinese
                         ? std::format("方案 {} 已切换；缺少的花瓣已降级或留空", index + 1)
@@ -316,6 +328,43 @@ void Game::on_message(uint8_t *ptr, uint32_t len) {
                 board.self_value[category] = reader.read<uint64_t>();
             }
             leaderboard_board_at = Game::timestamp;
+            break;
+        }
+        case Clientbound::kLifeSummary: {
+            life_mob_kills.clear();
+            life_petal_picks.clear();
+            uint8_t mob_n = reader.read<uint8_t>();
+            for (uint8_t i = 0; i < mob_n; ++i) {
+                LifeEntry e;
+                e.id = reader.read<uint8_t>();
+                e.count = reader.read<uint16_t>();
+                if (e.id < MobID::kNumMobs && e.count > 0)
+                    life_mob_kills.push_back(e);
+            }
+            uint16_t petal_n = reader.read<uint16_t>();
+            for (uint16_t i = 0; i < petal_n; ++i) {
+                LifeEntry e;
+                e.id = reader.read<PetalID::T>();
+                e.count = reader.read<uint16_t>();
+                if (e.id < PetalID::kNumPetals && e.count > 0)
+                    life_petal_picks.push_back(e);
+            }
+            // Rarity high→low, then count high→low
+            auto by_mob = [](LifeEntry const &a, LifeEntry const &b) {
+                uint8_t ra = MOB_DATA[a.id].rarity, rb = MOB_DATA[b.id].rarity;
+                if (ra != rb) return ra > rb;
+                if (a.count != b.count) return a.count > b.count;
+                return a.id < b.id;
+            };
+            auto by_petal = [](LifeEntry const &a, LifeEntry const &b) {
+                uint8_t ra = PETAL_DATA[a.id].rarity, rb = PETAL_DATA[b.id].rarity;
+                if (ra != rb) return ra > rb;
+                if (a.count != b.count) return a.count > b.count;
+                return a.id < b.id;
+            };
+            std::sort(life_mob_kills.begin(), life_mob_kills.end(), by_mob);
+            std::sort(life_petal_picks.begin(), life_petal_picks.end(), by_petal);
+            life_summary_ready = 1;
             break;
         }
         case Clientbound::kGuildUpdate: {
@@ -607,7 +656,7 @@ void Game::withdraw_bank_petal(PetalID::T id) {
     cached_loadout[dest] = id;
     Writer writer(static_cast<uint8_t *>(OUTGOING_PACKET));
     writer.write<uint8_t>(Serverbound::kBankWithdraw);
-    writer.write<uint8_t>(id);
+    writer.write<PetalID::T>(id);
     socket.send(writer.packet, writer.at - writer.packet);
 }
 
@@ -652,6 +701,15 @@ uint8_t Game::cycle_next_loadout_preset() {
     return 0;
 }
 
+uint8_t Game::try_mobile_l_preset_slot(uint8_t primary_index) {
+    if (!mobile_l_preset_pick) return 0;
+    // L bank = presets 10..19 (L1..L0). One primary slot per L key.
+    if (primary_index >= MAX_SLOT_COUNT) return 0;
+    apply_loadout_preset((uint8_t) (10 + primary_index));
+    mobile_l_preset_pick = 0;
+    return 1;
+}
+
 void Game::swap_all_petals() {
     // One-key swap every primary ↔ paired secondary (1:1). Update local cache
     // first so UI stays consistent; do not remap petal_slots pointers mid-loop.
@@ -687,7 +745,7 @@ void Game::craft_petals(uint8_t mode, PetalID::T petal_id) {
     Writer writer(static_cast<uint8_t *>(OUTGOING_PACKET));
     writer.write<uint8_t>(Serverbound::kPetalCraft);
     writer.write<uint8_t>(mode);
-    writer.write<uint8_t>(petal_id);
+    writer.write<PetalID::T>(petal_id);
     socket.send(writer.packet, writer.at - writer.packet);
 }
 
@@ -743,7 +801,7 @@ void Game::craft_buy_rarity(uint8_t rarity) {
     Writer writer(static_cast<uint8_t *>(OUTGOING_PACKET));
     writer.write<uint8_t>(Serverbound::kPetalCraft);
     writer.write<uint8_t>(CraftMode::kCraftBuyRarity);
-    writer.write<uint8_t>(rarity);
+    writer.write<uint16_t>(rarity);
     socket.send(writer.packet, writer.at - writer.packet);
 }
 
@@ -752,7 +810,7 @@ void Game::craft_buy_special(PetalID::T id) {
     Writer writer(static_cast<uint8_t *>(OUTGOING_PACKET));
     writer.write<uint8_t>(Serverbound::kPetalCraft);
     writer.write<uint8_t>(CraftMode::kCraftBuySpecial);
-    writer.write<uint8_t>(id);
+    writer.write<PetalID::T>(id);
     socket.send(writer.packet, writer.at - writer.packet);
 }
 
@@ -761,6 +819,6 @@ void Game::craft_recipe(uint16_t recipe_index) {
     Writer writer(static_cast<uint8_t *>(OUTGOING_PACKET));
     writer.write<uint8_t>(Serverbound::kPetalCraft);
     writer.write<uint8_t>(CraftMode::kCraftRecipe);
-    writer.write<uint8_t>((uint8_t) recipe_index);
+    writer.write<uint16_t>(recipe_index);
     socket.send(writer.packet, writer.at - writer.packet);
 }

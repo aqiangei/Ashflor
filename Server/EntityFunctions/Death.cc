@@ -16,6 +16,7 @@
 #include <Shared/StaticData.hh>
 
 #include <algorithm>
+#include <array>
 #include <cmath>
 #include <iostream>
 
@@ -34,17 +35,24 @@ static void _alloc_drops(Simulation *sim, std::vector<PetalID::T> &success_drops
         }
     }
     DEBUG_ONLY(assert(success_drops.size() == count);)
-    if (count > 1) {
-        for (size_t i = 0; i < count; ++i) {
-            Entity &drop = alloc_drop(sim, success_drops[i], team);
-            drop.set_x(x);
-            drop.set_y(y);
-            drop.velocity.unit_normal(i * 2 * M_PI / count).set_magnitude(25);
-        }
-    } else if (count == 1) {
-        Entity &drop = alloc_drop(sim, success_drops[0], team);
+    // Coalesce identical ids into stacked piles (bags mats / multi-rolls).
+    std::array<uint16_t, PetalID::kNumPetals> piles = {};
+    std::vector<PetalID::T> order;
+    order.reserve(count);
+    for (size_t i = 0; i < count; ++i) {
+        PetalID::T id = success_drops[i];
+        if (id == PetalID::kNone || id >= PetalID::kNumPetals) continue;
+        if (piles[id] == 0) order.push_back(id);
+        if (piles[id] < 65535) ++piles[id];
+    }
+    size_t n = order.size();
+    for (size_t i = 0; i < n; ++i) {
+        PetalID::T id = order[i];
+        Entity &drop = alloc_drop(sim, id, team, piles[id]);
         drop.set_x(x);
         drop.set_y(y);
+        if (n > 1)
+            drop.velocity.unit_normal(i * 2 * M_PI / n).set_magnitude(25);
     }
 }
 
@@ -120,95 +128,128 @@ void entity_on_death(Simulation *sim, Entity const &ent) {
         else camera.set_killed_by("");
     }
     if (ent.has_component(kMob)) {
+        // Credit this-life mob kill to the damaging flower (heads only).
+        if (!natural_despawn
+            && !ent.has_component(kSegmented)
+            && sim->ent_exists(ent.last_damaged_by)) {
+            EntityID killer_id = sim->get_ent(ent.last_damaged_by).base_entity;
+            if (sim->ent_alive(killer_id)) {
+                Entity &killer = sim->get_ent(killer_id);
+                if (killer.has_component(kFlower) && sim->ent_alive(killer.get_parent())) {
+                    Client *owner = Server::client_by_camera(sim, killer.get_parent());
+                    if (owner != nullptr)
+                        client_credit_mob_kill(owner, ent.get_mob_id());
+                }
+            }
+        }
         if (BitMath::at(ent.flags, EntityFlags::kSpawnedFromZone))
             Map::remove_mob(sim, ent);
         if (!natural_despawn && !(BitMath::at(ent.flags, EntityFlags::kNoDrops))) {
             struct MobData const &mob_data = MOB_DATA[ent.get_mob_id()];
-            // Zone 的掉落系数：难度越高越容易出稀有花瓣（当前是全局倍率表里的死字段）
             float rarity_boost = 0.f;
             {
                 MapZones const &zones = map_zones(sim->map_id);
                 if (ent.zone < zones.size())
                     rarity_boost = zones[ent.zone].drop_multiplier;
                 else if (mob_data.rarity >= RarityID::kEpic)
-                    rarity_boost = 0.4f;   // Boss / 召唤物：不吃 Zone 系数也给足稀有倾斜
+                    rarity_boost = 0.4f;
             }
-            std::vector<PetalID::T> success_drops = {};
-            // Guaranteed first roll + rarity-scaled bonus rolls (up to 4 on Unique)
-            PetalID::T chosen = _roll_mob_drop(sim, ent.get_mob_id(), rarity_boost);
-            if (chosen != PetalID::kNone)
-                success_drops.push_back(chosen);
-            float p2 = 0.26f + 0.045f * (float) mob_data.rarity;
-            if (success_drops.size() < MAX_DROPS_PER_MOB && frand() < p2) {
-                PetalID::T extra = _roll_mob_drop(sim, ent.get_mob_id(), rarity_boost);
-                if (extra != PetalID::kNone)
-                    success_drops.push_back(extra);
-            }
-            if (mob_data.rarity >= RarityID::kEpic
-                && success_drops.size() < MAX_DROPS_PER_MOB) {
-                float p3 = 0.10f + 0.025f * (float) mob_data.rarity;
-                if (frand() < p3) {
-                    PetalID::T extra = _roll_mob_drop(sim, ent.get_mob_id(), rarity_boost);
-                    if (extra != PetalID::kNone)
-                        success_drops.push_back(extra);
-                }
-            }
-            if (mob_data.rarity >= RarityID::kLegendary
-                && success_drops.size() < MAX_DROPS_PER_MOB) {
-                float p4 = 0.05f + 0.02f * (float) (mob_data.rarity - RarityID::kLegendary);
-                if (frand() < p4) {
-                    PetalID::T extra = _roll_mob_drop(sim, ent.get_mob_id(), rarity_boost);
-                    if (extra != PetalID::kNone)
-                        success_drops.push_back(extra);
-                }
-            }
-            EntityID drop_team = NULL_ENTITY;
-            if (sim->ent_exists(ent.last_damaged_by))
-                drop_team = sim->get_ent(ent.last_damaged_by).get_team();
-            // Account bonus triples ordinary drops while the player's timer runs.
-            if (sim->ent_exists(ent.last_damaged_by)) {
-                EntityID killer_id = sim->get_ent(ent.last_damaged_by).base_entity;
-                if (sim->ent_alive(killer_id)) {
-                    Entity &killer = sim->get_ent(killer_id);
-                    if (killer.has_component(kFlower) && sim->ent_alive(killer.get_parent())) {
-                        Client *owner = Server::client_by_camera(sim, killer.get_parent());
-                        if (owner != nullptr && !owner->account_name.empty()
-                            && owner->bonus_enabled
-                            && (owner->daily_bonus_seconds || owner->offline_bonus_seconds)) {
-                            size_t bonus_rolls = std::min<size_t>(success_drops.size() * 2, 12);
-                            for (size_t i = 0; i < bonus_rolls; ++i) {
-                                PetalID::T extra = _roll_mob_drop(sim, ent.get_mob_id(), rarity_boost);
-                                if (extra != PetalID::kNone
-                                    && PETAL_DATA[extra].rarity != RarityID::kUnique)
-                                    success_drops.push_back(extra);
-                            }
-                        }
+
+            // Private loot units: each damaging player (or party) settles their own roll.
+            EntityID claim_teams[16];
+            uint8_t claim_n = ent.loot_claim_n;
+            if (claim_n > 16) claim_n = 16;
+            for (uint8_t i = 0; i < claim_n; ++i)
+                claim_teams[i] = ent.loot_claim_teams[i];
+            if (claim_n == 0 && sim->ent_exists(ent.last_damaged_by)) {
+                Entity &atk = sim->get_ent(ent.last_damaged_by);
+                EntityID flower_id = atk.has_component(kFlower) ? ent.last_damaged_by
+                    : (atk.has_component(kPetal) && sim->ent_alive(atk.get_parent())
+                        ? atk.get_parent() : NULL_ENTITY);
+                if (sim->ent_alive(flower_id)) {
+                    EntityID team = sim->get_ent(flower_id).get_team();
+                    if (!team.null()) {
+                        claim_teams[0] = team;
+                        claim_n = 1;
                     }
                 }
             }
-            _alloc_drops(sim, success_drops, ent.get_x(), ent.get_y(), drop_team);
-            // Coins are Coin petals on the ground. Cap the pile so a boss
-            // does not spawn hundreds of entities; the rest goes to the bag.
-            {
+
+            auto team_has_bonus = [&](EntityID team) -> uint8_t {
+                GameInstance *game = Server::game_for(sim);
+                if (game == nullptr) return 0;
+                for (Client *c : game->clients) {
+                    if (c == nullptr || c->game == nullptr) continue;
+                    if (&c->game->simulation != sim) continue;
+                    if (!sim->ent_exists(c->camera)) continue;
+                    if (!(sim->get_ent(c->camera).get_team() == team)) continue;
+                    if (!c->account_name.empty() && c->bonus_enabled
+                        && (c->daily_bonus_seconds || c->offline_bonus_seconds))
+                        return 1;
+                }
+                return 0;
+            };
+
+            auto roll_for_team = [&](EntityID drop_team, float angle_off) {
+                std::vector<PetalID::T> success_drops = {};
+                PetalID::T chosen = _roll_mob_drop(sim, ent.get_mob_id(), rarity_boost);
+                if (chosen != PetalID::kNone)
+                    success_drops.push_back(chosen);
+                float p2 = 0.26f + 0.045f * (float) mob_data.rarity;
+                if (success_drops.size() < MAX_DROPS_PER_MOB && frand() < p2) {
+                    PetalID::T extra = _roll_mob_drop(sim, ent.get_mob_id(), rarity_boost);
+                    if (extra != PetalID::kNone)
+                        success_drops.push_back(extra);
+                }
+                if (mob_data.rarity >= RarityID::kEpic
+                    && success_drops.size() < MAX_DROPS_PER_MOB) {
+                    float p3 = 0.10f + 0.025f * (float) mob_data.rarity;
+                    if (frand() < p3) {
+                        PetalID::T extra = _roll_mob_drop(sim, ent.get_mob_id(), rarity_boost);
+                        if (extra != PetalID::kNone)
+                            success_drops.push_back(extra);
+                    }
+                }
+                if (mob_data.rarity >= RarityID::kLegendary
+                    && success_drops.size() < MAX_DROPS_PER_MOB) {
+                    float p4 = 0.05f + 0.02f * (float) (mob_data.rarity - RarityID::kLegendary);
+                    if (frand() < p4) {
+                        PetalID::T extra = _roll_mob_drop(sim, ent.get_mob_id(), rarity_boost);
+                        if (extra != PetalID::kNone)
+                            success_drops.push_back(extra);
+                    }
+                }
+                if (team_has_bonus(drop_team)) {
+                    size_t bonus_rolls = std::min<size_t>(success_drops.size() * 2, 12);
+                    for (size_t i = 0; i < bonus_rolls; ++i) {
+                        PetalID::T extra = _roll_mob_drop(sim, ent.get_mob_id(), rarity_boost);
+                        if (extra != PetalID::kNone
+                            && PETAL_DATA[extra].rarity != RarityID::kUnique)
+                            success_drops.push_back(extra);
+                    }
+                }
+                float ox = ent.get_x() + std::cos(angle_off) * 12.f;
+                float oy = ent.get_y() + std::sin(angle_off) * 12.f;
+                _alloc_drops(sim, success_drops, ox, oy, drop_team);
                 uint32_t coins = Craft::coins_from_mob(mob_data.rarity);
-                uint32_t ground = coins > 16 ? 16 : coins;
-                for (uint32_t i = 0; i < ground; ++i) {
-                    Entity &drop = alloc_drop(sim, PetalID::kCoin, drop_team);
-                    drop.set_x(ent.get_x());
-                    drop.set_y(ent.get_y());
-                    drop.velocity.unit_normal(frand() * 2 * (float) M_PI).set_magnitude(20 + frand() * 25);
+                if (coins > 0) {
+                    uint16_t pile = coins > 65535 ? (uint16_t) 65535 : (uint16_t) coins;
+                    Entity &drop = alloc_drop(sim, PetalID::kCoin, drop_team, pile);
+                    drop.set_x(ox);
+                    drop.set_y(oy);
+                    drop.velocity.unit_normal(frand() * 2 * (float) M_PI)
+                        .set_magnitude(18 + frand() * 20);
                 }
-                uint32_t pocket = coins - ground;
-                if (pocket > 0 && sim->ent_exists(ent.last_damaged_by)) {
-                    EntityID killer_id = sim->get_ent(ent.last_damaged_by).base_entity;
-                    if (sim->ent_alive(killer_id)) {
-                        Entity &killer = sim->get_ent(killer_id);
-                        if (killer.has_component(kFlower) && sim->ent_alive(killer.get_parent())) {
-                            Client *owner = Server::client_by_camera(sim, killer.get_parent());
-                            if (owner != nullptr)
-                                client_award_coins(owner, pocket);
-                        }
-                    }
+            };
+
+            if (claim_n == 0) {
+                // No player credit — unowned brief lock then FFA (rare edge).
+                roll_for_team(NULL_ENTITY, 0.f);
+            } else {
+                for (uint8_t i = 0; i < claim_n; ++i) {
+                    float ang = (claim_n == 1) ? 0.f
+                        : (float) i * (2.f * (float) M_PI / (float) claim_n);
+                    roll_for_team(claim_teams[i], ang);
                 }
             }
         }
@@ -231,12 +272,11 @@ void entity_on_death(Simulation *sim, Entity const &ent) {
             uint32_t const total_slots = ent.get_loadout_count() + MAX_SLOT_COUNT;
             uint32_t level = score_to_level(ent.get_score());
             if (level < 1) level = 1;
-            if (level > MAX_LEVEL) level = MAX_LEVEL;
             if (level < camera.get_respawn_level())
                 level = camera.get_respawn_level();
             for (uint32_t i = 0; i < 2 * MAX_SLOT_COUNT; ++i)
                 PetalTracker::remove_petal(sim, camera.get_inventory(i));
-            camera.set_respawn_level((uint8_t) level);
+            camera.set_respawn_level(level);
             for (uint32_t i = 0; i < 2 * MAX_SLOT_COUNT; ++i)
                 camera.set_inventory(i, PetalID::kNone);
             for (uint32_t i = 0; i < total_slots && i < 2 * MAX_SLOT_COUNT; ++i) {
@@ -256,6 +296,7 @@ void entity_on_death(Simulation *sim, Entity const &ent) {
             if (Client *owner = Server::client_by_camera(sim, camera.id)) {
                 AccountStore::capture_nosave(owner);
                 Party::clear_corpse(owner);
+                owner->has_death_pos = 0;
                 owner->play_name.clear();
             }
             return;
@@ -285,10 +326,9 @@ void entity_on_death(Simulation *sim, Entity const &ent) {
         // Level never regresses on death — keep the floor reached this life.
         uint32_t respawn_level = score_to_level(ent.get_score());
         if (respawn_level < 1) respawn_level = 1;
-        if (respawn_level > MAX_LEVEL) respawn_level = MAX_LEVEL;
         if (respawn_level < camera.get_respawn_level())
             respawn_level = camera.get_respawn_level();
-        camera.set_respawn_level((uint8_t) respawn_level);
+        camera.set_respawn_level(respawn_level);
         uint32_t primary_slots = loadout_slots_at_level(respawn_level);
 
         for (uint32_t i = 0; i < 2 * MAX_SLOT_COUNT; ++i)
@@ -333,6 +373,7 @@ void entity_on_death(Simulation *sim, Entity const &ent) {
         if (Client *owner = Server::client_by_camera(sim, camera.id)) {
             // Nosave: sync write of accounts.dat on death stalls the whole server tick
             AccountStore::capture_nosave(owner);
+            client_send_life_summary(owner);
             Party::on_death(owner, death_x, death_y);
         }
     } else if (ent.has_component(kDrop)) {

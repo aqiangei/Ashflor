@@ -15,8 +15,10 @@
 #include <Shared/Binary.hh>
 #include <Shared/Config.hh>
 #include <Shared/Craft.hh>
+#include <Shared/Map.hh>
 #include <Shared/Recipe.hh>
 #include <Shared/StaticData.hh>
+#include <Shared/StaticDefinitions.hh>
 #include <Shared/Talent.hh>
 
 #include <Helpers/Math.hh>
@@ -26,7 +28,9 @@
 #include <chrono>
 #include <iostream>
 
-constexpr std::array<uint32_t, RarityID::kNumRarities> RARITY_TO_XP = { 2, 10, 50, 200, 1000, 5000, 0 };
+constexpr std::array<uint32_t, RarityID::kNumRarities> RARITY_TO_XP = {
+    2, 10, 50, 200, 1000, 5000, 0, 12000, 30000
+};
 
 static void send_boost_update(Client *client) {
     if (client == nullptr) return;
@@ -74,7 +78,7 @@ static void send_craft_update(Client *client, uint8_t result, PetalID::T petal) 
     Writer writer(Server::OUTGOING_PACKET);
     writer.write<uint8_t>(Clientbound::kCraftUpdate);
     writer.write<uint8_t>(result);
-    writer.write<uint8_t>(petal);
+    writer.write<PetalID::T>(petal);
     for (uint32_t i = 0; i < PetalID::kNumPetals; ++i)
         writer.write<uint32_t>(client->craft_bank[i]);
     writer.write<uint32_t>(client->coins);
@@ -97,7 +101,7 @@ static void send_loadout_preset_update(Client *client, uint8_t result, uint8_t i
     for (LoadoutPreset const &preset : client->loadout_presets) {
         writer.write<uint8_t>(preset.slot_count);
         for (PetalID::T id : preset.petals)
-            writer.write<uint8_t>(id);
+            writer.write<PetalID::T>(id);
     }
     client->send_packet(writer.packet, writer.at - writer.packet);
 }
@@ -111,7 +115,7 @@ static uint32_t client_level(Client *client) {
         uint32_t lv = score_to_level(sim->get_ent(camera.get_player()).get_score());
         return lv < 1 ? 1 : lv;
     }
-    uint8_t lv = camera.get_respawn_level();
+    uint32_t lv = camera.get_respawn_level();
     return lv < 1 ? 1 : lv;
 }
 
@@ -215,11 +219,58 @@ void client_sync_craft(Client *client) {
     send_craft_update(client, CraftResultCode::kCraftBankSync, PetalID::kNone);
 }
 
+void client_clear_life_stats(Client *client) {
+    if (client == nullptr) return;
+    client->life_mob_kills.fill(0);
+    client->life_petal_picks.fill(0);
+}
+
+void client_credit_mob_kill(Client *client, MobID::T id) {
+    if (client == nullptr || id >= MobID::kNumMobs) return;
+    if (client->life_mob_kills[id] < 65535)
+        ++client->life_mob_kills[id];
+}
+
+void client_credit_petal_pick(Client *client, PetalID::T id) {
+    if (client == nullptr || id == PetalID::kNone || id >= PetalID::kNumPetals) return;
+    if (client->life_petal_picks[id] < 65535)
+        ++client->life_petal_picks[id];
+}
+
+void client_send_life_summary(Client *client) {
+    if (client == nullptr) return;
+    Writer writer(Server::OUTGOING_PACKET);
+    writer.write<uint8_t>(Clientbound::kLifeSummary);
+    uint8_t mob_n = 0;
+    for (uint32_t i = 0; i < MobID::kNumMobs; ++i)
+        if (client->life_mob_kills[i] > 0) ++mob_n;
+    writer.write<uint8_t>(mob_n);
+    for (uint32_t i = 0; i < MobID::kNumMobs; ++i) {
+        if (client->life_mob_kills[i] == 0) continue;
+        writer.write<uint8_t>((uint8_t) i);
+        writer.write<uint16_t>(client->life_mob_kills[i]);
+    }
+    uint16_t petal_n = 0;
+    for (uint32_t i = 0; i < PetalID::kNumPetals; ++i)
+        if (client->life_petal_picks[i] > 0) ++petal_n;
+    writer.write<uint16_t>(petal_n);
+    for (uint32_t i = 0; i < PetalID::kNumPetals; ++i) {
+        if (client->life_petal_picks[i] == 0) continue;
+        writer.write<PetalID::T>((PetalID::T) i);
+        writer.write<uint16_t>(client->life_petal_picks[i]);
+    }
+    client->send_packet(writer.packet, writer.at - writer.packet);
+}
+
 void client_award_coins(Client *client, uint32_t amount) {
     if (client == nullptr || amount == 0) return;
+    uint32_t given = 0;
     for (uint32_t i = 0; i < amount; ++i) {
         if (!try_give_petal(client, PetalID::kCoin)) break;
+        ++given;
     }
+    for (uint32_t i = 0; i < given; ++i)
+        client_credit_petal_pick(client, PetalID::kCoin);
     persist_account(client);
     send_craft_update(client, CraftResultCode::kCraftBankSync, PetalID::kCoin);
 }
@@ -525,6 +576,11 @@ void Client::on_message(WebSocket *ws, std::string_view message, uint64_t code) 
                 client->send_packet(writer.packet, writer.at - writer.packet);
                 break;
             }
+            // Continue after death → near death site on same map; first enter / other map → hub
+            uint8_t near_death = client->has_death_pos && client->death_map_id == map_id;
+            float near_x = client->death_x;
+            float near_y = client->death_y;
+            client->has_death_pos = 0;
             Party::clear_corpse(client);
             if (client->game == nullptr)
                 Server::games[map_id].add_client(client);
@@ -539,10 +595,20 @@ void Client::on_message(WebSocket *ws, std::string_view message, uint64_t code) 
                 camera.set_player(NULL_ENTITY);
             }
             Entity &player = alloc_player(simulation, camera.get_team());
-            player_spawn(simulation, camera, player);
+            if (near_death) {
+                float sx = near_x + (frand() - 0.5f) * 320.f;
+                float sy = near_y + (frand() - 0.5f) * 320.f;
+                Map::resolve_circle_terrain(simulation->map_id, sx, sy, BASE_FLOWER_RADIUS + 8);
+                sx = fclamp(sx, BASE_FLOWER_RADIUS, ARENA_WIDTH - BASE_FLOWER_RADIUS);
+                sy = fclamp(sy, BASE_FLOWER_RADIUS, ARENA_HEIGHT - BASE_FLOWER_RADIUS);
+                player_spawn_at(simulation, camera, player, sx, sy);
+            } else {
+                player_spawn(simulation, camera, player);
+            }
             player.set_name(name);
             player.set_guild(client->guild_name);
             client->play_name = name;
+            client_clear_life_stats(client);
             if (!name.empty())
                 LeaderboardStore::record(name, player.get_score(), player.get_color());
             Party::apply_team(client);
@@ -580,9 +646,9 @@ void Client::on_message(WebSocket *ws, std::string_view message, uint64_t code) 
             writer.write<uint8_t>(Clientbound::kAccountResult);
             writer.write<uint8_t>(result);
             Account *acc = AccountStore::find(client->account_name);
-            writer.write<uint8_t>(acc == nullptr ? 1 : acc->level);
+            writer.write<uint32_t>(acc == nullptr ? 1u : acc->level);
             for (uint32_t i = 0; i < 2 * MAX_SLOT_COUNT; ++i)
-                writer.write<uint8_t>(acc == nullptr ? PetalID::kNone : acc->petals[i]);
+                writer.write<PetalID::T>(acc == nullptr ? PetalID::kNone : acc->petals[i]);
             for (uint32_t i = 0; i < PetalID::kNumPetals; ++i)
                 writer.write<uint32_t>(acc == nullptr ? 0 : acc->craft_bank[i]);
             writer.write<uint32_t>(acc == nullptr ? 0 : acc->coins);
@@ -650,13 +716,13 @@ void Client::on_message(WebSocket *ws, std::string_view message, uint64_t code) 
             // Allow death-screen craft (inventory lives on camera while down)
             if (client->game == nullptr
                 || !client->game->simulation.ent_exists(client->camera)) break;
-            if (client->check_invalid(validator.validate_uint8() && validator.validate_uint8())) return;
+            if (client->check_invalid(validator.validate_uint8() && validator.validate_uint16())) return;
             // Overflow bank → backpack first so craft list matches the bag UI.
             flush_craft_bank_to_bag(client);
             uint8_t mode = reader.read<uint8_t>();
-            uint8_t arg = reader.read<uint8_t>();
+            uint16_t arg = reader.read<uint16_t>();
             if (mode == CraftMode::kCraftBuyRarity) {
-                uint8_t rarity = arg;
+                uint8_t rarity = (uint8_t) arg;
                 if (rarity >= RarityID::kNumRarities) {
                     send_craft_update(client, CraftResultCode::kCraftNoMats, PetalID::kNone);
                     break;
@@ -855,38 +921,118 @@ void Client::on_message(WebSocket *ws, std::string_view message, uint64_t code) 
             std::array<PetalID::T, 2 * MAX_SLOT_COUNT> inventory = {};
             for (uint8_t i = 0; i < slots + MAX_SLOT_COUNT; ++i)
                 inventory[i] = player != nullptr ? player->get_loadout_ids(i) : camera.get_inventory(i);
+            auto write_inventory = [&](std::array<PetalID::T, 2 * MAX_SLOT_COUNT> const &inv) {
+                for (uint8_t i = 0; i < slots + MAX_SLOT_COUNT; ++i) {
+                    if (player != nullptr) player->set_loadout_ids(i, inv[i]);
+                    else camera.set_inventory(i, inv[i]);
+                }
+            };
+            auto save_preset_from_inventory = [&](uint8_t dest) {
+                if (dest >= LOADOUT_PRESET_COUNT) return;
+                LoadoutPreset &p = client->loadout_presets[dest];
+                p.slot_count = slots;
+                p.petals.fill(PetalID::kNone);
+                for (uint8_t i = 0; i < slots && i < MAX_SLOT_COUNT; ++i)
+                    p.petals[i] = inventory[i];
+            };
+            // Empty bag: clear primary bar. Park petals on secondary/bag slots
+            // so a later L1 apply can still find them; overflow → craft_bank.
+            auto clear_primaries_to_bag = [&]() {
+                for (uint8_t i = 0; i < slots; ++i) {
+                    PetalID::T id = inventory[i];
+                    if (id == PetalID::kNone || id >= PetalID::kNumPetals) continue;
+                    inventory[i] = PetalID::kNone;
+                    uint8_t placed = 0;
+                    for (uint8_t j = slots; j < slots + MAX_SLOT_COUNT; ++j) {
+                        if (inventory[j] != PetalID::kNone) continue;
+                        inventory[j] = id;
+                        placed = 1;
+                        break;
+                    }
+                    if (!placed) {
+                        if (client->craft_bank[id] < 1000000) ++client->craft_bank[id];
+                        PetalTracker::remove_petal(simulation, id);
+                    }
+                }
+                write_inventory(inventory);
+            };
             LoadoutPreset &preset = client->loadout_presets[index];
             if (message_type == Serverbound::kLoadoutPresetSave) {
-                preset.slot_count = slots;
-                for (uint8_t i = 0; i < MAX_SLOT_COUNT; ++i)
-                    preset.petals[i] = i < slots ? inventory[i] : PetalID::kNone;
+                save_preset_from_inventory(index);
+                client->active_loadout_preset = index;
                 AccountStore::capture_nosave(client);
                 send_loadout_preset_update(client, kPresetSaved, index);
                 break;
             }
+            // Autosave outgoing bag before switching:
+            // first L switch → current gear becomes L1; first K → K1.
+            uint8_t const to_l = index >= 10;
+            uint8_t const to_k = index < 10;
+            uint8_t const active = client->active_loadout_preset;
+            uint8_t const active_l = active >= 10 && active < LOADOUT_PRESET_COUNT;
+            uint8_t const active_k = active < 10;
+            if (to_l) {
+                if (!active_l)
+                    save_preset_from_inventory(10); // L1
+                else if (active != index)
+                    save_preset_from_inventory(active);
+            } else if (to_k) {
+                if (!active_k)
+                    save_preset_from_inventory(0); // K1
+                else if (active != index)
+                    save_preset_from_inventory(active);
+            }
+            // Refresh inventory snapshot after possible no-op save
+            for (uint8_t i = 0; i < slots + MAX_SLOT_COUNT; ++i)
+                inventory[i] = player != nullptr ? player->get_loadout_ids(i) : camera.get_inventory(i);
+
             if (preset.slot_count == 0) {
-                send_loadout_preset_update(client, kPresetEmpty, index);
+                // First visit: empty primary bar (current was already saved as L1/K1).
+                clear_primaries_to_bag();
+                preset.slot_count = slots;
+                preset.petals.fill(PetalID::kNone);
+                client->active_loadout_preset = index;
+                AccountStore::capture_nosave(client);
+                send_craft_update(client, CraftResultCode::kCraftBankSync, PetalID::kNone);
+                send_loadout_preset_update(client, kPresetAppliedBanked, index);
                 break;
             }
             std::array<uint32_t, PetalID::kNumPetals> overflow = {};
             uint8_t fallback_count = 0;
             if (!arrange_loadout_preset(inventory, slots, preset, overflow, fallback_count)) {
-                send_loadout_preset_update(client, kPresetEmpty, index);
+                for (uint8_t i = 0; i < slots + MAX_SLOT_COUNT; ++i)
+                    inventory[i] = player != nullptr ? player->get_loadout_ids(i) : camera.get_inventory(i);
+                clear_primaries_to_bag();
+                preset.slot_count = slots;
+                preset.petals.fill(PetalID::kNone);
+                client->active_loadout_preset = index;
+                AccountStore::capture_nosave(client);
+                send_craft_update(client, CraftResultCode::kCraftBankSync, PetalID::kNone);
+                send_loadout_preset_update(client, kPresetAppliedBanked, index);
                 break;
             }
-            for (uint8_t i = 0; i < slots + MAX_SLOT_COUNT; ++i) {
-                if (player != nullptr) player->set_loadout_ids(i, inventory[i]);
-                else camera.set_inventory(i, inventory[i]);
+            // Overflow copies from arrange go to backpack stacks.
+            uint8_t had_overflow = 0;
+            for (uint32_t id = 0; id < PetalID::kNumPetals; ++id) {
+                if (overflow[id] == 0) continue;
+                had_overflow = 1;
+                uint64_t sum = (uint64_t) client->craft_bank[id] + overflow[id];
+                if (sum > 1000000ull) sum = 1000000ull;
+                client->craft_bank[id] = (uint32_t) sum;
             }
+            write_inventory(inventory);
+            client->active_loadout_preset = index;
             AccountStore::capture_nosave(client);
+            if (had_overflow)
+                send_craft_update(client, CraftResultCode::kCraftBankSync, PetalID::kNone);
             send_loadout_preset_update(client,
                 fallback_count ? kPresetAppliedAdjusted : kPresetApplied, index);
             break;
         }
         case Serverbound::kBankWithdraw: {
             // Equip one copy from backpack stacks onto the loadout bar.
-            if (client->check_invalid(validator.validate_uint8())) return;
-            PetalID::T id = reader.read<uint8_t>();
+            if (client->check_invalid(validator.validate_uint16())) return;
+            PetalID::T id = reader.read<PetalID::T>();
             if (id == PetalID::kNone || id >= PetalID::kNumPetals
                 || client->craft_bank[id] == 0) break;
             if (!client->game || !client->game->simulation.ent_exists(client->camera)) break;
@@ -1032,6 +1178,7 @@ void Client::on_message(WebSocket *ws, std::string_view message, uint64_t code) 
             Simulation *simulation = &client->game->simulation;
             if (!simulation->ent_exists(client->camera)) break;
             Entity &camera = simulation->get_ent(client->camera);
+            client->has_death_pos = 0;
             Party::clear_corpse(client);
             if (simulation->ent_alive(camera.get_player())) {
                 Entity &player = simulation->get_ent(camera.get_player());
@@ -1060,6 +1207,7 @@ void Client::on_message(WebSocket *ws, std::string_view message, uint64_t code) 
             client->talent_hp = 0;
             client->talent_rot = 0;
             client->loadout_presets = {};
+            client->active_loadout_preset = LOADOUT_PRESET_COUNT;
             Party::leave(client);
             Guild::leave(client);
             Writer writer(Server::OUTGOING_PACKET);
@@ -1067,7 +1215,7 @@ void Client::on_message(WebSocket *ws, std::string_view message, uint64_t code) 
             writer.write<uint8_t>(AccountResultCode::kAccountLoggedOut);
             writer.write<uint8_t>(1);
             for (uint32_t i = 0; i < 2 * MAX_SLOT_COUNT; ++i)
-                writer.write<uint8_t>(PetalID::kNone);
+                writer.write<PetalID::T>(PetalID::kNone);
             for (uint32_t i = 0; i < PetalID::kNumPetals; ++i)
                 writer.write<uint32_t>(0);
             writer.write<uint32_t>(0);
@@ -1105,9 +1253,9 @@ void Client::on_message(WebSocket *ws, std::string_view message, uint64_t code) 
                 break;
             }
             // level + inventory
-            if (client->check_invalid(validator.validate_uint8())) return;
+            if (client->check_invalid(validator.validate_uint32())) return;
             for (uint32_t i = 0; i < 2 * MAX_SLOT_COUNT; ++i)
-                if (client->check_invalid(validator.validate_uint8())) return;
+                if (client->check_invalid(validator.validate_uint16())) return;
             // Craft bank length follows PetalID::kNumPetals and grows over deploys.
             // Old cached clients send fewer u32s — accept any count that still
             // leaves room for trailing coins(u32) + talent_hp/rot (2×u8).
@@ -1129,9 +1277,8 @@ void Client::on_message(WebSocket *ws, std::string_view message, uint64_t code) 
                 if (client->check_invalid(validator.validate_uint32())) return;
             if (client->check_invalid(validator.validate_uint32())) return; // coins
             if (client->check_invalid(validator.validate_uint8() && validator.validate_uint8())) return;
-            uint8_t level = reader.read<uint8_t>();
+            uint32_t level = reader.read<uint32_t>();
             if (level < 1) level = 1;
-            if (level > MAX_LEVEL) level = MAX_LEVEL;
             Simulation *simulation = &client->game->simulation;
             if (!simulation->ent_exists(client->camera)) break;
             Entity &camera = simulation->get_ent(client->camera);
@@ -1143,7 +1290,7 @@ void Client::on_message(WebSocket *ws, std::string_view message, uint64_t code) 
             camera.set_respawn_level(level);
             uint32_t slots = loadout_slots_at_level(level);
             for (uint32_t i = 0; i < 2 * MAX_SLOT_COUNT; ++i) {
-                PetalID::T id = reader.read<uint8_t>();
+                PetalID::T id = reader.read<PetalID::T>();
                 if (id >= PetalID::kNumPetals) id = PetalID::kNone;
                 if (i < slots && id == PetalID::kNone) id = PetalID::kBasic;
                 camera.set_inventory(i, id);

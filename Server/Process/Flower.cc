@@ -172,7 +172,12 @@ void tick_player_behavior(Simulation *sim, Entity &player) {
         float pickup_r2 = pickup_r * pickup_r;
         sim->for_each<kDrop>([&](Simulation *, Entity &drop) {
             if (drop.pending_delete) return;
-            if (drop.immunity_ticks > 0 && !(drop.get_team() == player.get_team())) return;
+            // Private loot: only pull drops owned by this solo/party (or unowned after lock).
+            if (drop.get_team() != NULL_ENTITY) {
+                if (!(drop.get_team() == player.get_team())) return;
+            } else if (drop.immunity_ticks > 0) {
+                return;
+            }
             float dx = player.get_x() - drop.get_x();
             float dy = player.get_y() - drop.get_y();
             float d2 = dx * dx + dy * dy;

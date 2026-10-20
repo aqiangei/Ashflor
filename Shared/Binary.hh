@@ -18,7 +18,8 @@ enum Clientbound {
     kGuildUpdate,
     kLoadoutPresetSync,
     kBoostUpdate,
-    kLeaderboardStats // multi-category stats board (name/value rows)
+    kLeaderboardStats, // multi-category stats board (name/value rows)
+    kLifeSummary // this-life mob kills + petal pickups (shown on death)
 };
 
 enum InviteType : uint8_t {
@@ -212,6 +213,7 @@ public:
     Validator(uint8_t const *, uint8_t const *);
 
     uint8_t validate_uint8();
+    uint8_t validate_uint16();
     uint8_t validate_uint32();
     uint8_t validate_uint64();
     uint8_t validate_float();

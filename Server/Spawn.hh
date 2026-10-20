@@ -7,7 +7,7 @@
 
 class Simulation;
 
-Entity &alloc_drop(Simulation *, PetalID::T, EntityID const team = NULL_ENTITY);
+Entity &alloc_drop(Simulation *, PetalID::T, EntityID const team = NULL_ENTITY, uint16_t count = 1);
 Entity &alloc_corpse(Simulation *, EntityID const team, float x, float y, std::string const &name);
 Entity &alloc_mob(
     Simulation *, MobID::T, float, float, 

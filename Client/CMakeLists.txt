@@ -49,6 +49,7 @@ set(SRCS
     Ui/InGame/Tooltip.cc
     Ui/TitleScreen/Changelog.cc
     Ui/TitleScreen/DeathScreen.cc
+    Ui/TitleScreen/DeathSummary.cc
     Ui/TitleScreen/MainScreen.cc
     Ui/TitleScreen/MobGallery.cc
     Ui/TitleScreen/PetalGallery.cc

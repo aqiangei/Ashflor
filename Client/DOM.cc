@@ -5,6 +5,14 @@
 
 #include <emscripten.h>
 
+namespace DOM {
+    uint8_t text_enter_pressed = 0;
+}
+
+extern "C" void EMSCRIPTEN_KEEPALIVE ashflor_text_enter() {
+    DOM::text_enter_pressed = 1;
+}
+
 void DOM::create_text_input(char const *name, uint32_t max_len, uint8_t password) {
     EM_ASM(
     {
@@ -31,9 +39,18 @@ void DOM::create_text_input(char const *name, uint32_t max_len, uint8_t password
         elem.setAttribute("autocomplete", $2 ? "current-password" : "off");
         elem.setAttribute("autocapitalize", "off");
         elem.setAttribute("autocorrect", "off");
-        elem.setAttribute("enterkeyhint", $2 ? "done" : "go");
+        // "send" makes mobile soft-keyboards show a send/go action that fires Enter
+        elem.setAttribute("enterkeyhint", $2 ? "done" : "send");
         // ≥16px prevents iOS page-zoom on focus (florr_clone mobile_text_input)
         elem.style["font-size"] = "16px";
+        // Enter on the overlay input (chat focused): always notify C++ — some
+        // mobile browsers never deliver window keydown for the soft Send key.
+        elem.addEventListener("keydown", function (e) {
+            if (e.isComposing || e.keyCode === 229) return;
+            if (e.key !== "Enter" && e.code !== "Enter" && e.code !== "NumpadEnter") return;
+            e.preventDefault();
+            try { Module._ashflor_text_enter(); } catch (err) {}
+        });
         document.body.appendChild(elem);
     },
     name, max_len * 2, (int) password);

@@ -14,7 +14,7 @@ namespace I18n {
 #include "I18nData.inc"
 
 static char const *const RARITY_ZH[RarityID::kNumRarities] = {
-    "普通", "罕见", "稀有", "史诗", "传奇", "神话", "独特"
+    "普通", "罕见", "稀有", "史诗", "传奇", "神话", "独特", "超凡", "究极"
 };
 
 static char const *const ZONE_ZH[] = {

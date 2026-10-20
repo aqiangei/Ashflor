@@ -41,6 +41,11 @@ void tick_camera_behavior(Simulation *sim, Entity &ent) {
                 ent.set_camera_y(owner->corpse_y);
                 return;
             }
+            if (owner->has_death_pos) {
+                ent.set_camera_x(owner->death_x);
+                ent.set_camera_y(owner->death_y);
+                return;
+            }
         }
         if (sim->ent_exists(ent.last_damaged_by)){
             Entity &spectating = sim->get_ent(ent.last_damaged_by);

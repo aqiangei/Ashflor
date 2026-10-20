@@ -6,7 +6,6 @@
 #include <cstdint>
 #include <cstring>
 
-extern uint32_t const MAX_LEVEL;
 extern uint32_t const TPS;
 
 extern float const PETAL_DISABLE_DELAY;
@@ -46,21 +45,21 @@ inline std::array const MAPS = std::to_array<MapZones>({
     MapZones({
         {
             .left = 0, .top = 0, .right = (float)ARENA_WIDTH, .bottom = (float)ARENA_HEIGHT,
-            .density = 2.6f, .drop_multiplier = 0.35,
+            .density = 3.2f, .drop_multiplier = 0.58,
             .spawns = {
                 { MobID::kDarkLadybug, 120000 }, { MobID::kHornet, 120000 }, { MobID::kSpider, 100000 },
-                { MobID::kEvilCentipede, 18000 }, { MobID::kMassiveBeetle, 2800 },
-                { MobID::kBoulder, 2500 },
+                { MobID::kEvilCentipede, 28000 }, { MobID::kMassiveBeetle, 12000 },
+                { MobID::kBoulder, 9000 },
                 { MobID::kSquare, 1 }
             },
             .difficulty = 3, .color = 0xff8FC777, .name = "Garden"
         },
         {
             .left = 2200, .top = 2200, .right = 15800, .bottom = 15800,
-            .density = 2.5f, .drop_multiplier = 0.20,
+            .density = 2.7f, .drop_multiplier = 0.30,
             .spawns = {
                 { MobID::kSpider, 100000 }, { MobID::kHornet, 100000 }, { MobID::kBeetle, 80000 },
-                { MobID::kEvilCentipede, 12000 }, { MobID::kMassiveBeetle, 2000 }, { MobID::kSquare, 1 }
+                { MobID::kEvilCentipede, 20000 }, { MobID::kMassiveBeetle, 8000 }, { MobID::kSquare, 1 }
             },
             .difficulty = 2, .color = 0xffA8D484, .name = "Garden"
         },
@@ -87,17 +86,17 @@ inline std::array const MAPS = std::to_array<MapZones>({
     MapZones({
         {
             .left = 0, .top = 0, .right = (float)ARENA_WIDTH, .bottom = (float)ARENA_HEIGHT,
-            .density = 2.6f, .drop_multiplier = 0.34,
+            .density = 3.2f, .drop_multiplier = 0.56,
             .spawns = {
                 { MobID::kDuneSpider, 105000 }, { MobID::kSandstorm, 90000 },
-                { MobID::kScorpion, 85000 }, { MobID::kDesertCentipede, 6000 },
-                { MobID::kDuneTitan, 3500 }, { MobID::kSquare, 1 }
+                { MobID::kScorpion, 85000 }, { MobID::kDesertCentipede, 22000 },
+                { MobID::kDuneTitan, 14000 }, { MobID::kSquare, 1 }
             },
             .difficulty = 3, .color = 0xffb57a2a, .name = "Desert"
         },
         {
             .left = 2200, .top = 2200, .right = 15800, .bottom = 15800,
-            .density = 2.5f, .drop_multiplier = 0.19,
+            .density = 2.7f, .drop_multiplier = 0.28,
             .spawns = {
                 { MobID::kCactus, 130000 }, { MobID::kDuneBeetle, 130000 },
                 { MobID::kDuneSpider, 105000 }, { MobID::kDuneHornet, 95000 },
@@ -129,20 +128,20 @@ inline std::array const MAPS = std::to_array<MapZones>({
     MapZones({
         {
             .left = 0, .top = 0, .right = (float)ARENA_WIDTH, .bottom = (float)ARENA_HEIGHT,
-            .density = 2.6f, .drop_multiplier = 0.33,
+            .density = 3.2f, .drop_multiplier = 0.56,
             .spawns = {
-                { MobID::kSeaLeech, 95000 }, { MobID::kMorayEel, 90000 },
-                { MobID::kInkCuttle, 6500 }, { MobID::kAbyssShark, 3500 },
+                { MobID::kSeaLeech, 24000 }, { MobID::kMorayEel, 70000 },
+                { MobID::kInkCuttle, 20000 }, { MobID::kAbyssShark, 14000 },
                 { MobID::kSquare, 1 }
             },
             .difficulty = 3, .color = 0xff023e8a, .name = "Ocean"
         },
         {
             .left = 2200, .top = 2200, .right = 15800, .bottom = 15800,
-            .density = 2.5f, .drop_multiplier = 0.18,
+            .density = 2.7f, .drop_multiplier = 0.28,
             .spawns = {
-                { MobID::kSpinePuffer, 105000 }, { MobID::kSeaLeech, 95000 },
-                { MobID::kMorayEel, 90000 }, { MobID::kReefCrab, 100000 },
+                { MobID::kSpinePuffer, 105000 }, { MobID::kSeaLeech, 24000 },
+                { MobID::kMorayEel, 70000 }, { MobID::kReefCrab, 100000 },
                 { MobID::kSquare, 1 }
             },
             .difficulty = 2, .color = 0xff005582, .name = "Ocean"
@@ -171,19 +170,19 @@ inline std::array const MAPS = std::to_array<MapZones>({
     MapZones({
         {
             .left = 0, .top = 0, .right = (float)ARENA_WIDTH, .bottom = (float)ARENA_HEIGHT,
-            .density = 2.6f, .drop_multiplier = 0.32,
+            .density = 3.2f, .drop_multiplier = 0.56,
             .spawns = {
-                { MobID::kRimeCentipede, 100000 }, { MobID::kBlizzardWisp, 110000 },
-                { MobID::kGlacierBeast, 90000 }, { MobID::kFrostYeti, 6500 },
-                { MobID::kIceGolem, 3500 }, { MobID::kSquare, 1 }
+                { MobID::kRimeCentipede, 22000 }, { MobID::kBlizzardWisp, 110000 },
+                { MobID::kGlacierBeast, 90000 }, { MobID::kFrostYeti, 18000 },
+                { MobID::kIceGolem, 14000 }, { MobID::kSquare, 1 }
             },
             .difficulty = 3, .color = 0xff6c757d, .name = "Snow"
         },
         {
             .left = 2200, .top = 2200, .right = 15800, .bottom = 15800,
-            .density = 2.5f, .drop_multiplier = 0.17,
+            .density = 2.7f, .drop_multiplier = 0.28,
             .spawns = {
-                { MobID::kRimeCentipede, 100000 }, { MobID::kBlizzardWisp, 110000 },
+                { MobID::kRimeCentipede, 22000 }, { MobID::kBlizzardWisp, 110000 },
                 { MobID::kGlacierBeast, 90000 }, { MobID::kIceSpider, 120000 },
                 { MobID::kFrostHornet, 105000 }, { MobID::kSquare, 1 }
             },
@@ -215,7 +214,7 @@ inline std::array const MAPS = std::to_array<MapZones>({
         {
             // hard / Deep
             .left = 0, .top = 0, .right = (float)ARENA_WIDTH, .bottom = (float)ARENA_HEIGHT,
-            .density = 2.8f, .drop_multiplier = 0.34,
+            .density = 3.4f, .drop_multiplier = 0.58,
             .spawns = {
                 { MobID::kEmeraldMantis, 120000 }, { MobID::kStoneGuardian, 80000 },
                 { MobID::kCarnivorousPlant, 100000 }, { MobID::kVineBug, 90000 },
@@ -226,7 +225,7 @@ inline std::array const MAPS = std::to_array<MapZones>({
         {
             // mid
             .left = 2200, .top = 2200, .right = 15800, .bottom = 15800,
-            .density = 2.6f, .drop_multiplier = 0.18,
+            .density = 2.8f, .drop_multiplier = 0.28,
             .spawns = {
                 { MobID::kJungleSpider, 130000 }, { MobID::kPoisonToad, 90000 },
                 { MobID::kSporeMushroom, 100000 }, { MobID::kRiverCrab, 80000 },
@@ -259,20 +258,20 @@ inline std::array const MAPS = std::to_array<MapZones>({
     MapZones({
         {
             .left = 0, .top = 0, .right = (float)ARENA_WIDTH, .bottom = (float)ARENA_HEIGHT,
-            .density = 2.8f, .drop_multiplier = 0.35,
+            .density = 3.4f, .drop_multiplier = 0.58,
             .spawns = {
                 { MobID::kSoldierAnt, 160000 }, { MobID::kWorkerAnt, 140000 },
-                { MobID::kAntHole, 8000 }, { MobID::kQueenAnt, 3500 },
+                { MobID::kAntHole, 18000 }, { MobID::kQueenAnt, 8000 },
                 { MobID::kSquare, 1 }
             },
             .difficulty = 3, .color = 0xff582f0e, .name = "Ant Hell"
         },
         {
             .left = 2200, .top = 2200, .right = 15800, .bottom = 15800,
-            .density = 2.6f, .drop_multiplier = 0.19,
+            .density = 2.8f, .drop_multiplier = 0.28,
             .spawns = {
                 { MobID::kWorkerAnt, 150000 }, { MobID::kSoldierAnt, 120000 },
-                { MobID::kBabyAnt, 100000 }, { MobID::kAntHole, 5000 },
+                { MobID::kBabyAnt, 100000 }, { MobID::kAntHole, 12000 },
                 { MobID::kSquare, 1 }
             },
             .difficulty = 2, .color = 0xff6f4518, .name = "Ant Hell"
@@ -300,17 +299,17 @@ inline std::array const MAPS = std::to_array<MapZones>({
     MapZones({
         {
             .left = 0, .top = 0, .right = (float)ARENA_WIDTH, .bottom = (float)ARENA_HEIGHT,
-            .density = 2.6f, .drop_multiplier = 0.33,
+            .density = 3.2f, .drop_multiplier = 0.56,
             .spawns = {
                 { MobID::kMagmaCrab, 105000 }, { MobID::kFireSpider, 110000 },
-                { MobID::kMagmaCentipede, 95000 }, { MobID::kObsidianGolem, 6500 },
-                { MobID::kLavaColossus, 3500 }, { MobID::kSquare, 1 }
+                { MobID::kMagmaCentipede, 22000 }, { MobID::kObsidianGolem, 18000 },
+                { MobID::kLavaColossus, 14000 }, { MobID::kSquare, 1 }
             },
             .difficulty = 3, .color = 0xff1a1a2e, .name = "Volcano"
         },
         {
             .left = 2200, .top = 2200, .right = 15800, .bottom = 15800,
-            .density = 2.5f, .drop_multiplier = 0.18,
+            .density = 2.7f, .drop_multiplier = 0.28,
             .spawns = {
                 { MobID::kCinderMoth, 135000 }, { MobID::kLavaBeetle, 125000 },
                 { MobID::kEmberWasp, 105000 }, { MobID::kMagmaCrab, 105000 },
@@ -384,7 +383,7 @@ inline std::array const MAPS = std::to_array<MapZones>({
         {
             // 4 Ruined Quarter — northwest
             .left = 600, .top = 800, .right = 10500, .bottom = 9500,
-            .density = 2.6f, .drop_multiplier = 0.32,
+            .density = 3.2f, .drop_multiplier = 0.55,
             .spawns = {
                 { MobID::kPhantomOrb, 400000 }, { MobID::kFallenKnight, 250000 },
                 { MobID::kMimicChest, 200000 }, { MobID::kRustMite, 150000 },
@@ -395,7 +394,7 @@ inline std::array const MAPS = std::to_array<MapZones>({
         {
             // 5 Royal Palace — NE of center (leave spawn plaza at MAP_SPAWN clear)
             .left = 14500, .top = 4500, .right = 24500, .bottom = 11500,
-            .density = 2.7f, .drop_multiplier = 0.35,
+            .density = 3.3f, .drop_multiplier = 0.58,
             .spawns = {
                 { MobID::kShieldSentinel, 350000 }, { MobID::kSpearSentinel, 300000 },
                 { MobID::kFallenKnight, 250000 }, { MobID::kWanderingGuard, 100000 },

@@ -2,7 +2,6 @@
 
 #include <cmath>
 
-uint32_t const MAX_LEVEL = 99;
 uint32_t const TPS = 20;
 
 // Tuned for TPS=20 (terminal ≈ accel/friction). Calibrate via screen-width crossing time.
@@ -505,11 +504,11 @@ std::array<struct PetalData, PetalID::kNumPetals> const PETAL_DATA = {{
     {
         .name = "Third Eye",
         .description = "Allows your flower to extend petals further out",
-        .health = 0.0,
-        .damage = 0.0,
+        .health = 40.0,
+        .damage = 26.0,
         .radius = 10.0,
-        .reload = 0.0,
-        .count = 0,
+        .reload = 2.5,
+        .count = 1,
         .rarity = RarityID::kMythic,
         .attributes = {
             .extra_range = 75,
@@ -614,11 +613,11 @@ std::array<struct PetalData, PetalID::kNumPetals> const PETAL_DATA = {{
     {
         .name = "Cutter",
         .description = "Increases the flower's body damage",
-        .health = 0.0,
-        .damage = 0.0,
+        .health = 18.0,
+        .damage = 12.0,
         .radius = 40.0,
-        .reload = 0.0,
-        .count = 0,
+        .reload = 2.5,
+        .count = 1,
         .rarity = RarityID::kEpic,
         .attributes = { 
             .extra_body_damage = 15,
@@ -722,11 +721,11 @@ std::array<struct PetalData, PetalID::kNumPetals> const PETAL_DATA = {{
     {
         .name = "Accelerator",
         .description = "Strap it on and your flower zooms like it's flying",
-        .health = 0.0,
-        .damage = 0.0,
+        .health = 8.0,
+        .damage = 5.0,
         .radius = 12.0,
-        .reload = 0.0,
-        .count = 0,
+        .reload = 2.5,
+        .count = 1,
         .rarity = RarityID::kUnusual,
         .attributes = {
             .move_speed_factor = 1.65f,
@@ -736,11 +735,11 @@ std::array<struct PetalData, PetalID::kNumPetals> const PETAL_DATA = {{
     {
         .name = "Magnet",
         .description = "Pulls nearby petal drops toward your flower",
-        .health = 0.0,
-        .damage = 0.0,
+        .health = 8.0,
+        .damage = 5.0,
         .radius = 12.0,
-        .reload = 0.0,
-        .count = 0,
+        .reload = 2.5,
+        .count = 1,
         .rarity = RarityID::kUnusual,
         .attributes = {
             .magnet_radius = 1800.f,
@@ -1074,11 +1073,11 @@ std::array<struct PetalData, PetalID::kNumPetals> const PETAL_DATA = {{
     {
         .name = "Coin",
         .description = "A small gold coin stamped with a petal. Spend it at the shop.",
-        .health = 0.0,
-        .damage = 0.0,
+        .health = 5.0,
+        .damage = 3.0,
         .radius = 11.0,
-        .reload = 0.0,
-        .count = 0,
+        .reload = 2.5,
+        .count = 1,
         .rarity = RarityID::kCommon,
         .attributes = {}
     },
@@ -1104,528 +1103,528 @@ std::array<struct PetalData, PetalID::kNumPetals> const PETAL_DATA = {{
     {
         .name = "Leaf Scrap",
         .description = "Garden leaf scrap used for crafting.",
-        .health = 0.0,
-        .damage = 0.0,
+        .health = 5.0,
+        .damage = 3.0,
         .radius = 10.0,
-        .reload = 0.0,
-        .count = 0,
+        .reload = 2.5,
+        .count = 1,
         .rarity = RarityID::kCommon,
         .attributes = {}
     },
     {
         .name = "Twig",
         .description = "A dry garden twig.",
-        .health = 0.0,
-        .damage = 0.0,
+        .health = 5.0,
+        .damage = 3.0,
         .radius = 10.0,
-        .reload = 0.0,
-        .count = 0,
+        .reload = 2.5,
+        .count = 1,
         .rarity = RarityID::kCommon,
         .attributes = {}
     },
     {
         .name = "Bee Barb",
         .description = "A tiny bee barb.",
-        .health = 0.0,
-        .damage = 0.0,
+        .health = 8.0,
+        .damage = 5.0,
         .radius = 10.0,
-        .reload = 0.0,
-        .count = 0,
+        .reload = 2.5,
+        .count = 1,
         .rarity = RarityID::kUnusual,
         .attributes = {}
     },
     {
         .name = "Pollen Dust",
         .description = "Sticky golden pollen.",
-        .health = 0.0,
-        .damage = 0.0,
+        .health = 5.0,
+        .damage = 3.0,
         .radius = 10.0,
-        .reload = 0.0,
-        .count = 0,
+        .reload = 2.5,
+        .count = 1,
         .rarity = RarityID::kCommon,
         .attributes = {}
     },
     {
         .name = "Royal Jelly",
         .description = "Rare jelly from elite bees.",
-        .health = 0.0,
-        .damage = 0.0,
+        .health = 18.0,
+        .damage = 12.0,
         .radius = 10.0,
-        .reload = 0.0,
-        .count = 0,
+        .reload = 2.5,
+        .count = 1,
         .rarity = RarityID::kEpic,
         .attributes = {}
     },
     {
         .name = "Ancient Heart",
         .description = "Heartwood of an ancient garden spirit.",
-        .health = 0.0,
-        .damage = 0.0,
+        .health = 28.0,
+        .damage = 18.0,
         .radius = 10.0,
-        .reload = 0.0,
-        .count = 0,
+        .reload = 2.5,
+        .count = 1,
         .rarity = RarityID::kLegendary,
         .attributes = {}
     },
     {
         .name = "Sand Grain",
         .description = "Desert sand grain.",
-        .health = 0.0,
-        .damage = 0.0,
+        .health = 5.0,
+        .damage = 3.0,
         .radius = 10.0,
-        .reload = 0.0,
-        .count = 0,
+        .reload = 2.5,
+        .count = 1,
         .rarity = RarityID::kCommon,
         .attributes = {}
     },
     {
         .name = "Venom Barb",
         .description = "Poisoned desert barb.",
-        .health = 0.0,
-        .damage = 0.0,
+        .health = 8.0,
+        .damage = 5.0,
         .radius = 10.0,
-        .reload = 0.0,
-        .count = 0,
+        .reload = 2.5,
+        .count = 1,
         .rarity = RarityID::kUnusual,
         .attributes = {}
     },
     {
         .name = "Cactus Sap",
         .description = "Thick cactus sap.",
-        .health = 0.0,
-        .damage = 0.0,
+        .health = 8.0,
+        .damage = 5.0,
         .radius = 10.0,
-        .reload = 0.0,
-        .count = 0,
+        .reload = 2.5,
+        .count = 1,
         .rarity = RarityID::kUnusual,
         .attributes = {}
     },
     {
         .name = "Carapace",
         .description = "Hard desert shell plate.",
-        .health = 0.0,
-        .damage = 0.0,
+        .health = 12.0,
+        .damage = 8.0,
         .radius = 10.0,
-        .reload = 0.0,
-        .count = 0,
+        .reload = 2.5,
+        .count = 1,
         .rarity = RarityID::kRare,
         .attributes = {}
     },
     {
         .name = "Sandstorm Eye",
         .description = "Eye of a living sandstorm.",
-        .health = 0.0,
-        .damage = 0.0,
+        .health = 18.0,
+        .damage = 12.0,
         .radius = 10.0,
-        .reload = 0.0,
-        .count = 0,
+        .reload = 2.5,
+        .count = 1,
         .rarity = RarityID::kEpic,
         .attributes = {}
     },
     {
         .name = "Sandworm Core",
         .description = "Core of the sandworm monarch.",
-        .health = 0.0,
-        .damage = 0.0,
+        .health = 28.0,
+        .damage = 18.0,
         .radius = 10.0,
-        .reload = 0.0,
-        .count = 0,
+        .reload = 2.5,
+        .count = 1,
         .rarity = RarityID::kLegendary,
         .attributes = {}
     },
     {
         .name = "Water Drop",
         .description = "A dense ocean water drop.",
-        .health = 0.0,
-        .damage = 0.0,
+        .health = 5.0,
+        .damage = 3.0,
         .radius = 10.0,
-        .reload = 0.0,
-        .count = 0,
+        .reload = 2.5,
+        .count = 1,
         .rarity = RarityID::kCommon,
         .attributes = {}
     },
     {
         .name = "Sea Salt",
         .description = "Ocean salt crystals.",
-        .health = 0.0,
-        .damage = 0.0,
+        .health = 5.0,
+        .damage = 3.0,
         .radius = 10.0,
-        .reload = 0.0,
-        .count = 0,
+        .reload = 2.5,
+        .count = 1,
         .rarity = RarityID::kCommon,
         .attributes = {}
     },
     {
         .name = "Seashell",
         .description = "A colorful seashell.",
-        .health = 0.0,
-        .damage = 0.0,
+        .health = 8.0,
+        .damage = 5.0,
         .radius = 10.0,
-        .reload = 0.0,
-        .count = 0,
+        .reload = 2.5,
+        .count = 1,
         .rarity = RarityID::kUnusual,
         .attributes = {}
     },
     {
         .name = "Coral",
         .description = "Branching reef coral.",
-        .health = 0.0,
-        .damage = 0.0,
+        .health = 12.0,
+        .damage = 8.0,
         .radius = 10.0,
-        .reload = 0.0,
-        .count = 0,
+        .reload = 2.5,
+        .count = 1,
         .rarity = RarityID::kRare,
         .attributes = {}
     },
     {
         .name = "Abyss Pearl",
         .description = "Pearl from the deep.",
-        .health = 0.0,
-        .damage = 0.0,
+        .health = 18.0,
+        .damage = 12.0,
         .radius = 10.0,
-        .reload = 0.0,
-        .count = 0,
+        .reload = 2.5,
+        .count = 1,
         .rarity = RarityID::kEpic,
         .attributes = {}
     },
     {
         .name = "Tide Core",
         .description = "Core of the abyssal tide.",
-        .health = 0.0,
-        .damage = 0.0,
+        .health = 28.0,
+        .damage = 18.0,
         .radius = 10.0,
-        .reload = 0.0,
-        .count = 0,
+        .reload = 2.5,
+        .count = 1,
         .rarity = RarityID::kLegendary,
         .attributes = {}
     },
     {
         .name = "Ice Crystal",
         .description = "Sharp polar ice crystal.",
-        .health = 0.0,
-        .damage = 0.0,
+        .health = 5.0,
+        .damage = 3.0,
         .radius = 10.0,
-        .reload = 0.0,
-        .count = 0,
+        .reload = 2.5,
+        .count = 1,
         .rarity = RarityID::kCommon,
         .attributes = {}
     },
     {
         .name = "Snow Fluff",
         .description = "Soft snow fluff.",
-        .health = 0.0,
-        .damage = 0.0,
+        .health = 5.0,
+        .damage = 3.0,
         .radius = 10.0,
-        .reload = 0.0,
-        .count = 0,
+        .reload = 2.5,
+        .count = 1,
         .rarity = RarityID::kCommon,
         .attributes = {}
     },
     {
         .name = "Cold Iron",
         .description = "Frost-tempered iron shard.",
-        .health = 0.0,
-        .damage = 0.0,
+        .health = 12.0,
+        .damage = 8.0,
         .radius = 10.0,
-        .reload = 0.0,
-        .count = 0,
+        .reload = 2.5,
+        .count = 1,
         .rarity = RarityID::kRare,
         .attributes = {}
     },
     {
         .name = "Ice Scale",
         .description = "Scale of an ice beast.",
-        .health = 0.0,
-        .damage = 0.0,
+        .health = 12.0,
+        .damage = 8.0,
         .radius = 10.0,
-        .reload = 0.0,
-        .count = 0,
+        .reload = 2.5,
+        .count = 1,
         .rarity = RarityID::kRare,
         .attributes = {}
     },
     {
         .name = "Permafrost Heart",
         .description = "Heart of endless winter.",
-        .health = 0.0,
-        .damage = 0.0,
+        .health = 28.0,
+        .damage = 18.0,
         .radius = 10.0,
-        .reload = 0.0,
-        .count = 0,
+        .reload = 2.5,
+        .count = 1,
         .rarity = RarityID::kLegendary,
         .attributes = {}
     },
     {
         .name = "Blizzard Eye",
         .description = "Eye of a blizzard wisp.",
-        .health = 0.0,
-        .damage = 0.0,
+        .health = 18.0,
+        .damage = 12.0,
         .radius = 10.0,
-        .reload = 0.0,
-        .count = 0,
+        .reload = 2.5,
+        .count = 1,
         .rarity = RarityID::kEpic,
         .attributes = {}
     },
     {
         .name = "Vine Strand",
         .description = "Living jungle vine.",
-        .health = 0.0,
-        .damage = 0.0,
+        .health = 5.0,
+        .damage = 3.0,
         .radius = 10.0,
-        .reload = 0.0,
-        .count = 0,
+        .reload = 2.5,
+        .count = 1,
         .rarity = RarityID::kCommon,
         .attributes = {}
     },
     {
         .name = "Resin",
         .description = "Amber jungle resin.",
-        .health = 0.0,
-        .damage = 0.0,
+        .health = 8.0,
+        .damage = 5.0,
         .radius = 10.0,
-        .reload = 0.0,
-        .count = 0,
+        .reload = 2.5,
+        .count = 1,
         .rarity = RarityID::kUnusual,
         .attributes = {}
     },
     {
         .name = "Venom Sac",
         .description = "A swollen venom sac.",
-        .health = 0.0,
-        .damage = 0.0,
+        .health = 12.0,
+        .damage = 8.0,
         .radius = 10.0,
-        .reload = 0.0,
-        .count = 0,
+        .reload = 2.5,
+        .count = 1,
         .rarity = RarityID::kRare,
         .attributes = {}
     },
     {
         .name = "Spore Dust",
         .description = "Jungle spore dust.",
-        .health = 0.0,
-        .damage = 0.0,
+        .health = 8.0,
+        .damage = 5.0,
         .radius = 10.0,
-        .reload = 0.0,
-        .count = 0,
+        .reload = 2.5,
+        .count = 1,
         .rarity = RarityID::kUnusual,
         .attributes = {}
     },
     {
         .name = "Heartwood Chip",
         .description = "Chip of ancient heartwood.",
-        .health = 0.0,
-        .damage = 0.0,
+        .health = 28.0,
+        .damage = 18.0,
         .radius = 10.0,
-        .reload = 0.0,
-        .count = 0,
+        .reload = 2.5,
+        .count = 1,
         .rarity = RarityID::kLegendary,
         .attributes = {}
     },
     {
         .name = "Corrupt Spore",
         .description = "Corrupted spore core.",
-        .health = 0.0,
-        .damage = 0.0,
+        .health = 18.0,
+        .damage = 12.0,
         .radius = 10.0,
-        .reload = 0.0,
-        .count = 0,
+        .reload = 2.5,
+        .count = 1,
         .rarity = RarityID::kEpic,
         .attributes = {}
     },
     {
         .name = "Ant Shell",
         .description = "Chitin ant shell.",
-        .health = 0.0,
-        .damage = 0.0,
+        .health = 5.0,
+        .damage = 3.0,
         .radius = 10.0,
-        .reload = 0.0,
-        .count = 0,
+        .reload = 2.5,
+        .count = 1,
         .rarity = RarityID::kCommon,
         .attributes = {}
     },
     {
         .name = "Antenna Scrap",
         .description = "Ant antenna scrap.",
-        .health = 0.0,
-        .damage = 0.0,
+        .health = 8.0,
+        .damage = 5.0,
         .radius = 10.0,
-        .reload = 0.0,
-        .count = 0,
+        .reload = 2.5,
+        .count = 1,
         .rarity = RarityID::kUnusual,
         .attributes = {}
     },
     {
         .name = "Formic Acid",
         .description = "Concentrated formic acid.",
-        .health = 0.0,
-        .damage = 0.0,
+        .health = 8.0,
+        .damage = 5.0,
         .radius = 10.0,
-        .reload = 0.0,
-        .count = 0,
+        .reload = 2.5,
+        .count = 1,
         .rarity = RarityID::kUnusual,
         .attributes = {}
     },
     {
         .name = "Ant Roe",
         .description = "Cluster of ant eggs.",
-        .health = 0.0,
-        .damage = 0.0,
+        .health = 12.0,
+        .damage = 8.0,
         .radius = 10.0,
-        .reload = 0.0,
-        .count = 0,
+        .reload = 2.5,
+        .count = 1,
         .rarity = RarityID::kRare,
         .attributes = {}
     },
     {
         .name = "Queen Pheromone",
         .description = "Pheromone of the ant queen.",
-        .health = 0.0,
-        .damage = 0.0,
+        .health = 18.0,
+        .damage = 12.0,
         .radius = 10.0,
-        .reload = 0.0,
-        .count = 0,
+        .reload = 2.5,
+        .count = 1,
         .rarity = RarityID::kEpic,
         .attributes = {}
     },
     {
         .name = "Hive Heart",
         .description = "Heart of the ant hive.",
-        .health = 0.0,
-        .damage = 0.0,
+        .health = 28.0,
+        .damage = 18.0,
         .radius = 10.0,
-        .reload = 0.0,
-        .count = 0,
+        .reload = 2.5,
+        .count = 1,
         .rarity = RarityID::kLegendary,
         .attributes = {}
     },
     {
         .name = "Fire Crystal",
         .description = "Volcanic fire crystal.",
-        .health = 0.0,
-        .damage = 0.0,
+        .health = 8.0,
+        .damage = 5.0,
         .radius = 10.0,
-        .reload = 0.0,
-        .count = 0,
+        .reload = 2.5,
+        .count = 1,
         .rarity = RarityID::kUnusual,
         .attributes = {}
     },
     {
         .name = "Sulfur",
         .description = "Yellow sulfur chunk.",
-        .health = 0.0,
-        .damage = 0.0,
+        .health = 5.0,
+        .damage = 3.0,
         .radius = 10.0,
-        .reload = 0.0,
-        .count = 0,
+        .reload = 2.5,
+        .count = 1,
         .rarity = RarityID::kCommon,
         .attributes = {}
     },
     {
         .name = "Lava Rock",
         .description = "Still-warm lava rock.",
-        .health = 0.0,
-        .damage = 0.0,
+        .health = 12.0,
+        .damage = 8.0,
         .radius = 10.0,
-        .reload = 0.0,
-        .count = 0,
+        .reload = 2.5,
+        .count = 1,
         .rarity = RarityID::kRare,
         .attributes = {}
     },
     {
         .name = "Obsidian Shard",
         .description = "Sharp obsidian shard.",
-        .health = 0.0,
-        .damage = 0.0,
+        .health = 12.0,
+        .damage = 8.0,
         .radius = 10.0,
-        .reload = 0.0,
-        .count = 0,
+        .reload = 2.5,
+        .count = 1,
         .rarity = RarityID::kRare,
         .attributes = {}
     },
     {
         .name = "Leyline Core",
         .description = "Molten leyline core.",
-        .health = 0.0,
-        .damage = 0.0,
+        .health = 28.0,
+        .damage = 18.0,
         .radius = 10.0,
-        .reload = 0.0,
-        .count = 0,
+        .reload = 2.5,
+        .count = 1,
         .rarity = RarityID::kLegendary,
         .attributes = {}
     },
     {
         .name = "Phoenix Ember",
         .description = "Ember of a phoenix.",
-        .health = 0.0,
-        .damage = 0.0,
+        .health = 18.0,
+        .damage = 12.0,
         .radius = 10.0,
-        .reload = 0.0,
-        .count = 0,
+        .reload = 2.5,
+        .count = 1,
         .rarity = RarityID::kEpic,
         .attributes = {}
     },
     {
         .name = "Refined Steel",
         .description = "Refined capital steel.",
-        .health = 0.0,
-        .damage = 0.0,
+        .health = 8.0,
+        .damage = 5.0,
         .radius = 10.0,
-        .reload = 0.0,
-        .count = 0,
+        .reload = 2.5,
+        .count = 1,
         .rarity = RarityID::kUnusual,
         .attributes = {}
     },
     {
         .name = "Gear Tooth",
         .description = "A precision gear.",
-        .health = 0.0,
-        .damage = 0.0,
+        .health = 8.0,
+        .damage = 5.0,
         .radius = 10.0,
-        .reload = 0.0,
-        .count = 0,
+        .reload = 2.5,
+        .count = 1,
         .rarity = RarityID::kUnusual,
         .attributes = {}
     },
     {
         .name = "Holy Shard",
         .description = "Fragment of holy light.",
-        .health = 0.0,
-        .damage = 0.0,
+        .health = 12.0,
+        .damage = 8.0,
         .radius = 10.0,
-        .reload = 0.0,
-        .count = 0,
+        .reload = 2.5,
+        .count = 1,
         .rarity = RarityID::kRare,
         .attributes = {}
     },
     {
         .name = "Capital Badge",
         .description = "Royal capital badge.",
-        .health = 0.0,
-        .damage = 0.0,
+        .health = 12.0,
+        .damage = 8.0,
         .radius = 10.0,
-        .reload = 0.0,
-        .count = 0,
+        .reload = 2.5,
+        .count = 1,
         .rarity = RarityID::kRare,
         .attributes = {}
     },
     {
         .name = "Sovereign Core",
         .description = "Core of fallen sovereignty.",
-        .health = 0.0,
-        .damage = 0.0,
+        .health = 28.0,
+        .damage = 18.0,
         .radius = 10.0,
-        .reload = 0.0,
-        .count = 0,
+        .reload = 2.5,
+        .count = 1,
         .rarity = RarityID::kLegendary,
         .attributes = {}
     },
     {
         .name = "Royal Seal",
         .description = "Wax royal seal.",
-        .health = 0.0,
-        .damage = 0.0,
+        .health = 18.0,
+        .damage = 12.0,
         .radius = 10.0,
-        .reload = 0.0,
-        .count = 0,
+        .reload = 2.5,
+        .count = 1,
         .rarity = RarityID::kEpic,
         .attributes = {}
     },
@@ -2310,7 +2309,51 @@ std::array<struct PetalData, PetalID::kNumPetals> const PETAL_DATA = {{
         .count = 1,
         .rarity = RarityID::kLegendary,
         .attributes = { .poison_damage = { .damage = 6.0, .time = 3.0 }, .slow_inflict_seconds = 2.0 }
-    }
+    },
+    // ---- Unique / Super / Ultra ladders (×2 from Mythic each step) ----
+    // Strong Unique Basic (appended after meme kUniqueBasic so craft prefers this id).
+    { .name = "Basic", .description = "A nice petal, not too strong but not too weak", .health = 4860, .damage = 4860, .radius = 10, .reload = 2.5, .count = 1, .rarity = RarityID::kUnique, .attributes = {} },
+    { .name = "Basic", .description = "A nice petal, not too strong but not too weak", .health = 9720, .damage = 9720, .radius = 10, .reload = 2.5, .count = 1, .rarity = RarityID::kSuper, .attributes = {} },
+    { .name = "Basic", .description = "A nice petal, not too strong but not too weak", .health = 19440, .damage = 19440, .radius = 10, .reload = 2.5, .count = 1, .rarity = RarityID::kUltra, .attributes = {} },
+    { .name = "Stinger", .description = "It really hurts, but it's really fragile", .health = 486, .damage = 11340, .radius = 7, .reload = 6.0, .count = 3, .rarity = RarityID::kUnique, .attributes = { .clump_radius = 10 } },
+    { .name = "Stinger", .description = "It really hurts, but it's really fragile", .health = 972, .damage = 22680, .radius = 7, .reload = 6.0, .count = 3, .rarity = RarityID::kSuper, .attributes = { .clump_radius = 10 } },
+    { .name = "Stinger", .description = "It really hurts, but it's really fragile", .health = 1944, .damage = 45360, .radius = 7, .reload = 6.0, .count = 3, .rarity = RarityID::kUltra, .attributes = { .clump_radius = 10 } },
+    { .name = "Rose", .description = "Its healing properties are amazing. Not so good at combat though", .health = 810, .damage = 810, .radius = 10, .reload = 3.5, .count = 1, .rarity = RarityID::kUnique, .attributes = { .secondary_reload = 1.0, .burst_heal = 2268, .defend_only = 1 } },
+    { .name = "Rose", .description = "Its healing properties are amazing. Not so good at combat though", .health = 1620, .damage = 1620, .radius = 10, .reload = 3.5, .count = 1, .rarity = RarityID::kSuper, .attributes = { .secondary_reload = 1.0, .burst_heal = 4536, .defend_only = 1 } },
+    { .name = "Rose", .description = "Its healing properties are amazing. Not so good at combat though", .health = 3240, .damage = 3240, .radius = 10, .reload = 3.5, .count = 1, .rarity = RarityID::kUltra, .attributes = { .secondary_reload = 1.0, .burst_heal = 9072, .defend_only = 1 } },
+    { .name = "Leaf", .description = "Gathers energy from the sun to passively heal your flower", .health = 1620, .damage = 1296, .radius = 10, .reload = 1.0, .count = 1, .rarity = RarityID::kUnique, .attributes = { .constant_heal = 6, .icon_angle = -1 } },
+    { .name = "Leaf", .description = "Gathers energy from the sun to passively heal your flower", .health = 3240, .damage = 2592, .radius = 10, .reload = 1.0, .count = 1, .rarity = RarityID::kSuper, .attributes = { .constant_heal = 7, .icon_angle = -1 } },
+    { .name = "Leaf", .description = "Gathers energy from the sun to passively heal your flower", .health = 6480, .damage = 5184, .radius = 10, .reload = 1.0, .count = 1, .rarity = RarityID::kUltra, .attributes = { .constant_heal = 8, .icon_angle = -1 } },
+    { .name = "Iris", .description = "Very poisonous, but takes a while to do its work", .health = 810, .damage = 810, .radius = 7, .reload = 5.0, .count = 1, .rarity = RarityID::kUnique, .attributes = { .poison_damage = { .damage = 1620.0, .time = 6.0 } } },
+    { .name = "Iris", .description = "Very poisonous, but takes a while to do its work", .health = 1620, .damage = 1620, .radius = 7, .reload = 5.0, .count = 1, .rarity = RarityID::kSuper, .attributes = { .poison_damage = { .damage = 3240.0, .time = 6.0 } } },
+    { .name = "Iris", .description = "Very poisonous, but takes a while to do its work", .health = 3240, .damage = 3240, .radius = 7, .reload = 5.0, .count = 1, .rarity = RarityID::kUltra, .attributes = { .poison_damage = { .damage = 6480.0, .time = 6.0 } } },
+    { .name = "Wing", .description = "It comes and goes", .health = 810, .damage = 810, .radius = 10, .reload = 2.5, .count = 1, .rarity = RarityID::kUnique, .attributes = { .icon_angle = 1 } },
+    { .name = "Wing", .description = "It comes and goes", .health = 1620, .damage = 1620, .radius = 10, .reload = 2.5, .count = 1, .rarity = RarityID::kSuper, .attributes = { .icon_angle = 1 } },
+    { .name = "Wing", .description = "It comes and goes", .health = 3240, .damage = 3240, .radius = 10, .reload = 2.5, .count = 1, .rarity = RarityID::kUltra, .attributes = { .icon_angle = 1 } },
+    { .name = "Missile", .description = "You can actually shoot this one", .health = 648, .damage = 2160, .radius = 10, .reload = 3.0, .count = 1, .rarity = RarityID::kUnique, .attributes = { .secondary_reload = 0.85, .defend_only = 1, .icon_angle = 1, .rotation_style = PetalAttributes::kFollowRot } },
+    { .name = "Missile", .description = "You can actually shoot this one", .health = 1296, .damage = 4320, .radius = 10, .reload = 3.0, .count = 1, .rarity = RarityID::kSuper, .attributes = { .secondary_reload = 0.85, .defend_only = 1, .icon_angle = 1, .rotation_style = PetalAttributes::kFollowRot } },
+    { .name = "Missile", .description = "You can actually shoot this one", .health = 2592, .damage = 8640, .radius = 10, .reload = 3.0, .count = 1, .rarity = RarityID::kUltra, .attributes = { .secondary_reload = 0.85, .defend_only = 1, .icon_angle = 1, .rotation_style = PetalAttributes::kFollowRot } },
+    { .name = "Bubble", .description = "You can right click to pop it and propel your flower", .health = 1, .damage = 0, .radius = 12, .reload = 1.75, .count = 1, .rarity = RarityID::kUnique, .attributes = { .secondary_reload = 0.35, .defend_only = 1 } },
+    { .name = "Bubble", .description = "You can right click to pop it and propel your flower", .health = 1, .damage = 0, .radius = 12, .reload = 1.75, .count = 1, .rarity = RarityID::kSuper, .attributes = { .secondary_reload = 0.35, .defend_only = 1 } },
+    { .name = "Bubble", .description = "You can right click to pop it and propel your flower", .health = 1, .damage = 0, .radius = 12, .reload = 1.75, .count = 1, .rarity = RarityID::kUltra, .attributes = { .secondary_reload = 0.35, .defend_only = 1 } },
+    { .name = "Faster", .description = "It's so light it makes your other petals spin faster", .health = 270, .damage = 378, .radius = 7, .reload = 0.5, .count = 1, .rarity = RarityID::kUnique, .attributes = { .extra_rotation_speed = 1.75 } },
+    { .name = "Faster", .description = "It's so light it makes your other petals spin faster", .health = 540, .damage = 756, .radius = 7, .reload = 0.5, .count = 1, .rarity = RarityID::kSuper, .attributes = { .extra_rotation_speed = 2.0 } },
+    { .name = "Faster", .description = "It's so light it makes your other petals spin faster", .health = 1080, .damage = 1512, .radius = 7, .reload = 0.5, .count = 1, .rarity = RarityID::kUltra, .attributes = { .extra_rotation_speed = 2.25 } },
+    { .name = "Rock", .description = "Even more durable, but slower to recharge", .health = 5400, .damage = 540, .radius = 12, .reload = 7.5, .count = 1, .rarity = RarityID::kUnique, .attributes = {} },
+    { .name = "Rock", .description = "Even more durable, but slower to recharge", .health = 10800, .damage = 1080, .radius = 12, .reload = 7.5, .count = 1, .rarity = RarityID::kSuper, .attributes = {} },
+    { .name = "Rock", .description = "Even more durable, but slower to recharge", .health = 21600, .damage = 2160, .radius = 12, .reload = 7.5, .count = 1, .rarity = RarityID::kUltra, .attributes = {} },
+    { .name = "Web", .description = "It's really sticky", .health = 540, .damage = 270, .radius = 10, .reload = 3.0, .count = 3, .rarity = RarityID::kUnique, .attributes = { .clump_radius = 10, .secondary_reload = 0.5, .defend_only = 1 } },
+    { .name = "Web", .description = "It's really sticky", .health = 1080, .damage = 540, .radius = 10, .reload = 3.0, .count = 3, .rarity = RarityID::kSuper, .attributes = { .clump_radius = 10, .secondary_reload = 0.5, .defend_only = 1 } },
+    { .name = "Web", .description = "It's really sticky", .health = 2160, .damage = 1080, .radius = 10, .reload = 3.0, .count = 3, .rarity = RarityID::kUltra, .attributes = { .clump_radius = 10, .secondary_reload = 0.5, .defend_only = 1 } },
+    { .name = "Fast", .description = "Weaker than most petals, but reloads very quickly", .health = 2430, .damage = 3888, .radius = 7, .reload = 1.0, .count = 1, .rarity = RarityID::kUnique, .attributes = {} },
+    { .name = "Fast", .description = "Weaker than most petals, but reloads very quickly", .health = 4860, .damage = 7776, .radius = 7, .reload = 1.0, .count = 1, .rarity = RarityID::kSuper, .attributes = {} },
+    { .name = "Fast", .description = "Weaker than most petals, but reloads very quickly", .health = 9720, .damage = 15552, .radius = 7, .reload = 1.0, .count = 1, .rarity = RarityID::kUltra, .attributes = {} },
+    { .name = "Heavy", .description = "Very resilient and deals more damage, but reloads very slowly", .health = 9720, .damage = 9720, .radius = 12, .reload = 4.5, .count = 1, .rarity = RarityID::kUnique, .attributes = {} },
+    { .name = "Heavy", .description = "Very resilient and deals more damage, but reloads very slowly", .health = 19440, .damage = 19440, .radius = 12, .reload = 4.5, .count = 1, .rarity = RarityID::kSuper, .attributes = {} },
+    { .name = "Heavy", .description = "Very resilient and deals more damage, but reloads very slowly", .health = 38880, .damage = 38880, .radius = 12, .reload = 4.5, .count = 1, .rarity = RarityID::kUltra, .attributes = {} },
+    { .name = "Twin", .description = "Why stop at one? Why not TWO?!", .health = 810, .damage = 1296, .radius = 7, .reload = 1.0, .count = 2, .rarity = RarityID::kUnique, .attributes = {} },
+    { .name = "Twin", .description = "Why stop at one? Why not TWO?!", .health = 1620, .damage = 2592, .radius = 7, .reload = 1.0, .count = 2, .rarity = RarityID::kSuper, .attributes = {} },
+    { .name = "Twin", .description = "Why stop at one? Why not TWO?!", .health = 3240, .damage = 5184, .radius = 7, .reload = 1.0, .count = 2, .rarity = RarityID::kUltra, .attributes = {} }
 }};
 
 std::array<struct MobData, MobID::kNumMobs> const MOB_DATA = {{
@@ -3274,13 +3317,15 @@ std::array<struct MobData, MobID::kNumMobs> const MOB_DATA = {{
 // Relative rarity weights for multi-drop rolls.
 // Per-mob: only rarities present in that mob's drop table are kept, then renormalized to 1.0.
 static float const DROP_RARITY_WEIGHT[RarityID::kNumRarities] = {
-    52.0f, // Common
-    26.0f, // Unusual
-    13.0f, // Rare
-     6.0f, // Epic
-     2.2f, // Legendary
-     0.55f,// Mythic
-     0.08f // Unique
+    52.0f,  // Common
+    26.0f,  // Unusual
+    13.0f,  // Rare
+     6.0f,  // Epic
+     2.2f,  // Legendary
+     0.55f, // Mythic
+     0.08f, // Unique
+     0.03f, // Super
+     0.01f  // Ultra
 };
 
 std::array<StaticArray<float, MAX_DROPS_PER_MOB>, MobID::kNumMobs> const MOB_DROP_CHANCES = [](){
@@ -3315,18 +3360,20 @@ std::array<StaticArray<float, MAX_DROPS_PER_MOB>, MobID::kNumMobs> const MOB_DRO
 }();
 
 uint32_t score_to_pass_level(uint32_t level) {
-    // Linear XP curve (level never needs exponential grind):
-    // L1→2: 40 · L10→11: 220 · L50→51: 1020 · L98→99: 1980
+    // Linear XP, uncapped. Steeper than the old 20+20×L so early levels
+    // are not free from a handful of mid-tier kills.
+    // L1→2: 325 · L10→11: 1000 · L50→51: 4000 · L100→101: 7750
     if (level < 1) level = 1;
-    return 20u + 20u * level;
+    return 250u + 75u * level;
 }
 
 uint32_t score_to_level(uint32_t score) {
     uint32_t level = 1;
-    while (level < MAX_LEVEL) {
+    for (;;) {
         uint32_t level_score = score_to_pass_level(level);
         if (score < level_score) break;
         score -= level_score;
+        if (level == UINT32_MAX) break;
         ++level;
     }
     return level;
@@ -3334,26 +3381,29 @@ uint32_t score_to_level(uint32_t score) {
 
 uint32_t level_to_score(uint32_t level) {
     uint32_t score = 0;
-    for (uint32_t i = 1; i < level; ++i)
-        score += score_to_pass_level(i);
+    for (uint32_t i = 1; i < level; ++i) {
+        uint32_t add = score_to_pass_level(i);
+        if (score > UINT32_MAX - add) return UINT32_MAX;
+        score += add;
+    }
     return score;
 }
 
 uint32_t loadout_slots_at_level(uint32_t level) {
-    if (level > MAX_LEVEL) level = MAX_LEVEL;
+    if (level < 1) level = 1;
     uint32_t ret = 5 + level / LEVELS_PER_EXTRA_SLOT;
     if (ret > MAX_SLOT_COUNT) return MAX_SLOT_COUNT;
     return ret;
 }
 
 float hp_at_level(uint32_t level) {
-    if (level > MAX_LEVEL) level = MAX_LEVEL;
+    if (level < 1) level = 1;
     uint32_t gained = level > 1 ? level - 1 : 0;
     return BASE_HEALTH + 8.0f * gained + 0.08f * gained * gained;
 }
 
 float body_damage_at_level(uint32_t level) {
-    if (level > MAX_LEVEL) level = MAX_LEVEL;
+    if (level < 1) level = 1;
     uint32_t gained = level > 1 ? level - 1 : 0;
     return BASE_BODY_DAMAGE + 2.5f * gained + 0.015f * gained * gained;
 }

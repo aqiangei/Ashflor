@@ -24,19 +24,17 @@ namespace Talent {
     // Incremental: each level grants exactly one talent point.
     inline uint32_t points_earned(uint32_t level) {
         if (level < 1) level = 1;
-        if (level > MAX_LEVEL) level = MAX_LEVEL;
         return level;
     }
 
-    // Every 10 levels unlocks +1 max rank in each talent tree
+    // Every 10 levels unlocks +1 max rank in each talent tree (rank storage is u8).
     inline uint8_t max_rank(uint32_t level) {
         if (level < 1) level = 1;
-        if (level > MAX_LEVEL) level = MAX_LEVEL;
-        return (uint8_t) (1u + level / 10u);
+        uint32_t r = 1u + level / 10u;
+        return (uint8_t) (r > 255u ? 255u : r);
     }
 
-    // Odd costs: rank-r costs (2r-1). Maxing both trees at 99 needs 200 pts
-    // vs 99 earned — still a real allocation choice.
+    // Odd costs: rank-r costs (2r-1).
     inline uint32_t rank_cost(uint8_t next_rank) {
         if (next_rank == 0) return 0;
         return 2u * (uint32_t) next_rank - 1u; // 1,3,5,...

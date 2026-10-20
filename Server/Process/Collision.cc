@@ -41,37 +41,55 @@ static void _add_to_backpack_stack(Client *client, PetalID::T id) {
 
 static void _pickup_drop(Simulation *sim, Entity &player, Entity &drop) {
     if (!sim->ent_alive(player.get_parent())) return;
-    // During immunity, only same-team (party) can pick — shared party loot
-    if (drop.immunity_ticks > 0) {
-        if (drop.get_team() == NULL_ENTITY) return;
+    // Private loot: team-tagged drops are forever exclusive to that solo/party.
+    // Unowned drops (NULL team) are locked briefly, then free-for-all.
+    if (drop.get_team() != NULL_ENTITY) {
         if (!(drop.get_team() == player.get_team())) return;
+    } else if (drop.immunity_ticks > 0) {
+        return;
     }
 
     PetalID::T drop_id = drop.get_drop_id();
-    auto place = [&](uint32_t begin, uint32_t end) -> bool {
+    uint16_t qty = drop.get_drop_count();
+    if (qty < 1) qty = 1;
+    Client *client = Server::client_by_camera(sim, player.get_parent());
+    auto place_one = [&](uint32_t begin, uint32_t end) -> bool {
         for (uint32_t i = begin; i < end; ++i) {
             if (player.get_loadout_ids(i) != PetalID::kNone) continue;
             player.set_loadout_ids(i, drop_id);
-            drop.set_x(player.get_x());
-            drop.set_y(player.get_y());
-            // Ownership moves from the world drop into this inventory slot.
-            BitMath::unset(drop.flags, EntityFlags::kIsDespawning);
-            sim->request_delete(drop.id);
-            if (Client *client = Server::client_by_camera(sim, player.get_parent()))
-                AccountStore::capture_nosave(client);
             return true;
         }
         return false;
     };
     uint32_t const n = player.get_loadout_count();
-    if (Recipe::is_bag_only(drop_id)) {
-        if (place(n, n + MAX_SLOT_COUNT)) return;
-    } else if (place(n, n + MAX_SLOT_COUNT) || place(0, n)) return;
-    // Slots full — still goes into the backpack (same panel as slot copies).
-    Client *client = Server::client_by_camera(sim, player.get_parent());
-    if (client != nullptr) _add_to_backpack_stack(client, drop_id);
+    for (uint16_t q = 0; q < qty; ++q) {
+        uint8_t placed = 0;
+        if (Recipe::is_bag_only(drop_id)) {
+            placed = place_one(n, n + MAX_SLOT_COUNT);
+        } else {
+            placed = place_one(n, n + MAX_SLOT_COUNT) || place_one(0, n);
+        }
+        if (!placed) {
+            if (client != nullptr) {
+                if (client->craft_bank[drop_id] < 1000000 - (qty - q))
+                    client->craft_bank[drop_id] += (uint32_t) (qty - q);
+                else
+                    client->craft_bank[drop_id] = 1000000;
+                for (uint16_t c = q; c < qty; ++c)
+                    client_credit_petal_pick(client, drop_id);
+            }
+            break;
+        }
+        if (client != nullptr) client_credit_petal_pick(client, drop_id);
+    }
+    if (client != nullptr) {
+        AccountStore::capture_nosave(client);
+        if (Recipe::is_bag_only(drop_id))
+            client_sync_craft(client);
+    }
     drop.set_x(player.get_x());
     drop.set_y(player.get_y());
+    BitMath::unset(drop.flags, EntityFlags::kIsDespawning);
     sim->request_delete(drop.id);
 }
 

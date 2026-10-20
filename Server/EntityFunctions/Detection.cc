@@ -1,5 +1,6 @@
 #include <Server/EntityFunctions.hh>
 
+#include <Shared/Map.hh>
 #include <Shared/Simulation.hh>
 #include <Shared/Entity.hh>
 #include <Shared/StaticData.hh>
@@ -42,6 +43,10 @@ EntityID find_nearest_enemy(Simulation *simulation, Entity const &entity, float 
         if (!ent.has_component(kMob) && !ent.has_component(kFlower)) return;
         // Players / bots / their summons never aggro other player-faction flowers
         if (seeker_player && is_player_faction(sim, ent)) return;
+        // Spawn plaza: wild mobs never acquire aggro on players inside (players may still attack).
+        if (!seeker_player && is_player_faction(sim, ent)
+            && Map::in_spawn_plaza(ent.get_x(), ent.get_y()))
+            return;
         if (sim->ent_alive(entity.get_parent())) {
             Entity &parent = sim->get_ent(entity.get_parent());
             float dist = Vector(ent.get_x()-parent.get_x(),ent.get_y()-parent.get_y()).magnitude();

@@ -51,6 +51,7 @@ namespace Ui {
     Element *make_title_info_box();
     Element *make_panel_buttons();
     Element *make_death_main_screen();
+    Element *make_death_life_summary();
     Element *make_stat_screen();
     Element *make_settings_panel();
     Element *make_petal_gallery();

@@ -236,6 +236,16 @@ uint8_t Validator::validate_uint8() {
     return (at += sizeof(uint8_t)) <= end;
 }
 
+uint8_t Validator::validate_uint16() {
+    if (at >= end) return 0;
+    for (uint8_t i = 0; i < 3; ++i) {
+        uint8_t x = *at;
+        if (!validate_uint8()) return 0;
+        if (x <= 127) return 1;
+    }
+    return 0;
+}
+
 uint8_t Validator::validate_uint32() {
     if (at >= end) return 0;
     for (uint8_t i = 0; i < 5; ++i) {

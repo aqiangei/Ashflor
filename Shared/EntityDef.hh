@@ -41,7 +41,7 @@ SINGLE(Physics, angle, Float)
 
 #define FIELDS_Camera \
 SINGLE(Camera, player, EntityID) \
-SINGLE(Camera, respawn_level, uint8_t) \
+SINGLE(Camera, respawn_level, uint32_t) \
 MULTIPLE(Camera, inventory, PetalID::T, 2 * MAX_SLOT_COUNT) \
 SINGLE(Camera, killed_by, std::string) \
 SINGLE(Camera, camera_x, Float) \
@@ -73,7 +73,8 @@ SINGLE(Health, damaged, StickyFlag)
 SINGLE(Mob, mob_id, MobID::T)
 
 #define FIELDS_Drop \
-SINGLE(Drop, drop_id, PetalID::T)
+SINGLE(Drop, drop_id, PetalID::T) \
+SINGLE(Drop, drop_count, uint16_t)
 
 #define FIELDS_Segmented
 
@@ -121,6 +122,9 @@ SINGLE(Name, guild, std::string)
     SINGLE(poison_armor, float, =0) \
     SINGLE(damage_reflection, float, =0) \
     SINGLE(last_damaged_by, EntityID, =NULL_ENTITY) \
+    /* Teams (solo camera / party leader) that damaged this mob — private loot units. */ \
+    SINGLE(loot_claim_n, uint8_t, =0) \
+    MULTIPLE(loot_claim_teams, EntityID, 16, =NULL_ENTITY) \
     SINGLE(score_reward, uint32_t, =0) \
     \
     SINGLE(base_entity, EntityID, =NULL_ENTITY) \

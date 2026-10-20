@@ -10,15 +10,20 @@
 #include <Shared/StaticDefinitions.hh>
 
 #include <Helpers/Bits.hh>
+#include <Helpers/Math.hh>
 
 #include <cmath>
 
-Entity &alloc_drop(Simulation *sim, PetalID::T drop_id, EntityID const team) {
+Entity &alloc_drop(Simulation *sim, PetalID::T drop_id, EntityID const team, uint16_t count) {
     DEBUG_ONLY(assert(drop_id < PetalID::kNumPetals);)
+    if (count < 1) count = 1;
     PetalTracker::add_petal(sim, drop_id);
     Entity &drop = sim->alloc_ent();
     drop.add_component(kPhysics);
-    drop.set_radius(25);
+    // Bigger pile for stacked drops (coins etc.)
+    float rad = 25.f;
+    if (count > 1) rad = fminf(42.f, 22.f + 2.5f * sqrtf((float) count));
+    drop.set_radius(rad);
     drop.set_angle(frand() * 0.2 - 0.1);
     drop.friction = 0.25;
 
@@ -27,10 +32,14 @@ Entity &alloc_drop(Simulation *sim, PetalID::T drop_id, EntityID const team) {
 
     drop.add_component(kDrop);
     drop.set_drop_id(drop_id);
+    drop.set_drop_count(count);
     entity_set_despawn_tick(drop, 10 * (2 + PETAL_DATA[drop_id].rarity) * TPS);
-    // Party shares the killer's team — exclusive pickup window long enough
-    // for teammates to grab; then free-for-all. Solo = only killer.
-    drop.immunity_ticks = (team == NULL_ENTITY) ? (TPS / 3) : (8 * TPS);
+    // Private loot: team-tagged drops stay claimable only by that solo/party
+    // until despawn. Unowned (manual discard) gets a short lock then FFA.
+    if (team == NULL_ENTITY)
+        drop.immunity_ticks = TPS / 3;
+    else
+        drop.immunity_ticks = drop.despawn_tick > 0 ? drop.despawn_tick : (8 * TPS);
     return drop;
 }
 
@@ -276,29 +285,10 @@ static void _finish_player_spawn(Simulation *sim, Entity &camera, Entity &player
 }
 
 void player_spawn(Simulation *sim, Entity &camera, Entity &player) {
-    uint32_t power = Map::difficulty_at_level(camera.get_respawn_level());
-    float spawn_x = 0;
-    float spawn_y = 0;
-    if (power == 0) {
-        // New / low-level players: fixed hub spawn with tiny jitter
-        spawn_x = MAP_SPAWN_X + (frand() - 0.5f) * 240.f;
-        spawn_y = MAP_SPAWN_Y + (frand() - 0.5f) * 240.f;
-    } else {
-        // Checkpoint-like: tight bias to suitable-zone center so mid/high-level
-        // respawns stay near progress band (not full-zone lottery).
-        ZoneDefinition const &zone = map_zones(sim->map_id)[
-            Map::get_suitable_difficulty_zone(sim->map_id, power)];
-        float zw = zone.right - zone.left;
-        float zh = zone.bottom - zone.top;
-        spawn_x = 0.5f * (zone.left + zone.right) + (frand() - 0.5f) * 0.22f * zw;
-        spawn_y = 0.5f * (zone.top + zone.bottom) + (frand() - 0.5f) * 0.22f * zh;
-        for (uint32_t tries = 0; tries < 28; ++tries) {
-            if (!Map::circle_hits_impassable(sim->map_id, spawn_x, spawn_y, BASE_FLOWER_RADIUS + 8))
-                break;
-            spawn_x = 0.5f * (zone.left + zone.right) + (frand() - 0.5f) * 0.40f * zw;
-            spawn_y = 0.5f * (zone.top + zone.bottom) + (frand() - 0.5f) * 0.40f * zh;
-        }
-    }
+    // Hub spawn: first map entry / Continue without a death site.
+    // Death Continue uses player_spawn_at near death (Client.cc); party revive / portals too.
+    float spawn_x = MAP_SPAWN_X + (frand() - 0.5f) * 240.f;
+    float spawn_y = MAP_SPAWN_Y + (frand() - 0.5f) * 240.f;
     Map::resolve_circle_terrain(sim->map_id, spawn_x, spawn_y, BASE_FLOWER_RADIUS + 8);
     spawn_x = fclamp(spawn_x, BASE_FLOWER_RADIUS, ARENA_WIDTH - BASE_FLOWER_RADIUS);
     spawn_y = fclamp(spawn_y, BASE_FLOWER_RADIUS, ARENA_HEIGHT - BASE_FLOWER_RADIUS);

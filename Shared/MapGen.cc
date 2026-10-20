@@ -197,6 +197,11 @@ ZoneDefinition eco_from(ZoneDefinition base, char const *name, uint8_t diff,
     z.name = name;
     z.difficulty = diff;
     z.density = base.density * density_mul;
+    // Hard pockets: denser threat + richer rarity tilt (外环/Boss 周边奖励)
+    if (diff >= 3)
+        z.drop_multiplier = base.drop_multiplier < 0.7f ? base.drop_multiplier * 1.2f : base.drop_multiplier;
+    else if (diff == 2)
+        z.drop_multiplier = base.drop_multiplier < 0.45f ? base.drop_multiplier * 1.15f : base.drop_multiplier;
     z.spawns.clear();
     for (SpawnChance s : spawns) z.spawns.push(s);
     return z;
@@ -232,12 +237,12 @@ void append_biome_ecos(MapZones &zones, uint8_t map_id, ZoneDefinition const &ha
         add(eco_from(mid, "Creek Banks", 2, 1.0f, {
             { MobID::kHornet, 100000 }, { MobID::kBee, 90000 }, { MobID::kLadybug, 70000 },
             { MobID::kSquare, 1 }}), 2200.f, 3400.f, 2);
-        add(eco_from(hard, "Thorn Field", 3, 1.1f, {
+        add(eco_from(hard, "Thorn Field", 3, 1.3f, {
             { MobID::kDarkLadybug, 130000 }, { MobID::kHornet, 110000 }, { MobID::kSpider, 100000 },
-            { MobID::kEvilCentipede, 16000 }, { MobID::kSquare, 1 }}), 2000.f, 3000.f, 2);
-        add(eco_from(hard, "Flower Heart", 3, 1.2f, {
-            { MobID::kMassiveBeetle, 5000 }, { MobID::kHornet, 120000 },
-            { MobID::kDarkLadybug, 100000 }, { MobID::kBoulder, 3000 },
+            { MobID::kEvilCentipede, 26000 }, { MobID::kSquare, 1 }}), 2000.f, 3000.f, 2);
+        add(eco_from(hard, "Flower Heart", 3, 1.45f, {
+            { MobID::kMassiveBeetle, 16000 }, { MobID::kHornet, 120000 },
+            { MobID::kDarkLadybug, 100000 }, { MobID::kBoulder, 10000 },
             { MobID::kSquare, 1 }}), 3600.f, 4800.f, 1);
         break;
     case MapID::kDesert:
@@ -253,13 +258,13 @@ void append_biome_ecos(MapZones &zones, uint8_t map_id, ZoneDefinition const &ha
             { MobID::kDuneBeetle, 130000 }, { MobID::kDuneSpider, 105000 },
             { MobID::kDuneHornet, 95000 }, { MobID::kSandstorm, 90000 },
             { MobID::kScorpion, 85000 }, { MobID::kSquare, 1 }}), 2200.f, 3400.f, 2);
-        add(eco_from(hard, "Bone Yard", 3, 1.1f, {
+        add(eco_from(hard, "Bone Yard", 3, 1.3f, {
             { MobID::kDuneSpider, 105000 }, { MobID::kSandstorm, 90000 },
-            { MobID::kScorpion, 85000 }, { MobID::kDesertCentipede, 6000 },
-            { MobID::kDuneTitan, 3500 }, { MobID::kSquare, 1 }}), 2000.f, 3000.f, 2);
-        add(eco_from(hard, "Sandworm Nest", 3, 1.2f, {
+            { MobID::kScorpion, 85000 }, { MobID::kDesertCentipede, 22000 },
+            { MobID::kDuneTitan, 14000 }, { MobID::kSquare, 1 }}), 2000.f, 3000.f, 2);
+        add(eco_from(hard, "Sandworm Nest", 3, 1.45f, {
             { MobID::kSandstorm, 90000 }, { MobID::kScorpion, 85000 },
-            { MobID::kDesertCentipede, 6000 }, { MobID::kDuneTitan, 3500 },
+            { MobID::kDesertCentipede, 22000 }, { MobID::kDuneTitan, 14000 },
             { MobID::kSquare, 1 }}), 3600.f, 4800.f, 1);
         break;
     case MapID::kOcean:
@@ -273,15 +278,15 @@ void append_biome_ecos(MapZones &zones, uint8_t map_id, ZoneDefinition const &ha
             { MobID::kSquare, 1 }}), 2400.f, 3600.f, 3);
         add(eco_from(mid, "Kelp Forest", 2, 1.0f, {
             { MobID::kReefCrab, 100000 }, { MobID::kSpinePuffer, 105000 },
-            { MobID::kSeaLeech, 95000 }, { MobID::kMorayEel, 90000 },
+            { MobID::kSeaLeech, 24000 }, { MobID::kMorayEel, 70000 },
             { MobID::kSquare, 1 }}), 2200.f, 3400.f, 2);
-        add(eco_from(hard, "Shipwreck", 3, 1.1f, {
-            { MobID::kSpinePuffer, 105000 }, { MobID::kSeaLeech, 95000 },
-            { MobID::kMorayEel, 90000 }, { MobID::kInkCuttle, 6500 },
-            { MobID::kAbyssShark, 3500 }, { MobID::kSquare, 1 }}), 2000.f, 3000.f, 2);
-        add(eco_from(hard, "Abyss Core", 3, 1.2f, {
-            { MobID::kSeaLeech, 95000 }, { MobID::kMorayEel, 90000 },
-            { MobID::kInkCuttle, 6500 }, { MobID::kAbyssShark, 3500 },
+        add(eco_from(hard, "Shipwreck", 3, 1.3f, {
+            { MobID::kSpinePuffer, 105000 }, { MobID::kSeaLeech, 24000 },
+            { MobID::kMorayEel, 70000 }, { MobID::kInkCuttle, 20000 },
+            { MobID::kAbyssShark, 14000 }, { MobID::kSquare, 1 }}), 2000.f, 3000.f, 2);
+        add(eco_from(hard, "Abyss Core", 3, 1.45f, {
+            { MobID::kSeaLeech, 24000 }, { MobID::kMorayEel, 70000 },
+            { MobID::kInkCuttle, 20000 }, { MobID::kAbyssShark, 14000 },
             { MobID::kSquare, 1 }}), 3600.f, 4800.f, 1);
         break;
     case MapID::kPolar:
@@ -291,19 +296,19 @@ void append_biome_ecos(MapZones &zones, uint8_t map_id, ZoneDefinition const &ha
             { MobID::kSquare, 1 }}), 2800.f, 4200.f, 3);
         add(eco_from(mid, "Pine Maze", 2, 1.05f, {
             { MobID::kSnowHare, 135000 }, { MobID::kIceSpider, 120000 },
-            { MobID::kFrostHornet, 105000 }, { MobID::kRimeCentipede, 100000 },
+            { MobID::kFrostHornet, 105000 }, { MobID::kRimeCentipede, 22000 },
             { MobID::kGlacierBeast, 90000 }, { MobID::kSquare, 1 }}), 2400.f, 3600.f, 3);
         add(eco_from(mid, "Ice River", 2, 1.0f, {
-            { MobID::kIceSpider, 120000 }, { MobID::kRimeCentipede, 100000 },
+            { MobID::kIceSpider, 120000 }, { MobID::kRimeCentipede, 22000 },
             { MobID::kBlizzardWisp, 110000 }, { MobID::kGlacierBeast, 90000 },
             { MobID::kSquare, 1 }}), 2200.f, 3400.f, 2);
-        add(eco_from(hard, "Frost Rift", 3, 1.1f, {
-            { MobID::kRimeCentipede, 100000 }, { MobID::kBlizzardWisp, 110000 },
-            { MobID::kGlacierBeast, 90000 }, { MobID::kFrostYeti, 6500 },
-            { MobID::kIceGolem, 3500 }, { MobID::kSquare, 1 }}), 2000.f, 3000.f, 2);
-        add(eco_from(hard, "Frost Core", 3, 1.2f, {
-            { MobID::kRimeCentipede, 100000 }, { MobID::kGlacierBeast, 90000 },
-            { MobID::kFrostYeti, 6500 }, { MobID::kIceGolem, 3500 },
+        add(eco_from(hard, "Frost Rift", 3, 1.3f, {
+            { MobID::kRimeCentipede, 22000 }, { MobID::kBlizzardWisp, 110000 },
+            { MobID::kGlacierBeast, 90000 }, { MobID::kFrostYeti, 18000 },
+            { MobID::kIceGolem, 14000 }, { MobID::kSquare, 1 }}), 2000.f, 3000.f, 2);
+        add(eco_from(hard, "Frost Core", 3, 1.45f, {
+            { MobID::kRimeCentipede, 22000 }, { MobID::kGlacierBeast, 90000 },
+            { MobID::kFrostYeti, 18000 }, { MobID::kIceGolem, 14000 },
             { MobID::kSquare, 1 }}), 3600.f, 4800.f, 1);
         break;
     case MapID::kJungle:
@@ -321,11 +326,11 @@ void append_biome_ecos(MapZones &zones, uint8_t map_id, ZoneDefinition const &ha
         add(eco_from(mid, "Jungle River", 2, 1.0f, {
             { MobID::kRiverCrab, 130000 }, { MobID::kPoisonToad, 100000 }, { MobID::kJungleSpider, 110000 },
             { MobID::kJungleWasp, 100000 }, { MobID::kSquare, 1 }}), 2200.f, 3400.f, 2);
-        add(eco_from(hard, "Ancient Ruins", 3, 1.15f, {
+        add(eco_from(hard, "Ancient Ruins", 3, 1.35f, {
             { MobID::kEmeraldMantis, 110000 }, { MobID::kJungleSpider, 100000 },
             { MobID::kStoneGuardian, 90000 }, { MobID::kCarnivorousPlant, 80000 },
             { MobID::kJungleWasp, 100000 }, { MobID::kSquare, 1 }}), 2000.f, 3000.f, 2);
-        add(eco_from(hard, "Heart of Jungle", 3, 1.25f, {
+        add(eco_from(hard, "Heart of Jungle", 3, 1.5f, {
             { MobID::kEmeraldMantis, 100000 }, { MobID::kStoneGuardian, 110000 },
             { MobID::kCarnivorousPlant, 100000 }, { MobID::kVineBug, 80000 },
             { MobID::kJungleWasp, 100000 }, { MobID::kSquare, 1 }}), 3600.f, 4800.f, 1);
@@ -341,12 +346,12 @@ void append_biome_ecos(MapZones &zones, uint8_t map_id, ZoneDefinition const &ha
         add(eco_from(mid, "Fungal Farm", 2, 1.05f, {
             { MobID::kWorkerAnt, 140000 }, { MobID::kBabyAnt, 120000 },
             { MobID::kAntHole, 4000 }, { MobID::kSquare, 1 }}), 2200.f, 3400.f, 2);
-        add(eco_from(hard, "Soldier Patrol", 3, 1.15f, {
+        add(eco_from(hard, "Soldier Patrol", 3, 1.35f, {
             { MobID::kSoldierAnt, 180000 }, { MobID::kWorkerAnt, 100000 },
-            { MobID::kAntHole, 6000 }, { MobID::kSquare, 1 }}), 2000.f, 3000.f, 2);
-        add(eco_from(hard, "Queen Nest", 3, 1.3f, {
-            { MobID::kQueenAnt, 3500 }, { MobID::kSoldierAnt, 160000 },
-            { MobID::kAntHole, 8000 }, { MobID::kSquare, 1 }}), 3600.f, 4800.f, 1);
+            { MobID::kAntHole, 14000 }, { MobID::kSquare, 1 }}), 2000.f, 3000.f, 2);
+        add(eco_from(hard, "Queen Nest", 3, 1.55f, {
+            { MobID::kQueenAnt, 8000 }, { MobID::kSoldierAnt, 160000 },
+            { MobID::kAntHole, 18000 }, { MobID::kSquare, 1 }}), 3600.f, 4800.f, 1);
         break;
     default: // Volcano
         add(eco_from(soft, "Ash Plain", 1, 0.9f, {
@@ -359,15 +364,15 @@ void append_biome_ecos(MapZones &zones, uint8_t map_id, ZoneDefinition const &ha
             { MobID::kFireSpider, 110000 }, { MobID::kSquare, 1 }}), 2400.f, 3600.f, 3);
         add(eco_from(mid, "Lava Banks", 2, 1.0f, {
             { MobID::kLavaBeetle, 125000 }, { MobID::kMagmaCrab, 105000 },
-            { MobID::kFireSpider, 110000 }, { MobID::kMagmaCentipede, 95000 },
+            { MobID::kFireSpider, 110000 }, { MobID::kMagmaCentipede, 22000 },
             { MobID::kSquare, 1 }}), 2200.f, 3400.f, 2);
-        add(eco_from(hard, "Magma Nest", 3, 1.15f, {
+        add(eco_from(hard, "Magma Nest", 3, 1.35f, {
             { MobID::kMagmaCrab, 105000 }, { MobID::kFireSpider, 110000 },
-            { MobID::kMagmaCentipede, 95000 }, { MobID::kObsidianGolem, 6500 },
-            { MobID::kLavaColossus, 3500 }, { MobID::kSquare, 1 }}), 2000.f, 3000.f, 2);
-        add(eco_from(hard, "Molten Heart", 3, 1.25f, {
-            { MobID::kFireSpider, 110000 }, { MobID::kMagmaCentipede, 95000 },
-            { MobID::kObsidianGolem, 6500 }, { MobID::kLavaColossus, 3500 },
+            { MobID::kMagmaCentipede, 22000 }, { MobID::kObsidianGolem, 18000 },
+            { MobID::kLavaColossus, 14000 }, { MobID::kSquare, 1 }}), 2000.f, 3000.f, 2);
+        add(eco_from(hard, "Molten Heart", 3, 1.5f, {
+            { MobID::kFireSpider, 110000 }, { MobID::kMagmaCentipede, 22000 },
+            { MobID::kObsidianGolem, 18000 }, { MobID::kLavaColossus, 14000 },
             { MobID::kSquare, 1 }}), 3600.f, 4800.f, 1);
         break;
     }
@@ -788,8 +793,27 @@ void gen_snow(MapTerrain &t, ThemePalette const &p, uint32_t &rng, float W, floa
                 rng_range(rng, 2700.f, 3500.f), 3, rng_range(rng, 1300.f, 1700.f), 70, 0);
     spiral_farm(t, p, rng, cx + 2400.f, cy - 1600.f, 2, -1, gap * 0.9f, wall,
                 rng_range(rng, 2400.f, 3100.f), 2, rng_range(rng, 1150.f, 1500.f), 100, 1);
-    push_feat(t, TerrainKind::kWater, TerrainShape::kRiver, TerrainFlags::kImpassable,
-              W * 0.15f, H * 0.25f, W * 0.85f, H * 0.75f, p.water, 120, rng_range(rng, 200.f, 260.f));
+    // Main ice river (2 shallows) + NW tributary
+    {
+        float x0 = W * 0.15f, y0 = H * 0.25f, x1 = W * 0.85f, y1 = H * 0.75f;
+        float dx = x1 - x0, dy = y1 - y0;
+        float len = std::sqrt(dx * dx + dy * dy);
+        float hw = rng_range(rng, 200.f, 260.f);
+        float gt = 1100.f / std::max(len, 1.f);
+        float f0 = 0.28f, f1 = 0.65f;
+        auto ice = [&](float ta, float tb, uint8_t seed) {
+            if (tb - ta < 0.04f) return;
+            push_feat(t, TerrainKind::kWater, TerrainShape::kRiver, TerrainFlags::kImpassable,
+                      x0 + dx * ta, y0 + dy * ta, x0 + dx * tb, y0 + dy * tb,
+                      p.water, seed, hw);
+        };
+        ice(0.f, f0 - gt * 0.5f, 120);
+        ice(f0 + gt * 0.5f, f1 - gt * 0.5f, 121);
+        ice(f1 + gt * 0.5f, 1.f, 122);
+        float mx = x0 + dx * 0.45f, my = y0 + dy * 0.45f;
+        push_feat(t, TerrainKind::kWater, TerrainShape::kRiver, TerrainFlags::kImpassable,
+                  mx, my, W * 0.22f, H * 0.58f, p.water, 123, hw * 0.85f);
+    }
     rock_field(t, p, rng, 140, W * 0.55f, H * 0.55f, W * 0.90f, H * 0.90f, 6, 320.f, 580.f);
     ring_valley(t, p, rng, W * 0.80f, H * 0.20f, 1000.f, 420.f, 3.8f, 0.5f, 160, 1);
     // Boss: winter sovereign in the frost core basin
@@ -838,14 +862,11 @@ void gen_ant_hell(MapTerrain &t, ThemePalette const &p, uint32_t &rng, float W, 
     corridor_h(t, p, 100, W * 0.15f, W * 0.85f, H * 0.35f, gap * 0.85f, wall * 0.7f, 0);
     corridor_v(t, p, 110, H * 0.15f, H * 0.85f, W * 0.35f, gap * 0.85f, wall * 0.7f, 0);
     corridor_h(t, p, 120, W * 0.15f, W * 0.85f, H * 0.65f, gap * 0.85f, wall * 0.7f, 0);
-    // Queen chamber
+    // Queen chamber — fixed block (21.0, 14.0) for stable Boss / docs
     {
-        float qx = fclamp(cx + rng_range(rng, 3500.f, 5500.f) * (rng_f(rng) < 0.5f ? 1.f : -1.f),
-                          1800.f, W - 1800.f);
-        float qy = fclamp(cy + rng_range(rng, 2000.f, 4000.f) * (rng_f(rng) < 0.5f ? 1.f : -1.f),
-                          1800.f, H - 4000.f);
-        ring_valley(t, p, rng, qx, qy, 1200.f, 500.f, rng_range(rng, 0.f, 6.28f), 0.45f, 140, 0);
-        // Boss: the queen ant guards her own chamber
+        float qx = W * (21.f / 28.f);
+        float qy = H * (14.f / 20.f);
+        ring_valley(t, p, rng, qx, qy, 1200.f, 500.f, 2.4f, 0.45f, 140, 0);
         g_boss[MapID::kAntHell] = { qx, qy, (uint8_t)MobID::kQueenAnt };
     }
     // Water pool chambers
