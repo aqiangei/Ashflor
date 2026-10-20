@@ -568,7 +568,7 @@ Element *Ui::make_debug_stats() {
             if (Game::alive() && Game::simulation.ent_exists(Game::camera_id)) {
                 Entity const &cam = Game::simulation.get_ent(Game::camera_id);
                 return std::format("ents {}  cam {:.0f},{:.0f}  lv {}",
-                    ents, cam.get_camera_x(), cam.get_camera_y(),
+                    ents, (float)cam.get_camera_x(), (float)cam.get_camera_y(),
                     score_to_level(Game::score));
             }
             return std::format("ents {}  lv {}", ents, score_to_level(Game::score));
