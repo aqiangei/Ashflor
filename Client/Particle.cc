@@ -4,6 +4,10 @@
 
 #include <Client/Assets/Assets.hh>
 
+#include <Shared/StaticData.hh>
+#include <Shared/StaticDefinitions.hh>
+
+#include <array>
 #include <cmath>
 #include <vector>
 
@@ -11,6 +15,44 @@ using namespace Particle;
 
 static std::vector<TitleParticleEntity> title_particles;
 static std::vector<GameParticleEntity> game_particles;
+
+// Petals that drop from mobs spawning on each map (biome-flavored title flybys).
+static std::array<std::vector<PetalID::T>, MapID::kNumMaps> map_title_petals;
+static uint8_t map_title_petals_ready = 0;
+
+static void ensure_map_title_petals() {
+    if (map_title_petals_ready) return;
+    for (uint8_t mid = 0; mid < MapID::kNumMaps; ++mid) {
+        std::array<uint8_t, PetalID::kNumPetals> seen{};
+        std::vector<PetalID::T> &out = map_title_petals[mid];
+        out.clear();
+        out.push_back(PetalID::kBasic);
+        seen[PetalID::kBasic] = 1;
+        MapZones const &zones = map_zones(mid);
+        for (uint32_t zi = 0; zi < zones.size(); ++zi) {
+            ZoneDefinition const &zone = zones[zi];
+            for (uint32_t si = 0; si < zone.spawns.size(); ++si) {
+                MobID::T mob = zone.spawns[si].id;
+                if (mob >= MobID::kNumMobs) continue;
+                auto const &drops = MOB_DATA[mob].drops;
+                for (uint32_t di = 0; di < drops.size(); ++di) {
+                    PetalID::T pid = drops[di];
+                    if (pid >= PetalID::kNumPetals || seen[pid]) continue;
+                    seen[pid] = 1;
+                    out.push_back(pid);
+                }
+            }
+        }
+    }
+    map_title_petals_ready = 1;
+}
+
+static std::vector<PetalID::T> const &title_petal_pool_for_selected_map() {
+    ensure_map_title_petals();
+    uint8_t mid = Game::selected_map;
+    if (mid >= MapID::kNumMaps) mid = MapID::kGarden;
+    return map_title_petals[mid];
+}
 
 void Particle::tick_title(Renderer &ctx, double dt) {
     RenderContext c(&ctx);
@@ -35,21 +77,38 @@ void Particle::tick_title(Renderer &ctx, double dt) {
         else
             draw_static_petal_single(part.id, ctx);
     }
-    std::vector<PetalID::T> ids = {PetalID::kBasic};
-    float freq_sum = 1;
-    for (PetalID::T pot = PetalID::kBasic + 1; pot < PetalID::kNumPetals; ++pot)
-        if (Game::seen_petals[pot]) { ids.push_back(pot); freq_sum += pow(0.5, PETAL_DATA[pot].rarity); }
+
+    std::vector<PetalID::T> const &pool = title_petal_pool_for_selected_map();
+    // Prefer collected petals from this biome; fall back to full biome pool so
+    // the flyby still matches the selected map on a fresh account.
+    std::vector<PetalID::T> ids;
+    float freq_sum = 0;
+    for (PetalID::T id : pool) {
+        if (!Game::seen_petals[id] && id != PetalID::kBasic) continue;
+        ids.push_back(id);
+        freq_sum += (float)pow(0.5, PETAL_DATA[id].rarity);
+    }
+    if (ids.size() <= 1) {
+        ids = pool;
+        freq_sum = 0;
+        for (PetalID::T id : ids)
+            freq_sum += (float)pow(0.5, PETAL_DATA[id].rarity);
+    }
+    if (freq_sum <= 0) {
+        ids = {PetalID::kBasic};
+        freq_sum = 1;
+    }
 
     for (size_t i = 0; i < 4; ++i) {
         if (frand() > 0.02) continue;
         TitleParticleEntity npart;
         npart.x = -100;
-        
+
         float freq_score = freq_sum * frand();
         for (PetalID::T id : ids) {
-            freq_score -= pow(0.5, PETAL_DATA[id].rarity);
+            freq_score -= (float)pow(0.5, PETAL_DATA[id].rarity);
             if (freq_score > 0) continue;
-            npart.id = id;   
+            npart.id = id;
             npart.y = frand() * ctx.height;
             npart.angle = frand() * 2 * M_PI;
             npart.x_velocity = frand() * 100 + 100;

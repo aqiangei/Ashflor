@@ -171,7 +171,11 @@ void Socket::connect(std::string const url) {
             Module._ashflorHbStarted = 1;
             setInterval(sendHeartbeat, 2500);
             document.addEventListener("visibilitychange", function() {
-                if (document.visibilityState !== "visible") return;
+                if (document.visibilityState === "hidden") {
+                    // Last chance keepalive before the browser freezes timers
+                    sendHeartbeat();
+                    return;
+                }
                 let s = Module.socket;
                 if (!s || s.readyState === 2 || s.readyState === 3) {
                     Module._ashflorReconnectNow();

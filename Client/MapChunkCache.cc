@@ -226,18 +226,37 @@ void paint_ground_detail(Renderer &r, uint8_t mid, TerrainArt::ThemeMaterial con
                 break;
             }
             case TerrainArt::Style::kDirt: {
+                // Packed nest floor: soft soil blobs + grit
                 if ((cell & 3u) == 0u) {
-                    r.set_fill(tm.wall_dark);
+                    r.set_fill(tm.ground_shade);
                     r.begin_path();
-                    r.ellipse(px, py, 5.f, 3.5f);
+                    r.ellipse(px, py,
+                              14.f + std::fabs(Map::terrain_hash(cell, 2)) * 18.f,
+                              9.f + std::fabs(Map::terrain_hash(cell, 3)) * 10.f);
                     r.fill();
                 }
-                if ((cell % 8u) == 0u) {
-                    r.set_stroke(tm.wall_mid);
-                    r.set_line_width(2.f);
+                if ((cell & 7u) == 0u) {
+                    r.set_fill(tm.wall_dark);
                     r.begin_path();
-                    r.arc(px, py, 8.f + std::fabs(Map::terrain_hash(cell, 4)) * 6.f);
+                    r.ellipse(px + 4.f, py - 2.f, 5.f, 3.5f);
+                    r.fill();
+                }
+                // Dry root curls
+                if ((cell % 11u) == 0u) {
+                    r.set_stroke(tm.channel_speck);
+                    r.set_line_width(2.2f);
+                    r.begin_path();
+                    float rr = 10.f + std::fabs(Map::terrain_hash(cell, 4)) * 8.f;
+                    r.move_to(px - rr * 0.4f, py);
+                    r.qcurve_to(px, py - rr * 0.6f, px + rr * 0.5f, py + rr * 0.2f);
                     r.stroke();
+                }
+                // Occasional egg / seed fleck
+                if ((cell % 17u) == 0u) {
+                    r.set_fill(0xffF2DDB5);
+                    r.begin_path();
+                    r.ellipse(px, py, 3.2f, 2.4f);
+                    r.fill();
                 }
                 break;
             }

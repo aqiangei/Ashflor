@@ -1652,11 +1652,11 @@ std::array<struct PetalData, PetalID::kNumPetals> const PETAL_DATA = {{
     },
     {
         .name = "Sand Spike",
-        .description = "A sandy spike petal.",
-        .health = 32.0,
-        .damage = 16.0,
-        .radius = 9.0,
-        .reload = 0.9,
+        .description = "A brittle sand spike that hits hard.",
+        .health = 14.0,
+        .damage = 23.0,
+        .radius = 8.0,
+        .reload = 2.7,
         .count = 1,
         .rarity = RarityID::kUnusual,
         .attributes = {}
@@ -1685,7 +1685,7 @@ std::array<struct PetalData, PetalID::kNumPetals> const PETAL_DATA = {{
     },
     {
         .name = "Water Bubble",
-        .description = "Bursts into a splash.",
+        .description = "A soft bubble that helps absorb incoming hits.",
         .health = 15.0,
         .damage = 10.0,
         .radius = 12.0,
@@ -1696,18 +1696,18 @@ std::array<struct PetalData, PetalID::kNumPetals> const PETAL_DATA = {{
     },
     {
         .name = "Starfish",
-        .description = "Every third hit hits harder.",
-        .health = 40.0,
-        .damage = 15.0,
-        .radius = 11.0,
-        .reload = 1.0,
+        .description = "A sturdy starfish that deals steady contact damage.",
+        .health = 34.0,
+        .damage = 17.0,
+        .radius = 15.0,
+        .reload = 2.5,
         .count = 1,
         .rarity = RarityID::kRare,
         .attributes = {}
     },
     {
         .name = "Tide Pearl",
-        .description = "Releases a water ring.",
+        .description = "A dense pearl that orbits with steady force.",
         .health = 30.0,
         .damage = 12.0,
         .radius = 10.0,
@@ -1729,12 +1729,12 @@ std::array<struct PetalData, PetalID::kNumPetals> const PETAL_DATA = {{
     },
     {
         .name = "Snowball",
-        .description = "Builds chill stacks.",
-        .health = 45.0,
-        .damage = 11.0,
-        .radius = 12.0,
-        .reload = 1.2,
-        .count = 1,
+        .description = "Small snowballs that quickly return when broken.",
+        .health = 18.0,
+        .damage = 10.0,
+        .radius = 16.0,
+        .reload = 1.1,
+        .count = 2,
         .rarity = RarityID::kUnusual,
         .attributes = {}
     },
@@ -1751,7 +1751,7 @@ std::array<struct PetalData, PetalID::kNumPetals> const PETAL_DATA = {{
     },
     {
         .name = "Thorn Vine",
-        .description = "Vines that snare foes.",
+        .description = "A thorny vine that deals contact damage.",
         .health = 55.0,
         .damage = 12.0,
         .radius = 10.0,
@@ -1762,7 +1762,7 @@ std::array<struct PetalData, PetalID::kNumPetals> const PETAL_DATA = {{
     },
     {
         .name = "Rotwood",
-        .description = "Toxic wood that bursts.",
+        .description = "Dense rotting wood that deals contact damage.",
         .health = 120.0,
         .damage = 8.0,
         .radius = 14.0,
@@ -1773,18 +1773,18 @@ std::array<struct PetalData, PetalID::kNumPetals> const PETAL_DATA = {{
     },
     {
         .name = "Ant Fang",
-        .description = "Fangs that hate poison.",
-        .health = 30.0,
-        .damage = 19.0,
-        .radius = 9.0,
-        .reload = 0.9,
+        .description = "A sharp ant fang built for direct strikes.",
+        .health = 19.0,
+        .damage = 21.0,
+        .radius = 10.0,
+        .reload = 2.4,
         .count = 1,
         .rarity = RarityID::kUnusual,
         .attributes = {}
     },
     {
         .name = "Acid Flask",
-        .description = "Melts armor with acid.",
+        .description = "Applies a weak but long-lasting poison.",
         .health = 20.0,
         .damage = 9.0,
         .radius = 9.0,
@@ -1795,7 +1795,7 @@ std::array<struct PetalData, PetalID::kNumPetals> const PETAL_DATA = {{
     },
     {
         .name = "Soldier Egg",
-        .description = "Hatches a soldier ant.",
+        .description = "A tough egg petal.",
         .health = 25.0,
         .damage = 0.0,
         .radius = 12.0,
@@ -1806,14 +1806,14 @@ std::array<struct PetalData, PetalID::kNumPetals> const PETAL_DATA = {{
     },
     {
         .name = "Fireball",
-        .description = "A burning fireball.",
-        .health = 25.0,
-        .damage = 22.0,
-        .radius = 12.0,
-        .reload = 3.0,
+        .description = "A volatile fireball that hits with strong impact.",
+        .health = 16.0,
+        .damage = 25.0,
+        .radius = 13.0,
+        .reload = 3.3,
         .count = 1,
         .rarity = RarityID::kUnusual,
-        .attributes = { .poison_damage = { .damage = 4.0, .time = 3.0 } }
+        .attributes = {}
     },
     {
         .name = "Magma Core",
@@ -1828,11 +1828,11 @@ std::array<struct PetalData, PetalID::kNumPetals> const PETAL_DATA = {{
     },
     {
         .name = "Obsidian Blade",
-        .description = "Cuts through shields.",
-        .health = 24.0,
-        .damage = 34.0,
-        .radius = 9.0,
-        .reload = 1.0,
+        .description = "A fragile obsidian blade that deals heavy contact damage.",
+        .health = 18.0,
+        .damage = 35.0,
+        .radius = 12.0,
+        .reload = 4.0,
         .count = 1,
         .rarity = RarityID::kRare,
         .attributes = {}
@@ -1894,7 +1894,7 @@ std::array<struct PetalData, PetalID::kNumPetals> const PETAL_DATA = {{
     },
     {
         .name = "Sand Leaf Dart",
-        .description = "Fires sandy leaf darts.",
+        .description = "A sharp sand-leaf petal.",
         .health = 28.0,
         .damage = 17.0,
         .radius = 8.0,
@@ -1916,7 +1916,7 @@ std::array<struct PetalData, PetalID::kNumPetals> const PETAL_DATA = {{
     },
     {
         .name = "Frost Bubble",
-        .description = "Exploding frosty bubble.",
+        .description = "A frosty bubble that slows on contact.",
         .health = 20.0,
         .damage = 24.0,
         .radius = 12.0,
@@ -1927,18 +1927,18 @@ std::array<struct PetalData, PetalID::kNumPetals> const PETAL_DATA = {{
     },
     {
         .name = "Frost Starfish",
-        .description = "Chilling starfish strikes.",
-        .health = 45.0,
-        .damage = 26.0,
-        .radius = 11.0,
-        .reload = 1.0,
-        .count = 1,
+        .description = "Three frost starfish provide sustained contact pressure.",
+        .health = 28.0,
+        .damage = 15.0,
+        .radius = 13.0,
+        .reload = 2.6,
+        .count = 3,
         .rarity = RarityID::kEpic,
-        .attributes = { .slow_inflict_seconds = 0.8 }
+        .attributes = {}
     },
     {
         .name = "Ice Tide Ring",
-        .description = "Icy tide ring pulse.",
+        .description = "An icy ring petal that slows foes on contact.",
         .health = 40.0,
         .damage = 18.0,
         .radius = 12.0,
@@ -1949,7 +1949,7 @@ std::array<struct PetalData, PetalID::kNumPetals> const PETAL_DATA = {{
     },
     {
         .name = "Deep Frost Pearl",
-        .description = "Stronger vs slowed foes.",
+        .description = "A dense frost pearl that slows on contact.",
         .health = 85.0,
         .damage = 30.0,
         .radius = 10.0,
@@ -1960,7 +1960,7 @@ std::array<struct PetalData, PetalID::kNumPetals> const PETAL_DATA = {{
     },
     {
         .name = "Poison Ant Nest",
-        .description = "Spawns venomous ants.",
+        .description = "Inflicts poison on contact.",
         .health = 45.0,
         .damage = 8.0,
         .radius = 12.0,
@@ -1971,7 +1971,7 @@ std::array<struct PetalData, PetalID::kNumPetals> const PETAL_DATA = {{
     },
     {
         .name = "Corrode Vine",
-        .description = "Acid vines that melt armor.",
+        .description = "Inflicts lingering poison on contact.",
         .health = 50.0,
         .damage = 23.0,
         .radius = 10.0,
@@ -1982,7 +1982,7 @@ std::array<struct PetalData, PetalID::kNumPetals> const PETAL_DATA = {{
     },
     {
         .name = "Colony Core",
-        .description = "Spore bursts from the colony.",
+        .description = "A colony petal that poisons on contact.",
         .health = 55.0,
         .damage = 7.0,
         .radius = 13.0,
@@ -2004,7 +2004,7 @@ std::array<struct PetalData, PetalID::kNumPetals> const PETAL_DATA = {{
     },
     {
         .name = "Forged Holy Sword",
-        .description = "Burning holy steel.",
+        .description = "A forged sword that poisons on contact.",
         .health = 55.0,
         .damage = 48.0,
         .radius = 10.0,
@@ -2015,7 +2015,7 @@ std::array<struct PetalData, PetalID::kNumPetals> const PETAL_DATA = {{
     },
     {
         .name = "Flame Gear",
-        .description = "Gear that spews fire rings.",
+        .description = "Extends your petal orbit.",
         .health = 70.0,
         .damage = 34.0,
         .radius = 12.0,
@@ -2037,7 +2037,7 @@ std::array<struct PetalData, PetalID::kNumPetals> const PETAL_DATA = {{
     },
     {
         .name = "Holy Flame Core",
-        .description = "Burns foes and heals you.",
+        .description = "Heals you in bursts and over time.",
         .health = 50.0,
         .damage = 25.0,
         .radius = 12.0,
@@ -2059,7 +2059,7 @@ std::array<struct PetalData, PetalID::kNumPetals> const PETAL_DATA = {{
     },
     {
         .name = "Wet Leaf",
-        .description = "Leaf that casts a water ring.",
+        .description = "Slows foes and lightly heals you.",
         .health = 40.0,
         .damage = 22.0,
         .radius = 10.0,
@@ -2070,7 +2070,7 @@ std::array<struct PetalData, PetalID::kNumPetals> const PETAL_DATA = {{
     },
     {
         .name = "Coral Hive",
-        .description = "Fires coral bee needles.",
+        .description = "A coral petal that poisons on contact.",
         .health = 35.0,
         .damage = 12.0,
         .radius = 11.0,
@@ -2081,7 +2081,7 @@ std::array<struct PetalData, PetalID::kNumPetals> const PETAL_DATA = {{
     },
     {
         .name = "Life Lotus",
-        .description = "Burst heal and cleanse slow.",
+        .description = "Releases a burst of healing.",
         .health = 35.0,
         .damage = 0.0,
         .radius = 12.0,
@@ -2092,18 +2092,18 @@ std::array<struct PetalData, PetalID::kNumPetals> const PETAL_DATA = {{
     },
     {
         .name = "Molten Sand Blade",
-        .description = "Burning sand blade.",
-        .health = 40.0,
-        .damage = 40.0,
-        .radius = 9.0,
-        .reload = 1.0,
+        .description = "A fragile molten blade that delivers heavy strikes.",
+        .health = 26.0,
+        .damage = 42.0,
+        .radius = 14.0,
+        .reload = 5.0,
         .count = 1,
         .rarity = RarityID::kEpic,
-        .attributes = { .poison_damage = { .damage = 5.0, .time = 2.0 } }
+        .attributes = {}
     },
     {
         .name = "Volcano Worm",
-        .description = "Summons a lava sandworm.",
+        .description = "A heavy volcanic petal.",
         .health = 90.0,
         .damage = 18.0,
         .radius = 14.0,
@@ -2114,7 +2114,7 @@ std::array<struct PetalData, PetalID::kNumPetals> const PETAL_DATA = {{
     },
     {
         .name = "Scorch Palm",
-        .description = "Burning reflecting palm.",
+        .description = "Reflects damage and poisons on contact.",
         .health = 130.0,
         .damage = 12.0,
         .radius = 12.0,
@@ -2125,7 +2125,7 @@ std::array<struct PetalData, PetalID::kNumPetals> const PETAL_DATA = {{
     },
     {
         .name = "Glass Storm",
-        .description = "Shatters into glass shards.",
+        .description = "A dense glass petal.",
         .health = 30.0,
         .damage = 16.0,
         .radius = 11.0,
@@ -2158,7 +2158,7 @@ std::array<struct PetalData, PetalID::kNumPetals> const PETAL_DATA = {{
     },
     {
         .name = "Permafrost Gear",
-        .description = "Freezes nearby foes.",
+        .description = "Extends orbit and lightly slows on contact.",
         .health = 75.0,
         .damage = 28.0,
         .radius = 12.0,
@@ -2180,7 +2180,7 @@ std::array<struct PetalData, PetalID::kNumPetals> const PETAL_DATA = {{
     },
     {
         .name = "Royal Thorn",
-        .description = "Thorns that snare briefly.",
+        .description = "Thorns that briefly slow foes.",
         .health = 50.0,
         .damage = 36.0,
         .radius = 10.0,
@@ -2213,7 +2213,7 @@ std::array<struct PetalData, PetalID::kNumPetals> const PETAL_DATA = {{
     },
     {
         .name = "Treant Guard",
-        .description = "Tanky taunting woodguard.",
+        .description = "Tanky woodguard that reflects damage.",
         .health = 260.0,
         .damage = 12.0,
         .radius = 16.0,
@@ -2235,7 +2235,7 @@ std::array<struct PetalData, PetalID::kNumPetals> const PETAL_DATA = {{
     },
     {
         .name = "Abyssal Tide",
-        .description = "Expanding abyssal water ring.",
+        .description = "A heavy tide petal that slows foes.",
         .health = 60.0,
         .damage = 55.0,
         .radius = 14.0,
@@ -2257,7 +2257,7 @@ std::array<struct PetalData, PetalID::kNumPetals> const PETAL_DATA = {{
     },
     {
         .name = "Chrono Vortex",
-        .description = "Slows time in a field.",
+        .description = "Heavily slows enemies on contact.",
         .health = 70.0,
         .damage = 20.0,
         .radius = 14.0,
@@ -2268,7 +2268,7 @@ std::array<struct PetalData, PetalID::kNumPetals> const PETAL_DATA = {{
     },
     {
         .name = "Ant King",
-        .description = "Summons royal soldier ants.",
+        .description = "A regal ant-themed petal.",
         .health = 100.0,
         .damage = 15.0,
         .radius = 14.0,
@@ -2279,7 +2279,7 @@ std::array<struct PetalData, PetalID::kNumPetals> const PETAL_DATA = {{
     },
     {
         .name = "World Tree Seed",
-        .description = "Grows a healing tree.",
+        .description = "Continuously restores health while equipped.",
         .health = 80.0,
         .damage = 0.0,
         .radius = 13.0,
@@ -2353,7 +2353,90 @@ std::array<struct PetalData, PetalID::kNumPetals> const PETAL_DATA = {{
     { .name = "Heavy", .description = "Very resilient and deals more damage, but reloads very slowly", .health = 38880, .damage = 38880, .radius = 12, .reload = 4.5, .count = 1, .rarity = RarityID::kUltra, .attributes = {} },
     { .name = "Twin", .description = "Why stop at one? Why not TWO?!", .health = 810, .damage = 1296, .radius = 7, .reload = 1.0, .count = 2, .rarity = RarityID::kUnique, .attributes = {} },
     { .name = "Twin", .description = "Why stop at one? Why not TWO?!", .health = 1620, .damage = 2592, .radius = 7, .reload = 1.0, .count = 2, .rarity = RarityID::kSuper, .attributes = {} },
-    { .name = "Twin", .description = "Why stop at one? Why not TWO?!", .health = 3240, .damage = 5184, .radius = 7, .reload = 1.0, .count = 2, .rarity = RarityID::kUltra, .attributes = {} }
+    { .name = "Twin", .description = "Why stop at one? Why not TWO?!", .health = 3240, .damage = 5184, .radius = 7, .reload = 1.0, .count = 2, .rarity = RarityID::kUltra, .attributes = {} },
+    // ---- Ant Hell exclusive (anthell.txt) ----
+    {
+        .name = "Chitin Needle",
+        .description = "A straight chitin spike — thinner and longer than an ant fang.",
+        .health = 22.0, .damage = 21.0, .radius = 8.0, .reload = 0.85, .count = 1,
+        .rarity = RarityID::kUnusual, .attributes = {}
+    },
+    {
+        .name = "Shell Plate",
+        .description = "A single hexagonal carapace plate that shrugs off hits.",
+        .health = 70.0, .damage = 8.0, .radius = 12.0, .reload = 3.5, .count = 1,
+        .rarity = RarityID::kUnusual, .attributes = { .armor = 4 }
+    },
+    {
+        .name = "Acid Droplet",
+        .description = "A lone acid bead that burns on contact.",
+        .health = 18.0, .damage = 8.0, .radius = 9.0, .reload = 3.5, .count = 1,
+        .rarity = RarityID::kUnusual,
+        .attributes = { .poison_damage = { .damage = 4.0, .time = 3.5 } }
+    },
+    {
+        .name = "Brood Pearl",
+        .description = "A smooth brood egg that slowly restores your flower.",
+        .health = 35.0, .damage = 4.0, .radius = 11.0, .reload = 4.0, .count = 1,
+        .rarity = RarityID::kRare,
+        .attributes = { .constant_heal = 2.5, .defend_only = 1 }
+    },
+    {
+        .name = "Pheromone Star",
+        .description = "Colony pheromones that spin your petals faster.",
+        .health = 28.0, .damage = 10.0, .radius = 10.0, .reload = 2.0, .count = 1,
+        .rarity = RarityID::kRare,
+        .attributes = { .extra_rotation_speed = 0.55, .move_speed_factor = 1.06f }
+    },
+    {
+        .name = "Tunnel Stone",
+        .description = "A packed nest stone that resists knockback.",
+        .health = 95.0, .damage = 12.0, .radius = 13.0, .reload = 5.0, .count = 1,
+        .rarity = RarityID::kRare,
+        .attributes = { .mass = 80.0, .armor = 3 }
+    },
+    {
+        .name = "Iron Mandible",
+        .description = "Hardened mandible armor that punches through shells.",
+        .health = 40.0, .damage = 28.0, .radius = 10.0, .reload = 1.1, .count = 1,
+        .rarity = RarityID::kRare,
+        .attributes = { .extra_damage_factor = 1.15f }
+    },
+    {
+        .name = "Hive Disc",
+        .description = "A thick hive disc that spins as durable defense.",
+        .health = 140.0, .damage = 14.0, .radius = 13.0, .reload = 4.5, .count = 1,
+        .rarity = RarityID::kEpic,
+        .attributes = { .armor = 6, .extra_rotation_speed = 0.25 }
+    },
+    {
+        .name = "Venom Cocoon",
+        .description = "A sealed purple cocoon — tough shell, leaking venom.",
+        .health = 90.0, .damage = 10.0, .radius = 12.0, .reload = 5.5, .count = 1,
+        .rarity = RarityID::kEpic,
+        .attributes = { .armor = 4, .poison_damage = { .damage = 5.0, .time = 4.0 } }
+    },
+    {
+        .name = "Royal Carapace",
+        .description = "Gold-lined royal plate with heavy protection.",
+        .health = 180.0, .damage = 12.0, .radius = 13.0, .reload = 5.0, .count = 1,
+        .rarity = RarityID::kEpic,
+        .attributes = { .armor = 10, .extra_health = 25 }
+    },
+    {
+        .name = "Queen's Emblem",
+        .description = "A royal badge that summons soldier ants.",
+        .health = 55.0, .damage = 8.0, .radius = 12.0, .reload = 16.0, .count = 1,
+        .rarity = RarityID::kLegendary,
+        .attributes = { .spawns = MobID::kSoldierAnt, .spawn_count = 2 }
+    },
+    {
+        .name = "Colony Heart",
+        .description = "Amber colony core that heals and stirs the swarm.",
+        .health = 120.0, .damage = 16.0, .radius = 14.0, .reload = 14.0, .count = 1,
+        .rarity = RarityID::kLegendary,
+        .attributes = { .constant_heal = 4.0, .extra_rotation_speed = 0.4, .burst_heal = 12.0 }
+    }
 }};
 
 std::array<struct MobData, MobID::kNumMobs> const MOB_DATA = {{
@@ -2379,7 +2462,7 @@ std::array<struct MobData, MobID::kNumMobs> const MOB_DATA = {{
         .radius = {14.0},
         .xp = 3,
         .drops = {
-            PetalID::kLight, PetalID::kLeaf, PetalID::kTwin,
+            PetalID::kLight, PetalID::kLeaf, PetalID::kChitinNeedle, PetalID::kShellPlate,
             PetalID::kMatAntShell, PetalID::kMatAntenna, PetalID::kMatFormicAcid
         }, 
         .attributes = {}
@@ -2393,7 +2476,7 @@ std::array<struct MobData, MobID::kNumMobs> const MOB_DATA = {{
         .radius = {14.0},
         .xp = 5,
         .drops = {
-            PetalID::kTwin, PetalID::kIris, PetalID::kWing,
+            PetalID::kTwin, PetalID::kIris, PetalID::kWing, PetalID::kChitinNeedle,
             PetalID::kMatAntShell, PetalID::kMatFormicAcid
         }, 
         .attributes = {}
@@ -2664,8 +2747,8 @@ std::array<struct MobData, MobID::kNumMobs> const MOB_DATA = {{
         .radius = {25.0},
         .xp = 15,
         .drops = {
-            PetalID::kTwin, PetalID::kAntEgg, PetalID::kMatAntRoe,
-            PetalID::kMatQueenPheromone, PetalID::kMatHiveHeart
+            PetalID::kColonyHeart, PetalID::kQueensEmblem, PetalID::kAntEgg,
+            PetalID::kMatAntRoe, PetalID::kMatQueenPheromone, PetalID::kMatHiveHeart
         },
         .attributes = {
             .aggro_radius = 750
@@ -3311,6 +3394,97 @@ std::array<struct MobData, MobID::kNumMobs> const MOB_DATA = {{
         .health = {2600.0}, .damage = 26.0, .radius = {92.0}, .xp = 200,
         .drops = { PetalID::kIris, PetalID::kWing, PetalID::kBeetleEgg, PetalID::kThirdEye, PetalID::kTriplet },
         .attributes = { .aggro_radius = 900 }
+    },
+    // ---- Ant Hell mobs (new) — classic ants above kept unchanged ----
+    {
+        .name = "Acid Ant",
+        .description = "Keeps its distance and spits acid from a pale green sac.",
+        .rarity = RarityID::kUnusual,
+        .health = {35.0}, .damage = 12.0, .radius = {21.0}, .xp = 6,
+        .drops = {
+            PetalID::kAcidDroplet, PetalID::kAcidFlask, PetalID::kMatFormicAcid, PetalID::kMatAntShell
+        },
+        .attributes = { .aggro_radius = 360, .poison_damage = { .damage = 5.0, .time = 2.0 } }
+    },
+    {
+        .name = "Scout Ant",
+        .description = "A slim, fast scout that dashes in short bursts.",
+        .rarity = RarityID::kCommon,
+        .health = {18.0}, .damage = 10.0, .radius = {16.0}, .xp = 3,
+        .drops = {
+            PetalID::kChitinNeedle, PetalID::kFaster, PetalID::kMatAntenna, PetalID::kMatAntShell
+        },
+        .attributes = { .aggro_radius = 420 }
+    },
+    {
+        .name = "Armored Ant",
+        .description = "A wide, slow ant under thick polygonal plating.",
+        .rarity = RarityID::kUnusual,
+        .health = {90.0}, .damage = 14.0, .radius = {29.0}, .xp = 10,
+        .drops = {
+            PetalID::kIronMandible, PetalID::kRoyalCarapace, PetalID::kMatAntShell, PetalID::kAntFang
+        },
+        .attributes = { .aggro_radius = 280 }
+    },
+    {
+        .name = "Brood Carrier",
+        .description = "Carries a pale egg on its back and releases baby ants.",
+        .rarity = RarityID::kUnusual,
+        .health = {45.0}, .damage = 10.0, .radius = {24.0}, .xp = 8,
+        .drops = {
+            PetalID::kBroodPearl, PetalID::kSoldierEgg, PetalID::kMatAntRoe, PetalID::kMatAntShell
+        },
+        .attributes = { .aggro_radius = 300 }
+    },
+    {
+        .name = "Winged Ant",
+        .description = "A small ant with wide translucent wings.",
+        .rarity = RarityID::kUnusual,
+        .health = {30.0}, .damage = 12.0, .radius = {20.0}, .xp = 6,
+        .drops = {
+            PetalID::kPheromoneStar, PetalID::kWing, PetalID::kMatAntenna, PetalID::kMatAntShell
+        },
+        .attributes = { .aggro_radius = 380 }
+    },
+    {
+        .name = "Tunnel Guard",
+        .description = "A flat, heavy ant that barrels down nest corridors.",
+        .rarity = RarityID::kRare,
+        .health = {110.0}, .damage = 18.0, .radius = {30.0}, .xp = 16,
+        .drops = {
+            PetalID::kTunnelStone, PetalID::kHiveDisc, PetalID::kMatAntShell, PetalID::kBone
+        },
+        .attributes = { .aggro_radius = 340 }
+    },
+    {
+        .name = "Spore Ant",
+        .description = "A purple ant whose spore sac leaks toxins on contact.",
+        .rarity = RarityID::kUnusual,
+        .health = {40.0}, .damage = 10.0, .radius = {22.0}, .xp = 7,
+        .drops = {
+            PetalID::kVenomCocoon, PetalID::kIris, PetalID::kMatFormicAcid, PetalID::kMatAntShell
+        },
+        .attributes = { .aggro_radius = 300, .poison_damage = { .damage = 8.0, .time = 3.0 } }
+    },
+    {
+        .name = "Fang Ant",
+        .description = "Long triangular fangs telegraph a sudden bite.",
+        .rarity = RarityID::kUnusual,
+        .health = {42.0}, .damage = 20.0, .radius = {23.0}, .xp = 8,
+        .drops = {
+            PetalID::kIronMandible, PetalID::kAntFang, PetalID::kMatAntShell, PetalID::kMatAntenna
+        },
+        .attributes = { .aggro_radius = 320 }
+    },
+    {
+        .name = "Royal Sentinel",
+        .description = "Amber royal guard with a gold-plated abdomen.",
+        .rarity = RarityID::kRare,
+        .health = {130.0}, .damage = 18.0, .radius = {31.0}, .xp = 20,
+        .drops = {
+            PetalID::kQueensEmblem, PetalID::kRoyalCarapace, PetalID::kMatQueenPheromone, PetalID::kMatAntShell
+        },
+        .attributes = { .aggro_radius = 400 }
     },
 }};
 

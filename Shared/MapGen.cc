@@ -337,21 +337,26 @@ void append_biome_ecos(MapZones &zones, uint8_t map_id, ZoneDefinition const &ha
         break;
     case MapID::kAntHell:
         add(eco_from(soft, "Forage Halls", 1, 1.0f, {
-            { MobID::kBabyAnt, 180000 }, { MobID::kWorkerAnt, 140000 },
-            { MobID::kAntHole, 4000 }, { MobID::kSquare, 1 }}), 2800.f, 4200.f, 3);
+            { MobID::kBabyAnt, 160000 }, { MobID::kWorkerAnt, 130000 },
+            { MobID::kScoutAnt, 100000 }, { MobID::kAntHole, 4000 },
+            { MobID::kSquare, 1 }}), 2800.f, 4200.f, 4);
         add(eco_from(mid, "Dirt Maze", 2, 1.1f, {
-            { MobID::kWorkerAnt, 150000 }, { MobID::kSoldierAnt, 120000 },
-            { MobID::kBabyAnt, 90000 }, { MobID::kAntHole, 5000 },
-            { MobID::kSquare, 1 }}), 2400.f, 3600.f, 3);
+            { MobID::kWorkerAnt, 120000 }, { MobID::kSoldierAnt, 100000 },
+            { MobID::kFangAnt, 90000 }, { MobID::kScoutAnt, 70000 },
+            { MobID::kBabyAnt, 60000 }, { MobID::kAntHole, 5000 },
+            { MobID::kSquare, 1 }}), 2400.f, 3600.f, 4);
         add(eco_from(mid, "Fungal Farm", 2, 1.05f, {
-            { MobID::kWorkerAnt, 140000 }, { MobID::kBabyAnt, 120000 },
-            { MobID::kAntHole, 4000 }, { MobID::kSquare, 1 }}), 2200.f, 3400.f, 2);
+            { MobID::kWorkerAnt, 110000 }, { MobID::kBabyAnt, 100000 },
+            { MobID::kSporeAnt, 95000 }, { MobID::kBroodCarrier, 80000 },
+            { MobID::kAntHole, 4000 }, { MobID::kSquare, 1 }}), 2200.f, 3400.f, 3);
         add(eco_from(hard, "Soldier Patrol", 3, 1.35f, {
-            { MobID::kSoldierAnt, 180000 }, { MobID::kWorkerAnt, 100000 },
-            { MobID::kAntHole, 14000 }, { MobID::kSquare, 1 }}), 2000.f, 3000.f, 2);
+            { MobID::kSoldierAnt, 120000 }, { MobID::kTunnelGuard, 100000 },
+            { MobID::kArmoredAnt, 90000 }, { MobID::kWingedAnt, 70000 },
+            { MobID::kAntHole, 14000 }, { MobID::kSquare, 1 }}), 2000.f, 3000.f, 3);
         add(eco_from(hard, "Queen Nest", 3, 1.55f, {
-            { MobID::kQueenAnt, 8000 }, { MobID::kSoldierAnt, 160000 },
-            { MobID::kAntHole, 18000 }, { MobID::kSquare, 1 }}), 3600.f, 4800.f, 1);
+            { MobID::kRoyalSentinel, 120000 }, { MobID::kSoldierAnt, 100000 },
+            { MobID::kTunnelGuard, 70000 }, { MobID::kAntHole, 18000 },
+            { MobID::kSquare, 1 }}), 3600.f, 4800.f, 1);
         break;
     default: // Volcano
         add(eco_from(soft, "Ash Plain", 1, 0.9f, {

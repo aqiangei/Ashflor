@@ -15,7 +15,9 @@
 #include <Helpers/Math.hh>
 
 #include <cmath>
+#include <cstddef>
 #include <string>
+#include <vector>
 
 using namespace Ui;
 
@@ -44,6 +46,30 @@ Element *Ui::make_pause_menu() {
     float const btn_w = m ? 220.f : 320.f;
     float const pad = m ? 14.f : 28.f;
     float const gap = m ? 8.f : 14.f;
+
+    std::vector<Element *> toggles = {
+        pause_toggle_row(&Input::keyboard_movement, I18n::kKeyboardMovement),
+        pause_toggle_row(&Input::movement_helper, I18n::kMovementHelper),
+        pause_toggle_row(&Input::invert_attack, I18n::kInvertAttack),
+        pause_toggle_row(&Input::invert_defend, I18n::kInvertDefend),
+        pause_toggle_row(&Input::request_mobile, I18n::kRequestMobile),
+        pause_toggle_row(&Game::show_debug, I18n::kDebugStats),
+    };
+    Element *toggles_block = nullptr;
+    if (m) {
+        // Same two-column sheet as title settings so it fits the phone viewport.
+        size_t mid = (toggles.size() + 1) / 2;
+        std::vector<Element *> left(toggles.begin(), toggles.begin() + (std::ptrdiff_t) mid);
+        std::vector<Element *> right(toggles.begin() + (std::ptrdiff_t) mid, toggles.end());
+        toggles_block = new Ui::HContainer({
+            new Ui::VContainer(left, 0, 8, { .h_justify = Style::Left, .no_animation = 1 }),
+            new Ui::VContainer(right, 0, 8, { .h_justify = Style::Left, .no_animation = 1 })
+        }, 0, 12, { .h_justify = Style::Left, .no_animation = 1 });
+    } else {
+        toggles_block = new Ui::VContainer(toggles, 0, gap, {
+            .h_justify = Style::Left, .no_animation = 1
+        });
+    }
 
     Element *elt = new Ui::VContainer({
         new Ui::DynamicText(title, [](){ return I18n::tr(I18n::kPauseMenu); }, {
@@ -77,11 +103,7 @@ Element *Ui::make_pause_menu() {
         new Ui::DynamicText(section, [](){
             return I18n::use_chinese ? std::string{"—— 操作 ——"} : std::string{"— Controls —"};
         }, { .fill = Chrome::kMuted, .h_justify = Style::Left }),
-        pause_toggle_row(&Input::keyboard_movement, I18n::kKeyboardMovement),
-        pause_toggle_row(&Input::movement_helper, I18n::kMovementHelper),
-        pause_toggle_row(&Input::invert_attack, I18n::kInvertAttack),
-        pause_toggle_row(&Input::invert_defend, I18n::kInvertDefend),
-        pause_toggle_row(&Input::request_mobile, I18n::kRequestMobile),
+        toggles_block,
         new Ui::Button(btn_w, m ? 34.f : 48.f,
             new Ui::DynamicText(section, [](){ return I18n::tr(I18n::kFullscreen); }),
             [](Element *, uint8_t e){

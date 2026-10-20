@@ -66,11 +66,11 @@ namespace TerrainArt {
               0xff081C15, 0xff1B4332, 0xff40916C, 0xff0D2818, 0xff040F0A,
               0xff2D6A4F, 0x6652B788, 0xff95D5B2, 0x99D8F3DC,
               Style::kJungle, 8.f, 24.f, 40.f, 64.f },
-            // Ant Hell — packed earth tunnels
-            { 0xffC4A484, 0x40A98467, 0x44E6D5B8,
-              0xff3D2314, 0xff6F4518, 0xffB08968, 0xff582F0E, 0xff2A180C,
-              0xff582F0E, 0x668C5E3B, 0xffB08968, 0x99E6D5B8,
-              Style::kDirt, 7.f, 16.f, 28.f, 70.f },
+            // Ant Hell — Anthill-terrain-art-spec nest floor / dirt wall
+            { 0xffC9A477, 0x40A77E58, 0x55E0BF92,
+              0xff4B3026, 0xff704A35, 0xffA77751, 0xff856044, 0xff38241E,
+              0xff582F0E, 0x668C5E3B, 0xffB08968, 0x99D9C09B,
+              Style::kDirt, 7.5f, 18.f, 32.f, 68.f },
             // Volcano — ash + ember
             { 0xff4A4E6A, 0x403D405B, 0x55E76F51,
               0xff0D0D14, 0xff1A1A2E, 0xffE76F51, 0xff12121F, 0xff050508,

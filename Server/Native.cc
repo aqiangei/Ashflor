@@ -4,11 +4,14 @@
 #include <Server/AccountStore.hh>
 #include <Server/Client.hh>
 #include <Server/LeaderboardStore.hh>
+#include <Server/RateLimit.hh>
 #include <Shared/Config.hh>
 
 #include <csignal>
 #include <cstdlib>
 #include <iostream>
+#include <string>
+#include <string_view>
 #include <vector>
 
 static us_listen_socket_t *g_listen_socket = nullptr;
@@ -34,19 +37,22 @@ uWS::App Server::server = uWS::App({
         std::cout << "client connection\n";
         Client *client = ws->getUserData();
         client->ws = ws;
+        // Behind nginx this is the proxy IP unless a custom upgrade copies XFF.
+        std::string_view addr = ws->getRemoteAddressAsText();
+        client->remote_ip.assign(addr.data(), addr.size());
+        if (!RateLimit::allow_connect(client->remote_ip)) {
+            client->disconnect(CloseReason::kServer, "Too Many Connections");
+            return;
+        }
+        RateLimit::on_connect(client->remote_ip);
+        client->conn_counted = 1;
     },
     .message = [](WebSocket *ws, std::string_view message, uWS::OpCode opCode) {
         Client::on_message(ws, message, opCode);
     },
-    .dropped = [](WebSocket *ws, std::string_view /*message*/, uWS::OpCode /*opCode*/) {
-        std::cout << "dropped packet\n";
-        Client *client = ws->getUserData();
-        if (client == nullptr) {
-            ws->end(1006, "Dropped Message");
-            return;
-        }
-        client->disconnect();
-        /* A message was dropped due to set maxBackpressure and closeOnBackpressureLimit limit */
+    .dropped = [](WebSocket * /*ws*/, std::string_view /*message*/, uWS::OpCode /*opCode*/) {
+        // Background / frozen tabs stop reading; backpressure drops are expected.
+        // Do NOT kick — park updates via can_accept_update() instead.
     },
     .drain = [](WebSocket */*ws*/) {
         //assert(!1);
@@ -100,8 +106,15 @@ void Server::stop() {
     }
 }
 
+uint8_t Client::can_accept_update() {
+    if (ws == nullptr) return 0;
+    // ~2 full snapshots — beyond this the tab is almost certainly frozen.
+    return ws->getBufferedAmount() <= 128 * 1024 ? 1 : 0;
+}
+
 void Client::send_packet(uint8_t const *packet, size_t size) {
     if (ws == nullptr) return;
+    if (!can_accept_update()) return;
     std::string_view message(reinterpret_cast<char const *>(packet), size);
     ws->send(message, uWS::OpCode::BINARY, 0);
 }

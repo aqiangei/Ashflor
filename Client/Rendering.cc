@@ -3,6 +3,7 @@
 #include <Client/Input.hh>
 #include <Client/MapChunkCache.hh>
 #include <Client/Particle.hh>
+#include <Client/ThemeMaterial.hh>
 
 #include <Client/Ui/Extern.hh>
 #include <Client/Render/RenderEntity.hh>
@@ -11,6 +12,7 @@
 
 #include <Shared/Map.hh>
 #include <Shared/StaticData.hh>
+#include <Shared/StaticDefinitions.hh>
 #include <Shared/Talent.hh>
 
 #include <Helpers/Math.hh>
@@ -235,7 +237,29 @@ void Game::render_game() {
 
 void Game::render_title_screen() {
     RenderContext context(&renderer);
+    uint8_t mid = Game::selected_map;
+    if (mid >= MapID::kNumMaps) mid = MapID::kGarden;
+    TerrainArt::ThemeMaterial const &tm = TerrainArt::theme(mid);
+
     renderer.reset_transform();
-    renderer.set_fill(0xff1ea761);
-    renderer.fill_rect(0,0,renderer.width,renderer.height);
+    renderer.set_fill(tm.ground);
+    renderer.fill_rect(0, 0, renderer.width, renderer.height);
+
+    // Slow pan over spawn plaza so the backdrop reads as that map's ThemeMaterial.
+    float const fov = 0.62f;
+    float const t = (float)(Game::timestamp * 0.00018);
+    float const cam_x = MAP_SPAWN_X + std::sin(t) * 480.f;
+    float const cam_y = MAP_SPAWN_Y + std::cos(t * 0.81f) * 360.f;
+    {
+        RenderContext world(&renderer);
+        renderer.translate(renderer.width / 2, renderer.height / 2);
+        renderer.scale(Ui::scale * fov);
+        renderer.translate(-cam_x, -cam_y);
+        float const scale = 1.f / (2.f * fov * Ui::scale);
+        float const leftX = cam_x - renderer.width * scale;
+        float const rightX = cam_x + renderer.width * scale;
+        float const topY = cam_y - renderer.height * scale;
+        float const bottomY = cam_y + renderer.height * scale;
+        MapChunkCache::draw(renderer, mid, 0, leftX, topY, rightX, bottomY, Input::is_mobile);
+    }
 }

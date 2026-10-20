@@ -16,7 +16,10 @@
 #include <Client/I18n.hh>
 #include <Client/Input.hh>
 
+#include <Helpers/Math.hh>
+
 #include <Shared/Config.hh>
+#include <Shared/StaticData.hh>
 #include <Shared/StaticDefinitions.hh>
 
 #include <cmath>
@@ -507,46 +510,84 @@ Element *Ui::make_panel_buttons() {
     return elt;
 }
 
+static void debug_minmax_avg(CircularArray<double, 100> const &samples, float &min_dt, float &avg_dt, float &max_dt) {
+    min_dt = avg_dt = max_dt = (float) samples[0];
+    for (uint32_t i = 1; i < samples.size(); ++i) {
+        float const v = (float) samples[i];
+        if (min_dt > v) min_dt = v;
+        else if (max_dt < v) max_dt = v;
+        avg_dt += v;
+    }
+    avg_dt /= samples.size();
+}
+
 Element *Ui::make_debug_stats() {
     Element *elt = new Ui::VContainer({
-        new Ui::DynamicText(12, [](){
+        new Ui::DynamicText(13, [](){
+            float fps = Ui::dt > 0.01f ? 1000.f / (float) Ui::dt : 0.f;
+            return I18n::use_chinese
+                ? std::format("调试  {:.0f} fps", fps)
+                : std::format("Debug  {:.0f} fps", fps);
+        }, { .fill = 0xfff5e6a8, .h_justify = Style::Left }),
+        new Ui::DynamicText(11, [](){
+            if (Debug::frame_times.size() == 0) return std::string{I18n::tr(I18n::kDebugFail)};
+            float min_dt, avg_dt, max_dt;
+            debug_minmax_avg(Debug::frame_times, min_dt, avg_dt, max_dt);
+            return I18n::use_chinese
+                ? std::format("帧 {:.1f}/{:.1f}/{:.1f} ms", min_dt, avg_dt, max_dt)
+                : std::format("frame {:.1f}/{:.1f}/{:.1f} ms", min_dt, avg_dt, max_dt);
+        }, { .fill = 0xffffffff, .h_justify = Style::Left }),
+        new Ui::DynamicText(11, [](){
+            if (Debug::tick_times.size() == 0) return std::string{I18n::tr(I18n::kDebugFail)};
+            float min_dt, avg_dt, max_dt;
+            debug_minmax_avg(Debug::tick_times, min_dt, avg_dt, max_dt);
+            return I18n::use_chinese
+                ? std::format("逻辑 {:.1f}/{:.1f}/{:.1f} ms", min_dt, avg_dt, max_dt)
+                : std::format("tick {:.1f}/{:.1f}/{:.1f} ms", min_dt, avg_dt, max_dt);
+        }, { .fill = 0xffffffff, .h_justify = Style::Left }),
+        new Ui::DynamicText(11, [](){
             float pxls = 0;
             for (Renderer *r : Renderer::renderers) pxls += r->width * r->height;
-            return std::format("{} ctxs - {} pxls - {:.0f}x{:.0f}", Renderer::renderers.size(), format_score(pxls), Ui::window_width, Ui::window_height);
-        }, { .fill = 0xffffffff, .h_justify = Style::Right }),
-        new Ui::DynamicText(12, [](){
-            if (Debug::frame_times.size() == 0) return std::string{I18n::tr(I18n::kDebugFail)};
-            float min_dt = Debug::tick_times[0];
-            float avg_dt = min_dt;
-            float max_dt = min_dt;
-            for (uint32_t i = 1; i < Debug::tick_times.size(); ++i) {
-                float const frame_time = Debug::tick_times[i];
-                if (min_dt > frame_time) min_dt = frame_time;
-                else if (max_dt < frame_time) max_dt = frame_time;
-                avg_dt += frame_time;
+            return std::format("{} ctx  {}px  {:.0f}x{:.0f}",
+                Renderer::renderers.size(), format_score(pxls), Ui::window_width, Ui::window_height);
+        }, { .fill = 0xffdddddd, .h_justify = Style::Left }),
+        new Ui::DynamicText(11, [](){
+            uint8_t mid = Game::selected_map;
+            if (Game::in_game() && Game::simulation.arena_info.map_id < MapID::kNumMaps)
+                mid = Game::simulation.arena_info.map_id;
+            if (mid >= MapID::kNumMaps) mid = MapID::kGarden;
+            return std::format("{}  zoom {:.2f}  {}",
+                I18n::map_name(mid), Game::camera_zoom,
+                Game::socket.ready ? "ws ok" : "ws down");
+        }, { .fill = 0xffdddddd, .h_justify = Style::Left }),
+        new Ui::DynamicText(11, [](){
+            if (!Game::in_game()) {
+                return I18n::use_chinese ? std::string{"局外"} : std::string{"title"};
             }
-            avg_dt /= Debug::tick_times.size();
-            return I18n::use_chinese
-                ? std::format("逻辑: {:.1f}/{:.1f}/{:.1f} ms (最小/平均/最大)", min_dt, avg_dt, max_dt)
-                : std::format("tick: {:.1f}/{:.1f}/{:.1f} ms (min/avg/max)", min_dt, avg_dt, max_dt);
-        }, { .fill = 0xffffffff, .h_justify = Style::Right }),
-        new Ui::DynamicText(12, [](){
-            if (Debug::frame_times.size() == 0) return std::string{I18n::tr(I18n::kDebugFail)};
-            float min_dt = Debug::frame_times[0];
-            float avg_dt = min_dt;
-            float max_dt = min_dt;
-            for (uint32_t i = 1; i < Debug::frame_times.size(); ++i) {
-                float const frame_time = Debug::frame_times[i];
-                if (min_dt > frame_time) min_dt = frame_time;
-                else if (max_dt < frame_time) max_dt = frame_time;
-                avg_dt += frame_time;
+            uint32_t ents = Game::simulation.active_entities.size();
+            if (Game::alive() && Game::simulation.ent_exists(Game::camera_id)) {
+                Entity const &cam = Game::simulation.get_ent(Game::camera_id);
+                return std::format("ents {}  cam {:.0f},{:.0f}  lv {}",
+                    ents, cam.get_camera_x(), cam.get_camera_y(),
+                    score_to_level(Game::score));
             }
-            avg_dt /= Debug::frame_times.size();
+            return std::format("ents {}  lv {}", ents, score_to_level(Game::score));
+        }, { .fill = 0xffdddddd, .h_justify = Style::Left }),
+        new Ui::DynamicText(10, [](){
             return I18n::use_chinese
-                ? std::format("帧: {:.1f}/{:.1f}/{:.1f} ms (最小/平均/最大) - {:.1f} fps", min_dt, avg_dt, max_dt, 1000 / Ui::dt)
-                : std::format("frame: {:.1f}/{:.1f}/{:.1f} ms (min/avg/max) - {:.1f} fps", min_dt, avg_dt, max_dt, 1000 / Ui::dt);
-        }, { .fill = 0xffffffff, .h_justify = Style::Right })
-    }, 5, 5, { .should_render = [](){ return Game::show_debug; }, .h_justify = Style::Right, .v_justify = Style::Top, .no_animation = 1 });
+                ? std::string{"; 键也可开关"}
+                : std::string{"toggle: ;"};
+        }, { .fill = 0xffaaaaaa, .h_justify = Style::Left })
+    }, 8, 3, {
+        .fill = 0xe0181c20,
+        .round_radius = 8,
+        .animate = [](Element *, Renderer &){},
+        .should_render = [](){ return Game::show_debug; },
+        .h_justify = Style::Right,
+        .v_justify = Style::Top,
+        .no_animation = 1
+    });
+    elt->x = -10;
     elt->y = 8;
     return elt;
 }

@@ -11,6 +11,7 @@
 #include <Client/Ui/Extern.hh>
 #include <Client/Ui/InGame/GameInfo.hh>
 #include <Client/Ui/InGame/Loadout.hh>
+#include <Client/Ui/TitleScreen/TitleScreen.hh>
 #include <Client/Ui/TextInput.hh>
 
 #include <Shared/Binary.hh>
@@ -90,7 +91,8 @@ namespace Game {
     uint8_t show_debug = 0;
     uint8_t selected_map = MapID::kGarden;
     uint8_t minimap_expanded = 0;
-    float camera_zoom = 1.f;
+    // >1 = closer / smaller view. Default slightly zoomed-in vs old 1.0.
+    float camera_zoom = 1.28f;
     uint8_t pause_menu_open = 0;
     uint8_t leave_confirm_open = 0;
     uint8_t game_panel = 0;
@@ -114,6 +116,9 @@ namespace Game {
     std::string invite_from;
     std::string guild_name;
     std::string guild_status;
+    std::vector<GuildMember> guild_members;
+    std::string guild_announcement;
+    std::string guild_anno_draft;
     uint8_t guild_member_count = 0;
     uint8_t guild_panel_open = 0;
     std::string guild_create_draft;
@@ -331,6 +336,7 @@ void Game::init() {
         Ui::make_boost_panel()
     );
     Ui::make_petal_tooltips();
+    Ui::make_mob_tooltips();
     other_ui_window.add_child(
         Ui::make_debug_stats()
     );
@@ -387,6 +393,9 @@ void Game::reset() {
     invite_from.clear();
     guild_name.clear();
     guild_status.clear();
+    guild_members.clear();
+    guild_announcement.clear();
+    guild_anno_draft.clear();
     guild_member_count = 0;
     guild_panel_open = 0;
     guild_create_draft.clear();
@@ -639,6 +648,22 @@ void Game::guild_leave() {
     socket.send(writer.packet, writer.at - writer.packet);
 }
 
+uint8_t Game::guild_self_is_leader() {
+    for (GuildMember const &m : guild_members) {
+        if ((m.flags & 4) && (m.flags & 1)) return 1;
+    }
+    return 0;
+}
+
+void Game::guild_set_announcement() {
+    if (!socket.ready || !alive()) return;
+    if (!guild_self_is_leader()) return;
+    Writer writer(static_cast<uint8_t *>(OUTGOING_PACKET));
+    writer.write<uint8_t>(Serverbound::kGuildSetAnno);
+    writer.write<std::string>(guild_anno_draft);
+    socket.send(writer.packet, writer.at - writer.packet);
+}
+
 void Game::toggle_pause() {
     if (!alive()) return;
     if (leave_confirm_open) {
@@ -675,7 +700,7 @@ void Game::return_to_title() {
     on_game_screen = 0;
     awaiting_party_revive = 0;
     revive_progress = 0;
-    camera_zoom = 1.f;
+    camera_zoom = 1.28f;
     speech_bubbles.clear();
     // Keep WebSocket — soft-despawn flower only (was close 1000 "leave")
     if (socket.ready) {
@@ -1042,6 +1067,38 @@ void Game::tick(double time) {
         float factor = 1.f - Input::wheel_delta * 0.0012f;
         camera_zoom = fclamp(camera_zoom * factor, 0.55f, 2.2f);
         Input::wheel_delta = 0;
+    }
+
+    // Mobile pinch-to-zoom (two fingers). Same clamp as wheel zoom.
+    {
+        static float pinch_prev = 0.f;
+        static uint8_t pinch_on = 0;
+        uint8_t can_pinch = alive() && !chat_open && game_panel == kPanelNone
+            && Input::mobile_controls() && Input::touches.size() >= 2;
+        if (can_pinch) {
+            auto it = Input::touches.begin();
+            Input::Touch const &a = it->second;
+            ++it;
+            Input::Touch const &b = it->second;
+            float dx = a.x - b.x;
+            float dy = a.y - b.y;
+            float dist = std::sqrt(dx * dx + dy * dy);
+            if (pinch_on && pinch_prev > 8.f && dist > 8.f) {
+                float factor = dist / pinch_prev;
+                // Soften one-frame spikes from finger jitter
+                if (factor < 0.85f) factor = 0.85f;
+                if (factor > 1.18f) factor = 1.18f;
+                camera_zoom = fclamp(camera_zoom * factor, 0.55f, 2.2f);
+            }
+            pinch_prev = dist;
+            pinch_on = 1;
+            // Mark both fingers so joystick / A-B stop fighting the pinch
+            Input::touches[a.id].saturated = 1;
+            Input::touches[b.id].saturated = 1;
+        } else {
+            pinch_on = 0;
+            pinch_prev = 0.f;
+        }
     }
 
     // Spawn watchdog — keep retrying until alive. Name conflicts / brief

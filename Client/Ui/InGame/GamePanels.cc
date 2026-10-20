@@ -1479,25 +1479,79 @@ public:
                 .fill = can ? Chrome::kGold : 0xffffaaaa, .size = 11, .stroke_scale = 0.1f
             });
         }
-        // Hammer craft button (right)
+        // Combine / craft button (right) — claw-hammer glyph on a warm plate
         {
             RenderContext c(&ctx);
             float bx = width / 2 - 42;
             ctx.translate(bx, 0);
-            Chrome::draw_plate(ctx, 56, 56,
-                can ? 0xff5a5a5a : 0xff3a3a3a, Chrome::kRadius, 0.f);
-            ctx.set_fill(can ? 0xffffe066 : 0xff888888);
+            uint32_t plate = can ? 0xff3d8f78 : 0xff3a4a4c;
+            uint32_t plate_hi = can ? 0xff5bb896 : 0xff4a585a;
+            Chrome::draw_plate(ctx, 56, 56, plate, Chrome::kRadius, 0.f);
+            // Soft top sheen so the hit-target reads as a button
+            ctx.set_fill(plate_hi);
+            ctx.set_global_alpha(0.35f);
             ctx.begin_path();
-            ctx.move_to(-10, 8);
-            ctx.line_to(12, -10);
-            ctx.line_to(16, -6);
-            ctx.line_to(-6, 12);
-            ctx.close_path();
+            ctx.round_rect(-24, -24, 48, 18, 8);
             ctx.fill();
-            ctx.set_fill(can ? 0xffc98418 : 0xff555555);
-            ctx.begin_path();
-            ctx.round_rect(-4, 6, 8, 16, 2);
-            ctx.fill();
+            ctx.set_global_alpha(1.f);
+
+            uint32_t metal = can ? 0xfffff0c8 : 0xff9aa3a4;
+            uint32_t metal_dk = can ? 0xffd4a84a : 0xff6a7274;
+            uint32_t wood = can ? 0xffc9894a : 0xff6a5a4a;
+            uint32_t wood_dk = can ? 0xff8a5a28 : 0xff4a3a2a;
+
+            {
+                RenderContext hammer(&ctx);
+                ctx.rotate(-0.55f);
+                // Handle (wood)
+                ctx.set_fill(wood_dk);
+                ctx.begin_path();
+                ctx.round_rect(-3.5f, -2.f, 7.f, 22.f, 2.5f);
+                ctx.fill();
+                ctx.set_fill(wood);
+                ctx.begin_path();
+                ctx.round_rect(-2.6f, -1.f, 5.2f, 19.f, 2.f);
+                ctx.fill();
+                // Head block
+                ctx.set_fill(metal_dk);
+                ctx.begin_path();
+                ctx.round_rect(-14.f, -16.f, 28.f, 12.f, 3.f);
+                ctx.fill();
+                ctx.set_fill(metal);
+                ctx.begin_path();
+                ctx.round_rect(-12.5f, -14.5f, 25.f, 9.f, 2.5f);
+                ctx.fill();
+                // Claw notch (readable “hammer”, not a random diamond)
+                ctx.set_fill(plate);
+                ctx.begin_path();
+                ctx.move_to(-14.f, -10.f);
+                ctx.line_to(-7.f, -10.f);
+                ctx.line_to(-14.f, -4.f);
+                ctx.close_path();
+                ctx.fill();
+                // Face highlight
+                ctx.set_fill(can ? 0xfffff8e8 : 0xffc8d0d2);
+                ctx.set_global_alpha(0.55f);
+                ctx.begin_path();
+                ctx.round_rect(4.f, -13.5f, 7.f, 6.f, 1.5f);
+                ctx.fill();
+                ctx.set_global_alpha(1.f);
+            }
+            if (can) {
+                // Tiny spark so “ready to craft” is obvious at a glance
+                ctx.set_fill(0xfffff6a0);
+                ctx.begin_path();
+                ctx.move_to(14.f, -16.f);
+                ctx.line_to(16.5f, -11.f);
+                ctx.line_to(21.f, -13.5f);
+                ctx.line_to(17.f, -9.f);
+                ctx.line_to(20.f, -5.f);
+                ctx.line_to(14.f, -8.f);
+                ctx.line_to(8.f, -5.f);
+                ctx.line_to(11.f, -9.f);
+                ctx.close_path();
+                ctx.fill();
+            }
         }
     }
     void on_event(uint8_t event) override {

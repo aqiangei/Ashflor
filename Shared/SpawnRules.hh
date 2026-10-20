@@ -71,6 +71,13 @@ inline std::array<SpawnRule, MobID::kNumMobs> const &spawn_rules() {
 
         // P4 通道型：冲撞 / 长身怪需要直线路径
         set(MobID::kSandstorm,     SpawnClass::kCorridor, 0.f, 0.f, 0.f);
+        set(MobID::kTunnelGuard,   SpawnClass::kCorridor, 0.f, 0.f, 0.f);
+
+        // Ant Hell — near-wall / open preferences
+        set(MobID::kSporeAnt,     SpawnClass::kNearWall, 120.f, 0.f, 0.f);
+        set(MobID::kBroodCarrier,  SpawnClass::kNearWall, 100.f, 0.f, 0.f);
+        set(MobID::kWingedAnt,    SpawnClass::kOpen, 0.f, 350.f, 0.f);
+        set(MobID::kRoyalSentinel, SpawnClass::kAnchor, 0.f, 0.f, 900.f);
 
         // P6 Boss：固定锚点
         set(MobID::kQueenAnt,         SpawnClass::kBoss, 0.f, 0.f, 0.f);

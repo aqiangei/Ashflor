@@ -124,6 +124,14 @@ namespace I18n {
         kGuildLeave,
         kGuildCreateHint,
         kGuildMembers,
+        kGuildLeader,
+        kGuildOnline,
+        kGuildOffline,
+        kGuildPartyBtn,
+        kGuildAnno,
+        kGuildAnnoSave,
+        kGuildAnnoHint,
+        kGuildPartyLevelHint,
         kPanelInventoryBtn,
         kPanelTalentsBtn,
         kPanelCraftBtn,
@@ -157,6 +165,7 @@ namespace I18n {
         kLbKillsTitle,
         kLbCraftsTitle,
         kLbScoreTitle,
+        kAuthRateLimited,
         kCount
     };
 

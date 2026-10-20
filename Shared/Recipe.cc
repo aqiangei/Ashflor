@@ -65,6 +65,43 @@ namespace Recipe {
         { PetalID::kSoldierEgg, 0, 2, {
             { PetalID::kMatAntRoe, 8 }, { PetalID::kMatQueenPheromone, 1 }, {}, {}
         }},
+        // Ant Hell exclusives (anthell.txt)
+        { PetalID::kChitinNeedle, 0, 2, {
+            { PetalID::kMatAntShell, 5 }, { PetalID::kMatAntenna, 2 }, {}, {}
+        }},
+        { PetalID::kShellPlate, 0, 2, {
+            { PetalID::kMatAntShell, 8 }, { PetalID::kHeavy, 1 }, {}, {}
+        }},
+        { PetalID::kAcidDroplet, 0, 2, {
+            { PetalID::kMatFormicAcid, 5 }, { PetalID::kMatAntShell, 2 }, {}, {}
+        }},
+        { PetalID::kBroodPearl, 0, 2, {
+            { PetalID::kMatAntRoe, 6 }, { PetalID::kMatAntShell, 3 }, {}, {}
+        }},
+        { PetalID::kPheromoneStar, 0, 2, {
+            { PetalID::kMatQueenPheromone, 1 }, { PetalID::kMatAntenna, 5 }, {}, {}
+        }},
+        { PetalID::kTunnelStone, 0, 2, {
+            { PetalID::kMatAntShell, 10 }, { PetalID::kRock, 2 }, {}, {}
+        }},
+        { PetalID::kIronMandible, 0, 2, {
+            { PetalID::kAntFang, 1 }, { PetalID::kMatAntShell, 6 }, {}, {}
+        }},
+        { PetalID::kHiveDisc, 0, 3, {
+            { PetalID::kShellPlate, 2 }, { PetalID::kMatAntenna, 4 }, { PetalID::kMatAntShell, 6 }, {}
+        }},
+        { PetalID::kVenomCocoon, 0, 3, {
+            { PetalID::kAcidDroplet, 2 }, { PetalID::kMatFormicAcid, 8 }, { PetalID::kMatAntShell, 4 }, {}
+        }},
+        { PetalID::kRoyalCarapace, 0, 3, {
+            { PetalID::kShellPlate, 2 }, { PetalID::kMatQueenPheromone, 1 }, { PetalID::kMatAntShell, 10 }, {}
+        }},
+        { PetalID::kQueensEmblem, 0, 3, {
+            { PetalID::kSoldierEgg, 1 }, { PetalID::kMatQueenPheromone, 2 }, { PetalID::kMatAntShell, 8 }, {}
+        }},
+        { PetalID::kColonyHeart, 0, 3, {
+            { PetalID::kMatHiveHeart, 1 }, { PetalID::kMatQueenPheromone, 2 }, { PetalID::kBroodPearl, 2 }, {}
+        }},
         // ---- Volcano ----
         { PetalID::kFireball, 0, 2, {
             { PetalID::kMatFireCrystal, 5 }, { PetalID::kMatSulfur, 3 }, {}, {}

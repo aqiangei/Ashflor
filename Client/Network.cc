@@ -39,7 +39,8 @@ void Game::on_message(uint8_t *ptr, uint32_t len) {
                 I18n::kAuthNotFound,
                 I18n::kAuthWrongPass,
                 I18n::kAuthAlreadyIn,
-                I18n::kAuthLoggedOut
+                I18n::kAuthLoggedOut,
+                I18n::kAuthRateLimited
             };
             if (result < sizeof(reasons) / sizeof(reasons[0]))
                 account_status = I18n::tr(reasons[result]);
@@ -369,16 +370,25 @@ void Game::on_message(uint8_t *ptr, uint32_t len) {
         }
         case Clientbound::kGuildUpdate: {
             reader.read<std::string>(guild_name);
+            reader.read<std::string>(guild_announcement);
+            // Keep draft in sync unless the leader is mid-edit in the panel input
+            if (!guild_panel_open || !guild_self_is_leader()
+                || Ui::active_text_input() == nullptr)
+                guild_anno_draft = guild_announcement;
             uint8_t count = reader.read<uint8_t>();
             guild_member_count = count;
+            guild_members.clear();
             guild_status.clear();
             for (uint8_t i = 0; i < count; ++i) {
-                std::string name;
-                reader.read<std::string>(name);
-                uint8_t flags = reader.read<uint8_t>();
+                GuildMember m;
+                reader.read<std::string>(m.name);
+                m.flags = reader.read<uint8_t>();
+                m.level = reader.read<uint32_t>();
+                guild_members.push_back(m);
                 if (!guild_status.empty()) guild_status += ", ";
-                if (flags & 1) guild_status += "*";
-                guild_status += name;
+                if (m.flags & 1) guild_status += "*";
+                if (!(m.flags & 2)) guild_status += "?";
+                guild_status += m.name;
             }
             if (count == 0)
                 guild_status = I18n::tr(I18n::kGuildEmpty);

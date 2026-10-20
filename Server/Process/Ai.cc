@@ -1580,6 +1580,48 @@ void tick_ai_behavior(Simulation *sim, Entity &ent) {
         case MobID::kSandwormMonarch:
             tick_sandworm_monarch(sim, ent);
             break;
+        // ---- Ant Hell (new) ----
+        case MobID::kAcidAnt:
+            // Ranged acid spit — same windup kit as Hornet.
+            tick_hornet_aggro(sim, ent);
+            break;
+        case MobID::kScoutAnt:
+            tick_default_aggro(sim, ent, 1.35f);
+            break;
+        case MobID::kArmoredAnt:
+            tick_default_aggro(sim, ent, 0.55f);
+            break;
+        case MobID::kBroodCarrier:
+            if (ent.lifetime % (3 * TPS) == 0) {
+                Vector behind;
+                behind.unit_normal(ent.get_angle() + M_PI);
+                behind *= ent.get_radius();
+                Entity &spawned = alloc_mob(
+                    sim, MobID::kBabyAnt, ent.get_x() + behind.x, ent.get_y() + behind.y,
+                    ent.get_team(), [](Entity &mob) {
+                    mob.score_reward = MOB_DATA[mob.get_mob_id()].xp;
+                    BitMath::set(mob.flags, EntityFlags::kHasCulling);
+                });
+                entity_set_despawn_tick(spawned, 8 * TPS);
+                spawned.set_parent(ent.id);
+            }
+            tick_default_aggro(sim, ent, 0.8f);
+            break;
+        case MobID::kWingedAnt:
+            tick_default_aggro(sim, ent, 1.15f);
+            break;
+        case MobID::kTunnelGuard:
+            tick_charge_mob(sim, ent, 0.7f, 2.0f, 0.55f, 0.4f, 5.5f);
+            break;
+        case MobID::kSporeAnt:
+            tick_default_aggro(sim, ent, 0.9f);
+            break;
+        case MobID::kFangAnt:
+            tick_charge_mob(sim, ent, 0.85f, 2.3f, 0.5f, 0.35f, 4.5f);
+            break;
+        case MobID::kRoyalSentinel:
+            tick_charge_mob(sim, ent, 0.8f, 1.9f, 0.6f, 0.4f, 5.0f);
+            break;
         // ---- Spawn-point fillers ----
         case MobID::kJungleStone:
         case MobID::kRoyalBoulder:

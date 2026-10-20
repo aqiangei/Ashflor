@@ -4,6 +4,7 @@
 #include <Server/Client.hh>
 #include <Server/Game.hh>
 #include <Server/LeaderboardStore.hh>
+#include <Server/RateLimit.hh>
 
 #include <Shared/Binary.hh>
 
@@ -42,6 +43,8 @@ void Server::tick() {
     auto start = std::chrono::steady_clock::now();
     static uint32_t tick_n = 0;
     ++tick_n;
+    if ((tick_n % 75) == 0) // ~3s at 25 TPS
+        RateLimit::tick_prune();
     uint32_t online = 0;
     for (uint8_t i = 0; i < MapID::kNumMaps; ++i) {
         // Empty maps (no WS clients): tick at 1/6 rate. 8 maps at full rate

@@ -9,12 +9,19 @@ class GameInstance;
 namespace Guild {
     constexpr uint32_t MAX_SIZE = 16;
     constexpr uint32_t kNameMax = 12;
+    constexpr uint32_t kAnnoMax = 80;
     constexpr uint32_t INVITE_TTL_TICKS = 20 * 30; // 30s at 20 TPS
+
+    // Wire flags for kGuildUpdate members
+    constexpr uint8_t kFlagLeader = 1;
+    constexpr uint8_t kFlagOnline = 2;
+    constexpr uint8_t kFlagSelf = 4;
 
     void leave(Client *);
     uint8_t create(Client *, std::string const &name);
     uint8_t invite(Client *from, std::string const &target_name);
     uint8_t respond(Client *target, std::string const &from_name, uint8_t accept);
+    uint8_t set_announcement(Client *, std::string const &text);
     void send_update(Client *);
     void sync_nametag(Client *);
     void notify(Client *, std::string const &);

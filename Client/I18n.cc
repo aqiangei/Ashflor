@@ -144,6 +144,14 @@ static char const *const EN[I18n::kCount] = {
     "Leave guild",
     "Name (no spaces, ≤12)",
     "Members",
+    "Leader",
+    "Online",
+    "Offline",
+    "Party",
+    "Announcement",
+    "Save",
+    "Leaders can edit the guild board",
+    "Party level gap ≤25",
     "B Inv",
     "Z Talent",
     "C Craft",
@@ -177,6 +185,7 @@ static char const *const EN[I18n::kCount] = {
     "Kill messages",
     "Craft messages",
     "Best score",
+    "Too many attempts, try again shortly",
 };
 
 static char const *const ZH[I18n::kCount] = {
@@ -294,6 +303,14 @@ static char const *const ZH[I18n::kCount] = {
     "离开公会",
     "名称（无空格，≤12字）",
     "成员",
+    "会长",
+    "在线",
+    "离线",
+    "组队",
+    "公告",
+    "保存",
+    "会长可编辑公会公告",
+    "组队等级差 ≤25",
     "B 背包",
     "Z 天赋",
     "C 合成",
@@ -327,6 +344,7 @@ static char const *const ZH[I18n::kCount] = {
     "击杀消息",
     "合成消息",
     "最高分",
+    "尝试过于频繁，请稍后再试",
 };
 
 char const *I18n::tr(Str id) {

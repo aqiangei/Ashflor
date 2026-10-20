@@ -15,15 +15,34 @@
 #include <Shared/StaticData.hh>
 
 #include <array>
+#include <chrono>
 #include <iostream>
 #include <string>
 #include <vector>
+
+static void _park_player_still(Simulation *sim, Client *client) {
+    if (!sim->ent_exists(client->camera)) return;
+    Entity &camera = sim->get_ent(client->camera);
+    if (!sim->ent_alive(camera.get_player())) return;
+    Entity &player = sim->get_ent(camera.get_player());
+    player.acceleration.set(0, 0);
+    player.input = 0;
+}
 
 static void _update_client(Simulation *sim, Client *client) {
     if (client == nullptr) return;
     if (!client->verified) return;
     if (sim == nullptr) return;
     if (!sim->ent_exists(client->camera)) return;
+    // Frozen / background tabs stop reading. Keep the flower standing still and
+    // skip pushes so backpressure cannot kill the socket (was: dropped → kick).
+    uint64_t now_ms = (uint64_t) std::chrono::duration_cast<std::chrono::milliseconds>(
+        std::chrono::steady_clock::now().time_since_epoch()).count();
+    uint8_t silent = client->last_rx_ms > 0 && (now_ms - client->last_rx_ms) > 4000;
+    if (silent || !client->can_accept_update()) {
+        _park_player_still(sim, client);
+        return;
+    }
     std::set<EntityID> in_view;
     std::vector<EntityID> deletes;
     in_view.insert(client->camera);
@@ -251,8 +270,16 @@ void GameInstance::remove_client(Client *client) {
     AccountStore::capture(client);
     AccountStore::logout(client);
     Party::leave(client);
-    Guild::leave(client);
+    // Keep guild roster membership on disconnect so others see them offline.
+    // Explicit leave / account logout still call Guild::leave.
+    std::string gname = client->guild_name;
     clients.erase(client);
+    if (!gname.empty()) {
+        for (Client *c : clients) {
+            if (c != nullptr && c->guild_name == gname)
+                Guild::send_update(c);
+        }
+    }
     _teardown_camera(this, client);
     client->game = nullptr;
     client->in_view.clear();

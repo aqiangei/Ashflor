@@ -416,6 +416,19 @@ namespace PetalID {
         kTwinUnique,
         kTwinSuper,
         kTwinUltra,
+        // Ant Hell exclusive combat petals (anthell.txt — append only)
+        kChitinNeedle,
+        kShellPlate,
+        kAcidDroplet,
+        kBroodPearl,
+        kPheromoneStar,
+        kTunnelStone,
+        kIronMandible,
+        kHiveDisc,
+        kVenomCocoon,
+        kRoyalCarapace,
+        kQueensEmblem,
+        kColonyHeart,
         kNumPetals
     };
 };
@@ -530,6 +543,16 @@ namespace MobID {
         kRoyalPebble,   // Royal Capital — passive
         // Boss — Garden Flower Heart (append only)
         kFlowerGuardian,
+        // Ant Hell mobs (append only) — Baby/Worker/Soldier/AntHole/QueenAnt kept as-is
+        kAcidAnt,
+        kScoutAnt,
+        kArmoredAnt,
+        kBroodCarrier,
+        kWingedAnt,
+        kTunnelGuard,
+        kSporeAnt,
+        kFangAnt,
+        kRoyalSentinel,
         kNumMobs
     };
 };

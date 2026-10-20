@@ -43,15 +43,49 @@ void DOM::create_text_input(char const *name, uint32_t max_len, uint8_t password
         elem.setAttribute("enterkeyhint", $2 ? "done" : "send");
         // ≥16px prevents iOS page-zoom on focus (florr_clone mobile_text_input)
         elem.style["font-size"] = "16px";
-        // Enter on the overlay input (chat focused): always notify C++ — some
-        // mobile browsers never deliver window keydown for the soft Send key.
+        // Coalesce keydown + beforeinput + form submit into one flag per gesture
+        let enterArmed = true;
+        const notifyEnter = function () {
+            if (!enterArmed) return;
+            enterArmed = false;
+            setTimeout(function () { enterArmed = true; }, 80);
+            try {
+                if (typeof Module._ashflor_text_enter === "function")
+                    Module._ashflor_text_enter();
+            } catch (err) {}
+        };
+        const isEnterKey = function (e) {
+            if (e.isComposing || e.keyCode === 229) return false;
+            return e.key === "Enter" || e.code === "Enter" || e.code === "NumpadEnter"
+                || e.keyCode === 13;
+        };
+        // Soft-keyboard Send often never reaches window keydown; listen on the
+        // overlay itself. Also catch beforeinput line-break + form submit —
+        // common on iOS/Android when enterkeyhint=send.
         elem.addEventListener("keydown", function (e) {
-            if (e.isComposing || e.keyCode === 229) return;
-            if (e.key !== "Enter" && e.code !== "Enter" && e.code !== "NumpadEnter") return;
+            if (!isEnterKey(e)) return;
             e.preventDefault();
-            try { Module._ashflor_text_enter(); } catch (err) {}
+            notifyEnter();
         });
-        document.body.appendChild(elem);
+        elem.addEventListener("beforeinput", function (e) {
+            if (e.inputType !== "insertLineBreak" && e.inputType !== "insertParagraph")
+                return;
+            e.preventDefault();
+            notifyEnter();
+        });
+        if (!$2) {
+            const form = document.createElement("form");
+            form.setAttribute("action", "javascript:void(0)");
+            form.style.display = "contents";
+            form.addEventListener("submit", function (e) {
+                e.preventDefault();
+                notifyEnter();
+            });
+            form.appendChild(elem);
+            document.body.appendChild(form);
+        } else {
+            document.body.appendChild(elem);
+        }
     },
     name, max_len * 2, (int) password);
 }

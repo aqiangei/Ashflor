@@ -14,7 +14,15 @@ Window::Window() : Container({}) {}
 void Window::render(Renderer &ctx) {
     width = Ui::window_width;
     height = Ui::window_height;
-    refactor();
+    // Element::refactor skips invisible children, so a panel that just became
+    // should_render() would keep a stale/zero size. Layout anything that wants
+    // to show this frame (debug overlay, settings sheets, …).
+    for (Element *elt : children) {
+        if (elt->visible
+            || elt->style.should_render == nullptr
+            || elt->style.should_render())
+            elt->refactor();
+    }
     RenderContext context(&ctx);
     ctx.reset_transform();
     ctx.translate(width / 2, height / 2);

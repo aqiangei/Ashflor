@@ -1172,6 +1172,13 @@ void Client::on_message(WebSocket *ws, std::string_view message, uint64_t code) 
             Guild::leave(client);
             break;
         }
+        case Serverbound::kGuildSetAnno: {
+            if (client->check_invalid(validator.validate_string(Guild::kAnnoMax))) return;
+            std::string text;
+            reader.read<std::string>(text);
+            Guild::set_announcement(client, text);
+            break;
+        }
         case Serverbound::kClientLeave: {
             // Return to title without closing the WebSocket
             if (client->game == nullptr) break;

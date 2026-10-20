@@ -166,7 +166,8 @@ public:
     X(20, Game::password) \
     X(15, Game::guest_talent_hp) \
     X(16, Game::guest_talent_rot) \
-    X(17, Game::rot_speed_setting)
+    X(17, Game::rot_speed_setting) \
+    X(21, Game::show_debug)
 
 #define X(ct, name) static auto checker_##ct = MutationObserver(name);
 STORED
@@ -205,7 +206,7 @@ void Storage::retrieve() {
         }
     }
     {
-        uint32_t len = StorageProtocol::retrieve("settings", 1);
+        uint32_t len = StorageProtocol::retrieve("settings", 2);
         if (len > 0) {
             Decoder reader(&StorageProtocol::buffer[0]);
             uint8_t opts = reader.read<uint8_t>();
@@ -223,6 +224,8 @@ void Storage::retrieve() {
                 Input::request_mobile = BitMath::at(opts, 6);
             else
                 Input::request_mobile = Input::is_mobile;
+            if (len >= 2)
+                Game::show_debug = reader.read<uint8_t>() ? 1 : 0;
         } else {
             Input::request_mobile = Input::is_mobile;
         }
@@ -438,6 +441,7 @@ void Storage::set() {
             | ((Input::request_mobile ? 1 : 0) << 6)
             | (1 << 7)
         );
+        writer.write<uint8_t>(Game::show_debug ? 1 : 0);
         StorageProtocol::store("settings", writer.at - writer.base);
     }
     {

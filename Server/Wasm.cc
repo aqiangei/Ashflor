@@ -1,7 +1,9 @@
 #ifdef WASM_SERVER
 #include <Server/Client.hh>
+#include <Server/RateLimit.hh>
 #include <Server/Server.hh>
 
+#include <Shared/Binary.hh>
 #include <Shared/Config.hh>
 
 #include <iostream>
@@ -16,10 +18,20 @@ size_t const MAX_BUFFER_LEN = 1024;
 static uint8_t INCOMING_BUFFER[MAX_BUFFER_LEN] = {0};
 
 extern "C" {
-    void on_connect(int ws_id) {
+    void on_connect(int ws_id, char const *ip) {
         std::printf("client connect: [%d]\n", ws_id);
         WebSocket *ws = new WebSocket(ws_id);
+        Client *client = ws->getUserData();
+        if (ip != nullptr && ip[0] != '\0')
+            client->remote_ip = ip;
         WS_MAP.insert({ws_id, ws});
+        if (!RateLimit::allow_connect(client->remote_ip)) {
+            // Leave WS_MAP entry; on_disconnect deletes it after close.
+            ws->end(CloseReason::kServer, "Too Many Connections");
+            return;
+        }
+        RateLimit::on_connect(client->remote_ip);
+        client->conn_counted = 1;
     }
 
     void on_disconnect(int ws_id, int reason) {
@@ -181,7 +193,20 @@ WebSocketServer::WebSocketServer() {
         wss.on("connection", function(ws, req) {
             const ws_id = curr_id;
             Module.ws_connections[ws_id] = ws;
-            _on_connect(ws_id);
+            // Prefer first X-Forwarded-For hop (player); X-Real-IP may be edge IP after multi-proxy.
+            let ip = "";
+            const xff = (req && req.headers && req.headers["x-forwarded-for"]) || "";
+            if (xff) ip = String(xff).split(",")[0].trim();
+            if (!ip && req && req.headers && req.headers["x-real-ip"])
+                ip = String(req.headers["x-real-ip"]).trim();
+            if (!ip && req && req.socket && req.socket.remoteAddress)
+                ip = String(req.socket.remoteAddress);
+            if (ip.indexOf("::ffff:") === 0) ip = ip.slice(7);
+            const ipLen = lengthBytesUTF8(ip) + 1;
+            const ipPtr = _malloc(ipLen);
+            stringToUTF8(ip, ipPtr, ipLen);
+            _on_connect(ws_id, ipPtr);
+            _free(ipPtr);
             curr_id = (curr_id + 1) | 0;
             ws.on("message", function(message) {
                 let data = new Uint8Array(message);
@@ -238,6 +263,16 @@ void Server::stop() {
     });
 }
 
+uint8_t Client::can_accept_update() {
+    if (ws == nullptr) return 0;
+    return (uint8_t) EM_ASM_INT({
+        if (!Module.ws_connections || !Module.ws_connections[$0]) return 0;
+        const ws = Module.ws_connections[$0];
+        if (ws.readyState !== 1) return 0;
+        return ws.bufferedAmount <= 128 * 1024 ? 1 : 0;
+    }, ws->id());
+}
+
 void Client::send_packet(uint8_t const *packet, size_t size) {
     if (ws == nullptr) return;
     ws->send(packet, size);
@@ -253,7 +288,7 @@ void WebSocket::send(uint8_t const *packet, size_t size) {
         if (!Module.ws_connections || !Module.ws_connections[$0]) return;
         const ws = Module.ws_connections[$0];
         if (ws.readyState !== 1) return;
-        if (ws.bufferedAmount > 256 * 1024) return;
+        if (ws.bufferedAmount > 128 * 1024) return;
         ws.send(HEAPU8.subarray($1,$1+$2));
     }, ws_id, packet, size);
 }

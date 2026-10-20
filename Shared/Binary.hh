@@ -15,7 +15,7 @@ enum Clientbound {
     kSpawnResult,
     kTalentUpdate,
     kInvitePrompt, // type, from_name — pending party/guild invite toast
-    kGuildUpdate,
+    kGuildUpdate, // name, announcement, count, [name, flags, level]*  flags:1 leader 2 online 4 self
     kLoadoutPresetSync,
     kBoostUpdate,
     kLeaderboardStats, // multi-category stats board (name/value rows)
@@ -57,7 +57,8 @@ enum Serverbound {
     kBankWithdraw, // equip one copy from backpack stacks
     kLeaderboardRequest, // ask the server for the stats board
     kBankDeposit, // unequip primary/secondary → backpack stacks
-    kBoostToggle // arg = 0/1 — pause or resume triple-drop bonus timers
+    kBoostToggle, // arg = 0/1 — pause or resume triple-drop bonus timers
+    kGuildSetAnno  // announcement text (leader only)
 };
 
 // Categories shown as separate columns on the leaderboard board.
@@ -116,7 +117,8 @@ enum AccountResultCode {
     kAccountNotFound = 4,
     kAccountWrongPass = 5,
     kAccountAlreadyIn = 6,
-    kAccountLoggedOut = 7
+    kAccountLoggedOut = 7,
+    kAccountRateLimited = 8
 };
 
 enum CloseReason {

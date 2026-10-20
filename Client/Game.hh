@@ -108,7 +108,7 @@ namespace Game {
     extern uint8_t show_debug;
     extern uint8_t selected_map; // MapID for title-screen world select
     extern uint8_t minimap_expanded; // 0 compact full-map, 1 larger full-map (toggle M)
-    extern float camera_zoom; // client wheel zoom multiplier (1 = default)
+    extern float camera_zoom; // client zoom multiplier (default 1.28 = slightly closer)
     extern uint8_t pause_menu_open;
     extern uint8_t leave_confirm_open;
     extern uint8_t game_panel; // 0 none, see kPanel*
@@ -148,7 +148,15 @@ namespace Game {
     extern uint8_t invite_type;
     extern std::string invite_from;
     extern std::string guild_name;
-    extern std::string guild_status; // member list summary
+    extern std::string guild_status; // legacy summary string
+    struct GuildMember {
+        std::string name;
+        uint8_t flags = 0; // 1=leader 2=online 4=self
+        uint32_t level = 1;
+    };
+    extern std::vector<GuildMember> guild_members;
+    extern std::string guild_announcement;
+    extern std::string guild_anno_draft;
     extern uint8_t guild_member_count;
     extern uint8_t guild_panel_open;
     extern std::string guild_create_draft;
@@ -232,6 +240,8 @@ namespace Game {
     void guild_create();
     void guild_invite_name(std::string const &);
     void guild_leave();
+    void guild_set_announcement();
+    uint8_t guild_self_is_leader();
     void toggle_pause();
     void toggle_game_panel(uint8_t panel);
     void close_game_panel();

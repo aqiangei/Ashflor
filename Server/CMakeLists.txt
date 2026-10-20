@@ -31,6 +31,7 @@ set(SOURCES
     Guild.cc
     Party.cc
     PetalTracker.cc
+    RateLimit.cc
     Server.cc
     Simulation.cc
     Spawn.cc

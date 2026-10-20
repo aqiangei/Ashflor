@@ -194,6 +194,40 @@ static Client *find_by_name(GameInstance *game, std::string const &name) {
     return nullptr;
 }
 
+static uint32_t party_client_level(Client *client) {
+    if (client == nullptr || client->game == nullptr) return 1;
+    Simulation *sim = &client->game->simulation;
+    if (!sim->ent_exists(client->camera)) return 1;
+    Entity &camera = sim->get_ent(client->camera);
+    if (sim->ent_alive(camera.get_player())) {
+        uint32_t lv = score_to_level(sim->get_ent(camera.get_player()).get_score());
+        return lv < 1 ? 1 : lv;
+    }
+    uint32_t lv = camera.get_respawn_level();
+    return lv < 1 ? 1 : lv;
+}
+
+// True if adding `candidate` to `host`'s party keeps max-min level ≤ MAX_LEVEL_GAP.
+static uint8_t party_level_gap_ok(Client *host, Client *candidate) {
+    if (host == nullptr || candidate == nullptr || host->game == nullptr) return 0;
+    uint32_t lo = party_client_level(candidate);
+    uint32_t hi = lo;
+    auto absorb = [&](Client *c) {
+        if (c == nullptr) return;
+        uint32_t lv = party_client_level(c);
+        if (lv < lo) lo = lv;
+        if (lv > hi) hi = lv;
+    };
+    absorb(host);
+    if (host->party_id != 0) {
+        for (Client *c : host->game->clients) {
+            if (c != nullptr && c->party_id == host->party_id)
+                absorb(c);
+        }
+    }
+    return (hi - lo) <= Party::MAX_LEVEL_GAP ? 1 : 0;
+}
+
 static Client *find_nearest(Client *from) {
     if (from == nullptr || !from->alive() || from->game == nullptr) return nullptr;
     Simulation *sim = &from->game->simulation;
@@ -238,6 +272,12 @@ uint8_t Party::invite(Client *from, std::string const &target_name) {
     }
     if (count >= MAX_SIZE) {
         notify(from, "[队伍] 队伍已满。");
+        return 0;
+    }
+    if (!party_level_gap_ok(from, target)) {
+        notify(from, "[队伍] 等级差超过 " + std::to_string(MAX_LEVEL_GAP)
+            + " 级，无法组队（队内最高与最低相差须 ≤ "
+            + std::to_string(MAX_LEVEL_GAP) + "）。");
         return 0;
     }
     // Ensure inviter has a party shell so accept can join
@@ -288,6 +328,12 @@ uint8_t Party::respond(Client *target, std::string const &from_name, uint8_t acc
         if (c != nullptr && c->party_id == from->party_id) ++count;
     if (count >= MAX_SIZE) {
         notify(target, "[队伍] 队伍已满。");
+        return 0;
+    }
+    if (!party_level_gap_ok(from, target)) {
+        notify(target, "[队伍] 等级差超过 " + std::to_string(MAX_LEVEL_GAP)
+            + " 级，无法加入。");
+        notify(from, "[队伍] " + player_name(target) + " 因等级差过大未能入队。");
         return 0;
     }
     target->party_id = from->party_id;

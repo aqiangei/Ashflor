@@ -45,7 +45,11 @@ namespace Ui {
         GalleryMob(MobID::T, float);
 
         virtual void on_render(Renderer &) override;
+        virtual void on_event(uint8_t) override;
     };
+
+    extern Element *mob_tooltips[MobID::kNumMobs];
+    void make_mob_tooltips();
 
     Element *make_title_input_box();
     Element *make_title_info_box();

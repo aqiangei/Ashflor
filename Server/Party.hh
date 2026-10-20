@@ -8,6 +8,8 @@ class GameInstance;
 
 namespace Party {
     constexpr uint32_t MAX_SIZE = 4;
+    // Party members' levels must stay within this span (max - min).
+    constexpr uint32_t MAX_LEVEL_GAP = 25;
     constexpr float REVIVE_RADIUS = 150.0f;
     constexpr float INVITE_RADIUS = 500.0f;
     // TPS is 20
