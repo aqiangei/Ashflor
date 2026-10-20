@@ -2,8 +2,6 @@
 
 自托管的多人 florr 风格游戏。基于 [gardn](https://github.com/trigonal-bacon/gardn) fork，C++ 编写。
 
-玩法启发自 [florr.io](https://static.florr.io/old/)，与官方无关。
-
 ## 游玩
 
 - [https://ashflor.com/](https://ashflor.com/)（推荐）
