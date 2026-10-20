@@ -74,11 +74,16 @@ public:
     float death_x = 0;
     float death_y = 0;
     uint8_t death_map_id = 0;
+    // Rate-limit / backpressure (Native + Wasm)
+    std::string remote_ip;
+    uint8_t conn_counted = 0;
+    uint64_t last_rx_ms = 0;
     Client();
     void init();
     void remove();
     void disconnect(int = CloseReason::kProtocol, std::string const & = "Protocol Error");
     uint8_t alive();
+    uint8_t can_accept_update();
 
     void send_packet(uint8_t const *, size_t);
     //takes in a bool expr
@@ -106,6 +111,7 @@ class WebSocket {
 public:
     Client client;
     WebSocket(int);
+    int id() const { return ws_id; }
     Client *getUserData();
     void send(uint8_t const *, size_t);
     void end(int, std::string const &);

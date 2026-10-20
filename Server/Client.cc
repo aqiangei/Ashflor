@@ -7,6 +7,7 @@
 #include <Server/Guild.hh>
 #include <Server/Party.hh>
 #include <Server/PetalTracker.hh>
+#include <Server/RateLimit.hh>
 #include <Server/Server.hh>
 #include <Server/Spawn.hh>
 
@@ -437,6 +438,8 @@ void Client::on_message(WebSocket *ws, std::string_view message, uint64_t code) 
         ws->end(CloseReason::kServer, "Server Error");
         return;
     }
+    client->last_rx_ms = (uint64_t) std::chrono::duration_cast<std::chrono::milliseconds>(
+        std::chrono::steady_clock::now().time_since_epoch()).count();
     if (!client->verified) {
         if (client->check_invalid(validator.validate_uint8() && validator.validate_uint64())) return;
         if (reader.read<uint8_t>() != Serverbound::kVerify) {
@@ -627,21 +630,27 @@ void Client::on_message(WebSocket *ws, std::string_view message, uint64_t code) 
             std::string password;
             reader.read<std::string>(username);
             reader.read<std::string>(password);
-            uint8_t result = AccountResultCode::kAccountInvalidUser;
-            if (mode == AccountAuthMode::kAccountRegister) {
-                result = AccountStore::register_account(client, username, password);
-                if (result == AccountResultCode::kAccountOk)
+            uint8_t result = RateLimit::precheck_auth(client->remote_ip, username, mode);
+            if (result == AccountResultCode::kAccountOk) {
+                if (mode == AccountAuthMode::kAccountRegister) {
+                    result = AccountStore::register_account(client, username, password);
+                    if (result == AccountResultCode::kAccountOk)
+                        result = AccountStore::login(client, username, password);
+                } else if (mode == AccountAuthMode::kAccountResume) {
+                    uint64_t token = 0;
+                    for (unsigned char c : password) {
+                        if (c < '0' || c > '9') { token = 0; break; }
+                        token = token * 10 + (uint64_t) (c - '0');
+                    }
+                    result = AccountStore::resume(client, username, token);
+                } else {
                     result = AccountStore::login(client, username, password);
-            } else if (mode == AccountAuthMode::kAccountResume) {
-                uint64_t token = 0;
-                for (unsigned char c : password) {
-                    if (c < '0' || c > '9') { token = 0; break; }
-                    token = token * 10 + (uint64_t) (c - '0');
                 }
-                result = AccountStore::resume(client, username, token);
-            } else {
-                result = AccountStore::login(client, username, password);
             }
+            if (result == AccountResultCode::kAccountOk)
+                RateLimit::note_auth_ok(client->remote_ip, username);
+            else
+                RateLimit::note_auth_fail(client->remote_ip, username, mode);
             Writer writer(Server::OUTGOING_PACKET);
             writer.write<uint8_t>(Clientbound::kAccountResult);
             writer.write<uint8_t>(result);
@@ -1330,6 +1339,10 @@ void Client::on_disconnect(WebSocket *ws, int code, std::string_view message) {
     std::printf("disconnect: [%d]\n", code);
     Client *client = ws->getUserData();
     if (client == nullptr) return;
+    if (client->conn_counted) {
+        RateLimit::on_disconnect(client->remote_ip);
+        client->conn_counted = 0;
+    }
     client->remove();
 }
 
