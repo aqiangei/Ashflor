@@ -224,17 +224,23 @@ void client_award_coins(Client *client, uint32_t amount) {
     send_craft_update(client, CraftResultCode::kCraftBankSync, PetalID::kCoin);
 }
 
-// Secondary + pure bag slots (not primary): [loadout, loadout+MAX)
+// Secondary + pure bag slots (not primary): [loadout, loadout+MAX).
+// Dead players keep inventory on the camera — same as bank withdraw.
 static uint32_t count_bag_mats(Client *client, PetalID::T id) {
-    if (!client->alive() || id == PetalID::kNone || id >= PetalID::kNumPetals) return 0;
+    if (client == nullptr || id == PetalID::kNone || id >= PetalID::kNumPetals) return 0;
+    if (client->game == nullptr || !client->game->simulation.ent_exists(client->camera)) return 0;
     Simulation *simulation = &client->game->simulation;
     Entity &camera = simulation->get_ent(client->camera);
-    Entity &player = simulation->get_ent(camera.get_player());
-    uint32_t loadout = player.get_loadout_count();
+    Entity *player = client->alive() ? &simulation->get_ent(camera.get_player()) : nullptr;
+    uint32_t loadout = player != nullptr ? player->get_loadout_count()
+        : (uint32_t) loadout_slots_at_level(camera.get_respawn_level());
     uint32_t end = loadout + MAX_SLOT_COUNT;
     uint32_t n = 0;
-    for (uint32_t i = loadout; i < end; ++i)
-        if (player.get_loadout_ids(i) == id) ++n;
+    for (uint32_t i = loadout; i < end; ++i) {
+        PetalID::T slot = player != nullptr ? player->get_loadout_ids(i)
+            : camera.get_inventory(i);
+        if (slot == id) ++n;
+    }
     return n;
 }
 
@@ -244,11 +250,13 @@ static uint32_t craft_owned(Client *client, PetalID::T id) {
 
 // Pull overflow bank into empty backpack slots so craft materials match the bag.
 static void flush_craft_bank_to_bag(Client *client) {
-    if (client == nullptr || !client->alive()) return;
+    if (client == nullptr) return;
+    if (client->game == nullptr || !client->game->simulation.ent_exists(client->camera)) return;
     Simulation *simulation = &client->game->simulation;
     Entity &camera = simulation->get_ent(client->camera);
-    Entity &player = simulation->get_ent(camera.get_player());
-    uint32_t loadout = player.get_loadout_count();
+    Entity *player = client->alive() ? &simulation->get_ent(camera.get_player()) : nullptr;
+    uint32_t loadout = player != nullptr ? player->get_loadout_count()
+        : (uint32_t) loadout_slots_at_level(camera.get_respawn_level());
     uint32_t end = loadout + MAX_SLOT_COUNT;
     uint8_t moved = 0;
     // Use uint32_t — PetalID::T is uint8_t; a naive uint8_t loop hangs at 256.
@@ -256,8 +264,11 @@ static void flush_craft_bank_to_bag(Client *client) {
         while (client->craft_bank[id] > 0) {
             uint8_t placed = 0;
             for (uint32_t i = loadout; i < end; ++i) {
-                if (player.get_loadout_ids(i) != PetalID::kNone) continue;
-                player.set_loadout_ids(i, (PetalID::T) id);
+                PetalID::T cur = player != nullptr ? player->get_loadout_ids(i)
+                    : camera.get_inventory(i);
+                if (cur != PetalID::kNone) continue;
+                if (player != nullptr) player->set_loadout_ids(i, (PetalID::T) id);
+                else camera.set_inventory(i, (PetalID::T) id);
                 PetalTracker::add_petal(simulation, (PetalID::T) id);
                 --client->craft_bank[id];
                 placed = 1;
@@ -279,15 +290,19 @@ static uint8_t consume_craft_mats(Client *client, PetalID::T id, uint32_t amount
     if (id == PetalID::kNone || id >= PetalID::kNumPetals) return 0;
     flush_craft_bank_to_bag(client);
     if (craft_owned(client, id) < amount) return 0;
-    if (!client->alive()) return 0;
+    if (client->game == nullptr || !client->game->simulation.ent_exists(client->camera)) return 0;
     Simulation *simulation = &client->game->simulation;
     Entity &camera = simulation->get_ent(client->camera);
-    Entity &player = simulation->get_ent(camera.get_player());
-    uint32_t loadout = player.get_loadout_count();
+    Entity *player = client->alive() ? &simulation->get_ent(camera.get_player()) : nullptr;
+    uint32_t loadout = player != nullptr ? player->get_loadout_count()
+        : (uint32_t) loadout_slots_at_level(camera.get_respawn_level());
     uint32_t end = loadout + MAX_SLOT_COUNT;
     for (uint32_t i = end; i-- > loadout && amount > 0;) {
-        if (player.get_loadout_ids(i) != id) continue;
-        player.set_loadout_ids(i, PetalID::kNone);
+        PetalID::T cur = player != nullptr ? player->get_loadout_ids(i)
+            : camera.get_inventory(i);
+        if (cur != id) continue;
+        if (player != nullptr) player->set_loadout_ids(i, PetalID::kNone);
+        else camera.set_inventory(i, PetalID::kNone);
         PetalTracker::remove_petal(simulation, id);
         --amount;
     }
@@ -303,14 +318,18 @@ static uint8_t consume_craft_mats(Client *client, PetalID::T id, uint32_t amount
 // Returns 1 when the petal joins the backpack, including its stacked section.
 static uint8_t try_give_petal(Client *client, PetalID::T id) {
     if (id == PetalID::kNone || id >= PetalID::kNumPetals) return 0;
-    if (!client->alive()) return 0;
+    if (client->game == nullptr || !client->game->simulation.ent_exists(client->camera)) return 0;
     Simulation *simulation = &client->game->simulation;
     Entity &camera = simulation->get_ent(client->camera);
-    Entity &player = simulation->get_ent(camera.get_player());
-    uint32_t loadout = player.get_loadout_count();
+    Entity *player = client->alive() ? &simulation->get_ent(camera.get_player()) : nullptr;
+    uint32_t loadout = player != nullptr ? player->get_loadout_count()
+        : (uint32_t) loadout_slots_at_level(camera.get_respawn_level());
     auto place = [&](uint32_t i) -> uint8_t {
-        if (player.get_loadout_ids(i) != PetalID::kNone) return 0;
-        player.set_loadout_ids(i, id);
+        PetalID::T cur = player != nullptr ? player->get_loadout_ids(i)
+            : camera.get_inventory(i);
+        if (cur != PetalID::kNone) return 0;
+        if (player != nullptr) player->set_loadout_ids(i, id);
+        else camera.set_inventory(i, id);
         PetalTracker::add_petal(simulation, id);
         return 1;
     };
@@ -628,7 +647,9 @@ void Client::on_message(WebSocket *ws, std::string_view message, uint64_t code) 
             break;
         }
         case Serverbound::kPetalCraft: {
-            if (!client->alive()) break;
+            // Allow death-screen craft (inventory lives on camera while down)
+            if (client->game == nullptr
+                || !client->game->simulation.ent_exists(client->camera)) break;
             if (client->check_invalid(validator.validate_uint8() && validator.validate_uint8())) return;
             // Overflow bank → backpack first so craft list matches the bag UI.
             flush_craft_bank_to_bag(client);

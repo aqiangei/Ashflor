@@ -473,17 +473,18 @@ uint8_t point_on_channel(MapTerrain const &t, float x, float y) {
 }
 
 // Emit up to 4 AABB remnants around a cleared rect punched out of src.
-void emit_aabb_minus_rect(MapTerrain &out, TerrainFeature const &src,
+template <uint32_t Cap>
+void emit_aabb_minus_rect(StaticArray<TerrainFeature, Cap> &out, TerrainFeature const &src,
                           float cl, float ct, float cr, float cb) {
     float L = src.left, T = src.top, R = src.right, B = src.bottom;
     float pl = std::max(L, cl), pt = std::max(T, ct), pr = std::min(R, cr), pb = std::min(B, cb);
     if (pl >= pr || pt >= pb) {
-        if (out.size() < MAX_TERRAIN_PER_MAP) out.push(src);
+        if (out.size() < Cap) out.push(src);
         return;
     }
     auto emit = [&](float l, float top, float r, float b) {
         if (r - l < 80.f || b - top < 80.f) return;
-        if (out.size() >= MAX_TERRAIN_PER_MAP) return;
+        if (out.size() >= Cap) return;
         TerrainFeature g = src;
         g.left = l; g.top = top; g.right = r; g.bottom = b;
         out.push(g);
@@ -495,18 +496,19 @@ void emit_aabb_minus_rect(MapTerrain &out, TerrainFeature const &src,
 }
 
 // Punch a vertical (axis==0) or horizontal (axis==1) band out of an AABB.
-void emit_aabb_minus_band(MapTerrain &out, TerrainFeature const &src,
+template <uint32_t Cap>
+void emit_aabb_minus_band(StaticArray<TerrainFeature, Cap> &out, TerrainFeature const &src,
                           float c0, float c1, uint8_t axis) {
     float L = src.left, T = src.top, R = src.right, B = src.bottom;
     if (axis == 0) {
         float a = std::max(L, c0), b = std::min(R, c1);
         if (b <= a) {
-            if (out.size() < MAX_TERRAIN_PER_MAP) out.push(src);
+            if (out.size() < Cap) out.push(src);
             return;
         }
         auto emit = [&](float l, float r) {
             if (r - l < 80.f) return;
-            if (out.size() >= MAX_TERRAIN_PER_MAP) return;
+            if (out.size() >= Cap) return;
             TerrainFeature g = src;
             g.left = l; g.right = r;
             out.push(g);
@@ -516,12 +518,12 @@ void emit_aabb_minus_band(MapTerrain &out, TerrainFeature const &src,
     } else {
         float a = std::max(T, c0), b = std::min(B, c1);
         if (b <= a) {
-            if (out.size() < MAX_TERRAIN_PER_MAP) out.push(src);
+            if (out.size() < Cap) out.push(src);
             return;
         }
         auto emit = [&](float top, float bot) {
             if (bot - top < 80.f) return;
-            if (out.size() >= MAX_TERRAIN_PER_MAP) return;
+            if (out.size() >= Cap) return;
             TerrainFeature g = src;
             g.top = top; g.bottom = bot;
             out.push(g);
@@ -640,7 +642,7 @@ void resolve_terrain_overlaps(MapTerrain &t) {
                 // Fully covered by cut → drop
                 if (axis == 0 && c0 <= r.left + 40.f && c1 >= r.right - 40.f) continue;
                 if (axis == 1 && c0 <= r.top + 40.f && c1 >= r.bottom - 40.f) continue;
-                MapTerrain tmp;
+                StaticArray<TerrainFeature, 8> tmp;
                 emit_aabb_minus_band(tmp, r, c0, c1, axis);
                 for (TerrainFeature const &g : tmp) {
                     if (next.size() < 48) next.push(g);
@@ -704,8 +706,9 @@ void gen_desert(MapTerrain &t, ThemePalette const &p, uint32_t &rng, float W, fl
     for (uint32_t i = 0; i < 4; ++i) {
         float y = H * (0.18f + 0.18f * (float)i) + rng_range(rng, -120.f, 120.f);
         float gate = rng_range(rng, W * 0.16f, W * 0.46f);
-        float gw = gap * 0.9f;
-        float gw2 = gap * 0.75f;
+        // West gate stays wide (≥1000); corridor seam ~0.5 block so belts still feel oppressive.
+        float gw = std::max(1000.f, gap * 0.9f);
+        float gw2 = rng_range(rng, 480.f, 560.f);
         float y0 = y - wall * 0.5f, y1 = y + wall * 0.5f;
         uint8_t s = (uint8_t)(30 + i * 2);
         // Segment 1: west edge → main gate
@@ -718,6 +721,9 @@ void gen_desert(MapTerrain &t, ThemePalette const &p, uint32_t &rng, float W, fl
     // Rock canyon maze — kept inside one dune layer so it never seals a belt
     float maze_x0 = W * 0.55f, maze_y0 = H * 0.39f, maze_x1 = W * 0.92f, maze_y1 = H * 0.52f;
     maze_cell(t, p, rng, 50, maze_x0, maze_y0, maze_x1, maze_y1, wall, gap * 0.6f);
+    // C4: scattered rock/bone piles in canyon + bone yard
+    rock_field(t, p, rng, 180, maze_x0, maze_y0, maze_x1, maze_y1, 6, 280.f, 520.f);
+    rock_field(t, p, rng, 190, W * 0.72f, H * 0.18f, W * 0.94f, H * 0.40f, 5, 280.f, 520.f);
     // Sandworm nest: east corridor that crosses the belts, ending in a sealed basin
     float bw_x = 0.f, bw_y = 0.f;
     {
@@ -733,7 +739,7 @@ void gen_desert(MapTerrain &t, ThemePalette const &p, uint32_t &rng, float W, fl
     // Dry river bed
     push_feat(t, TerrainKind::kChannel, TerrainShape::kRiver, TerrainFlags::kNoAttack,
               W * 0.1f, H * 0.15f, W * 0.9f, H * 0.88f, p.channel, 100, rng_range(rng, 350.f, 450.f));
-    // Oasis + sandworm basin
+    // Oasis + bone yard basin
     ring_valley(t, p, rng, W * 0.20f, H * 0.75f, 950.f, 420.f, 1.2f, 0.55f, 120, 1);
     ring_valley(t, p, rng, W * 0.82f, H * 0.28f, 1100.f, 450.f, 3.5f, 0.5f, 140, 0);
     // Boss: sandworm monarch at the end of the spiral nest
@@ -749,9 +755,24 @@ void gen_ocean(MapTerrain &t, ThemePalette const &p, uint32_t &rng, float W, flo
                 rng_range(rng, 2500.f, 3300.f), 3, rng_range(rng, 1250.f, 1650.f), 60, 0);
     spiral_farm(t, p, rng, cx - 2200.f, cy - 800.f, 3, +1, gap * 0.9f, wall,
                 rng_range(rng, 2300.f, 3000.f), 2, rng_range(rng, 1100.f, 1450.f), 90, 0);
-    // Deep trenches
-    push_feat(t, TerrainKind::kWater, TerrainShape::kRiver, TerrainFlags::kImpassable,
-              W * 0.1f, H * 0.72f, W * 0.9f, H * 0.28f, p.water, 110, rng_range(rng, 220.f, 300.f));
+    // Deep trench (SW→NE) split into 3 segments with 2 shallow fords ≥1000
+    {
+        float x0 = W * 0.1f, y0 = H * 0.72f, x1 = W * 0.9f, y1 = H * 0.28f;
+        float dx = x1 - x0, dy = y1 - y0;
+        float len = std::sqrt(dx * dx + dy * dy);
+        float hw = rng_range(rng, 220.f, 300.f);
+        float gt = 1100.f / std::max(len, 1.f); // ford gap in t-space
+        float f0 = 0.30f, f1 = 0.70f;
+        auto trench = [&](float ta, float tb, uint8_t seed) {
+            if (tb - ta < 0.04f) return;
+            push_feat(t, TerrainKind::kWater, TerrainShape::kRiver, TerrainFlags::kImpassable,
+                      x0 + dx * ta, y0 + dy * ta, x0 + dx * tb, y0 + dy * tb,
+                      p.water, seed, hw);
+        };
+        trench(0.f, f0 - gt * 0.5f, 110);
+        trench(f0 + gt * 0.5f, f1 - gt * 0.5f, 111);
+        trench(f1 + gt * 0.5f, 1.f, 112);
+    }
     rock_field(t, p, rng, 130, W * 0.12f, H * 0.55f, W * 0.40f, H * 0.88f, 7, 300.f, 560.f);
     ring_valley(t, p, rng, W * 0.18f, H * 0.20f, 880.f, 400.f, 0.4f, 0.55f, 150, 0);
     ring_valley(t, p, rng, W * 0.82f, H * 0.80f, 1050.f, 430.f, 2.8f, 0.5f, 170, 0); // abyss core
@@ -834,11 +855,25 @@ void gen_ant_hell(MapTerrain &t, ThemePalette const &p, uint32_t &rng, float W, 
 void gen_volcano(MapTerrain &t, ThemePalette const &p, uint32_t &rng, float W, float H, float cx, float cy) {
     float gap = rng_range(rng, 1100.f, 1400.f);
     float wall = rng_range(rng, 450.f, 600.f);
-    // Lava rivers (water kind = lava color)
-    push_feat(t, TerrainKind::kWater, TerrainShape::kRiver, TerrainFlags::kImpassable,
-              W * 0.1f, H * 0.25f, W * 0.9f, H * 0.78f, p.water, 30, rng_range(rng, 240.f, 320.f));
-    push_feat(t, TerrainKind::kWater, TerrainShape::kRiver, TerrainFlags::kImpassable,
-              W * 0.15f, H * 0.80f, W * 0.85f, H * 0.20f, p.water, 32, rng_range(rng, 220.f, 300.f));
+    // Lava rivers with cooled rock bridges (gaps) so quadrants aren't island-only
+    auto lava_with_bridge = [&](float x0, float y0, float x1, float y1,
+                                float ford_t, uint8_t seed0, float hw) {
+        float dx = x1 - x0, dy = y1 - y0;
+        float len = std::sqrt(dx * dx + dy * dy);
+        float gt = 1000.f / std::max(len, 1.f);
+        auto seg = [&](float ta, float tb, uint8_t seed) {
+            if (tb - ta < 0.04f) return;
+            push_feat(t, TerrainKind::kWater, TerrainShape::kRiver, TerrainFlags::kImpassable,
+                      x0 + dx * ta, y0 + dy * ta, x0 + dx * tb, y0 + dy * tb,
+                      p.water, seed, hw);
+        };
+        seg(0.f, ford_t - gt * 0.5f, seed0);
+        seg(ford_t + gt * 0.5f, 1.f, (uint8_t)(seed0 + 1));
+    };
+    lava_with_bridge(W * 0.1f, H * 0.25f, W * 0.9f, H * 0.78f, 0.45f, 30,
+                     rng_range(rng, 240.f, 320.f));
+    lava_with_bridge(W * 0.15f, H * 0.80f, W * 0.85f, H * 0.20f, 0.55f, 32,
+                     rng_range(rng, 220.f, 300.f));
     // Obsidian maze
     maze_cell(t, p, rng, 40, W * 0.10f, H * 0.10f, W * 0.45f, H * 0.48f, wall, gap * 0.6f);
     maze_cell(t, p, rng, 60, W * 0.55f, H * 0.50f, W * 0.90f, H * 0.90f, wall, gap * 0.6f);
