@@ -2,6 +2,7 @@
 
 #include <Server/Client.hh>
 #include <Server/Game.hh>
+#include <Server/LeaderboardStore.hh>
 #include <Server/NodeFs.hh>
 #include <Server/PetalTracker.hh>
 #include <Server/Server.hh>
@@ -14,6 +15,7 @@
 #include <Shared/StaticData.hh>
 #include <Shared/Talent.hh>
 
+#include <algorithm>
 #include <cctype>
 #include <chrono>
 #include <cstdio>
@@ -29,6 +31,15 @@ static std::unordered_set<std::string> ACTIVE_SESSIONS;
 static std::unordered_map<std::string, uint64_t> SESSION_TOKENS;
 static std::chrono::steady_clock::time_point LAST_SNAPSHOT =
     std::chrono::steady_clock::now() - std::chrono::hours(1);
+
+static uint64_t wall_seconds() {
+    return (uint64_t) std::chrono::duration_cast<std::chrono::seconds>(
+        std::chrono::system_clock::now().time_since_epoch()).count();
+}
+
+static uint32_t beijing_day(uint64_t epoch) {
+    return (uint32_t)((epoch + 8 * 3600) / 86400);
+}
 
 static uint64_t issue_session_token(std::string const &username) {
     uint64_t t = (uint64_t) std::chrono::high_resolution_clock::now().time_since_epoch().count();
@@ -46,8 +57,37 @@ static uint64_t issue_session_token(std::string const &username) {
 static uint8_t bind_session(Client *client, std::string const &username, Account *acc) {
     if (ACTIVE_SESSIONS.contains(username) && client->account_name != username)
         return AccountResultCode::kAccountAlreadyIn;
+    bool continuing_session = client->account_name == username;
     if (!client->account_name.empty())
         ACTIVE_SESSIONS.erase(client->account_name);
+    uint64_t now = wall_seconds();
+    uint32_t day = beijing_day(now);
+    if (acc->bonus_day != day) {
+        acc->bonus_day = day;
+        acc->daily_bonus_seconds = 3600;
+    }
+    if (!continuing_session && acc->last_seen_epoch > 0 && now > acc->last_seen_epoch) {
+        uint64_t earned = (now - acc->last_seen_epoch) / 10;
+        acc->offline_bonus_seconds = (uint32_t) std::min<uint64_t>(10800,
+            (uint64_t)acc->offline_bonus_seconds + earned);
+    }
+    // Fold legacy overflow into actual backpack slots before sending the
+    // account snapshot. Keep any remainder in the old save fields until a
+    // slot is freed, so migration never destroys owned petals.
+    bool migrated = false;
+    uint32_t bag_start = loadout_slots_at_level(acc->level);
+    for (uint32_t id = 1; id < PetalID::kNumPetals; ++id) {
+        while (acc->craft_bank[id] > 0) {
+            uint32_t slot = bag_start;
+            while (slot < bag_start + MAX_SLOT_COUNT
+                && acc->petals[slot] != PetalID::kNone) ++slot;
+            if (slot >= bag_start + MAX_SLOT_COUNT) break;
+            acc->petals[slot] = (PetalID::T)id;
+            --acc->craft_bank[id];
+            migrated = true;
+        }
+    }
+    acc->last_seen_epoch = now;
     client->account_name = username;
     client->craft_bank = acc->craft_bank;
     client->coins = acc->coins;
@@ -55,9 +95,16 @@ static uint8_t bind_session(Client *client, std::string const &username, Account
     uint8_t max_r = Talent::max_rank(acc->level);
     client->talent_hp = acc->talent_hp > max_r ? max_r : acc->talent_hp;
     client->talent_rot = acc->talent_rot > max_r ? max_r : acc->talent_rot;
+    client->loadout_presets = acc->loadout_presets;
+    client->bonus_day = acc->bonus_day;
+    client->daily_bonus_seconds = acc->daily_bonus_seconds;
+    client->offline_bonus_seconds = acc->offline_bonus_seconds;
+    client->last_bonus_tick = now;
+    client->last_bonus_sync = 0;
     ACTIVE_SESSIONS.insert(username);
     if (client->game != nullptr && client->game->simulation.ent_exists(client->camera) && !client->alive())
         AccountStore::apply_to_camera(&client->game->simulation, client->game->simulation.get_ent(client->camera), *acc);
+    if (migrated) AccountStore::save();
     return AccountResultCode::kAccountOk;
 }
 
@@ -168,10 +215,15 @@ void AccountStore::load() {
         if (line.empty() || line[0] == '#') continue;
         std::istringstream ls(line);
         Account acc;
-        ls >> acc.username >> acc.pass_hash >> acc.level;
+        // uint8_t is read as a *character* by operator>>, so the level goes
+        // through a uint32_t and is narrowed afterwards (a saved level of 53
+        // used to come back as 5).
+        uint64_t pass_hash = 0;
+        uint32_t level = 0;
+        ls >> acc.username >> pass_hash >> level;
         if (acc.username.empty() || !valid_username(acc.username)) continue;
-        if (acc.level < 1) acc.level = 1;
-        if (acc.level > MAX_LEVEL) acc.level = MAX_LEVEL;
+        acc.pass_hash = pass_hash;
+        acc.level = (uint8_t) std::min<uint32_t>(std::max<uint32_t>(level, 1), MAX_LEVEL);
         acc.petals.fill(PetalID::kNone);
         acc.craft_bank.fill(0);
         acc.coins = 0;
@@ -190,17 +242,27 @@ void AccountStore::load() {
             while (ls >> v) rest.push_back(v);
             // craft_bank grew when Royal petals were appended; accept prior length.
             uint32_t bank_n = PetalID::kNumPetals;
-            // Accept saves from before Stinger Legendary (+1), Jungle (+12), ladders (+43), Royal (+12)
+            // Accept saves from before Fast/Heavy/Twin ladders (+14), Stinger Leg (+1), Jungle (+12), ladders (+43), Royal (+12)
+            constexpr uint32_t kCommonLadderAdded = 14;
             constexpr uint32_t kStingerLegAdded = 1;
             constexpr uint32_t kJungleAdded = 12;
             constexpr uint32_t kLadderAdded = 43;
             constexpr uint32_t kRoyalAdded = 12;
             uint32_t const n = (uint32_t)PetalID::kNumPetals;
-            uint32_t const prev_stinger = n > kStingerLegAdded ? n - kStingerLegAdded : n;
+            // Coin is one appended id. A full modern line is bank + this tail.
+            constexpr uint32_t kCoinAdded = 1;
+            constexpr uint32_t kAccountTail = 5 + LOADOUT_PRESET_COUNT * (1 + MAX_SLOT_COUNT) + 4;
+            uint32_t const prev_coin = n > kCoinAdded ? n - kCoinAdded : n;
+            if (rest.size() == prev_coin + kAccountTail)
+                bank_n = prev_coin;
+            uint32_t const prev_common = n > kCommonLadderAdded ? n - kCommonLadderAdded : n;
+            uint32_t const prev_stinger = prev_common > kStingerLegAdded ? prev_common - kStingerLegAdded : prev_common;
             uint32_t const prev_jungle = prev_stinger > kJungleAdded ? prev_stinger - kJungleAdded : prev_stinger;
             uint32_t const prev_ladder = prev_jungle > kLadderAdded ? prev_jungle - kLadderAdded : prev_jungle;
             uint32_t const prev_royal = prev_ladder > kRoyalAdded ? prev_ladder - kRoyalAdded : prev_ladder;
-            if (rest.size() < bank_n && rest.size() >= prev_stinger)
+            if (rest.size() < bank_n && rest.size() >= prev_common)
+                bank_n = prev_common;
+            else if (rest.size() < bank_n && rest.size() >= prev_stinger)
                 bank_n = prev_stinger;
             else if (rest.size() < bank_n && rest.size() >= prev_jungle)
                 bank_n = prev_jungle;
@@ -221,6 +283,24 @@ void AccountStore::load() {
                     acc.talent_rot = (uint8_t) std::min<uint64_t>(rest[bank_n + 3], 99);
                 if (rest.size() > bank_n + 4)
                     acc.session_hash = rest[bank_n + 4];
+                constexpr uint32_t preset_width = 1 + MAX_SLOT_COUNT;
+                if (rest.size() >= bank_n + 5 + LOADOUT_PRESET_COUNT * preset_width) {
+                    uint32_t at = bank_n + 5;
+                    for (LoadoutPreset &preset : acc.loadout_presets) {
+                        uint64_t slots = rest[at++];
+                        preset.slot_count = slots <= MAX_SLOT_COUNT ? (uint8_t) slots : 0;
+                        for (PetalID::T &id : preset.petals) {
+                            uint64_t value = rest[at++];
+                            id = value < PetalID::kNumPetals ? (PetalID::T) value : PetalID::kNone;
+                        }
+                    }
+                    if (rest.size() >= at + 4) {
+                        acc.bonus_day = (uint32_t)rest[at++];
+                        acc.daily_bonus_seconds = (uint32_t)std::min<uint64_t>(rest[at++], 3600);
+                        acc.offline_bonus_seconds = (uint32_t)std::min<uint64_t>(rest[at++], 10800);
+                        acc.last_seen_epoch = rest[at++];
+                    }
+                }
             } else if (rest.size() >= RarityID::kNumRarities) {
                 // Legacy rarity buckets → park counts on first petal of that rarity
                 for (uint8_t r = 0; r < RarityID::kNumRarities; ++r) {
@@ -232,6 +312,12 @@ void AccountStore::load() {
                     acc.coins = (uint32_t) rest[RarityID::kNumRarities];
             }
         }
+        if (acc.coins > 0) {
+            uint64_t sum = (uint64_t) acc.craft_bank[PetalID::kCoin] + acc.coins;
+            if (sum > 1000000000ull) sum = 1000000000ull;
+            acc.craft_bank[PetalID::kCoin] = (uint32_t) sum;
+            acc.coins = 0;
+        }
         ACCOUNTS[acc.username] = acc;
     }
     std::cout << "[accounts] loaded " << ACCOUNTS.size() << " accounts" << std::endl;
@@ -241,7 +327,7 @@ void AccountStore::load() {
 
 void AccountStore::save() {
     std::ostringstream out;
-    out << "# ashflor accounts  fields: user hash level petals[16] craft_bank[N] coins craft_attempts talent_hp talent_rot session_hash\n";
+    out << "# ashflor accounts  fields: user hash level petals[16] craft_bank[N] coins craft_attempts talent_hp talent_rot session_hash presets[20][slots+8 petals] bonus_day daily_bonus offline_bonus last_seen\n";
     for (auto const &kv : ACCOUNTS) {
         Account const &acc = kv.second;
         out << acc.username << ' ' << acc.pass_hash << ' ' << (uint32_t) acc.level;
@@ -252,6 +338,13 @@ void AccountStore::save() {
         out << ' ' << acc.coins << ' ' << acc.craft_attempts
             << ' ' << (uint32_t) acc.talent_hp << ' ' << (uint32_t) acc.talent_rot
             << ' ' << acc.session_hash;
+        for (LoadoutPreset const &preset : acc.loadout_presets) {
+            out << ' ' << (uint32_t) preset.slot_count;
+            for (PetalID::T id : preset.petals)
+                out << ' ' << (uint32_t) id;
+        }
+        out << ' ' << acc.bonus_day << ' ' << acc.daily_bonus_seconds
+            << ' ' << acc.offline_bonus_seconds << ' ' << acc.last_seen_epoch;
         out << '\n';
     }
     write_file_atomic(ACCOUNT_FILE, out.str());
@@ -262,15 +355,17 @@ uint32_t AccountStore::registered_count() {
     return (uint32_t) ACCOUNTS.size();
 }
 
+void AccountStore::seed_leaderboard_levels() {
+    for (auto const &kv : ACCOUNTS) {
+        if (kv.first.empty()) continue;
+        LeaderboardStore::add_stat(kv.first, kLbLevel, kv.second.level);
+    }
+}
+
 static void normalize_petals(Account &acc) {
-    uint32_t slots = loadout_slots_at_level(acc.level);
     for (uint32_t i = 0; i < 2 * MAX_SLOT_COUNT; ++i) {
         if (acc.petals[i] >= PetalID::kNumPetals)
             acc.petals[i] = PetalID::kNone;
-    }
-    for (uint32_t i = 0; i < slots; ++i) {
-        if (acc.petals[i] == PetalID::kNone)
-            acc.petals[i] = PetalID::kBasic;
     }
 }
 
@@ -280,22 +375,25 @@ static void copy_progress(Account &acc, Client *client) {
     if (!sim->ent_exists(client->camera)) return;
     Entity &camera = sim->get_ent(client->camera);
     acc.petals.fill(PetalID::kNone);
+    // Level is a high-water mark — never write a lower value back to the account.
+    uint8_t level = 1;
     if (sim->ent_alive(camera.get_player())) {
         Entity &player = sim->get_ent(camera.get_player());
-        uint32_t level = score_to_level(player.get_score());
-        if (level < 1) level = 1;
-        if (level > MAX_LEVEL) level = MAX_LEVEL;
-        acc.level = (uint8_t) level;
+        uint32_t lv = score_to_level(player.get_score());
+        if (lv < 1) lv = 1;
+        if (lv > MAX_LEVEL) lv = MAX_LEVEL;
+        if (lv < camera.get_respawn_level()) lv = camera.get_respawn_level();
+        level = (uint8_t) lv;
         for (uint32_t i = 0; i < 2 * MAX_SLOT_COUNT; ++i)
             acc.petals[i] = player.get_loadout_ids(i);
     } else {
-        uint8_t level = camera.get_respawn_level();
+        level = camera.get_respawn_level();
         if (level < 1) level = 1;
         if (level > MAX_LEVEL) level = MAX_LEVEL;
-        acc.level = level;
         for (uint32_t i = 0; i < 2 * MAX_SLOT_COUNT; ++i)
             acc.petals[i] = camera.get_inventory(i);
     }
+    if (level > acc.level) acc.level = level;
     normalize_petals(acc);
     acc.craft_bank = client->craft_bank;
     acc.coins = client->coins;
@@ -303,6 +401,11 @@ static void copy_progress(Account &acc, Client *client) {
     uint8_t max_r = Talent::max_rank(acc.level);
     acc.talent_hp = client->talent_hp > max_r ? max_r : client->talent_hp;
     acc.talent_rot = client->talent_rot > max_r ? max_r : client->talent_rot;
+    acc.loadout_presets = client->loadout_presets;
+    acc.bonus_day = client->bonus_day;
+    acc.daily_bonus_seconds = client->daily_bonus_seconds;
+    acc.offline_bonus_seconds = client->offline_bonus_seconds;
+    acc.last_seen_epoch = wall_seconds();
 }
 
 uint8_t AccountStore::register_account(Client *client, std::string const &username, std::string const &password) {
@@ -314,6 +417,8 @@ uint8_t AccountStore::register_account(Client *client, std::string const &userna
     acc.pass_hash = hash_password(username, password);
     acc.level = 1;
     acc.petals.fill(PetalID::kNone);
+    for (uint32_t i = 0; i < loadout_slots_at_level(acc.level); ++i)
+        acc.petals[i] = PetalID::kBasic;
     acc.craft_bank.fill(0);
     acc.coins = 0;
     acc.craft_attempts = 0;

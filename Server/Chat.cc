@@ -90,6 +90,8 @@ void Chat::handle(Client *client, uint8_t channel, std::string const &target, st
         }
         send_to(client, ChatChannel::kChatWhisper, name, text);
         send_to(other, ChatChannel::kChatWhisper, name, text);
+        if (client->stat_messages < 4000000000u)
+            ++client->stat_messages;
         return;
     }
 
@@ -102,6 +104,8 @@ void Chat::handle(Client *client, uint8_t channel, std::string const &target, st
             if (c != nullptr && c->party_id == client->party_id)
                 send_to(c, ChatChannel::kChatParty, name, text);
         }
+        if (client->stat_messages < 4000000000u)
+            ++client->stat_messages;
         return;
     }
 
@@ -111,6 +115,8 @@ void Chat::handle(Client *client, uint8_t channel, std::string const &target, st
             return;
         }
         Guild::broadcast_chat(client, name, text);
+        if (client->stat_messages < 4000000000u)
+            ++client->stat_messages;
         return;
     }
 
@@ -123,4 +129,6 @@ void Chat::handle(Client *client, uint8_t channel, std::string const &target, st
         if (dx * dx + dy * dy > NEARBY_RADIUS * NEARBY_RADIUS) continue;
         send_to(c, ChatChannel::kChatNearby, name, text);
     }
+    if (client->stat_messages < 4000000000u)
+        ++client->stat_messages;
 }

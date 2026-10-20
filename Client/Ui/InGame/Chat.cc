@@ -49,8 +49,10 @@ public:
         : TextInput(r, w, h, m, s) {}
 
     void on_event(uint8_t e) override {
-        if (e == kMouseDown || e == kClick)
+        if (e == kMouseDown || e == kClick) {
             Game::open_chat();
+            TextInput::on_event(e);
+        }
     }
 
     void on_render(Renderer &ctx) override {

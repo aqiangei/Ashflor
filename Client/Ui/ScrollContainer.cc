@@ -9,7 +9,7 @@
 
 using namespace Ui;
 
-ScrollBar::ScrollBar() : Element(8, 100, { .fill = 0x40000000, .round_radius = 4 }) {
+ScrollBar::ScrollBar() : Element(10, 100, { .fill = 0xaa5a3a1a, .round_radius = 5 }) {
     style.animate = [&](Element *elt, Renderer &ctx){
         if (elt->style.layer && BitMath::at(Input::mouse_buttons_released, Input::LeftMouse))
             elt->style.layer = 0;
@@ -42,8 +42,11 @@ void ScrollContainer::on_render(Renderer &ctx) {
             Input::wheel_delta = 0; // consume so camera zoom does not also fire
         }
         if (scroll->style.layer) lerp_scroll += (Input::mouse_y - Input::prev_mouse_y);
-        // Don't scroll the bag while a petal drag is active (finger leaves cell)
-        if (Input::is_mobile && Ui::UiLoadout::num_petals_selected == 0) {
+        // Don't scroll while a bag petal tap/drag is active — mobile scroll
+        // was eating click-to-equip and turning taps into no-op "drags".
+        if (Input::is_mobile
+            && Ui::UiLoadout::num_petals_selected == 0
+            && !Ui::bag_gesture_busy()) {
             auto iter = Input::touches.find(touch_id);
             if (iter != Input::touches.end())
                 lerp_scroll -= iter->second.dy / ratio;
@@ -67,20 +70,37 @@ void ScrollContainer::on_render(Renderer &ctx) {
 
 void ScrollContainer::refactor() {
     DEBUG_ONLY(assert(children.size() == 2));
-    width = 0;
-    for (Element *elt : children) {
-        elt->style.h_justify = Style::Left;
-        elt->style.v_justify = Style::Top;
-        elt->refactor();
-        elt->x = width;
-        width += inner_pad + elt->width;
-    }
-    width -= inner_pad;
+    // Content left-aligned, scrollbar flush to the right edge of the viewport.
+    // (Both Left would park the bar near the middle via justify math.)
+    Element *content = children[0];
+    Element *bar = children[1];
+    content->refactor();
+    bar->refactor();
+    content->style.h_justify = Style::Left;
+    content->style.v_justify = Style::Top;
+    bar->style.h_justify = Style::Right;
+    bar->style.v_justify = Style::Top;
+    content->x = 0;
+    bar->x = 0;
+    width = content->width + inner_pad + bar->width;
 }
 
 void ScrollContainer::poll_events(ScreenEvent const &event) {
     Element::poll_events(event);
-    if (Ui::focused == this)
-        for (Element *elt : children)
-            elt->poll_events(event);
+    if (Ui::focused != this) return;
+    // children[0]=content, children[1]=scrollbar. Container::poll_events only
+    // walks descendants when Ui::focused == content; if the touch sits in the
+    // clip but outside content's AABB (scroll offset / padding), bag cells
+    // never see the tap. Force-deliver into content while we own the gesture.
+    DEBUG_ONLY(assert(children.size() == 2));
+    Element *content = children[0];
+    Element *bar = children[1];
+    if (content != nullptr) {
+        Ui::focused = content;
+        content->poll_events(event);
+        if (Ui::focused == content)
+            Ui::focused = this;
+    }
+    if (bar != nullptr)
+        bar->poll_events(event);
 }

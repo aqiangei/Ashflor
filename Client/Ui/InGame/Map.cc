@@ -119,8 +119,19 @@ void Minimap::on_render(Renderer &ctx) {
             }
         }
 
+        auto is_teammate_at = [](float wx, float wy) -> bool {
+            for (Game::PartyMember const &m : Game::party_members) {
+                if (m.flags & 4) continue; // self
+                if (!(m.x >= 0.f && m.y >= 0.f)) continue;
+                if (std::abs(m.x - wx) < 80.f && std::abs(m.y - wy) < 80.f)
+                    return true;
+            }
+            return false;
+        };
+
         // Other players (arena sync — every living flower on this map)
         float const pr_other = Game::minimap_expanded ? 4.5f : 3.8f;
+        constexpr uint32_t kTeammatePink = 0xffff69b4;
         for (uint32_t i = 0; i < MINIMAP_PLAYER_CAP; ++i) {
             float wx = Game::simulation.arena_info.minimap_x[i];
             float wy = Game::simulation.arena_info.minimap_y[i];
@@ -132,7 +143,7 @@ void Minimap::on_render(Renderer &ctx) {
             float py = (wy - top) * sy;
             uint8_t color = Game::simulation.arena_info.minimap_colors[i];
             if (color >= ColorID::kNumColors) color = 0;
-            uint32_t fill = FLOWER_COLORS[color];
+            uint32_t fill = is_teammate_at(wx, wy) ? kTeammatePink : FLOWER_COLORS[color];
             // White halo so dots stay visible on green/blue zones
             ctx.set_fill(0xeeffffff);
             ctx.begin_path();
@@ -143,6 +154,27 @@ void Minimap::on_render(Renderer &ctx) {
             ctx.set_line_width(1.2f);
             ctx.begin_path();
             ctx.arc(px, py, pr_other);
+            ctx.fill();
+            ctx.stroke();
+        }
+
+        // DOWN teammates (corpse pos) — pink, not in living minimap list
+        float const pr_down = Game::minimap_expanded ? 4.0f : 3.4f;
+        for (Game::PartyMember const &m : Game::party_members) {
+            if (m.flags & 4) continue;
+            if (!(m.flags & 2)) continue;
+            if (!(m.x >= 0.f && m.y >= 0.f)) continue;
+            float px = (m.x - left) * sx;
+            float py = (m.y - top) * sy;
+            ctx.set_fill(0x88ffffff);
+            ctx.begin_path();
+            ctx.arc(px, py, pr_down + 1.4f);
+            ctx.fill();
+            ctx.set_fill(0xccff69b4);
+            ctx.set_stroke(0xff882244);
+            ctx.set_line_width(1.1f);
+            ctx.begin_path();
+            ctx.arc(px, py, pr_down);
             ctx.fill();
             ctx.stroke();
         }

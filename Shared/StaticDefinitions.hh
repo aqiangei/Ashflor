@@ -15,10 +15,12 @@ inline float const MAP_SPAWN_Y = ARENA_HEIGHT * 0.5f;
 inline uint32_t const MAX_SLOT_COUNT = 8;
 inline uint32_t const LEVELS_PER_EXTRA_SLOT = 15;
 inline uint32_t const LEADERBOARD_SIZE = 10;
+// Rows kept per category on the multi-column leaderboard board
+inline uint32_t const LEADERBOARD_STAT_SIZE = 10;
 inline uint32_t const MINIMAP_PLAYER_CAP = 128;
 inline uint32_t const MAX_PETALS_IN_CLUMP = 4;
 inline uint32_t const MAX_DIFFICULTY = 3;
-inline uint32_t const MAX_DROPS_PER_MOB = 6;
+inline uint32_t const MAX_DROPS_PER_MOB = 8;
 // Concept maps need many specialty Zone AABBs + large terrain pieces
 inline uint32_t const MAX_ZONES_PER_MAP = 48;
 inline uint32_t const MAX_TERRAIN_PER_MAP = 192;
@@ -63,43 +65,45 @@ namespace TerrainFlags {
     };
 }
 
-// Theme cloth colors (shared across maps — see MAP_TERRAIN.md)
+// Theme cloth colors (shared across maps — see MAP_TERRAIN.md).
+// Ground/hill tuned for wall-vs-floor contrast (TerrainArt ThemeMaterial).
 namespace MapTheme {
-    inline uint32_t const GARDEN_GROUND = 0xff3cb371;
-    inline uint32_t const GARDEN_HILL = 0xff2d6a4f;
+    inline uint32_t const GARDEN_GROUND = 0xffB9DB91;
+    inline uint32_t const GARDEN_HILL = 0xff285B35;
     inline uint32_t const GARDEN_WATER = 0xff40916c;
-    inline uint32_t const GARDEN_CHANNEL = 0x99d4a373;
-    inline uint32_t const DESERT_GROUND = 0xffe9c46a;
-    inline uint32_t const DESERT_HILL = 0xffbc6c25;
+    inline uint32_t const GARDEN_CHANNEL = 0xffE7C792;
+    inline uint32_t const DESERT_GROUND = 0xffF2D79B;
+    inline uint32_t const DESERT_HILL = 0xff815337;
     inline uint32_t const DESERT_WATER = 0xff2a9d8f;
-    inline uint32_t const DESERT_CHANNEL = 0x99f4a261;
-    inline uint32_t const OCEAN_GROUND = 0xff0077b6;
+    inline uint32_t const DESERT_CHANNEL = 0xffC9955C;
+    inline uint32_t const OCEAN_GROUND = 0xff3AA0C8;
     inline uint32_t const OCEAN_HILL = 0xff023e8a;
     inline uint32_t const OCEAN_WATER = 0xff00b4d8;
     inline uint32_t const OCEAN_CHANNEL = 0x99ff85a1;
-    inline uint32_t const POLAR_GROUND = 0xffadb5bd;
-    inline uint32_t const POLAR_HILL = 0xff6c757d;
+    inline uint32_t const POLAR_GROUND = 0xffE8EEF2;
+    inline uint32_t const POLAR_HILL = 0xff4A5560;
     inline uint32_t const POLAR_WATER = 0xff4cc9f0;
     inline uint32_t const POLAR_CHANNEL = 0x99caf0f8;
-    inline uint32_t const JUNGLE_GROUND = 0xff2d6a4f;
-    inline uint32_t const JUNGLE_HILL = 0xff1b4332;
-    inline uint32_t const JUNGLE_WATER = 0xff40916c;
+    inline uint32_t const JUNGLE_GROUND = 0xff52B788;
+    inline uint32_t const JUNGLE_HILL = 0xff081C15;
+    inline uint32_t const JUNGLE_WATER = 0xff2D6A4F;
     inline uint32_t const JUNGLE_CHANNEL = 0x9995d5b2;
-    inline uint32_t const ANT_GROUND = 0xffa98467;
-    inline uint32_t const ANT_HILL = 0xff6f4518;
+    inline uint32_t const ANT_GROUND = 0xffC4A484;
+    inline uint32_t const ANT_HILL = 0xff3D2314;
     inline uint32_t const ANT_WATER = 0xff582f0e;
     inline uint32_t const ANT_CHANNEL = 0x99b08968;
-    inline uint32_t const VOLCANO_GROUND = 0xff3d405b;
-    inline uint32_t const VOLCANO_HILL = 0xff1a1a2e;
+    inline uint32_t const VOLCANO_GROUND = 0xff4A4E6A;
+    inline uint32_t const VOLCANO_HILL = 0xff0D0D14;
     inline uint32_t const VOLCANO_WATER = 0xffe76f51; // lava
     inline uint32_t const VOLCANO_CHANNEL = 0x99f4a261;
     // Royal Capital — stone plaza / palace wall / moat / carpet channel
-    inline uint32_t const ROYAL_GROUND = 0xff9aa3ad;
-    inline uint32_t const ROYAL_HILL = 0xff5c6670;
+    inline uint32_t const ROYAL_GROUND = 0xffDCC9A6;
+    inline uint32_t const ROYAL_HILL = 0xff3E4355;
     inline uint32_t const ROYAL_WATER = 0xff4a6d8c;
     inline uint32_t const ROYAL_CHANNEL = 0x99c94d4c;
-    inline uint32_t const WEAVE_LIGHT = 0x28ffffff;
-    inline uint32_t const WEAVE_DARK = 0x18000000;
+    // Legacy weave accents (secondary only — walls use ThemeMaterial outlines)
+    inline uint32_t const WEAVE_LIGHT = 0x40ffffff;
+    inline uint32_t const WEAVE_DARK = 0x30000000;
 }
 
 namespace DamageType {
@@ -237,6 +241,138 @@ namespace PetalID {
         kHeartwood,
         // Append-only ladder fill (Epic→Legendary was skipping; craft looks up by name+rarity)
         kStingerLegendary,
+        // Fast/Light, Heavy, Twin — were Common/Unusual-only; craft fell back to random
+        kLightUnusual,
+        kLightRare,
+        kLightEpic,
+        kLightLegendary,
+        kLightMythic,
+        kHeavyUnusual,
+        kHeavyRare,
+        kHeavyEpic,
+        kHeavyLegendary,
+        kHeavyMythic,
+        kTwinRare,
+        kTwinEpic,
+        kTwinLegendary,
+        kTwinMythic,
+        // Currency. Append-only. Not a combat petal and not a craft result.
+        kCoin,
+        // Jungle Monstera petal (append only; after kCoin so saved craft banks stay valid)
+        kMonstera,
+        // Craft materials + base craft products (append-only; bag petals)
+        kMatLeaf,
+        kMatTwig,
+        kMatBeeBarb,
+        kMatPollenDust,
+        kMatRoyalJelly,
+        kMatAncientHeart,
+        kMatSand,
+        kMatVenomBarb,
+        kMatCactusSap,
+        kMatCarapace,
+        kMatSandstormEye,
+        kMatSandwormCore,
+        kMatWaterDrop,
+        kMatSeaSalt,
+        kMatSeashell,
+        kMatCoral,
+        kMatAbyssPearl,
+        kMatTideCore,
+        kMatIceCrystal,
+        kMatSnowFluff,
+        kMatColdIron,
+        kMatIceScale,
+        kMatPermafrostHeart,
+        kMatBlizzardEye,
+        kMatVine,
+        kMatResin,
+        kMatVenomSac,
+        kMatSpore,
+        kMatHeartwoodChip,
+        kMatCorruptSpore,
+        kMatAntShell,
+        kMatAntenna,
+        kMatFormicAcid,
+        kMatAntRoe,
+        kMatQueenPheromone,
+        kMatHiveHeart,
+        kMatFireCrystal,
+        kMatSulfur,
+        kMatLavaRock,
+        kMatObsidian,
+        kMatLeylineCore,
+        kMatPhoenixEmber,
+        kMatSteel,
+        kMatGear,
+        kMatHolyShard,
+        kMatCapitalBadge,
+        kMatSovereignCore,
+        kMatRoyalSeal,
+        // Base craft products (LeafBlade/PoisonSpore already exist)
+        kBeeSting,
+        kHealingBloom,
+        kSandSpike,
+        kCraftCactus,
+        kQuicksandOrb,
+        kWaterBubble,
+        kStarfish,
+        kTidePearl,
+        kIceSpike,
+        kSnowball,
+        kIceShield,
+        kThornVine,
+        kRotwood,
+        kAntFang,
+        kAcidFlask,
+        kSoldierEgg,
+        kFireball,
+        kMagmaCore,
+        kObsidianBlade,
+        kSteelSword,
+        kHolyOrb,
+        kMechGear,
+        // Cross-map (32) + legendary (8) craft products
+        kThornPalm,
+        kPollenSandstorm,
+        kSandLeafDart,
+        kDesertRoot,
+        kFrostBubble,
+        kFrostStarfish,
+        kIceTideRing,
+        kDeepFrostPearl,
+        kPoisonAntNest,
+        kCorrodeVine,
+        kColonyCore,
+        kSymbioteShell,
+        kForgedHolySword,
+        kFlameGear,
+        kObsidianKingShield,
+        kHolyFlameCore,
+        kAnemoneBloom,
+        kWetLeaf,
+        kCoralHive,
+        kLifeLotus,
+        kMoltenSandBlade,
+        kVolcanoWorm,
+        kScorchPalm,
+        kGlassStorm,
+        kFrostKnightSword,
+        kHolySnowflake,
+        kPermafrostGear,
+        kFrostCrown,
+        kRoyalThorn,
+        kMechPoisonBee,
+        kHolySpore,
+        kTreantGuard,
+        kHeartOfNature,
+        kAbyssalTide,
+        kInfernalCore,
+        kChronoVortex,
+        kAntKing,
+        kWorldTreeSeed,
+        kSkyblade,
+        kChaosPrism,
         kNumPetals
     };
 };
@@ -296,6 +432,61 @@ namespace MobID {
         kJungleWasp,
         // Boss — Heart of Jungle (v1 elite_tank)
         kAncientTreant,
+        // Ocean mobs (append only)
+        kReefStone,
+        kSeaFry,
+        kMoonJelly,
+        kCoralStar,
+        kReefCrab,
+        kSpinePuffer,
+        kSeaLeech,
+        kMorayEel,
+        kInkCuttle,
+        kAbyssShark,
+        // Boss — Abyss Core
+        kAbyssMaw,
+        // Snow mobs (append only)
+        kFrostStone,
+        kSnowMite,
+        kSnowHare,
+        kIceSpider,
+        kFrostHornet,
+        kRimeCentipede,
+        kBlizzardWisp,
+        kGlacierBeast,
+        kFrostYeti,
+        kIceGolem,
+        // Boss — Frost Core
+        kWinterSovereign,
+        // Volcano mobs (append only)
+        kEmberStone,
+        kAshMite,
+        kCinderMoth,
+        kLavaBeetle,
+        kEmberWasp,
+        kMagmaCrab,
+        kFireSpider,
+        kMagmaCentipede,
+        kObsidianGolem,
+        kLavaColossus,
+        // Boss — Molten Heart
+        kMoltenOverlord,
+        // Desert mobs (append only) — Cactus/Sandstorm/Scorpion/DesertCentipede reused as-is
+        kDuneStone,
+        kSandMite,
+        kDuneBeetle,
+        kDuneSpider,
+        kDuneHornet,
+        kDuneTitan,
+        // Boss — Sandworm Nest (10 segments)
+        kSandwormMonarch,
+        // Spawn-point fillers for biomes that lacked a passive pair
+        kJungleStone,   // Jungle — stationary
+        kJungleCrawler, // Jungle — passive
+        kRoyalBoulder,  // Royal Capital — stationary
+        kRoyalPebble,   // Royal Capital — passive
+        // Boss — Garden Flower Heart (append only)
+        kFlowerGuardian,
         kNumMobs
     };
 };
@@ -406,6 +597,11 @@ struct PetalAttributes {
     float extra_reload_factor = 1;
     float move_speed_factor = 1; // multiplies flower acceleration when equipped
     float magnet_radius = 0; // attracts drops within this range when equipped
+    // Ground "healing vine" aura: the Monstera petal, once thrown on the ground,
+    // roots itself and heals every flower standing inside `aura_radius`.
+    float aura_heal = 0;      // HP per second granted inside the aura
+    float aura_radius = 0;    // radius of the healing area
+    float aura_duration = 0;  // seconds the aura stays alive after rooting
     struct PoisonDamage poison_damage;
     uint8_t defend_only = 0;
     float icon_angle = 0;
@@ -463,6 +659,9 @@ struct ZoneDefinition {
     uint32_t difficulty;
     uint32_t color;
     char const *name;
+    // 精英怪锚点（世界坐标）。0/0 表示使用 Zone 中心。
+    float anchor_x = 0.f;
+    float anchor_y = 0.f;
 };
 
 // Shape param packing — see TerrainShape. seed drives jagged edges / river meander.

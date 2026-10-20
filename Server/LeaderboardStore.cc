@@ -82,17 +82,37 @@ void LeaderboardStore::load() {
     DIRTY = 0;
     std::string raw = read_file(LB_FILE);
     if (raw.empty()) return;
+    // One entry per line: name score color [playtime level messages kills crafts].
+    // Older files only carry the first three fields; the rest stay zero.
     std::istringstream in(raw);
-    std::string enc;
-    uint32_t score = 0;
-    uint32_t color = 0;
-    while (in >> enc >> score >> color) {
+    std::string line;
+    while (std::getline(in, line)) {
+        if (line.empty()) continue;
+        std::istringstream ls(line);
+        std::string enc;
+        if (!(ls >> enc)) continue;
         std::string name = unescape_name(enc);
         if (name.empty()) continue;
         LeaderboardEntry e;
         e.name = name;
+        // NOTE: uint8_t is read as a *character* by operator>>, so every
+        // numeric field goes through a uint32_t and is narrowed afterwards.
+        uint32_t score = 0, color = 0, playtime = 0, level = 0;
+        uint32_t messages = 0, kills = 0, crafts = 0;
+        if (!(ls >> score)) continue;
+        if (!(ls >> color)) color = 0;
+        if (!(ls >> playtime)) playtime = 0;
+        if (!(ls >> level)) level = 0;
+        if (!(ls >> messages)) messages = 0;
+        if (!(ls >> kills)) kills = 0;
+        if (!(ls >> crafts)) crafts = 0;
         e.score = score;
         e.color = (uint8_t) (color & 0xff);
+        e.playtime = playtime;
+        e.level = level;
+        e.messages = messages;
+        e.kills = kills;
+        e.crafts = crafts;
         ENTRIES[name] = e;
     }
 }
@@ -109,7 +129,12 @@ void LeaderboardStore::flush() {
     for (auto const &kv : ENTRIES) {
         out << escape_name(kv.second.name) << ' '
             << kv.second.score << ' '
-            << (uint32_t) kv.second.color << '\n';
+            << (uint32_t) kv.second.color << ' '
+            << kv.second.playtime << ' '
+            << kv.second.level << ' '
+            << kv.second.messages << ' '
+            << kv.second.kills << ' '
+            << kv.second.crafts << '\n';
     }
     write_file(LB_FILE, out.str());
 }
@@ -161,4 +186,88 @@ uint8_t LeaderboardStore::name_taken(std::string const &name, Client *self) {
         }
     }
     return 0;
+}
+
+// --- Stats board -----------------------------------------------------------
+
+uint64_t LeaderboardStore::stat_value(LeaderboardEntry const &entry, uint8_t category) {
+    switch (category) {
+        case kLbPlayTime: return entry.playtime;
+        case kLbLevel: return entry.level;
+        case kLbMessages: return entry.messages;
+        case kLbKills: return entry.kills;
+        case kLbCrafts: return entry.crafts;
+        case kLbScore: return entry.score;
+        default: return 0;
+    }
+}
+
+void LeaderboardStore::add_stat(std::string const &name, uint8_t category, uint32_t amount) {
+    if (name.empty() || category >= kLbCategoryCount) return;
+    auto it = ENTRIES.find(name);
+    if (it == ENTRIES.end()) {
+        if (amount == 0 && category != kLbLevel) return;
+        LeaderboardEntry e;
+        e.name = name;
+        ENTRIES[name] = e;
+        it = ENTRIES.find(name);
+    }
+    LeaderboardEntry &e = it->second;
+    uint32_t before = 0;
+    switch (category) {
+        case kLbPlayTime: before = e.playtime; break;
+        case kLbLevel: before = e.level; break;
+        case kLbMessages: before = e.messages; break;
+        case kLbKills: before = e.kills; break;
+        case kLbCrafts: before = e.crafts; break;
+        case kLbScore: before = e.score; break;
+        default: return;
+    }
+    uint32_t after = before;
+    if (category == kLbLevel || category == kLbScore)
+        after = amount > before ? amount : before; // level and best score only go up
+    else
+        after = before + amount; // counters accumulate across sessions
+    if (after == before) return;
+    switch (category) {
+        case kLbPlayTime: e.playtime = after; break;
+        case kLbLevel: e.level = after; break;
+        case kLbMessages: e.messages = after; break;
+        case kLbKills: e.kills = after; break;
+        case kLbCrafts: e.crafts = after; break;
+        case kLbScore: e.score = after; break;
+        default: break;
+    }
+    DIRTY = 1;
+}
+
+void LeaderboardStore::fill_top_stats(std::vector<LeaderboardStat> &out, uint8_t category, uint32_t limit) {
+    out.clear();
+    if (category >= kLbCategoryCount) return;
+    for (auto const &kv : ENTRIES) {
+        uint64_t value = stat_value(kv.second, category);
+        if (value == 0) continue;
+        out.push_back(LeaderboardStat{kv.second.name, value});
+    }
+    std::stable_sort(out.begin(), out.end(), [](LeaderboardStat const &a, LeaderboardStat const &b) {
+        if (a.value != b.value) return a.value > b.value;
+        return a.name < b.name;
+    });
+    if (out.size() > limit) out.resize(limit);
+}
+
+uint32_t LeaderboardStore::stat_rank(std::string const &name, uint8_t category, uint64_t &value) {
+    value = 0;
+    if (name.empty() || category >= kLbCategoryCount) return 0;
+    auto it = ENTRIES.find(name);
+    if (it == ENTRIES.end()) return 0;
+    uint64_t mine = stat_value(it->second, category);
+    value = mine;
+    if (mine == 0) return 0; // unranked until the player records something
+    uint32_t rank = 1;
+    for (auto const &kv : ENTRIES) {
+        if (kv.first == name) continue;
+        if (stat_value(kv.second, category) > mine) ++rank;
+    }
+    return rank;
 }

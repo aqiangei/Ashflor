@@ -5,8 +5,8 @@
 #include <cstdint>
 
 // Talent trees: invest points for permanent combat buffs.
-// Points earned = level + 10 * floor(level/10)
-// Slots unlocked (max rank per tree) = floor(level/10)
+// +1 talent point per level gained (points_earned == current level).
+// Rank 1 at level 1; each 10 levels unlocks another max rank.
 namespace TalentID {
     enum : uint8_t {
         kHealth = 0,
@@ -21,22 +21,25 @@ namespace Talent {
     // Noticeable spin; stacks with Faster petal (~1 rad/s)
     inline float rot_bonus(uint8_t rank) { return 0.4f * (float) rank; }
 
+    // Incremental: each level grants exactly one talent point.
     inline uint32_t points_earned(uint32_t level) {
         if (level < 1) level = 1;
         if (level > MAX_LEVEL) level = MAX_LEVEL;
-        return level + 10u * (level / 10u);
+        return level;
     }
 
     // Every 10 levels unlocks +1 max rank in each talent tree
     inline uint8_t max_rank(uint32_t level) {
+        if (level < 1) level = 1;
         if (level > MAX_LEVEL) level = MAX_LEVEL;
-        return (uint8_t) (level / 10u);
+        return (uint8_t) (1u + level / 10u);
     }
 
-    // Cost to buy the next rank (current_rank → current_rank+1)
+    // Odd costs: rank-r costs (2r-1). Maxing both trees at 99 needs 200 pts
+    // vs 99 earned — still a real allocation choice.
     inline uint32_t rank_cost(uint8_t next_rank) {
         if (next_rank == 0) return 0;
-        return (uint32_t) next_rank; // 1,2,3,...
+        return 2u * (uint32_t) next_rank - 1u; // 1,3,5,...
     }
 
     inline uint32_t points_spent(uint8_t hp_rank, uint8_t rot_rank) {

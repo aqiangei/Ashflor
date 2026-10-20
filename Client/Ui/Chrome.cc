@@ -8,27 +8,22 @@ void Ui::Chrome::draw_plate(Renderer &ctx, float w, float h, uint32_t face,
                             float radius, float rim) {
     float hw = w / 2.f;
     float hh = h / 2.f;
-    if (radius < 8.f) radius = 8.f;
+    radius = fmaxf(5.f, radius);
+    bool panel = face == kPanelDeep || face == kPanelFace;
+    float edge = rim > 0.f ? rim : (panel ? 7.f : 3.f);
+    edge = fminf(edge, fminf(w, h) * 0.16f);
 
-    // Soft drop shadow — depth without a flashy outline
-    ctx.set_fill(0x28000000);
+    ctx.set_fill(0x38000000);
     ctx.begin_path();
-    ctx.round_rect(-hw + 1.f, -hh + 3.f, w, h, radius);
+    ctx.round_rect(-hw + 2.f, -hh + 4.f, w, h, radius);
     ctx.fill();
-
-    // Single rounded body
-    ctx.set_fill(face);
+    ctx.set_fill(panel ? kRimBrass : Renderer::HSV(face, 0.65f));
     ctx.begin_path();
     ctx.round_rect(-hw, -hh, w, h, radius);
     ctx.fill();
-
-    // Subtle top light (not a rim)
-    float sheen_h = fmax(5.f, (h - 4.f) * 0.32f);
-    float inner_r = fmax(4.f, radius - 2.f);
-    ctx.set_fill(0x16ffffff);
+    ctx.set_fill(face);
     ctx.begin_path();
-    ctx.round_rect(-hw + 2.f, -hh + 2.f, w - 4.f, sheen_h, inner_r);
+    ctx.round_rect(-hw + edge, -hh + edge, w - 2.f * edge,
+                   h - 2.f * edge, fmaxf(3.f, radius - edge * 0.5f));
     ctx.fill();
-
-    (void)rim;
 }

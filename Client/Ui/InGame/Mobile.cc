@@ -1,4 +1,5 @@
 #include <Client/Ui/InGame/GameInfo.hh>
+#include <Client/Ui/InGame/Loadout.hh>
 
 #include <Client/Ui/Extern.hh>
 #include <Client/Game.hh>
@@ -44,11 +45,6 @@ void MobileJoyStick::on_render(Renderer &ctx) {
             px = it->second.x;
             py = it->second.y;
             held = 1;
-            // First frame of this press: nest appears under the finger
-            if (!is_pressed) {
-                base_x = px;
-                base_y = py;
-            }
         }
     } else if (is_pressed && BitMath::at(Input::mouse_buttons_state, Input::LeftMouse)) {
         px = Input::mouse_x;
@@ -110,17 +106,22 @@ void MobileJoyStick::on_render(Renderer &ctx) {
 }
 
 void MobileJoyStick::on_event(uint8_t event) {
+    // kMouseDown is delivered every frame the touch is held. Anchor the nest
+    // only on the first frame; later frames must keep base_x/base_y fixed
+    // or the knob offset stays ~0 and the flower never moves.
     if (event == UiEvent::kMouseDown) {
-        is_pressed = 0; // force re-anchor under this press in on_render
+        uint8_t fresh = !is_pressed;
         if (Input::is_mobile) {
+            if (persistent_touch_id != touch_id) fresh = 1;
             persistent_touch_id = touch_id;
+            if (!fresh) return;
             auto it = Input::touches.find(touch_id);
             if (it != Input::touches.end()) {
                 base_x = it->second.x;
                 base_y = it->second.y;
                 is_pressed = 1;
             }
-        } else {
+        } else if (fresh) {
             base_x = Input::mouse_x;
             base_y = Input::mouse_y;
             is_pressed = 1;
@@ -138,6 +139,18 @@ void MobileJoyStick::on_event(uint8_t event) {
 }
 
 void MobileJoyStick::poll_events(ScreenEvent const &event) {
+    // Bag/craft drawer sits on the left pad — never steal its taps.
+    if (Game::game_panel != Game::kPanelNone && !is_pressed)
+        return;
+    // The floating pad must also leave the bottom equipment bar alone.
+    if (Input::is_mobile && !is_pressed
+        && Ui::loadout_bar_hit(event.x, event.y))
+        return;
+    if (Input::is_mobile && is_pressed && event.id != persistent_touch_id)
+        return;
+    // On narrow screens the large joystick pad reaches beneath A/B.
+    if (Input::is_mobile && !is_pressed && event.x >= Ui::window_width / 2)
+        return;
     // Whole element is the capture pad; stick itself floats under the finger
     if (is_pressed) {
         Element::poll_events(event);
@@ -157,6 +170,7 @@ class MobileCircleButton : public Element {
     uint8_t flag_bit;
     uint32_t hold_id;
     uint8_t held;
+    double pulse_until;
 public:
     MobileCircleButton(float r, uint8_t flag, uint32_t fill)
         : Element(r * 2.5f, r * 2.5f, {
@@ -165,39 +179,41 @@ public:
             .round_radius = r * 1.25f,
             .should_render = [](){ return mobile_hud(); },
             .no_animation = 1
-        }), radius(r), flag_bit(flag), hold_id((uint32_t)-1), held(0) {}
+        }), radius(r), flag_bit(flag), hold_id((uint32_t)-1), held(0), pulse_until(0) {}
 
     void on_render(Renderer &ctx) override {
-        float px = 0, py = 0;
         uint8_t down = 0;
-        if (held) {
-            if (Input::is_mobile) {
-                auto it = Input::touches.find(hold_id);
-                if (it != Input::touches.end()) {
-                    px = it->second.x; py = it->second.y; down = 1;
-                }
-            } else if (BitMath::at(Input::mouse_buttons_state, Input::LeftMouse)) {
-                px = Input::mouse_x; py = Input::mouse_y; down = 1;
+        if (Input::is_mobile) {
+            // A fast tap can begin and end between two animation frames.
+            // Keep that action for two server ticks so it is actually seen.
+            for (auto const &[id, start] : Input::began_touches) {
+                if (!Input::ended_touches.contains(id)) continue;
+                float dx = start.x - screen_x;
+                float dy = start.y - screen_y;
+                float hit = radius * 1.35f * Ui::scale;
+                if (dx * dx + dy * dy <= hit * hit)
+                    pulse_until = Game::timestamp + 80;
             }
         }
-        if (!down) {
+        if (held) {
+            if (Input::is_mobile) {
+                down = Input::touches.contains(hold_id);
+            } else if (BitMath::at(Input::mouse_buttons_state, Input::LeftMouse)) {
+                down = 1;
+            }
+        }
+        if (!down && Game::timestamp >= pulse_until) {
             held = 0;
             hold_id = (uint32_t)-1;
             BitMath::unset(Input::game_inputs.flags, flag_bit);
         } else {
-            float dx = px - screen_x;
-            float dy = py - screen_y;
-            float hit = radius * 1.35f * Ui::scale;
-            if (dx * dx + dy * dy > hit * hit) {
-                held = 0;
-                hold_id = (uint32_t)-1;
-                BitMath::unset(Input::game_inputs.flags, flag_bit);
-            } else {
-                BitMath::set(Input::game_inputs.flags, flag_bit);
-            }
+            // A held action belongs to its starting finger until touchend.
+            // Sliding while aiming must not release it or transfer it to a
+            // second finger passing over this button.
+            BitMath::set(Input::game_inputs.flags, flag_bit);
         }
 
-        ctx.set_fill(held ? 0x77ffffff : style.fill);
+        ctx.set_fill(down || Game::timestamp < pulse_until ? 0x77ffffff : style.fill);
         ctx.begin_path();
         ctx.arc(0, 0, radius);
         ctx.fill();
@@ -236,6 +252,21 @@ public:
         float dx = ex - screen_x;
         float dy = ey - screen_y;
         float hit = radius * 1.35f * Ui::scale;
+        if (Input::is_mobile) {
+            // Generic Element focus has one owner for the whole UI. Capture
+            // the action directly so joystick, inventory, and another finger
+            // cannot replace this button's held touch.
+            auto touch = Input::touches.find(event.id);
+            if (!held && touch != Input::touches.end()
+                && !touch->second.saturated
+                && dx * dx + dy * dy <= hit * hit) {
+                held = 1;
+                hold_id = event.id;
+                touch->second.saturated = 1;
+                BitMath::set(Input::game_inputs.flags, flag_bit);
+            }
+            return;
+        }
         if (held || dx * dx + dy * dy <= hit * hit)
             Element::poll_events(event);
     }
@@ -256,6 +287,144 @@ Element *Ui::make_mobile_defend_button() {
     elt->style.v_justify = Style::Bottom;
     elt->x = -48 - kAttackR * 2.1f - 28.f;
     elt->y = -48 - 12.f;
+    return elt;
+}
+
+// R: short tap = swap primary↔secondary; hold = cycle next cloud preset.
+class MobileSwapButton final : public Element {
+    static constexpr float kRadius = 44.f;
+    static constexpr double kLongMs = 380.0;
+    uint32_t hold_id;
+    uint8_t held;
+    uint8_t long_fired;
+    double press_at;
+public:
+    MobileSwapButton()
+        : Element(kRadius * 2.4f, kRadius * 2.4f, {
+            .fill = 0x50404040,
+            .line_width = 0,
+            .round_radius = kRadius * 1.2f,
+            .should_render = [](){ return mobile_hud(); },
+            .no_animation = 1
+        }), hold_id((uint32_t)-1), held(0), long_fired(0), press_at(0) {}
+
+    void finish_press() {
+        if (!held) return;
+        if (!long_fired) Game::swap_all_petals();
+        held = 0;
+        hold_id = (uint32_t)-1;
+        long_fired = 0;
+    }
+
+    void on_render(Renderer &ctx) override {
+        // Short taps can start and end between animation frames. Those never
+        // reach poll_events, so recognize the completed gesture here.
+        if (!held && Input::is_mobile) {
+            float hit = kRadius * 1.35f * Ui::scale;
+            for (auto const &[id, start] : Input::began_touches) {
+                auto end = Input::ended_touches.find(id);
+                if (end == Input::ended_touches.end()) continue;
+                float sx = start.x - screen_x, sy = start.y - screen_y;
+                float ex = end->second.x - screen_x, ey = end->second.y - screen_y;
+                if (sx * sx + sy * sy <= hit * hit
+                    && ex * ex + ey * ey <= hit * hit) {
+                    Game::swap_all_petals();
+                    break;
+                }
+            }
+        }
+        uint8_t down = 0;
+        if (held) {
+            if (Input::is_mobile)
+                down = Input::touches.contains(hold_id);
+            else
+                down = BitMath::at(Input::mouse_buttons_state, Input::LeftMouse);
+        }
+        if (held && down && !long_fired
+            && Game::timestamp - press_at >= kLongMs) {
+            long_fired = 1;
+            Game::cycle_next_loadout_preset();
+        }
+        // Direct-capture mobile path never gets Element kClick — release here.
+        if (held && !down)
+            finish_press();
+        float fill_t = 0.f;
+        if (held && down && !long_fired) {
+            fill_t = (float) ((Game::timestamp - press_at) / kLongMs);
+            if (fill_t > 1.f) fill_t = 1.f;
+        }
+        ctx.set_fill(down || long_fired ? 0x77ffffff : style.fill);
+        ctx.begin_path();
+        ctx.arc(0, 0, kRadius);
+        ctx.fill();
+        if (fill_t > 0.02f) {
+            ctx.set_stroke(0xffc9a227);
+            ctx.set_line_width(5);
+            ctx.begin_path();
+            ctx.arc(0, 0, kRadius + 3.f);
+            ctx.stroke();
+            ctx.set_global_alpha(0.35f + 0.45f * fill_t);
+            ctx.set_fill(0xffc9a227);
+            ctx.begin_path();
+            ctx.arc(0, 0, kRadius * (0.55f + 0.45f * fill_t));
+            ctx.fill();
+            ctx.set_global_alpha(1.f);
+        }
+        ctx.set_stroke(0xaaffffff);
+        ctx.set_line_width(4);
+        ctx.begin_path();
+        ctx.arc(0, 0, kRadius);
+        ctx.stroke();
+        ctx.set_fill(0xffffffff);
+        ctx.draw_text("R", { .size = kRadius * 0.72f });
+    }
+
+    void on_event(uint8_t event) override {
+        if (event == UiEvent::kMouseDown) {
+            held = 1;
+            long_fired = 0;
+            press_at = Game::timestamp;
+            hold_id = Input::is_mobile ? touch_id : 0;
+        } else if (event == UiEvent::kClick || event == UiEvent::kFocusLost) {
+            if (event == UiEvent::kFocusLost && Input::is_mobile
+                && hold_id != (uint32_t)-1
+                && Input::touches.contains(hold_id))
+                return;
+            finish_press();
+        }
+    }
+
+    void poll_events(ScreenEvent const &event) override {
+        float ex = Input::is_mobile ? event.x : Input::mouse_x;
+        float ey = Input::is_mobile ? event.y : Input::mouse_y;
+        float dx = ex - screen_x;
+        float dy = ey - screen_y;
+        float hit = kRadius * 1.35f * Ui::scale;
+        if (Input::is_mobile) {
+            auto touch = Input::touches.find(event.id);
+            if (!held && touch != Input::touches.end()
+                && !touch->second.saturated
+                && dx * dx + dy * dy <= hit * hit) {
+                held = 1;
+                long_fired = 0;
+                press_at = Game::timestamp;
+                hold_id = event.id;
+                touch->second.saturated = 1;
+            }
+            return;
+        }
+        if (held || dx * dx + dy * dy <= hit * hit)
+            Element::poll_events(event);
+    }
+};
+
+Element *Ui::make_mobile_swap_button() {
+    Element *elt = new MobileSwapButton();
+    elt->style.h_justify = Style::Right;
+    elt->style.v_justify = Style::Bottom;
+    // Above defend, clear of A/B cluster
+    elt->x = -48 - kAttackR * 2.1f - 28.f;
+    elt->y = -48 - kDefendR * 2.2f - 36.f;
     return elt;
 }
 

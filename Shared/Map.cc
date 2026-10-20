@@ -4,12 +4,18 @@
 #ifdef SERVERSIDE
 #include <Server/Spawn.hh>
 #include <Shared/Entity.hh>
+#include <Shared/MapGen.hh>
+#include <Shared/SpawnRules.hh>
 #endif
 
 #include <algorithm>
 #include <cmath>
 #include <iostream>
 #include <vector>
+
+#ifndef M_PI
+#define M_PI 3.14159265358979323846
+#endif
 
 using namespace Map;
 
@@ -319,6 +325,12 @@ static uint8_t circle_hits_feature(TerrainFeature const &f, float x, float y, fl
 
 uint8_t Map::circle_hits_impassable(uint8_t map_id, float x, float y, float radius) {
     MapTerrain const &terrain = map_terrain(map_id);
+    // Safe arteries carve walkable corridors through hills/water.
+    // Use circle vs channel (not just center point) so edges don't trap players.
+    for (TerrainFeature const &f : terrain) {
+        if (f.kind != TerrainKind::kChannel) continue;
+        if (circle_hits_feature(f, x, y, radius)) return 0;
+    }
     for (TerrainFeature const &f : terrain) {
         if (!(f.flags & TerrainFlags::kImpassable)) continue;
         if (circle_hits_feature(f, x, y, radius)) return 1;
@@ -574,6 +586,11 @@ uint32_t Map::terrain_outline(TerrainFeature const &f, float *xs, float *ys, uin
 
 uint8_t Map::resolve_circle_terrain(uint8_t map_id, float &x, float &y, float radius) {
     MapTerrain const &terrain = map_terrain(map_id);
+    // Standing on a safe artery: do not shove the player out of overlapping hills.
+    for (TerrainFeature const &ch : terrain) {
+        if (ch.kind == TerrainKind::kChannel && circle_hits_feature(ch, x, y, radius))
+            return 0;
+    }
     uint8_t moved = 0;
     for (uint32_t pass = 0; pass < 3; ++pass) {
         uint8_t any = 0;
@@ -724,6 +741,15 @@ void Map::remove_mob(Simulation *sim, uint32_t zone) {
     --sim->zone_mob_counts[zone];
 }
 
+// 广场（出生区）里的怪单独计数：整个 hub zone 计数无法区分广场内外的怪。
+void Map::remove_mob(Simulation *sim, Entity const &ent) {
+    uint32_t zone = ent.zone;
+    if (zone >= map_zones(sim->map_id).size()) return;
+    --sim->zone_mob_counts[zone];
+    if (in_spawn_plaza(ent.get_x(), ent.get_y()) && sim->plaza_mob_count > 0)
+        --sim->plaza_mob_count;
+}
+
 static float zone_exclusive_area(uint8_t map_id, uint32_t zone_id) {
     MapZones const &zones = map_zones(map_id);
     ZoneDefinition const &zone = zones[zone_id];
@@ -745,6 +771,11 @@ void Map::spawn_random_mob(Simulation *sim, float x, float y) {
     if (Map::circle_hits_impassable(sim->map_id, x, y, 40.f)) return;
     uint32_t zone_id = Map::get_zone_from_pos(sim->map_id, x, y);
     struct ZoneDefinition const &zone = map_zones(sim->map_id)[zone_id];
+    // Respawn plaza: only the difficulty-0 hub table, and only a handful.
+    if (in_spawn_plaza(x, y)) {
+        if (zone.difficulty != 0) return;
+        if (sim->plaza_mob_count >= 2) return;
+    }
     if (zone.density * zone_exclusive_area(sim->map_id, zone_id) / (500 * 500) < sim->zone_mob_counts[zone_id]) return;
     float sum = 0;
     for (SpawnChance const &s : zone.spawns)
@@ -753,22 +784,259 @@ void Map::spawn_random_mob(Simulation *sim, float x, float y) {
     for (SpawnChance const &s : zone.spawns) {
         sum -= s.chance;
         if (sum <= 0) {
-            Entity &ent = alloc_mob(sim, s.id, x, y, NULL_ENTITY, [&](Entity &mob){
-                mob.zone = zone_id;
-                mob.immunity_ticks = TPS;
-                BitMath::set(mob.flags, EntityFlags::kSpawnedFromZone);
-                BitMath::set(mob.flags, EntityFlags::kHasCulling);
-                sim->zone_mob_counts[zone_id]++;
-                uint32_t diff = zone.difficulty;
-                float th = zone_threat_mult(diff);
-                mob.max_health *= th;
-                mob.health = mob.max_health;
-                mob.damage *= zone_damage_mult(diff);
-                mob.score_reward = (uint32_t) (MOB_DATA[mob.get_mob_id()].xp * zone_xp_mult(diff) + 0.5f);
-            });
+            _spawn_mob_at(sim, zone_id, s.id, x, y);
             return;
         }
     }
+}
+
+// 生成一只怪并套用 Zone 难度倍率 / 记账。
+void Map::_spawn_mob_at(Simulation *sim, uint32_t zone_id, MobID::T mob_id, float x, float y) {
+    struct ZoneDefinition const &zone = map_zones(sim->map_id)[zone_id];
+    alloc_mob(sim, mob_id, x, y, NULL_ENTITY, [&](Entity &mob){
+        mob.zone = zone_id;
+        mob.immunity_ticks = TPS;
+        BitMath::set(mob.flags, EntityFlags::kSpawnedFromZone);
+        BitMath::set(mob.flags, EntityFlags::kHasCulling);
+        sim->zone_mob_counts[zone_id]++;
+        if (in_spawn_plaza(x, y)) sim->plaza_mob_count++;
+        uint32_t diff = zone.difficulty;
+        float th = zone_threat_mult(diff);
+        mob.max_health *= th;
+        mob.health = mob.max_health;
+        mob.damage *= zone_damage_mult(diff);
+        mob.score_reward = (uint32_t) (MOB_DATA[mob.get_mob_id()].xp * zone_xp_mult(diff) + 0.5f);
+    });
+}
+
+// 沿 (dx,dy) 方向的最长连续可通行距离。
+float Map::corridor_reach(uint8_t map_id, float x, float y, float dx, float dy, float radius, float max_dist) {
+    float const step = 40.f;
+    float d = 0.f;
+    while (d < max_dist) {
+        float nd = d + step;
+        if (circle_hits_impassable(map_id, x + dx * nd, y + dy * nd, radius)) break;
+        d = nd;
+    }
+    if (d <= 0.f) return 0.f;
+    // 二分细化最后一段，让"贴墙"落点更精确
+    float lo = d - step, hi = d;
+    for (uint32_t i = 0; i < 4; ++i) {
+        float mid = (lo + hi) * 0.5f;
+        if (circle_hits_impassable(map_id, x + dx * mid, y + dy * mid, radius)) hi = mid;
+        else lo = mid;
+    }
+    return lo;
+}
+
+// 周围净空半径（8 方向取最小值）。
+float Map::open_clearance(uint8_t map_id, float x, float y, float radius, float max_dist) {
+    float best = max_dist;
+    for (uint32_t k = 0; k < 8; ++k) {
+        float ang = (float)k * (float)M_PI * 0.25f;
+        float reach = corridor_reach(map_id, x, y, std::cos(ang), std::sin(ang), radius, max_dist);
+        if (reach < best) best = reach;
+    }
+    return best;
+}
+
+// 是否位于"安全动脉"（不可攻击通道）内 —— 这类区域不刷怪。
+uint8_t Map::in_safe_channel(uint8_t map_id, float x, float y) {
+    MapTerrain const &terrain = map_terrain(map_id);
+    for (TerrainFeature const &f : terrain) {
+        if (f.kind != TerrainKind::kChannel) continue;
+        if (!(f.flags & TerrainFlags::kNoAttack)) continue;
+        if (point_in_feature(f, x, y)) return 1;
+    }
+    return 0;
+}
+
+uint8_t Map::boss_anchor(uint8_t map_id, float &x, float &y, uint8_t &mob_id) {
+    MapGen::BossAnchor const &a = MapGen::boss_anchor(map_id);
+    if (a.mob_id == 0) return 0;
+    x = a.x; y = a.y; mob_id = a.mob_id;
+    return 1;
+}
+
+// Zone 抽样：60% 按 密度×独占面积 加权，40% 等概率 —— 保证小生态区不被大环带淹没。
+uint32_t Map::pick_spawn_zone(uint8_t map_id) {
+    MapZones const &zones = map_zones(map_id);
+    uint32_t n = zones.size();
+    if (n == 0) return 0;
+    float r = frand();
+    if (r < kUniformZoneShare)
+        return (uint32_t)(frand() * (float)n) % n;
+    float total = 0.f;
+    for (uint32_t i = 0; i < n; ++i)
+        total += zones[i].density * zone_exclusive_area(map_id, i);
+    if (total <= 0.f)
+        return (uint32_t)(frand() * (float)n) % n;
+    float pick = (r - kUniformZoneShare) / (1.f - kUniformZoneShare) * total;
+    for (uint32_t i = 0; i < n; ++i) {
+        pick -= zones[i].density * zone_exclusive_area(map_id, i);
+        if (pick <= 0.f) return i;
+    }
+    return n - 1;
+}
+
+// 在指定 Zone 内按落点类别采样合法落点。
+uint8_t Map::sample_spawn_point(Simulation *sim, uint32_t zone_id, uint8_t mob_id, float &ox, float &oy) {
+    MapZones const &zones = map_zones(sim->map_id);
+    if (zone_id >= zones.size()) return 0;
+    ZoneDefinition const &zone = zones[zone_id];
+    SpawnRule const &rule = spawn_rules()[mob_id];
+    uint8_t cls = spawn_class(mob_id);
+    float radius = MOB_DATA[mob_id].radius.get_single(frand());
+    float clearance = radius + 8.f;
+    float const margin = 60.f;
+    float zw = zone.right - zone.left - 2.f * margin;
+    float zh = zone.bottom - zone.top - 2.f * margin;
+    if (zw <= 0.f || zh <= 0.f) return 0;
+
+    for (uint32_t attempt = 0; attempt < 12; ++attempt) {
+        float x = 0.f, y = 0.f;
+        bool ok = true;
+        switch (cls) {
+        case SpawnClass::kAttach:
+        case SpawnClass::kNearWall: {
+            float bx = zone.left + margin + frand() * zw;
+            float by = zone.top + margin + frand() * zh;
+            if (circle_hits_impassable(sim->map_id, bx, by, clearance)) { ok = false; break; }
+            // Find a real wall within reach — a direction that stays open for the
+            // whole probe distance does not count as "attached to a wall".
+            float probe = cls == SpawnClass::kNearWall ? kWallProbeNear : kWallProbe;
+            bool found = false;
+            for (uint32_t d = 0; d < 8 && !found; ++d) {
+                float ang = frand() * 2.f * (float)M_PI;
+                float dx = std::cos(ang), dy = std::sin(ang);
+                float reach = corridor_reach(sim->map_id, bx, by, dx, dy, clearance, probe);
+                if (reach >= probe) continue;
+                float back = reach;
+                if (cls == SpawnClass::kNearWall)
+                    back = reach - (rule.wall_dist + frand() * 120.f);
+                if (back < 0.f) back = 0.f;
+                x = bx + dx * back;
+                y = by + dy * back;
+                found = true;
+            }
+            if (!found) { ok = false; break; }
+            break;
+        }
+        case SpawnClass::kCorridor: {
+            float bx = zone.left + margin + frand() * zw;
+            float by = zone.top + margin + frand() * zh;
+            if (circle_hits_impassable(sim->map_id, bx, by, clearance)) { ok = false; break; }
+            float best = 0.f, bdx = 1.f, bdy = 0.f;
+            for (uint32_t k = 0; k < 4; ++k) {
+                float ang = (float)k * (float)M_PI * 0.5f;
+                float dx = std::cos(ang), dy = std::sin(ang);
+                float reach = corridor_reach(sim->map_id, bx, by, dx, dy, clearance, 2000.f);
+                if (reach > best) { best = reach; bdx = dx; bdy = dy; }
+            }
+            if (best < 800.f) { ok = false; break; }
+            // Spread along the corridor instead of stacking on its midpoint
+            float along = best * (0.25f + 0.5f * frand());
+            x = bx + bdx * along;
+            y = by + bdy * along;
+            break;
+        }
+        case SpawnClass::kAnchor: {
+            // 精英怪：优先落在 Zone 锚点附近的开阔地
+            float ax = zone.anchor_x != 0.f ? zone.anchor_x : 0.5f * (zone.left + zone.right);
+            float ay = zone.anchor_y != 0.f ? zone.anchor_y : 0.5f * (zone.top + zone.bottom);
+            float spread = rule.anchor_range > 0.f ? rule.anchor_range : 400.f;
+            if (attempt < 8) {
+                x = ax + (frand() * 2.f - 1.f) * spread;
+                y = ay + (frand() * 2.f - 1.f) * spread;
+            } else {
+                // Fallback: any open ground inside the zone
+                x = zone.left + margin + frand() * zw;
+                y = zone.top + margin + frand() * zh;
+            }
+            if (x < zone.left + margin || x > zone.right - margin
+                || y < zone.top + margin || y > zone.bottom - margin) { ok = false; break; }
+            break;
+        }
+        default: {
+            x = zone.left + margin + frand() * zw;
+            y = zone.top + margin + frand() * zh;
+            break;
+        }
+        }
+        if (!ok) continue;
+        if (x < zone.left + margin || x > zone.right - margin) continue;
+        if (y < zone.top + margin || y > zone.bottom - margin) continue;
+        if (circle_hits_impassable(sim->map_id, x, y, clearance)) continue;
+        float need_clear = rule.min_clear > 0.f ? rule.min_clear
+            : (cls == SpawnClass::kAnchor ? (attempt < 8 ? 700.f : 300.f) : 0.f);
+        if (need_clear > 0.f
+            && open_clearance(sim->map_id, x, y, clearance, need_clear) < need_clear) continue;
+        if (in_safe_channel(sim->map_id, x, y)) continue;
+        // 玩家近身不刷怪：避免凭空贴脸
+        bool too_close = false;
+        sim->for_each<kFlower>([&](Simulation *, Entity &ent){
+            if (too_close) return;
+            if (ent.has_component(kMob)) return;
+            float dx = ent.get_x() - x, dy = ent.get_y() - y;
+            if (dx * dx + dy * dy < kMinSpawnPlayerDist * kMinSpawnPlayerDist) too_close = true;
+        });
+        if (too_close) continue;
+        ox = x; oy = y;
+        return 1;
+    }
+    return 0;
+}
+
+// 主刷怪入口：选区 → 选点 → 抽怪 → 生成。
+void Map::spawn_zone_mob(Simulation *sim) {
+    // A placement can fail (no wall nearby, no open ground). Retry a few times
+    // with a fresh pick so the global spawn rate is not silently reduced.
+    for (uint32_t attempt = 0; attempt < 4; ++attempt) {
+        if (_spawn_zone_mob_once(sim)) return;
+    }
+}
+
+uint8_t Map::_spawn_zone_mob_once(Simulation *sim) {
+    uint32_t zone_id = Map::pick_spawn_zone(sim->map_id);
+    MapZones const &zones = map_zones(sim->map_id);
+    if (zone_id >= zones.size()) return 0;
+    ZoneDefinition const &zone = zones[zone_id];
+    if (zone.density * zone_exclusive_area(sim->map_id, zone_id) / (500 * 500) < sim->zone_mob_counts[zone_id]) return 0;
+
+    float total = 0.f;
+    for (SpawnChance const &s : zone.spawns) total += s.chance;
+    if (total <= 0.f) return 0;
+    float pick = frand() * total;
+    MobID::T mob_id = MobID::kNumMobs;
+    for (SpawnChance const &s : zone.spawns) {
+        pick -= s.chance;
+        if (pick <= 0) { mob_id = s.id; break; }
+    }
+    if (mob_id >= MobID::kNumMobs) return 0;
+
+    uint8_t cls = spawn_class(mob_id);
+    if (cls == SpawnClass::kBoss) return 0;   // Boss 由 ensure_boss 驱动
+
+    float x = 0.f, y = 0.f;
+    if (!Map::sample_spawn_point(sim, zone_id, mob_id, x, y)) return 0;
+    if (cls == SpawnClass::kAnchor) {
+        // 同款精英 1500 单位半径内至多 1 只（跨 Zone，总纲 R6）
+        float const r2 = kEliteUniqueRadius * kEliteUniqueRadius;
+        bool near = false;
+        sim->for_each<kMob>([&](Simulation *, Entity &m) {
+            if (near || m.pending_delete) return;
+            if (m.get_mob_id() != mob_id) return;
+            float dx = m.get_x() - x, dy = m.get_y() - y;
+            if (dx * dx + dy * dy < r2) near = true;
+        });
+        if (near) return 0;
+    }
+    if (in_spawn_plaza(x, y)) {
+        if (zone.difficulty != 0) return 0;
+        if (sim->plaza_mob_count >= 2) return 0;
+    }
+    _spawn_mob_at(sim, zone_id, mob_id, x, y);
+    return 1;
 }
 
 bool Map::find_spawn_location(Simulation *sim, float d, Vector &vref) {

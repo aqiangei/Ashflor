@@ -17,7 +17,6 @@
 using namespace Ui;
 
 static uint8_t death_swap_from = 255;
-static uint8_t title_swap_from = 255;
 
 StatPetalSlot::StatPetalSlot(uint8_t p) : Element(60,60,{ .no_animation = 1 }), pos(p) {
     //style.v_justify = Style::Bottom;
@@ -66,72 +65,6 @@ void StatPetalSlot::on_event(uint8_t event) {
             Game::cached_loadout[pos] = a;
             Game::swap_petals(death_swap_from, pos);
             death_swap_from = 255;
-        }
-    }
-    if (event != kFocusLost && id != PetalID::kNone) {
-        rendering_tooltip = 1;
-        tooltip = Ui::UiLoadout::petal_tooltips[id];
-    } else {
-        rendering_tooltip = 0;
-    }
-}
-
-TitlePetalSlot::TitlePetalSlot(uint8_t p) : Element(50,50,{}), pos(p) {
-    style.v_justify = Style::Bottom;
-    style.should_render = [=](){
-        if (Game::alive()) return false;
-        if (!Game::simulation.ent_exists(Game::camera_id))
-            return false;
-        Entity const &camera = Game::simulation.get_ent(Game::camera_id);
-        uint32_t lim = loadout_slots_at_level(camera.get_respawn_level()) + MAX_SLOT_COUNT;
-        if (lim > 2 * MAX_SLOT_COUNT) lim = 2 * MAX_SLOT_COUNT;
-        return p < lim; // show empties so bag prep is possible
-    };
-}
-
-void TitlePetalSlot::on_render(Renderer &ctx) {
-    if (!Game::simulation.ent_exists(Game::camera_id))
-        return;
-    Entity const &camera = Game::simulation.get_ent(Game::camera_id);
-    uint8_t id = camera.get_inventory(pos);
-    if (id != PetalID::kNone) {
-        ctx.scale(width / 60);
-        draw_loadout_background(ctx, id);
-        ctx.scale(60.f / width);
-    } else {
-        ctx.set_fill(0x40ffffff);
-        ctx.begin_path();
-        ctx.round_rect(-width / 2, -height / 2, width, height, 4);
-        ctx.fill();
-    }
-    if (title_swap_from == pos) {
-        ctx.set_stroke(0xffffffff);
-        ctx.set_line_width(3);
-        ctx.begin_path();
-        ctx.round_rect(-width / 2 - 2, -height / 2 - 2, width + 4, height + 4, 5);
-        ctx.stroke();
-    }
-}
-
-void TitlePetalSlot::on_event(uint8_t event) {
-    if (!Game::simulation.ent_exists(Game::camera_id))
-        return;
-    Entity const &camera = Game::simulation.get_ent(Game::camera_id);
-    uint8_t id = camera.get_inventory(pos);
-    if (event == kClick && !Game::alive()) {
-        if (title_swap_from == 255) {
-            title_swap_from = pos;
-        } else if (title_swap_from == pos) {
-            title_swap_from = 255;
-        } else {
-            PetalID::T a = Game::cached_loadout[title_swap_from];
-            PetalID::T b = Game::cached_loadout[pos];
-            if (title_swap_from < 2 * MAX_SLOT_COUNT && pos < 2 * MAX_SLOT_COUNT) {
-                Game::cached_loadout[title_swap_from] = b;
-                Game::cached_loadout[pos] = a;
-            }
-            Game::swap_petals(title_swap_from, pos);
-            title_swap_from = 255;
         }
     }
     if (event != kFocusLost && id != PetalID::kNone) {

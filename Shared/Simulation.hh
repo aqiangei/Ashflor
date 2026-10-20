@@ -20,6 +20,11 @@ class Simulation {
 public:
     SERVER_ONLY(std::array<uint32_t, PetalID::kNumPetals> petal_count_tracker;)
     SERVER_ONLY(std::array<uint32_t, MAX_ZONES_PER_MAP> zone_mob_counts;)
+    // 出生广场内的怪数量（与 zone 计数分开，广场外不占用名额）
+    SERVER_ONLY(uint32_t plaza_mob_count;)
+    // Boss 生命周期：唯一实例 + 死亡后重生计时
+    SERVER_ONLY(int32_t boss_respawn_ticks;)
+    SERVER_ONLY(uint8_t boss_ever_spawned;)
     SERVER_ONLY(SpatialHash spatial_hash;)
     Arena arena_info;
     uint8_t map_id = MapID::kGarden;
@@ -35,6 +40,9 @@ public:
     void tick();
     void on_tick();
     void post_tick();
+    // Rebuild the active-entity list without advancing the simulation.
+    // Needed by for_each/for_each_entity before the first tick() call.
+    void refresh_active_entities();
 
     //will only consider active entities from the start of the tick() call
     void for_each_entity(std::function<void (Simulation *, Entity &)>);

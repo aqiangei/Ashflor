@@ -151,6 +151,12 @@ namespace I18n {
         kInvertDefend,
         kRequestMobile,
         kFullscreen,
+        kLbPlayTimeTitle,
+        kLbLevelTitle,
+        kLbMessagesTitle,
+        kLbKillsTitle,
+        kLbCraftsTitle,
+        kLbScoreTitle,
         kCount
     };
 

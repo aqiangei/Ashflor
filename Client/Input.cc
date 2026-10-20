@@ -22,6 +22,8 @@ namespace Input {
     std::unordered_set<char> keys_held;
     std::unordered_set<char> keys_held_this_tick;
     std::unordered_map<uint32_t, Touch> touches;
+    std::unordered_map<uint32_t, Touch> began_touches;
+    std::unordered_map<uint32_t, Touch> ended_touches;
     //std::vector<uint32_t> keys_pressed_this_tick;
     std::string clipboard;
 
@@ -34,6 +36,8 @@ uint8_t Input::is_valid() {
 }
 
 void Input::reset() {
+    Input::began_touches.clear();
+    Input::ended_touches.clear();
     Input::keys_held_this_tick.clear();
     //Input::keys_pressed_this_tick.clear();
     Input::mouse_buttons_pressed = Input::mouse_buttons_released = 0;

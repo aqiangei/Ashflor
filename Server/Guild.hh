@@ -16,6 +16,7 @@ namespace Guild {
     uint8_t invite(Client *from, std::string const &target_name);
     uint8_t respond(Client *target, std::string const &from_name, uint8_t accept);
     void send_update(Client *);
+    void sync_nametag(Client *);
     void notify(Client *, std::string const &);
     uint8_t same_guild(Client *, Client *);
     void on_login(Client *); // rejoin by account guild_name

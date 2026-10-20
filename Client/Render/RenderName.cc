@@ -89,6 +89,22 @@ void render_name(Renderer &ctx, Entity const &ent) {
         draw_label(ctx, name.c_str(), 14, 0xffffffff);
     }
 
+    // Guild tag — bottom-right of the health bar (bar spans ±radius*1.33 at y = bar + 15)
+    if (ent.get_nametag_visible()
+        && ent.has_component(kName)
+        && ent.has_component(kFlower)
+        && !ent.has_component(kMob)
+        && !ent.get_guild().empty())
+    {
+        std::string const &guild = ent.get_guild();
+        float bar = rad * 1.33f;
+        RenderContext tag(&ctx);
+        ctx.set_text_size(12);
+        float tw = cached_label_width(ctx, guild, 12);
+        ctx.translate(bar - tw * 0.5f, bar + 28.f);
+        draw_label(ctx, guild.c_str(), 12, 0xff27dade);
+    }
+
     // 3) Monster rarity — bottom-right (heads only, not worm segments)
     if (ent.has_component(kMob) && !ent.has_component(kSegmented)) {
         MobID::T mid = ent.get_mob_id();

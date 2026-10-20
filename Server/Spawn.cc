@@ -28,7 +28,9 @@ Entity &alloc_drop(Simulation *sim, PetalID::T drop_id, EntityID const team) {
     drop.add_component(kDrop);
     drop.set_drop_id(drop_id);
     entity_set_despawn_tick(drop, 10 * (2 + PETAL_DATA[drop_id].rarity) * TPS);
-    drop.immunity_ticks = TPS / 3;
+    // Party shares the killer's team — exclusive pickup window long enough
+    // for teammates to grab; then free-for-all. Solo = only killer.
+    drop.immunity_ticks = (team == NULL_ENTITY) ? (TPS / 3) : (8 * TPS);
     return drop;
 }
 
@@ -254,6 +256,9 @@ static void _finish_player_spawn(Simulation *sim, Entity &camera, Entity &player
     player.set_score(level_to_score(camera.get_respawn_level()));
     player.set_loadout_count(loadout_slots_at_level(camera.get_respawn_level()));
     player.health = player.max_health = hp_at_level(camera.get_respawn_level());
+    player.damage = body_damage_at_level(camera.get_respawn_level());
+    // Give the player time to regain control after the spawn packet arrives.
+    player.immunity_ticks = 4 * TPS;
     for (uint32_t i = 0; i < player.get_loadout_count(); ++i) {
         PetalID::T id = camera.get_inventory(i);
         LoadoutSlot &slot = player.loadout[i];

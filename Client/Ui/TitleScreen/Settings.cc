@@ -44,6 +44,12 @@ Element *Ui::make_settings_panel() {
             })
         }, 0, 10, {.h_justify = Style::Left }),
         new Ui::HContainer({
+            new Ui::ToggleButton(30, &Input::invert_defend),
+            new Ui::DynamicText(16, [](){ return I18n::tr(I18n::kInvertDefend); }, {
+                .fill = Chrome::kBody
+            })
+        }, 0, 10, {.h_justify = Style::Left }),
+        new Ui::HContainer({
             new Ui::ToggleButton(30, &Input::request_mobile),
             new Ui::DynamicText(16, [](){ return I18n::tr(I18n::kRequestMobile); }, {
                 .fill = Chrome::kBody

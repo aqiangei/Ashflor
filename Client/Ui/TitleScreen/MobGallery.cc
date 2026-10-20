@@ -1,6 +1,7 @@
 #include <Client/Ui/TitleScreen/TitleScreen.hh>
 
 #include <Client/Ui/Chrome.hh>
+#include <Client/Ui/Button.hh>
 #include <Client/Ui/Container.hh>
 #include <Client/Ui/DynamicText.hh>
 #include <Client/Ui/StaticText.hh>
@@ -18,17 +19,21 @@
 using namespace Ui;
 
 GalleryMob::GalleryMob(MobID::T id, float w) : 
-    Element(w,w,{ .fill=0xff5a9fdb, .stroke_hsv=1, .line_width=3, .round_radius=6, .v_justify=Style::Top }), id(id) {}
+    Element(w,w,{ .fill=RARITY_COLORS[MOB_DATA[id].rarity], .stroke_hsv=1, .line_width=3, .round_radius=6, .v_justify=Style::Top }), id(id) {}
 
 void GalleryMob::on_render(Renderer &ctx) {
     Element::on_render(ctx);
+    bool seen = Game::seen_mobs[id] != 0;
+    {
+    RenderContext icon(&ctx);
+    if (!seen) ctx.set_global_alpha(0.25f);
     ctx.begin_path();
     ctx.round_rect(-width / 2, -height / 2, width, height, style.round_radius);
     ctx.clip();
     struct MobData const &data = MOB_DATA[id];
     if (id != MobID::kDigger)
         ctx.rotate(-3*M_PI/4);
-    if (id == MobID::kBeetle || id == MobID::kMassiveBeetle)
+    if (id == MobID::kBeetle || id == MobID::kMassiveBeetle || id == MobID::kFlowerGuardian)
         ctx.translate(-5,0);
     float radius = (data.radius.upper + data.radius.lower) / 2;
     if (radius > width * 0.5) ctx.scale(0.5 * width / radius);
@@ -38,6 +43,9 @@ void GalleryMob::on_render(Renderer &ctx) {
         ctx.translate(-2 * radius, 0);
         draw_static_mob(id, ctx, { .radius = radius, .flags = 1<<1, .flower_attrs = { .color = ColorID::kGray } });
     }
+    }
+    if (!seen)
+        ctx.draw_text("?", { .fill = 0xffffffff, .size = width * 0.46f, .stroke_scale = 0.12f });
 }
 
 static Element *make_mob_drops(MobID::T id) {
@@ -125,7 +133,7 @@ static Element *make_mob_card(MobID::T id) {
 }
 
 static Element *make_scroll() {
-    Element *elt = new Ui::VContainer({}, 0, 10, {});
+    std::vector<Element *> rows;
     MobID::T id_list[MobID::kNumMobs];
     for (MobID::T i = 0; i < MobID::kNumMobs; ++i)
         id_list[i] = i;
@@ -135,22 +143,48 @@ static Element *make_scroll() {
         return strcmp(MOB_DATA[a].name, MOB_DATA[b].name) <= 0;
     });
 
-    for (MobID::T i = 0; i < MobID::kNumMobs; ++i) 
-        elt->add_child(make_mob_card(id_list[i]));
-
-    return new Ui::ScrollContainer(elt, 300);
+    for (MobID::T i = 0; i < MobID::kNumMobs;) {
+        std::vector<Element *> cards;
+        for (uint8_t col = 0; col < 10 && i < MobID::kNumMobs; ++col, ++i) {
+            MobID::T id = id_list[i];
+            cards.push_back(new GalleryMob(id, 70));
+        }
+        rows.push_back(new Ui::HContainer(cards, 0, 6,
+            { .h_justify = Style::Left, .no_animation = 1 }));
+    }
+    return new Ui::ScrollContainer(new Ui::VContainer(rows, 0, 6,
+        { .h_justify = Style::Left, .no_animation = 1 }), 470);
 }
+
+class MobGalleryHeader final : public Ui::Container {
+public:
+    MobGalleryHeader() : Ui::Container({
+        new Ui::DynamicText(25, [](){ return I18n::tr(I18n::kMobGallery); },
+            { .fill = Chrome::kTitle }),
+        new Ui::Button(34, 34,
+            new Ui::DynamicText(22, [](){ return std::string{"×"}; }),
+            [](Element *, uint8_t e){ if (e == Ui::kClick) Ui::panel_open = Panel::kNone; },
+            nullptr, { .fill = Chrome::kBtnDanger, .round_radius = 6 })
+    }, 754, 38, { .no_animation = 1 }) {}
+    void refactor() override {
+        for (Element *child : children) child->refactor();
+        width = 754;
+        height = 38;
+        children[0]->x = 0;
+        children[1]->x = (width - children[1]->width) / 2 - 2;
+    }
+};
 
 Element *Ui::make_mob_gallery() {
     Element *elt = new Ui::VContainer({
-        new Ui::DynamicText(25, [](){ return I18n::tr(I18n::kMobGallery); }),
+        new MobGalleryHeader(),
         make_scroll()
-    }, 15, 10, { 
-        .fill = Chrome::kPanelDeep,
-        .line_width = 0,
+    }, 12, 10, {
+        .fill = 0xffd8d94c,
+        .line_width = Chrome::kRim,
         .round_radius = Chrome::kRadius,
         .animate = [](Element *elt, Renderer &ctx){
-            elt->y = Game::alive() ? 170.f : 84.f;
+            elt->y = Game::alive() ? 85.f : 84.f;
             ctx.translate(0, (elt->animation - 1) * elt->height);
         },
         .should_render = [](){

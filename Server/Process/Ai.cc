@@ -811,6 +811,401 @@ static void tick_sandstorm(Simulation *sim, Entity &ent) {
     }
 }
 
+// ---- Ocean mobs ----
+
+// Passive drifter: wanders slowly, only fights back after being hit.
+static void tick_sea_fry(Simulation *sim, Entity &ent) {
+    if (sim->ent_alive(ent.target)) {
+        Entity &target = sim->get_ent(ent.target);
+        Vector v(target.get_x() - ent.get_x(), target.get_y() - ent.get_y());
+        v.set_magnitude(PLAYER_ACCELERATION * 0.65f);
+        ent.acceleration = v;
+        ent.set_angle(v.angle());
+        return;
+    }
+    tick_default_passive(sim, ent);
+}
+
+// Lays a slowing web patch on a timer (IceSpider / DuneSpider style).
+static void tick_web_layer(Simulation *sim, Entity &ent, float speed, float web_radius) {
+    if (ent.lifetime % (8 * TPS) == 0)
+        alloc_web(sim, web_radius, ent);
+    tick_default_aggro(sim, ent, speed);
+}
+
+// Ambush predator: stays disguised until a player comes close, then lunges.
+static void tick_ink_cuttle(Simulation *sim, Entity &ent) {
+    if (sim->ent_alive(ent.target)) {
+        Entity &target = sim->get_ent(ent.target);
+        Vector v(target.get_x() - ent.get_x(), target.get_y() - ent.get_y());
+        float dist = v.magnitude();
+        ent.set_angle(v.angle());
+        if (ent.ai_state == 2) {
+            // Lunge burst
+            v.set_magnitude(PLAYER_ACCELERATION * 1.3f);
+            ent.acceleration = v;
+            if (ent.ai_tick >= (game_tick_t)(1.2f * TPS)) {
+                ent.ai_state = 0;
+                ent.ai_tick = 0;
+            }
+            return;
+        }
+        if (dist < 180.f && ent.ai_tick >= (game_tick_t)(1.0f * TPS)) {
+            ent.ai_state = 2;
+            ent.ai_tick = 0;
+            ent.acceleration.set(0, 0);
+            return;
+        }
+        // Slow drift toward the target while disguised
+        v.set_magnitude(PLAYER_ACCELERATION * 0.5f);
+        ent.acceleration = v;
+        return;
+    }
+    if (!(ent.target == NULL_ENTITY)) {
+        ent.ai_state = 0;
+        ent.ai_tick = 0;
+        ent.target = NULL_ENTITY;
+    }
+    ent.target = find_nearest_enemy(sim, ent, ent.detection_radius);
+    if (sim->ent_alive(ent.target)) {
+        // Hold still until the player is in striking range
+        ent.acceleration.set(0, 0);
+    }
+}
+
+// Abyss boss: phase 1 chase, phase 2 charge, phase 3 chase + summon fry.
+static void tick_abyss_maw(Simulation *sim, Entity &ent) {
+    float hp = ent.max_health > 0.f ? ent.health / ent.max_health : 0.f;
+    uint8_t phase = hp > 0.70f ? 1 : (hp > 0.35f ? 2 : 3);
+    float chase = phase == 1 ? 0.70f : (phase == 2 ? 0.85f : 1.0f);
+
+    if (!sim->ent_alive(ent.target)) {
+        if (!(ent.target == NULL_ENTITY)) {
+            ent.ai_state = 0;
+            ent.ai_tick = 0;
+            ent.target = NULL_ENTITY;
+        }
+        ent.target = find_nearest_enemy(sim, ent, ent.detection_radius + ent.get_radius());
+        if (!sim->ent_alive(ent.target)) {
+            tick_default_passive(sim, ent);
+            return;
+        }
+    }
+    Entity &target = sim->get_ent(ent.target);
+    Vector v(target.get_x() - ent.get_x(), target.get_y() - ent.get_y());
+    _focus_lose_clause(ent, v);
+    if (!sim->ent_alive(ent.target)) return;
+    float dist = v.magnitude();
+    ent.set_angle(v.angle());
+
+    // ai_state 1 = charge windup, 2 = charging
+    if (ent.ai_state == 1) {
+        ent.acceleration.set(0, 0);
+        if (ent.ai_tick >= (game_tick_t)(0.8f * TPS)) {
+            ent.ai_state = 2;
+            ent.ai_tick = 0;
+            ent.heading_angle = v.angle();
+        }
+        return;
+    }
+    if (ent.ai_state == 2) {
+        Vector dash;
+        dash.unit_normal(ent.heading_angle).set_magnitude(PLAYER_ACCELERATION * 2.4f);
+        ent.acceleration = dash;
+        if (ent.ai_tick >= (game_tick_t)(0.45f * TPS)) {
+            ent.ai_state = 0;
+            ent.ai_tick = 0;
+            ent.secondary_reload = (game_tick_t)(7.0f * TPS);
+        }
+        return;
+    }
+
+    if (ent.secondary_reload > 0) --ent.secondary_reload;
+    if (ent.secondary_reload == 0 && dist < 700.f && dist > 120.f && phase >= 2) {
+        ent.ai_state = 1;
+        ent.ai_tick = 0;
+        ent.acceleration.set(0, 0);
+        return;
+    }
+
+    // Phase 3 periodically summons a Sea Fry behind it
+    if (phase == 3 && ent.lifetime % (8 * TPS) == 0) {
+        uint32_t kids = _count_children(sim, ent.id);
+        if (kids < 3) {
+            Vector behind;
+            behind.unit_normal(ent.get_angle() + M_PI);
+            behind *= ent.get_radius();
+            Entity &spawned = alloc_mob(sim, MobID::kSeaFry,
+                ent.get_x() + behind.x, ent.get_y() + behind.y, ent.get_team(),
+                [](Entity &m) {
+                    m.score_reward = MOB_DATA[m.get_mob_id()].xp;
+                    BitMath::set(m.flags, EntityFlags::kHasCulling);
+                    BitMath::set(m.flags, EntityFlags::kDieOnParentDeath);
+                    BitMath::set(m.flags, EntityFlags::kNoDrops);
+                });
+            spawned.set_parent(ent.id);
+            entity_set_despawn_tick(spawned, 10 * TPS);
+        }
+    }
+
+    if (dist > 130.f) {
+        v.set_magnitude(PLAYER_ACCELERATION * chase);
+        ent.acceleration = v;
+    } else {
+        ent.acceleration.set(0, 0);
+    }
+}
+
+// Winter boss: phase 1 chase, phase 2 charge, phase 3 chase + summon mites.
+static void tick_winter_sovereign(Simulation *sim, Entity &ent) {
+    float hp = ent.max_health > 0.f ? ent.health / ent.max_health : 0.f;
+    uint8_t phase = hp > 0.70f ? 1 : (hp > 0.35f ? 2 : 3);
+    float chase = phase == 1 ? 0.70f : (phase == 2 ? 0.85f : 1.0f);
+
+    if (!sim->ent_alive(ent.target)) {
+        if (!(ent.target == NULL_ENTITY)) {
+            ent.ai_state = 0;
+            ent.ai_tick = 0;
+            ent.target = NULL_ENTITY;
+        }
+        ent.target = find_nearest_enemy(sim, ent, ent.detection_radius + ent.get_radius());
+        if (!sim->ent_alive(ent.target)) {
+            tick_default_passive(sim, ent);
+            return;
+        }
+    }
+    Entity &target = sim->get_ent(ent.target);
+    Vector v(target.get_x() - ent.get_x(), target.get_y() - ent.get_y());
+    _focus_lose_clause(ent, v);
+    if (!sim->ent_alive(ent.target)) return;
+    float dist = v.magnitude();
+    ent.set_angle(v.angle());
+
+    // ai_state 1 = charge windup, 2 = charging
+    if (ent.ai_state == 1) {
+        ent.acceleration.set(0, 0);
+        if (ent.ai_tick >= (game_tick_t)(0.9f * TPS)) {
+            ent.ai_state = 2;
+            ent.ai_tick = 0;
+            ent.heading_angle = v.angle();
+        }
+        return;
+    }
+    if (ent.ai_state == 2) {
+        Vector dash;
+        dash.unit_normal(ent.heading_angle).set_magnitude(PLAYER_ACCELERATION * 2.3f);
+        ent.acceleration = dash;
+        if (ent.ai_tick >= (game_tick_t)(0.45f * TPS)) {
+            ent.ai_state = 0;
+            ent.ai_tick = 0;
+            ent.secondary_reload = (game_tick_t)(7.0f * TPS);
+        }
+        return;
+    }
+
+    if (ent.secondary_reload > 0) --ent.secondary_reload;
+    if (ent.secondary_reload == 0 && dist < 700.f && dist > 120.f && phase >= 2) {
+        ent.ai_state = 1;
+        ent.ai_tick = 0;
+        ent.acceleration.set(0, 0);
+        return;
+    }
+
+    // Phase 3 periodically summons a Snow Mite behind it
+    if (phase == 3 && ent.lifetime % (10 * TPS) == 0) {
+        uint32_t kids = _count_children(sim, ent.id);
+        if (kids < 3) {
+            Vector behind;
+            behind.unit_normal(ent.get_angle() + M_PI);
+            behind *= ent.get_radius();
+            Entity &spawned = alloc_mob(sim, MobID::kSnowMite,
+                ent.get_x() + behind.x, ent.get_y() + behind.y, ent.get_team(),
+                [](Entity &m) {
+                    m.score_reward = MOB_DATA[m.get_mob_id()].xp;
+                    BitMath::set(m.flags, EntityFlags::kHasCulling);
+                    BitMath::set(m.flags, EntityFlags::kDieOnParentDeath);
+                    BitMath::set(m.flags, EntityFlags::kNoDrops);
+                });
+            spawned.set_parent(ent.id);
+            entity_set_despawn_tick(spawned, 10 * TPS);
+        }
+    }
+
+    if (dist > 130.f) {
+        v.set_magnitude(PLAYER_ACCELERATION * chase);
+        ent.acceleration = v;
+    } else {
+        ent.acceleration.set(0, 0);
+    }
+}
+
+// Molten boss: phase 1 chase, phase 2 charge, phase 3 chase + summon mites.
+static void tick_molten_overlord(Simulation *sim, Entity &ent) {
+    float hp = ent.max_health > 0.f ? ent.health / ent.max_health : 0.f;
+    uint8_t phase = hp > 0.70f ? 1 : (hp > 0.35f ? 2 : 3);
+    float chase = phase == 1 ? 0.70f : (phase == 2 ? 0.85f : 1.0f);
+
+    if (!sim->ent_alive(ent.target)) {
+        if (!(ent.target == NULL_ENTITY)) {
+            ent.ai_state = 0;
+            ent.ai_tick = 0;
+            ent.target = NULL_ENTITY;
+        }
+        ent.target = find_nearest_enemy(sim, ent, ent.detection_radius + ent.get_radius());
+        if (!sim->ent_alive(ent.target)) {
+            tick_default_passive(sim, ent);
+            return;
+        }
+    }
+    Entity &target = sim->get_ent(ent.target);
+    Vector v(target.get_x() - ent.get_x(), target.get_y() - ent.get_y());
+    _focus_lose_clause(ent, v);
+    if (!sim->ent_alive(ent.target)) return;
+    float dist = v.magnitude();
+    ent.set_angle(v.angle());
+
+    // ai_state 1 = charge windup, 2 = charging
+    if (ent.ai_state == 1) {
+        ent.acceleration.set(0, 0);
+        if (ent.ai_tick >= (game_tick_t)(0.9f * TPS)) {
+            ent.ai_state = 2;
+            ent.ai_tick = 0;
+            ent.heading_angle = v.angle();
+        }
+        return;
+    }
+    if (ent.ai_state == 2) {
+        Vector dash;
+        dash.unit_normal(ent.heading_angle).set_magnitude(PLAYER_ACCELERATION * 2.3f);
+        ent.acceleration = dash;
+        if (ent.ai_tick >= (game_tick_t)(0.45f * TPS)) {
+            ent.ai_state = 0;
+            ent.ai_tick = 0;
+            ent.secondary_reload = (game_tick_t)(7.0f * TPS);
+        }
+        return;
+    }
+
+    if (ent.secondary_reload > 0) --ent.secondary_reload;
+    if (ent.secondary_reload == 0 && dist < 700.f && dist > 120.f && phase >= 2) {
+        ent.ai_state = 1;
+        ent.ai_tick = 0;
+        ent.acceleration.set(0, 0);
+        return;
+    }
+
+    // Phase 3 periodically summons an Ash Mite behind it
+    if (phase == 3 && ent.lifetime % (9 * TPS) == 0) {
+        uint32_t kids = _count_children(sim, ent.id);
+        if (kids < 3) {
+            Vector behind;
+            behind.unit_normal(ent.get_angle() + M_PI);
+            behind *= ent.get_radius();
+            Entity &spawned = alloc_mob(sim, MobID::kAshMite,
+                ent.get_x() + behind.x, ent.get_y() + behind.y, ent.get_team(),
+                [](Entity &m) {
+                    m.score_reward = MOB_DATA[m.get_mob_id()].xp;
+                    BitMath::set(m.flags, EntityFlags::kHasCulling);
+                    BitMath::set(m.flags, EntityFlags::kDieOnParentDeath);
+                    BitMath::set(m.flags, EntityFlags::kNoDrops);
+                });
+            spawned.set_parent(ent.id);
+            entity_set_despawn_tick(spawned, 10 * TPS);
+        }
+    }
+
+    if (dist > 130.f) {
+        v.set_magnitude(PLAYER_ACCELERATION * chase);
+        ent.acceleration = v;
+    } else {
+        ent.acceleration.set(0, 0);
+    }
+}
+
+// Sandworm boss: 10-segment monarch. Phase 1 chase, phase 2 charge,
+// phase 3 chase + summon sand mites.
+static void tick_sandworm_monarch(Simulation *sim, Entity &ent) {
+    float hp = ent.max_health > 0.f ? ent.health / ent.max_health : 0.f;
+    uint8_t phase = hp > 0.70f ? 1 : (hp > 0.35f ? 2 : 3);
+    float chase = phase == 1 ? 0.70f : (phase == 2 ? 0.85f : 1.0f);
+
+    if (!sim->ent_alive(ent.target)) {
+        if (!(ent.target == NULL_ENTITY)) {
+            ent.ai_state = 0;
+            ent.ai_tick = 0;
+            ent.target = NULL_ENTITY;
+        }
+        ent.target = find_nearest_enemy(sim, ent, ent.detection_radius + ent.get_radius());
+        if (!sim->ent_alive(ent.target)) {
+            tick_default_passive(sim, ent);
+            return;
+        }
+    }
+    Entity &target = sim->get_ent(ent.target);
+    Vector v(target.get_x() - ent.get_x(), target.get_y() - ent.get_y());
+    _focus_lose_clause(ent, v);
+    if (!sim->ent_alive(ent.target)) return;
+    float dist = v.magnitude();
+    ent.set_angle(v.angle());
+
+    // ai_state 1 = charge windup, 2 = charging
+    if (ent.ai_state == 1) {
+        ent.acceleration.set(0, 0);
+        if (ent.ai_tick >= (game_tick_t)(0.9f * TPS)) {
+            ent.ai_state = 2;
+            ent.ai_tick = 0;
+            ent.heading_angle = v.angle();
+        }
+        return;
+    }
+    if (ent.ai_state == 2) {
+        Vector dash;
+        dash.unit_normal(ent.heading_angle).set_magnitude(PLAYER_ACCELERATION * 2.3f);
+        ent.acceleration = dash;
+        if (ent.ai_tick >= (game_tick_t)(0.45f * TPS)) {
+            ent.ai_state = 0;
+            ent.ai_tick = 0;
+            ent.secondary_reload = (game_tick_t)(7.0f * TPS);
+        }
+        return;
+    }
+
+    if (ent.secondary_reload > 0) --ent.secondary_reload;
+    if (ent.secondary_reload == 0 && dist < 700.f && dist > 120.f && phase >= 2) {
+        ent.ai_state = 1;
+        ent.ai_tick = 0;
+        ent.acceleration.set(0, 0);
+        return;
+    }
+
+    // Phase 3 periodically summons a Sand Mite behind it
+    if (phase == 3 && ent.lifetime % (10 * TPS) == 0) {
+        uint32_t kids = _count_children(sim, ent.id);
+        if (kids < 3) {
+            Vector behind;
+            behind.unit_normal(ent.get_angle() + M_PI);
+            behind *= ent.get_radius();
+            Entity &spawned = alloc_mob(sim, MobID::kSandMite,
+                ent.get_x() + behind.x, ent.get_y() + behind.y, ent.get_team(),
+                [](Entity &m) {
+                    m.score_reward = MOB_DATA[m.get_mob_id()].xp;
+                    BitMath::set(m.flags, EntityFlags::kHasCulling);
+                    BitMath::set(m.flags, EntityFlags::kDieOnParentDeath);
+                    BitMath::set(m.flags, EntityFlags::kNoDrops);
+                });
+            spawned.set_parent(ent.id);
+            entity_set_despawn_tick(spawned, 10 * TPS);
+        }
+    }
+
+    if (dist > 130.f) {
+        v.set_magnitude(PLAYER_ACCELERATION * chase);
+        ent.acceleration = v;
+    } else {
+        ent.acceleration.set(0, 0);
+    }
+}
+
 static void tick_digger(Simulation *sim, Entity &ent) {
     ent.input = 0;
     if (sim->ent_alive(ent.target)) {
@@ -886,6 +1281,12 @@ void tick_ai_behavior(Simulation *sim, Entity &ent) {
         ent.ai_tick = 0;
         return;
     }
+    // Outside mobs must not chase a player who is standing in the spawn plaza.
+    if (sim->ent_alive(ent.target) && !Map::in_spawn_plaza(ent.get_x(), ent.get_y())) {
+        Entity &prey = sim->get_ent(ent.target);
+        if (Map::in_spawn_plaza(prey.get_x(), prey.get_y()))
+            ent.target = NULL_ENTITY;
+    }
     switch(ent.get_mob_id()) {
         case MobID::kBabyAnt:            
         case MobID::kLadybug:
@@ -913,6 +1314,10 @@ void tick_ai_behavior(Simulation *sim, Entity &ent) {
         case MobID::kBeetle:
         case MobID::kMassiveBeetle:
             tick_default_aggro(sim, ent, 0.95);
+            break;
+        case MobID::kFlowerGuardian:
+            // Garden Boss — tank chase with windup charge bursts
+            tick_charge_mob(sim, ent, 0.85f, 2.1f, 0.7f, 0.45f, 6.0f);
             break;
         case MobID::kScorpion:
             tick_default_aggro(sim, ent, 1.20);
@@ -1024,6 +1429,159 @@ void tick_ai_behavior(Simulation *sim, Entity &ent) {
             break;
         case MobID::kAncientTreant:
             tick_ancient_treant(sim, ent);
+            break;
+        // ---- Ocean ----
+        case MobID::kReefStone:
+            // Stationary reef boulder — no AI at all.
+            break;
+        case MobID::kSeaFry:
+            tick_sea_fry(sim, ent);
+            break;
+        case MobID::kMoonJelly:
+            tick_default_aggro(sim, ent, 0.75f);
+            break;
+        case MobID::kCoralStar:
+            // Neutral: only retaliates after being hit.
+            tick_default_neutral(sim, ent);
+            break;
+        case MobID::kReefCrab:
+            tick_default_aggro(sim, ent, 0.85f);
+            break;
+        case MobID::kSpinePuffer:
+            // Passive until hit, then fights back.
+            tick_default_neutral(sim, ent);
+            break;
+        case MobID::kSeaLeech:
+            // Segmented: the head drives, the links follow.
+            if (ent.seg_head == NULL_ENTITY)
+                tick_default_aggro(sim, ent, 0.95f);
+            break;
+        case MobID::kMorayEel:
+            // Straight-line charge with a windup.
+            tick_charge_mob(sim, ent, 0.9f, 2.2f, 0.6f, 0.4f, 5.0f);
+            break;
+        case MobID::kInkCuttle:
+            tick_ink_cuttle(sim, ent);
+            break;
+        case MobID::kAbyssShark:
+            tick_default_aggro(sim, ent, 1.2f);
+            break;
+        case MobID::kAbyssMaw:
+            tick_abyss_maw(sim, ent);
+            break;
+        // ---- Snow ----
+        case MobID::kFrostStone:
+            // Stationary ice boulder — no AI at all.
+            break;
+        case MobID::kSnowMite:
+            // Passive until hit, then fights back.
+            tick_default_neutral(sim, ent);
+            break;
+        case MobID::kSnowHare:
+            tick_flee(sim, ent, 1.3f);
+            break;
+        case MobID::kIceSpider:
+            tick_web_layer(sim, ent, 1.0f, 55.f);
+            break;
+        case MobID::kFrostHornet:
+            // Ranged windup charge (same kit as the Hornet).
+            tick_hornet_aggro(sim, ent);
+            break;
+        case MobID::kRimeCentipede:
+            // Segmented: the head drives, the links follow.
+            if (ent.seg_head == NULL_ENTITY)
+                tick_default_aggro(sim, ent, 0.9f);
+            break;
+        case MobID::kBlizzardWisp:
+            // Sandstorm-style erratic rush.
+            tick_sandstorm(sim, ent);
+            break;
+        case MobID::kGlacierBeast:
+            tick_default_aggro(sim, ent, 0.75f);
+            break;
+        case MobID::kFrostYeti:
+            tick_default_aggro(sim, ent, 0.85f);
+            break;
+        case MobID::kIceGolem:
+            tick_default_aggro(sim, ent, 0.65f);
+            break;
+        case MobID::kWinterSovereign:
+            tick_winter_sovereign(sim, ent);
+            break;
+        // ---- Volcano ----
+        case MobID::kEmberStone:
+            // Stationary volcanic rock — no AI at all.
+            break;
+        case MobID::kAshMite:
+            // Passive until hit, then fights back.
+            tick_default_neutral(sim, ent);
+            break;
+        case MobID::kCinderMoth:
+            tick_flee(sim, ent, 1.3f);
+            break;
+        case MobID::kLavaBeetle:
+            tick_default_aggro(sim, ent, 0.85f);
+            break;
+        case MobID::kEmberWasp:
+            // Ranged windup charge (same kit as the Hornet).
+            tick_hornet_aggro(sim, ent);
+            break;
+        case MobID::kMagmaCrab:
+            // Passive until hit, then fights back.
+            tick_default_neutral(sim, ent);
+            break;
+        case MobID::kFireSpider:
+            // Poison comes from MOB_DATA; the AI is a plain chase.
+            tick_default_aggro(sim, ent, 1.0f);
+            break;
+        case MobID::kMagmaCentipede:
+            // Segmented: the head drives, the links follow.
+            if (ent.seg_head == NULL_ENTITY)
+                tick_default_aggro(sim, ent, 0.95f);
+            break;
+        case MobID::kObsidianGolem:
+            tick_default_aggro(sim, ent, 0.65f);
+            break;
+        case MobID::kLavaColossus:
+            // Straight-line charge with a windup.
+            tick_charge_mob(sim, ent, 0.9f, 2.0f, 0.9f, 0.4f, 7.0f);
+            break;
+        case MobID::kMoltenOverlord:
+            tick_molten_overlord(sim, ent);
+            break;
+        // ---- Desert ----
+        case MobID::kDuneStone:
+            // Stationary sandstone — no AI at all.
+            break;
+        case MobID::kSandMite:
+            // Passive until hit, then fights back.
+            tick_default_neutral(sim, ent);
+            break;
+        case MobID::kDuneBeetle:
+            tick_default_aggro(sim, ent, 0.85f);
+            break;
+        case MobID::kDuneSpider:
+            tick_web_layer(sim, ent, 1.0f, 55.f);
+            break;
+        case MobID::kDuneHornet:
+            // Ranged windup charge (same kit as the Hornet).
+            tick_hornet_aggro(sim, ent);
+            break;
+        case MobID::kDuneTitan:
+            tick_default_aggro(sim, ent, 0.65f);
+            break;
+        case MobID::kSandwormMonarch:
+            tick_sandworm_monarch(sim, ent);
+            break;
+        // ---- Spawn-point fillers ----
+        case MobID::kJungleStone:
+        case MobID::kRoyalBoulder:
+            // Stationary stones — no AI at all.
+            break;
+        case MobID::kJungleCrawler:
+        case MobID::kRoyalPebble:
+            // Passive until hit, then fights back.
+            tick_default_neutral(sim, ent);
             break;
         default:
             break;

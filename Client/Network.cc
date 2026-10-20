@@ -10,9 +10,11 @@
 #include <Shared/Binary.hh>
 #include <Shared/Config.hh>
 #include <Shared/Craft.hh>
+#include <Shared/Recipe.hh>
 #include <Shared/StaticDefinitions.hh>
 #include <Shared/Talent.hh>
 
+#include <cmath>
 #include <format>
 
 using namespace Game;
@@ -69,11 +71,17 @@ void Game::on_message(uint8_t *ptr, uint32_t len) {
             // Explicit logout → back to guest local progress (account row kept on server)
             if (result == AccountResultCode::kAccountLoggedOut) {
                 account_logged_in = 0;
+                daily_bonus_seconds = 0;
+                offline_bonus_seconds = 0;
                 auth_panel = 0;
                 password.clear();
                 session_token = 0;
                 craft_tray_clear();
                 ensure_guest_id();
+                talent_hp = guest_talent_hp;
+                talent_rot = guest_talent_rot;
+                talent_pending = 0;
+                talent_status.clear();
                 if (guest_save_valid) {
                     respawn_level = guest_level < 1 ? 1 : guest_level;
                     craft_bank = guest_craft_bank;
@@ -88,7 +96,13 @@ void Game::on_message(uint8_t *ptr, uint32_t len) {
             } else if (was_auto && !account_logged_in) {
                 // Already online elsewhere or stale token → play as guest this connection
                 ensure_guest_id();
+                talent_hp = guest_talent_hp;
+                talent_rot = guest_talent_rot;
                 send_guest_progress();
+            }
+            if (spawn_after_auth) {
+                spawn_after_auth = 0;
+                spawn_in();
             }
             break;
         }
@@ -137,15 +151,77 @@ void Game::on_message(uint8_t *ptr, uint32_t len) {
                     : std::format("Bought {} → backpack", I18n::petal_name(petal));
             else if (result == CraftResultCode::kCraftInvFull)
                 craft_status = I18n::use_chinese
-                    ? std::format("背包已满，{} 已转为材料", I18n::petal_name(petal))
-                    : std::format("Bag full — {} banked as mats", I18n::petal_name(petal));
+                    ? "背包已满，先腾出空位"
+                    : "Backpack full — free a slot first";
             if (petal < PetalID::kNumPetals && petal != PetalID::kNone)
                 seen_petals[petal] = 1;
             break;
         }
+        case Clientbound::kBoostUpdate: {
+            daily_bonus_seconds = reader.read<uint32_t>();
+            offline_bonus_seconds = reader.read<uint32_t>();
+            bonus_enabled = reader.read<uint8_t>() ? 1 : 0;
+            bonus_synced_at = timestamp;
+            break;
+        }
         case Clientbound::kTalentUpdate: {
-            talent_hp = reader.read<uint8_t>();
-            talent_rot = reader.read<uint8_t>();
+            uint8_t hp = reader.read<uint8_t>();
+            uint8_t rot = reader.read<uint8_t>();
+            if (talent_pending) {
+                uint8_t got = talent_pending_id == TalentID::kHealth ? hp : rot;
+                talent_status = got > talent_pending_rank
+                    ? (I18n::use_chinese ? "加点成功，属性已生效" : "Talent upgraded and active")
+                    : (I18n::use_chinese ? "加点未成功，请查看等级或点数" : "Upgrade unavailable; check level and points");
+                talent_pending = 0;
+            }
+            talent_hp = hp;
+            talent_rot = rot;
+            if (!account_logged_in) {
+                guest_talent_hp = hp;
+                guest_talent_rot = rot;
+            }
+            break;
+        }
+        case Clientbound::kLoadoutPresetSync: {
+            uint8_t result = reader.read<uint8_t>();
+            uint8_t index = reader.read<uint8_t>();
+            for (LoadoutPreset &preset : loadout_presets) {
+                preset.slot_count = reader.read<uint8_t>();
+                if (preset.slot_count > MAX_SLOT_COUNT) preset.slot_count = 0;
+                for (PetalID::T &id : preset.petals) {
+                    id = reader.read<uint8_t>();
+                    if (id >= PetalID::kNumPetals) id = PetalID::kNone;
+                }
+            }
+            if (result == kPresetSaved)
+                loadout_preset_status = I18n::use_chinese
+                    ? std::format("方案 {} 已保存到账号", index + 1)
+                    : std::format("Preset {} saved to account", index + 1);
+            else if (result == kPresetApplied || result == kPresetAppliedAdjusted
+                || result == kPresetAppliedBanked) {
+                active_loadout_preset = index;
+                if (result == kPresetAppliedBanked)
+                    loadout_preset_status = I18n::use_chinese
+                        ? std::format("方案 {} 已切换", index + 1)
+                        : std::format("Preset {} equipped", index + 1);
+                else if (result == kPresetAppliedAdjusted)
+                    loadout_preset_status = I18n::use_chinese
+                        ? std::format("方案 {} 已切换；缺少的花瓣已降级或留空", index + 1)
+                        : std::format("Preset {} applied; lower tier/empty used", index + 1);
+                else
+                    loadout_preset_status = I18n::use_chinese
+                        ? std::format("已切换到方案 {}", index + 1)
+                        : std::format("Preset {} equipped", index + 1);
+                for (Ui::UiLoadoutPetal *slot : Ui::UiLoadout::petal_slots)
+                    if (slot != nullptr) slot->no_change_ticks = 0;
+            } else if (result == kPresetEmpty)
+                loadout_preset_status = I18n::use_chinese ? "方案尚未保存" : "Preset is empty";
+            else if (result == kPresetNeedAccount)
+                loadout_preset_status = I18n::use_chinese ? "请先登录账号以保存云端方案" : "Sign in to save cloud presets";
+            else {
+                active_loadout_preset = LOADOUT_PRESET_COUNT;
+                loadout_preset_status.clear();
+            }
             break;
         }
         case Clientbound::kClientUpdate: {
@@ -153,9 +229,11 @@ void Game::on_message(uint8_t *ptr, uint32_t len) {
             camera_id = reader.read<EntityID>();
             EntityID curr_id = reader.read<EntityID>();
             while(!(curr_id == NULL_ENTITY)) {
-                assert(simulation.ent_exists(curr_id));
-                Entity &ent = simulation.get_ent(curr_id);
-                simulation._delete_ent(curr_id);
+                // The id may already be gone locally (deleted on a pending
+                // delete tick). Deleting it twice would desync the id/hash
+                // table and can leave the camera without a player.
+                if (simulation.ent_exists(curr_id))
+                    simulation._delete_ent(curr_id);
                 curr_id = reader.read<EntityID>();
             }
             curr_id = reader.read<EntityID>();
@@ -187,16 +265,21 @@ void Game::on_message(uint8_t *ptr, uint32_t len) {
             uint8_t count = reader.read<uint8_t>();
             party_member_count = count;
             party_status.clear();
+            party_members.clear();
             awaiting_party_revive = 0;
             for (uint8_t i = 0; i < count; ++i) {
-                std::string name;
-                reader.read<std::string>(name);
-                uint8_t flags = reader.read<uint8_t>();
+                PartyMember m;
+                reader.read<std::string>(m.name);
+                m.flags = reader.read<uint8_t>();
+                m.hp_pct = reader.read<uint8_t>();
+                m.x = reader.read<float>();
+                m.y = reader.read<float>();
+                party_members.push_back(m);
                 if (!party_status.empty()) party_status += ", ";
-                if (flags & 1) party_status += "*";
-                party_status += name;
-                if (flags & 2) party_status += " [DOWN]";
-                if ((flags & 4) && (flags & 2)) awaiting_party_revive = 1;
+                if (m.flags & 1) party_status += "*";
+                party_status += m.name;
+                if (m.flags & 2) party_status += " [DOWN]";
+                if ((m.flags & 4) && (m.flags & 2)) awaiting_party_revive = 1;
             }
             revive_progress = reader.read<uint8_t>();
             if (count == 0) {
@@ -210,6 +293,29 @@ void Game::on_message(uint8_t *ptr, uint32_t len) {
             invite_type = reader.read<uint8_t>();
             reader.read<std::string>(invite_from);
             invite_open = invite_from.empty() ? 0 : 1;
+            break;
+        }
+        case Clientbound::kLeaderboardStats: {
+            LeaderboardBoard &board = leaderboard_board;
+            board.recorded = reader.read<uint32_t>();
+            for (uint8_t category = 0; category < kLbCategoryCount; ++category) {
+                uint8_t count = reader.read<uint8_t>();
+                if (count > LEADERBOARD_STAT_SIZE) count = LEADERBOARD_STAT_SIZE;
+                for (uint8_t i = 0; i < LEADERBOARD_STAT_SIZE; ++i) {
+                    if (i >= count) {
+                        board.tops[category][i].name.clear();
+                        board.tops[category][i].value = 0;
+                        continue;
+                    }
+                    reader.read<std::string>(board.tops[category][i].name);
+                    board.tops[category][i].value = reader.read<uint64_t>();
+                }
+                board.has_self[category] = reader.read<uint8_t>();
+                reader.read<std::string>(board.self_name[category]);
+                board.self_rank[category] = reader.read<uint32_t>();
+                board.self_value[category] = reader.read<uint64_t>();
+            }
+            leaderboard_board_at = Game::timestamp;
             break;
         }
         case Clientbound::kGuildUpdate: {
@@ -234,26 +340,67 @@ void Game::on_message(uint8_t *ptr, uint32_t len) {
     }
 }
 
-void Game::send_inputs() {
+void Game::request_leaderboard_board() {
+    if (!socket.ready) return;
     Writer writer(static_cast<uint8_t *>(OUTGOING_PACKET));
-    writer.write<uint8_t>(Serverbound::kClientInput);
-    // Chat stays open while moving with the mouse — only pause / leave / freeze block motion
-    if (Input::freeze_input || Game::pause_menu_open
-        || Game::leave_confirm_open || Game::game_panel_blocking()) {
-        writer.write<float>(0);
-        writer.write<float>(0);
-        writer.write<uint8_t>(0);
-    } else {
-        writer.write<float>(Input::game_inputs.x);
-        writer.write<float>(Input::game_inputs.y);
-        writer.write<uint8_t>(Input::game_inputs.flags);
-    }
-    writer.write<uint8_t>(rot_speed_setting);
+    writer.write<uint8_t>(Serverbound::kLeaderboardRequest);
     socket.send(writer.packet, writer.at - writer.packet);
 }
 
+void Game::send_inputs() {
+    // Chat box stays open while moving. Any clicked popup stops the flower.
+    uint8_t blocked = Input::freeze_input || Game::pause_menu_open
+        || Game::leave_confirm_open || Game::game_panel_blocking()
+        || Game::guild_panel_open || Game::invite_open || Game::chat_menu_open
+        || Ui::panel_open != Ui::Panel::kNone;
+    float x = blocked ? 0.f : Input::game_inputs.x;
+    float y = blocked ? 0.f : Input::game_inputs.y;
+    uint8_t flags = blocked ? 0 : Input::game_inputs.flags;
+    static double last_sent_at = -1000;
+    static float last_x = 0, last_y = 0;
+    static uint8_t last_flags = 0, last_rot = 0;
+    // Send starts, stops, attacks, and large direction changes immediately.
+    // Steady input only needs one packet per 25 TPS server step.
+    uint8_t changed = flags != last_flags || rot_speed_setting != last_rot
+        || (x == 0.f) != (last_x == 0.f)
+        || (y == 0.f) != (last_y == 0.f)
+        || std::abs(x - last_x) > 24.f || std::abs(y - last_y) > 24.f;
+    if (!changed && Game::timestamp - last_sent_at < 40) return;
+    Writer writer(static_cast<uint8_t *>(OUTGOING_PACKET));
+    writer.write<uint8_t>(Serverbound::kClientInput);
+    writer.write<float>(x);
+    writer.write<float>(y);
+    writer.write<uint8_t>(flags);
+    writer.write<uint8_t>(rot_speed_setting);
+    socket.send(writer.packet, writer.at - writer.packet);
+    last_sent_at = Game::timestamp;
+    last_x = x;
+    last_y = y;
+    last_flags = flags;
+    last_rot = rot_speed_setting;
+}
+
 void Game::talent_spend(uint8_t talent_id) {
-    if (!socket.ready || talent_id >= TalentID::kNum) return;
+    if (talent_id >= TalentID::kNum || talent_pending) return;
+    if (!socket.ready || !simulation_ready || !simulation.ent_exists(camera_id)) {
+        talent_status = I18n::use_chinese ? "未连接，暂不能加点" : "Connect before upgrading";
+        return;
+    }
+    uint32_t level = alive() ? score_to_level(score)
+        : simulation.get_ent(camera_id).get_respawn_level();
+    uint8_t rank = talent_id == TalentID::kHealth ? talent_hp : talent_rot;
+    if (rank >= Talent::max_rank(level)) {
+        talent_status = I18n::use_chinese ? "当前等级的天赋阶数已满" : "Rank limit reached for this level";
+        return;
+    }
+    if (Talent::points_free(level, talent_hp, talent_rot) < Talent::rank_cost(rank + 1)) {
+        talent_status = I18n::use_chinese ? "天赋点不足" : "Not enough talent points";
+        return;
+    }
+    talent_pending = 1;
+    talent_pending_id = talent_id;
+    talent_pending_rank = rank;
+    talent_status = I18n::use_chinese ? "加点中…" : "Upgrading…";
     Writer writer(static_cast<uint8_t *>(OUTGOING_PACKET));
     writer.write<uint8_t>(Serverbound::kTalentSpend);
     writer.write<uint8_t>(talent_id);
@@ -280,9 +427,31 @@ void Game::send_chat() {
     socket.send(writer.packet, writer.at - writer.packet);
 }
 
+void Game::send_spawn_request() {
+    if (!socket.ready) return;
+    Writer writer(static_cast<uint8_t *>(OUTGOING_PACKET));
+    writer.write<uint8_t>(Serverbound::kClientSpawn);
+    std::string name = Game::account_logged_in ? Game::username : Game::guest_play_name();
+    writer.write<std::string>(name);
+    uint8_t map_id = Game::selected_map;
+    if (map_id >= MapID::kNumMaps) map_id = MapID::kGarden;
+    writer.write<uint8_t>(map_id);
+    socket.send(writer.packet, writer.at - writer.packet);
+    spawn_request_at = Game::timestamp;
+}
+
 void Game::spawn_in() {
     Writer writer(static_cast<uint8_t *>(OUTGOING_PACKET));
     if (Game::alive()) return;
+    if (!socket.ready) {
+        account_status = I18n::use_chinese ? "正在连接服务器，请稍后重试" : "Connecting to server; please try again";
+        return;
+    }
+    if (pending_auto_login) {
+        spawn_after_auth = 1;
+        account_status = I18n::use_chinese ? "账号恢复后自动出生" : "Spawning after account restore";
+        return;
+    }
     // Debounce rapid Continue / Enter / auto-respawn taps (mobile double-fire)
     static double last_spawn_req = -1e9;
     if (timestamp - last_spawn_req < 350.0) return;
@@ -300,20 +469,12 @@ void Game::spawn_in() {
     Input::game_inputs.x = 0;
     Input::game_inputs.y = 0;
     Input::game_inputs.flags = 0;
-    if (!socket.ready) return;
-    // Do not enter as a guest while the saved account session is being checked.
-    if (pending_auto_login || (session_token != 0 && !account_logged_in)) return;
     account_status.clear();
     // Re-sync guest bag/coins before spawn so reconnect/respawn keeps progress
     if (!account_logged_in && guest_save_valid)
         send_guest_progress();
-    writer.write<uint8_t>(Serverbound::kClientSpawn);
-    std::string name = Game::account_logged_in ? Game::username : Game::guest_play_name();
-    writer.write<std::string>(name);
-    uint8_t map_id = Game::selected_map;
-    if (map_id >= MapID::kNumMaps) map_id = MapID::kGarden;
-    writer.write<uint8_t>(map_id);
-    socket.send(writer.packet, writer.at - writer.packet);
+    send_spawn_request();
+    spawn_retries = 0;
 }
 
 void Game::party_invite_nearest() {
@@ -389,6 +550,108 @@ void Game::swap_petals(uint8_t pos1, uint8_t pos2) {
     socket.send(writer.packet, writer.at - writer.packet);
 }
 
+void Game::save_loadout_preset(uint8_t index) {
+    if (index >= LOADOUT_PRESET_COUNT) return;
+    if (!account_logged_in) {
+        loadout_preset_status = I18n::use_chinese ? "请先登录账号以保存云端方案" : "Sign in to save cloud presets";
+        return;
+    }
+    if (!socket.ready || !simulation_ready || !simulation.ent_exists(camera_id)) return;
+    Writer writer(static_cast<uint8_t *>(OUTGOING_PACKET));
+    writer.write<uint8_t>(Serverbound::kLoadoutPresetSave);
+    writer.write<uint8_t>(index);
+    socket.send(writer.packet, writer.at - writer.packet);
+}
+
+void Game::apply_loadout_preset(uint8_t index) {
+    if (index >= LOADOUT_PRESET_COUNT) return;
+    if (!account_logged_in) {
+        loadout_preset_status = I18n::use_chinese ? "请先登录账号以使用云端方案" : "Sign in to use cloud presets";
+        return;
+    }
+    if (!socket.ready || !simulation_ready || !simulation.ent_exists(camera_id)) return;
+    Writer writer(static_cast<uint8_t *>(OUTGOING_PACKET));
+    writer.write<uint8_t>(Serverbound::kLoadoutPresetApply);
+    writer.write<uint8_t>(index);
+    socket.send(writer.packet, writer.at - writer.packet);
+}
+
+void Game::withdraw_bank_petal(PetalID::T id) {
+    if (!socket.ready || id == PetalID::kNone || id >= PetalID::kNumPetals
+        || craft_bank[id] == 0) return;
+    if (Recipe::is_bag_only(id)) return;
+    uint8_t n = loadout_count;
+    if (n == 0 || n > MAX_SLOT_COUNT) return;
+    // Optimistic auto-equip — same priority as server.
+    uint8_t dest = (uint8_t) -1;
+    for (uint8_t i = 0; i < n; ++i)
+        if (cached_loadout[i] == PetalID::kNone) { dest = i; break; }
+    if (dest == (uint8_t) -1)
+        for (uint8_t i = 0; i < n; ++i)
+            if (cached_loadout[i] == PetalID::kBasic) { dest = i; break; }
+    if (dest == (uint8_t) -1)
+        for (uint8_t i = 0; i < n; ++i) {
+            uint8_t s = (uint8_t) (n + i);
+            if (cached_loadout[s] == PetalID::kNone) { dest = s; break; }
+        }
+    if (dest == (uint8_t) -1)
+        for (uint8_t i = 0; i < n; ++i)
+            if (cached_loadout[i] != id) { dest = i; break; }
+    if (dest == (uint8_t) -1) return;
+    PetalID::T old = cached_loadout[dest];
+    if (old != PetalID::kNone && old != PetalID::kBasic) {
+        if (craft_bank[old] >= 1000000) return;
+        ++craft_bank[old];
+    }
+    --craft_bank[id];
+    cached_loadout[dest] = id;
+    Writer writer(static_cast<uint8_t *>(OUTGOING_PACKET));
+    writer.write<uint8_t>(Serverbound::kBankWithdraw);
+    writer.write<uint8_t>(id);
+    socket.send(writer.packet, writer.at - writer.packet);
+}
+
+void Game::deposit_bank_petal(uint8_t static_pos) {
+    if (!socket.ready || !simulation_ready) return;
+    if (!simulation.ent_exists(camera_id)) return;
+    if (static_pos >= 2 * MAX_SLOT_COUNT) return;
+    PetalID::T id = cached_loadout[static_pos];
+    if (id == PetalID::kNone || id >= PetalID::kNumPetals) return;
+    // Optimistic — backpack panel reads stacks + slot copies together.
+    cached_loadout[static_pos] = PetalID::kNone;
+    if (craft_bank[id] < 1000000) ++craft_bank[id];
+    Writer writer(static_cast<uint8_t *>(OUTGOING_PACKET));
+    writer.write<uint8_t>(Serverbound::kBankDeposit);
+    writer.write<uint8_t>(static_pos);
+    socket.send(writer.packet, writer.at - writer.packet);
+}
+
+void Game::set_bonus_enabled(uint8_t on) {
+    bonus_enabled = on ? 1 : 0;
+    if (!socket.ready || !account_logged_in) return;
+    Writer writer(static_cast<uint8_t *>(OUTGOING_PACKET));
+    writer.write<uint8_t>(Serverbound::kBoostToggle);
+    writer.write<uint8_t>(bonus_enabled);
+    socket.send(writer.packet, writer.at - writer.packet);
+}
+
+uint8_t Game::cycle_next_loadout_preset() {
+    if (!account_logged_in) {
+        loadout_preset_status = I18n::use_chinese ? "请先登录账号以使用云端方案" : "Sign in to use cloud presets";
+        return 0;
+    }
+    uint8_t start = active_loadout_preset < LOADOUT_PRESET_COUNT
+        ? active_loadout_preset : (uint8_t) (LOADOUT_PRESET_COUNT - 1);
+    for (uint8_t step = 1; step <= LOADOUT_PRESET_COUNT; ++step) {
+        uint8_t idx = (uint8_t) ((start + step) % LOADOUT_PRESET_COUNT);
+        if (loadout_presets[idx].slot_count == 0) continue;
+        apply_loadout_preset(idx);
+        return 1;
+    }
+    loadout_preset_status = I18n::use_chinese ? "还没有已保存的方案" : "No saved presets yet";
+    return 0;
+}
+
 void Game::swap_all_petals() {
     // One-key swap every primary ↔ paired secondary (1:1). Update local cache
     // first so UI stays consistent; do not remap petal_slots pointers mid-loop.
@@ -419,7 +682,7 @@ void Game::swap_all_petals() {
 }
 
 void Game::craft_petals(uint8_t mode, PetalID::T petal_id) {
-    if (!socket.ready || !alive()) return;
+    if (!socket.ready || !(alive() || on_game_screen)) return;
     if (petal_id == PetalID::kNone || petal_id >= PetalID::kNumPetals) return;
     Writer writer(static_cast<uint8_t *>(OUTGOING_PACKET));
     writer.write<uint8_t>(Serverbound::kPetalCraft);
@@ -443,7 +706,7 @@ uint32_t Game::craft_bag_count(PetalID::T id) {
 
 uint32_t Game::craft_owned(PetalID::T id) {
     if (id == PetalID::kNone || id >= PetalID::kNumPetals) return 0;
-    return craft_bank[id] + craft_bag_count(id);
+    return craft_bag_count(id) + craft_bank[id];
 }
 
 uint32_t Game::craft_available(PetalID::T id) {
@@ -475,7 +738,7 @@ void Game::craft_tray_add(PetalID::T id, uint32_t amount) {
 }
 
 void Game::craft_buy_rarity(uint8_t rarity) {
-    if (!socket.ready || !alive()) return;
+    if (!socket.ready || !(alive() || on_game_screen)) return;
     if (rarity >= RarityID::kNumRarities) return;
     Writer writer(static_cast<uint8_t *>(OUTGOING_PACKET));
     writer.write<uint8_t>(Serverbound::kPetalCraft);
@@ -485,10 +748,19 @@ void Game::craft_buy_rarity(uint8_t rarity) {
 }
 
 void Game::craft_buy_special(PetalID::T id) {
-    if (!socket.ready || !alive()) return;
+    if (!socket.ready || !(alive() || on_game_screen)) return;
     Writer writer(static_cast<uint8_t *>(OUTGOING_PACKET));
     writer.write<uint8_t>(Serverbound::kPetalCraft);
     writer.write<uint8_t>(CraftMode::kCraftBuySpecial);
     writer.write<uint8_t>(id);
+    socket.send(writer.packet, writer.at - writer.packet);
+}
+
+void Game::craft_recipe(uint16_t recipe_index) {
+    if (!socket.ready || !(alive() || on_game_screen)) return;
+    Writer writer(static_cast<uint8_t *>(OUTGOING_PACKET));
+    writer.write<uint8_t>(Serverbound::kPetalCraft);
+    writer.write<uint8_t>(CraftMode::kCraftRecipe);
+    writer.write<uint8_t>((uint8_t) recipe_index);
     socket.send(writer.packet, writer.at - writer.packet);
 }

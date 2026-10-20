@@ -11,6 +11,7 @@ namespace Ui {
         uint32_t max;
         uint8_t is_password = 0;
         uint8_t password_masked = 1;
+        uint8_t editing = 0;
     public:
         // is_password=1 → start as masked type=password
         TextInput(std::string &, float, float, uint32_t, Style = {}, uint8_t is_password = 0);
@@ -20,9 +21,14 @@ namespace Ui {
         void sync_from_dom();
         void set_password_masked(uint8_t masked);
         uint8_t password_is_masked() const { return password_masked; }
+        uint8_t is_editing() const { return editing; }
         uint8_t contains_screen_point(float x, float y) const;
         virtual void on_render(Renderer &) override;
         virtual void on_render_skip(Renderer &) override;
         virtual void on_event(uint8_t) override;
     };
+
+    // Blur the active TextInput when a press lands outside its box (dismiss keyboard).
+    void dismiss_active_text_input_at(float x, float y);
+    TextInput *active_text_input();
 }

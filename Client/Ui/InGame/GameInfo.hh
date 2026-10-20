@@ -19,11 +19,17 @@ namespace Ui {
         virtual void on_render(Renderer &) override;
     };
 
-    class LeaderboardSlot final : public Element {
+    // Teammate name + HP strip under self status (top-left)
+    class PartyHud final : public Element {
     public:
-        uint8_t pos;
-        LerpFloat ratio;
-        LeaderboardSlot(uint8_t);
+        PartyHud();
+        virtual void on_render(Renderer &) override;
+        virtual void refactor() override;
+    };
+
+    class LeaderboardBoard final : public Element {
+    public:
+        LeaderboardBoard();
 
         virtual void on_render(Renderer &) override;
     };
@@ -59,10 +65,12 @@ namespace Ui {
     Element *make_leaderboard();
     Element *make_level_bar();
     Element *make_health_bar();
+    Element *make_boss_health_bar();
     Element *make_minimap();
     Element *make_overlevel_indicator();
     Element *make_mobile_attack_button();
     Element *make_mobile_defend_button();
+    Element *make_mobile_swap_button(); // R: tap swap-all, long-press cycle preset
     Element *make_mobile_joystick();
     Element *make_pause_menu();
     Element *make_game_topbar();
@@ -74,9 +82,11 @@ namespace Ui {
     Element *make_guild_top_button();
     Element *make_game_side_buttons();
     Element *make_inventory_panel();
+    Element *make_presets_panel();
     Element *make_talents_panel();
     Element *make_craft_panel();
     Element *make_special_craft_panel();
+    Element *make_boost_panel();
     class TextInput;
     TextInput *chat_text_input();
 }

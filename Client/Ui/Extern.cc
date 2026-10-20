@@ -1,6 +1,7 @@
 #include <Client/Ui/Extern.hh>
 
 #include <Client/Ui/Element.hh>
+#include <Client/Ui/InGame/Loadout.hh>
 #include <Client/Game.hh>
 #include <Client/Input.hh>
 
@@ -32,7 +33,7 @@ namespace Ui {
     Element *game_topbar_root = nullptr;
     Element *panel_buttons_root = nullptr;
     Element *game_side_buttons_root = nullptr;
-    Element *game_panel_roots[5] = {};
+    Element *game_panel_roots[7] = {};
 
     void toggle_panel(uint8_t panel) {
         if (panel_open == panel) {
@@ -132,12 +133,17 @@ namespace Ui {
                 panel_open = Panel::kNone;
         }
 
-        // B / Z / C / V drawers
+        // B / Z / C / V drawers. Mobile: touching the loadout bar to throw a
+        // petal into the open bag must NOT close the panel mid-gesture.
         if (Game::game_panel != Game::kPanelNone) {
+            if (Ui::bag_gesture_busy() || Ui::UiLoadout::num_petals_selected != 0)
+                return;
             Element *panel = nullptr;
-            if (Game::game_panel < 5) panel = game_panel_roots[Game::game_panel];
+            if (Game::game_panel < 7) panel = game_panel_roots[Game::game_panel];
             if (!hit_element(panel, x, y)
-                && !hit_element(game_side_buttons_root, x, y))
+                && !hit_element(game_side_buttons_root, x, y)
+                && !hit_element(game_topbar_root, x, y)
+                && !Ui::loadout_bar_hit(x, y))
                 Game::close_game_panel();
         }
     }

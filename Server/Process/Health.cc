@@ -19,8 +19,9 @@ void tick_health_behavior(Simulation *sim, Entity &ent) {
     if (ent.dandy_ticks > 0) --ent.dandy_ticks;
     if (ent.health <= 0) sim->request_delete(ent.id);
     if (ent.max_health == 0) return;
-    if (ent.has_component(kFlower))
-        ent.set_health_ratio(ent.health / ent.max_health);
-    else
+    // Petals keep a dummy ratio; flowers and mobs publish real HP so the bar shows when hit.
+    if (ent.has_component(kPetal))
         ent.set_health_ratio(1);
+    else
+        ent.set_health_ratio(ent.health / ent.max_health);
 }

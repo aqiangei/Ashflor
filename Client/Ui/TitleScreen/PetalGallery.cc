@@ -1,6 +1,8 @@
 #include <Client/Ui/TitleScreen/TitleScreen.hh>
 
 #include <Client/Ui/Chrome.hh>
+#include <Client/Ui/Button.hh>
+#include <Client/Ui/Container.hh>
 #include <Client/Ui/InGame/GameInfo.hh>
 #include <Client/Ui/ScrollContainer.hh>
 #include <Client/Ui/DynamicText.hh>
@@ -17,7 +19,7 @@
 using namespace Ui;
 
 GalleryPetal::GalleryPetal(PetalID::T id, float w) : 
-    Element(w,w,{ .fill = 0x40000000, .round_radius = w/20 , .h_justify = Style::Left }), id(id) {}
+    Element(w,w,{ .fill = Chrome::kPanelInset, .round_radius = w/12 , .h_justify = Style::Left }), id(id) {}
 
 void GalleryPetal::on_render(Renderer &ctx) {
     if (!Game::seen_petals[id]) {
@@ -59,7 +61,7 @@ void PetalsCollectedIndicator::on_render(Renderer &ctx) {
 }
 
 static Element *make_scroll() {
-    Element *elt = new Ui::VContainer({}, 10, 10, {});
+    std::vector<Element *> rows;
 
     PetalID::T id_list[PetalID::kNumPetals];
     for (PetalID::T i = 0; i < PetalID::kNumPetals; ++i)
@@ -72,23 +74,43 @@ static Element *make_scroll() {
         return strcmp(PETAL_DATA[a].name, PETAL_DATA[b].name) <= 0;
     });
     for (PetalID::T i = PetalID::kBasic; i < PetalID::kNumPetals;) {
-        Element *row = new Ui::HContainer({}, 0, 10, { .v_justify = Style::Top });
-        for (uint8_t j = 0; j < 4 && i < PetalID::kNumPetals; ++j, ++i) {
-            row->add_child(new GalleryPetal(id_list[i], 60));
+        std::vector<Element *> cards;
+        for (uint8_t j = 0; j < 9 && i < PetalID::kNumPetals; ++j, ++i) {
+            cards.push_back(new GalleryPetal(id_list[i], 64));
         }
-        row->refactor();
-        elt->add_child(row);
+        rows.push_back(new Ui::HContainer(cards, 0, 5,
+            { .h_justify = Style::Left, .no_animation = 1 }));
     }
-    return new Ui::ScrollContainer(elt, 300);
+    return new Ui::ScrollContainer(new Ui::VContainer(rows, 0, 5,
+        { .h_justify = Style::Left, .no_animation = 1 }), 470);
 }
+
+class PetalGalleryHeader final : public Ui::Container {
+public:
+    PetalGalleryHeader() : Ui::Container({
+        new Ui::DynamicText(25, [](){ return I18n::tr(I18n::kPetalGallery); },
+            { .fill = Chrome::kTitle }),
+        new Ui::Button(34, 34,
+            new Ui::DynamicText(22, [](){ return std::string{"×"}; }),
+            [](Element *, uint8_t e){ if (e == Ui::kClick) Ui::panel_open = Panel::kNone; },
+            nullptr, { .fill = Chrome::kBtnDanger, .round_radius = 6 })
+    }, 616, 38, { .no_animation = 1 }) {}
+    void refactor() override {
+        for (Element *child : children) child->refactor();
+        width = 616;
+        height = 38;
+        children[0]->x = 0;
+        children[1]->x = (width - children[1]->width) / 2 - 2;
+    }
+};
 
 Element *Ui::make_petal_gallery() {
     Element *elt = new Ui::VContainer({
-        new Ui::DynamicText(25, [](){ return I18n::tr(I18n::kPetalGallery); }),
+        new PetalGalleryHeader(),
         make_scroll()
-    }, 15, 10, { 
+    }, 12, 10, {
         .fill = Chrome::kPanelDeep,
-        .line_width = 0,
+        .line_width = Chrome::kRim,
         .round_radius = Chrome::kRadius,
         .animate = [](Element *elt, Renderer &ctx){
             ctx.translate(0, (elt->animation - 1) * elt->height);

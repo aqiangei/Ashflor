@@ -15,6 +15,7 @@ namespace {
 
 MapZones g_zones[MapID::kNumMaps];
 MapTerrain g_terrain[MapID::kNumMaps];
+MapGen::BossAnchor g_boss[MapID::kNumMaps];
 uint8_t g_ready[MapID::kNumMaps] = {};
 
 struct ThemePalette {
@@ -115,7 +116,8 @@ void ring_valley(MapTerrain &t, ThemePalette const &p, uint32_t &rng,
 void spiral_farm(MapTerrain &t, ThemePalette const &p, uint32_t &rng,
                  float sx, float sy, int dir, int turn,
                  float gap, float wall_t, float seg_len, uint32_t n_seg,
-                 float valley_r, uint8_t seed0, uint8_t water) {
+                 float valley_r, uint8_t seed0, uint8_t water,
+                 float *out_x = nullptr, float *out_y = nullptr) {
     float x = sx, y = sy;
     int last = dir;
     for (uint32_t i = 0; i < n_seg; ++i) {
@@ -139,6 +141,8 @@ void spiral_farm(MapTerrain &t, ThemePalette const &p, uint32_t &rng,
                 : (last == 2) ? 0.f : (float)M_PI * 0.5f;
     ring_valley(t, p, rng, vx, vy, valley_r, wall_t * 1.05f, gate,
                 rng_range(rng, 0.5f, 0.8f), (uint8_t)(seed0 + 50), water);
+    if (out_x) *out_x = vx;
+    if (out_y) *out_y = vy;
 }
 
 // Maze cell: thick walls with random gates on each side of a rect.
@@ -146,6 +150,8 @@ void maze_cell(MapTerrain &t, ThemePalette const &p, uint32_t &rng, uint8_t s,
                float L, float T, float R, float B, float thick, float gate_min) {
     float w = R - L, h = B - T;
     if (w < 900.f || h < 900.f) return;
+    // Hard floor: player-passable maze gates must stay ≥ kMinMazeGate (总纲 R7).
+    gate_min = std::max(gate_min, Map::kMinMazeGate);
     float gw = std::max(gate_min, w * rng_range(rng, 0.18f, 0.32f));
     float gh = std::max(gate_min, h * rng_range(rng, 0.18f, 0.32f));
     auto punch_h = [&](float y0, float y1, float gx, uint8_t ss) {
@@ -168,6 +174,10 @@ void rock_field(MapTerrain &t, ThemePalette const &p, uint32_t &rng, uint8_t s0,
         float rad = rng_range(rng, rad_lo, rad_hi);
         float x = rng_range(rng, L + rad, R - rad);
         float y = rng_range(rng, T + rad, B - rad);
+        // Keep spawn plaza and future artery axes clear — rocks here create traps.
+        if (Map::in_spawn_plaza(x, y)) continue;
+        float ax = (float)ARENA_WIDTH * 0.5f, ay = (float)ARENA_HEIGHT * 0.5f;
+        if (std::fabs(x - ax) < 700.f || std::fabs(y - ay) < 700.f) continue;
         hill_circle(t, p, (uint8_t)(s0 + i), x, y, rad);
     }
 }
@@ -212,130 +222,153 @@ void append_biome_ecos(MapZones &zones, uint8_t map_id, ZoneDefinition const &ha
 
     switch (map_id) {
     case MapID::kGarden:
+        // Fewer, larger pockets (小路大路 + 大 Zone).
         add(eco_from(soft, "Meadow", 1, 0.95f, {
             { MobID::kBee, 140000 }, { MobID::kLadybug, 120000 }, { MobID::kRock, 80000 },
-            { MobID::kSquare, 1 }}), 2000.f, 3400.f, 3);
+            { MobID::kSquare, 1 }}), 2800.f, 4200.f, 3);
         add(eco_from(mid, "Hedge Maze", 2, 1.05f, {
             { MobID::kSpider, 110000 }, { MobID::kBee, 90000 }, { MobID::kBeetle, 80000 },
-            { MobID::kCentipede, 14000 }, { MobID::kSquare, 1 }}), 1600.f, 2600.f, 3);
+            { MobID::kCentipede, 14000 }, { MobID::kSquare, 1 }}), 2400.f, 3600.f, 3);
         add(eco_from(mid, "Creek Banks", 2, 1.0f, {
             { MobID::kHornet, 100000 }, { MobID::kBee, 90000 }, { MobID::kLadybug, 70000 },
-            { MobID::kSquare, 1 }}), 1400.f, 2400.f, 2);
+            { MobID::kSquare, 1 }}), 2200.f, 3400.f, 2);
         add(eco_from(hard, "Thorn Field", 3, 1.1f, {
             { MobID::kDarkLadybug, 130000 }, { MobID::kHornet, 110000 }, { MobID::kSpider, 100000 },
-            { MobID::kEvilCentipede, 16000 }, { MobID::kSquare, 1 }}), 1100.f, 1800.f, 2);
+            { MobID::kEvilCentipede, 16000 }, { MobID::kSquare, 1 }}), 2000.f, 3000.f, 2);
         add(eco_from(hard, "Flower Heart", 3, 1.2f, {
-            { MobID::kMassiveBeetle, 5000 }, { MobID::kHornet, 120000 }, { MobID::kDarkLadybug, 100000 },
-            { MobID::kAntHole, 3000 }, { MobID::kSquare, 1 }}), 2600.f, 3400.f, 1);
+            { MobID::kMassiveBeetle, 5000 }, { MobID::kHornet, 120000 },
+            { MobID::kDarkLadybug, 100000 }, { MobID::kBoulder, 3000 },
+            { MobID::kSquare, 1 }}), 3600.f, 4800.f, 1);
         break;
     case MapID::kDesert:
         add(eco_from(soft, "Open Dunes", 1, 0.9f, {
-            { MobID::kSandstorm, 120000 }, { MobID::kRock, 140000 }, { MobID::kLadybug, 80000 },
-            { MobID::kSquare, 1 }}), 2200.f, 3600.f, 3);
+            { MobID::kCactus, 130000 }, { MobID::kDuneBeetle, 130000 },
+            { MobID::kSandMite, 155000 }, { MobID::kScorpion, 85000 },
+            { MobID::kSquare, 1 }}), 2800.f, 4200.f, 3);
         add(eco_from(mid, "Cactus Maze", 2, 1.05f, {
-            { MobID::kBeetle, 120000 }, { MobID::kSandstorm, 100000 }, { MobID::kSpider, 70000 },
-            { MobID::kSquare, 1 }}), 1500.f, 2500.f, 3);
+            { MobID::kCactus, 130000 }, { MobID::kDuneBeetle, 130000 },
+            { MobID::kDuneSpider, 105000 }, { MobID::kDuneHornet, 95000 },
+            { MobID::kScorpion, 85000 }, { MobID::kSquare, 1 }}), 2400.f, 3600.f, 3);
         add(eco_from(mid, "Dry River", 2, 1.0f, {
-            { MobID::kBoulder, 140000 }, { MobID::kRock, 120000 }, { MobID::kBee, 60000 },
-            { MobID::kSquare, 1 }}), 1400.f, 2300.f, 2);
+            { MobID::kDuneBeetle, 130000 }, { MobID::kDuneSpider, 105000 },
+            { MobID::kDuneHornet, 95000 }, { MobID::kSandstorm, 90000 },
+            { MobID::kScorpion, 85000 }, { MobID::kSquare, 1 }}), 2200.f, 3400.f, 2);
         add(eco_from(hard, "Bone Yard", 3, 1.1f, {
-            { MobID::kHornet, 120000 }, { MobID::kBeetle, 100000 }, { MobID::kEvilCentipede, 20000 },
-            { MobID::kSquare, 1 }}), 1100.f, 1800.f, 2);
+            { MobID::kDuneSpider, 105000 }, { MobID::kSandstorm, 90000 },
+            { MobID::kScorpion, 85000 }, { MobID::kDesertCentipede, 6000 },
+            { MobID::kDuneTitan, 3500 }, { MobID::kSquare, 1 }}), 2000.f, 3000.f, 2);
         add(eco_from(hard, "Sandworm Nest", 3, 1.2f, {
-            { MobID::kMassiveBeetle, 4500 }, { MobID::kSandstorm, 140000 }, { MobID::kHornet, 100000 },
-            { MobID::kSquare, 1 }}), 2600.f, 3400.f, 1);
+            { MobID::kSandstorm, 90000 }, { MobID::kScorpion, 85000 },
+            { MobID::kDesertCentipede, 6000 }, { MobID::kDuneTitan, 3500 },
+            { MobID::kSquare, 1 }}), 3600.f, 4800.f, 1);
         break;
     case MapID::kOcean:
         add(eco_from(soft, "Shallow Sea", 1, 0.9f, {
-            { MobID::kRock, 150000 }, { MobID::kBee, 90000 }, { MobID::kLadybug, 70000 },
-            { MobID::kSquare, 1 }}), 2200.f, 3600.f, 3);
+            { MobID::kSeaFry, 150000 }, { MobID::kMoonJelly, 110000 },
+            { MobID::kCoralStar, 120000 }, { MobID::kReefCrab, 100000 },
+            { MobID::kSquare, 1 }}), 2800.f, 4200.f, 3);
         add(eco_from(mid, "Coral Maze", 2, 1.05f, {
-            { MobID::kHornet, 110000 }, { MobID::kBeetle, 90000 }, { MobID::kBoulder, 100000 },
-            { MobID::kSquare, 1 }}), 1500.f, 2500.f, 3);
+            { MobID::kMoonJelly, 110000 }, { MobID::kCoralStar, 120000 },
+            { MobID::kReefCrab, 100000 }, { MobID::kSpinePuffer, 105000 },
+            { MobID::kSquare, 1 }}), 2400.f, 3600.f, 3);
         add(eco_from(mid, "Kelp Forest", 2, 1.0f, {
-            { MobID::kBee, 100000 }, { MobID::kSpider, 80000 }, { MobID::kSandstorm, 70000 },
-            { MobID::kSquare, 1 }}), 1400.f, 2300.f, 2);
+            { MobID::kReefCrab, 100000 }, { MobID::kSpinePuffer, 105000 },
+            { MobID::kSeaLeech, 95000 }, { MobID::kMorayEel, 90000 },
+            { MobID::kSquare, 1 }}), 2200.f, 3400.f, 2);
         add(eco_from(hard, "Shipwreck", 3, 1.1f, {
-            { MobID::kHornet, 130000 }, { MobID::kEvilCentipede, 22000 }, { MobID::kBeetle, 90000 },
-            { MobID::kSquare, 1 }}), 1100.f, 1800.f, 2);
+            { MobID::kSpinePuffer, 105000 }, { MobID::kSeaLeech, 95000 },
+            { MobID::kMorayEel, 90000 }, { MobID::kInkCuttle, 6500 },
+            { MobID::kAbyssShark, 3500 }, { MobID::kSquare, 1 }}), 2000.f, 3000.f, 2);
         add(eco_from(hard, "Abyss Core", 3, 1.2f, {
-            { MobID::kMassiveBeetle, 4800 }, { MobID::kHornet, 130000 }, { MobID::kEvilCentipede, 28000 },
-            { MobID::kSquare, 1 }}), 2600.f, 3400.f, 1);
+            { MobID::kSeaLeech, 95000 }, { MobID::kMorayEel, 90000 },
+            { MobID::kInkCuttle, 6500 }, { MobID::kAbyssShark, 3500 },
+            { MobID::kSquare, 1 }}), 3600.f, 4800.f, 1);
         break;
     case MapID::kPolar:
         add(eco_from(soft, "Snow Fields", 1, 0.9f, {
-            { MobID::kRock, 150000 }, { MobID::kLadybug, 100000 }, { MobID::kBee, 70000 },
-            { MobID::kSquare, 1 }}), 2200.f, 3600.f, 3);
+            { MobID::kSnowHare, 135000 }, { MobID::kIceSpider, 120000 },
+            { MobID::kFrostHornet, 105000 }, { MobID::kSnowMite, 155000 },
+            { MobID::kSquare, 1 }}), 2800.f, 4200.f, 3);
         add(eco_from(mid, "Pine Maze", 2, 1.05f, {
-            { MobID::kSpider, 110000 }, { MobID::kBoulder, 120000 }, { MobID::kBee, 70000 },
-            { MobID::kSquare, 1 }}), 1500.f, 2500.f, 3);
+            { MobID::kSnowHare, 135000 }, { MobID::kIceSpider, 120000 },
+            { MobID::kFrostHornet, 105000 }, { MobID::kRimeCentipede, 100000 },
+            { MobID::kGlacierBeast, 90000 }, { MobID::kSquare, 1 }}), 2400.f, 3600.f, 3);
         add(eco_from(mid, "Ice River", 2, 1.0f, {
-            { MobID::kBoulder, 140000 }, { MobID::kHornet, 90000 }, { MobID::kBee, 60000 },
-            { MobID::kSquare, 1 }}), 1400.f, 2300.f, 2);
+            { MobID::kIceSpider, 120000 }, { MobID::kRimeCentipede, 100000 },
+            { MobID::kBlizzardWisp, 110000 }, { MobID::kGlacierBeast, 90000 },
+            { MobID::kSquare, 1 }}), 2200.f, 3400.f, 2);
         add(eco_from(hard, "Frost Rift", 3, 1.1f, {
-            { MobID::kDarkLadybug, 130000 }, { MobID::kHornet, 110000 }, { MobID::kSpider, 100000 },
-            { MobID::kSquare, 1 }}), 1100.f, 1800.f, 2);
+            { MobID::kRimeCentipede, 100000 }, { MobID::kBlizzardWisp, 110000 },
+            { MobID::kGlacierBeast, 90000 }, { MobID::kFrostYeti, 6500 },
+            { MobID::kIceGolem, 3500 }, { MobID::kSquare, 1 }}), 2000.f, 3000.f, 2);
         add(eco_from(hard, "Frost Core", 3, 1.2f, {
-            { MobID::kMassiveBeetle, 4500 }, { MobID::kDarkLadybug, 120000 }, { MobID::kEvilCentipede, 24000 },
-            { MobID::kAntHole, 2500 }, { MobID::kSquare, 1 }}), 2600.f, 3400.f, 1);
+            { MobID::kRimeCentipede, 100000 }, { MobID::kGlacierBeast, 90000 },
+            { MobID::kFrostYeti, 6500 }, { MobID::kIceGolem, 3500 },
+            { MobID::kSquare, 1 }}), 3600.f, 4800.f, 1);
         break;
     case MapID::kJungle:
-        // Eco pockets ≈ design zones 1–6 (rings cover Edge/Deep; wasp in every pocket)
+        // Fewer, larger pockets (wasp in every pocket)
         add(eco_from(soft, "Jungle Edge", 1, 0.95f, {
             { MobID::kLeafBeetle, 140000 }, { MobID::kJungleMite, 130000 }, { MobID::kVineBug, 90000 },
-            { MobID::kJungleWasp, 100000 }, { MobID::kSquare, 1 }}), 2000.f, 3400.f, 3);
+            { MobID::kJungleWasp, 100000 }, { MobID::kSquare, 1 }}), 2800.f, 4200.f, 3);
         add(eco_from(mid, "Dense Canopy", 2, 1.1f, {
             { MobID::kLeafBeetle, 100000 }, { MobID::kJungleSpider, 130000 }, { MobID::kVineBug, 90000 },
-            { MobID::kEmeraldMantis, 70000 }, { MobID::kJungleWasp, 100000 }, { MobID::kSquare, 1 }}), 1500.f, 2500.f, 3);
+            { MobID::kEmeraldMantis, 70000 }, { MobID::kJungleWasp, 100000 }, { MobID::kSquare, 1 }}), 2400.f, 3600.f, 3);
         add(eco_from(mid, "Poison Grove", 2, 1.05f, {
             { MobID::kPoisonToad, 110000 }, { MobID::kSporeMushroom, 120000 },
             { MobID::kCarnivorousPlant, 80000 }, { MobID::kJungleMite, 90000 },
-            { MobID::kJungleWasp, 100000 }, { MobID::kSquare, 1 }}), 1400.f, 2300.f, 2);
+            { MobID::kJungleWasp, 100000 }, { MobID::kSquare, 1 }}), 2200.f, 3400.f, 2);
         add(eco_from(mid, "Jungle River", 2, 1.0f, {
             { MobID::kRiverCrab, 130000 }, { MobID::kPoisonToad, 100000 }, { MobID::kJungleSpider, 110000 },
-            { MobID::kJungleWasp, 100000 }, { MobID::kSquare, 1 }}), 1400.f, 2300.f, 2);
+            { MobID::kJungleWasp, 100000 }, { MobID::kSquare, 1 }}), 2200.f, 3400.f, 2);
         add(eco_from(hard, "Ancient Ruins", 3, 1.15f, {
             { MobID::kEmeraldMantis, 110000 }, { MobID::kJungleSpider, 100000 },
             { MobID::kStoneGuardian, 90000 }, { MobID::kCarnivorousPlant, 80000 },
-            { MobID::kJungleWasp, 100000 }, { MobID::kSquare, 1 }}), 1100.f, 1800.f, 2);
+            { MobID::kJungleWasp, 100000 }, { MobID::kSquare, 1 }}), 2000.f, 3000.f, 2);
         add(eco_from(hard, "Heart of Jungle", 3, 1.25f, {
             { MobID::kEmeraldMantis, 100000 }, { MobID::kStoneGuardian, 110000 },
             { MobID::kCarnivorousPlant, 100000 }, { MobID::kVineBug, 80000 },
-            { MobID::kJungleWasp, 100000 }, { MobID::kSquare, 1 }}), 2600.f, 3400.f, 1);
+            { MobID::kJungleWasp, 100000 }, { MobID::kSquare, 1 }}), 3600.f, 4800.f, 1);
         break;
     case MapID::kAntHell:
         add(eco_from(soft, "Forage Halls", 1, 1.0f, {
-            { MobID::kBabyAnt, 180000 }, { MobID::kWorkerAnt, 140000 }, { MobID::kRock, 80000 },
-            { MobID::kSquare, 1 }}), 1800.f, 3000.f, 3);
+            { MobID::kBabyAnt, 180000 }, { MobID::kWorkerAnt, 140000 },
+            { MobID::kAntHole, 4000 }, { MobID::kSquare, 1 }}), 2800.f, 4200.f, 3);
         add(eco_from(mid, "Dirt Maze", 2, 1.1f, {
-            { MobID::kWorkerAnt, 150000 }, { MobID::kSoldierAnt, 120000 }, { MobID::kBabyAnt, 90000 },
-            { MobID::kSquare, 1 }}), 1400.f, 2400.f, 3);
+            { MobID::kWorkerAnt, 150000 }, { MobID::kSoldierAnt, 120000 },
+            { MobID::kBabyAnt, 90000 }, { MobID::kAntHole, 5000 },
+            { MobID::kSquare, 1 }}), 2400.f, 3600.f, 3);
         add(eco_from(mid, "Fungal Farm", 2, 1.05f, {
-            { MobID::kWorkerAnt, 140000 }, { MobID::kBabyAnt, 120000 }, { MobID::kAntHole, 4000 },
-            { MobID::kSquare, 1 }}), 1300.f, 2200.f, 2);
+            { MobID::kWorkerAnt, 140000 }, { MobID::kBabyAnt, 120000 },
+            { MobID::kAntHole, 4000 }, { MobID::kSquare, 1 }}), 2200.f, 3400.f, 2);
         add(eco_from(hard, "Soldier Patrol", 3, 1.15f, {
-            { MobID::kSoldierAnt, 180000 }, { MobID::kWorkerAnt, 100000 }, { MobID::kAntHole, 6000 },
-            { MobID::kSquare, 1 }}), 1100.f, 1800.f, 2);
+            { MobID::kSoldierAnt, 180000 }, { MobID::kWorkerAnt, 100000 },
+            { MobID::kAntHole, 6000 }, { MobID::kSquare, 1 }}), 2000.f, 3000.f, 2);
         add(eco_from(hard, "Queen Nest", 3, 1.3f, {
-            { MobID::kQueenAnt, 3500 }, { MobID::kSoldierAnt, 160000 }, { MobID::kAntHole, 8000 },
-            { MobID::kMassiveBeetle, 2500 }, { MobID::kSquare, 1 }}), 2600.f, 3400.f, 1);
+            { MobID::kQueenAnt, 3500 }, { MobID::kSoldierAnt, 160000 },
+            { MobID::kAntHole, 8000 }, { MobID::kSquare, 1 }}), 3600.f, 4800.f, 1);
         break;
     default: // Volcano
         add(eco_from(soft, "Ash Plain", 1, 0.9f, {
-            { MobID::kRock, 160000 }, { MobID::kLadybug, 90000 }, { MobID::kBeetle, 70000 },
-            { MobID::kSquare, 1 }}), 2200.f, 3600.f, 3);
+            { MobID::kAshMite, 155000 }, { MobID::kCinderMoth, 135000 },
+            { MobID::kLavaBeetle, 125000 }, { MobID::kEmberWasp, 105000 },
+            { MobID::kSquare, 1 }}), 2800.f, 4200.f, 3);
         add(eco_from(mid, "Obsidian Maze", 2, 1.05f, {
-            { MobID::kSoldierAnt, 110000 }, { MobID::kBeetle, 100000 }, { MobID::kBoulder, 100000 },
-            { MobID::kSquare, 1 }}), 1500.f, 2500.f, 3);
+            { MobID::kCinderMoth, 135000 }, { MobID::kLavaBeetle, 125000 },
+            { MobID::kEmberWasp, 105000 }, { MobID::kMagmaCrab, 105000 },
+            { MobID::kFireSpider, 110000 }, { MobID::kSquare, 1 }}), 2400.f, 3600.f, 3);
         add(eco_from(mid, "Lava Banks", 2, 1.0f, {
-            { MobID::kBeetle, 110000 }, { MobID::kHornet, 90000 }, { MobID::kSpider, 70000 },
-            { MobID::kSquare, 1 }}), 1400.f, 2300.f, 2);
+            { MobID::kLavaBeetle, 125000 }, { MobID::kMagmaCrab, 105000 },
+            { MobID::kFireSpider, 110000 }, { MobID::kMagmaCentipede, 95000 },
+            { MobID::kSquare, 1 }}), 2200.f, 3400.f, 2);
         add(eco_from(hard, "Magma Nest", 3, 1.15f, {
-            { MobID::kSoldierAnt, 130000 }, { MobID::kHornet, 110000 }, { MobID::kBeetle, 90000 },
-            { MobID::kSquare, 1 }}), 1100.f, 1800.f, 2);
+            { MobID::kMagmaCrab, 105000 }, { MobID::kFireSpider, 110000 },
+            { MobID::kMagmaCentipede, 95000 }, { MobID::kObsidianGolem, 6500 },
+            { MobID::kLavaColossus, 3500 }, { MobID::kSquare, 1 }}), 2000.f, 3000.f, 2);
         add(eco_from(hard, "Molten Heart", 3, 1.25f, {
-            { MobID::kMassiveBeetle, 5000 }, { MobID::kSoldierAnt, 140000 }, { MobID::kHornet, 110000 },
-            { MobID::kSquare, 1 }}), 2600.f, 3400.f, 1);
+            { MobID::kFireSpider, 110000 }, { MobID::kMagmaCentipede, 95000 },
+            { MobID::kObsidianGolem, 6500 }, { MobID::kLavaColossus, 3500 },
+            { MobID::kSquare, 1 }}), 3600.f, 4800.f, 1);
         break;
     }
 
@@ -344,21 +377,30 @@ void append_biome_ecos(MapZones &zones, uint8_t map_id, ZoneDefinition const &ha
     for (uint32_t pi = 0; pi < pockets.size(); ++pi) {
         Pocket const &pk = pockets[pi];
         for (uint32_t n = 0; n < pk.count; ++n) {
-            float ww = rng_range(rng, pk.min_sz, pk.max_sz);
-            float hh = rng_range(rng, pk.min_sz * 0.72f, pk.max_sz * 0.95f);
+            // Large eco zones (少而大): inflate design sizes ~1.5× for path-maze hunting grounds.
+            float ww = rng_range(rng, pk.min_sz * 1.45f, pk.max_sz * 1.55f);
+            float hh = rng_range(rng, pk.min_sz * 1.05f, pk.max_sz * 1.35f);
             // Prefer corners / mid-rings via angle buckets
             float ang = (float)(2.0 * M_PI) * ((float)(pi * 3 + n) + rng_f(rng) * 0.35f) / 12.f;
             float dist = rng_range(rng, 3800.f, 10500.f);
             if (pk.def.difficulty >= 3) dist = rng_range(rng, 6500.f, 11500.f);
             else if (pk.def.difficulty <= 1) dist = rng_range(rng, 3200.f, 7500.f);
+            // The spawn hub must stay free of eco pockets. Push the pocket outward
+            // along its own bearing until its AABB clears the hub rectangle —
+            // a plain "distance > X" test dropped most pockets near the centre.
+            {
+                float ca = std::cos(ang), sa = std::sin(ang);
+                float need = 0.f;
+                if (std::fabs(ca) > 1e-3f)
+                    need = std::max(need, (hub_hw + ww * 0.5f) / std::fabs(ca));
+                if (std::fabs(sa) > 1e-3f)
+                    need = std::max(need, (hub_hh + hh * 0.5f) / std::fabs(sa));
+                if (dist < need) dist = need;
+            }
             float mx = cx + std::cos(ang) * dist;
             float my = cy + std::sin(ang) * dist;
             float x = fclamp(mx - ww * 0.5f, 350.f, W - ww - 350.f);
             float y = fclamp(my - hh * 0.5f, 350.f, H - hh - 350.f);
-            if (std::fabs((x + ww * 0.5f) - cx) < hub_hw * 0.85f
-                && std::fabs((y + hh * 0.5f) - cy) < hub_hh * 0.85f
-                && pk.def.difficulty >= 2)
-                continue;
             // Color = ring color for that difficulty (paint ignores pockets anyway)
             uint32_t col = (pk.def.difficulty >= 3) ? hard.color
                          : (pk.def.difficulty == 2) ? mid.color : soft.color;
@@ -374,10 +416,11 @@ void build_zones(MapZones &zones, uint8_t map_id, uint32_t &rng,
     MapZones const &tmpl = MAPS[map_id];
     ZoneDefinition hard = tmpl[0], mid = tmpl[1], soft = tmpl[2], hub = tmpl[3];
 
-    float hub_hw = rng_range(rng, 2200.f, 2800.f);
-    float hub_hh = rng_range(rng, 1800.f, 2300.f);
-    float m1 = rng_range(rng, 0.26f, 0.32f);
-    float m2 = rng_range(rng, 0.10f, 0.15f);
+    // Compact plaza — leave room for large eco zones / path network (少空旷、大 Zone).
+    float hub_hw = rng_range(rng, 3200.f, 3800.f);
+    float hub_hh = rng_range(rng, 2400.f, 3000.f);
+    float m1 = rng_range(rng, 0.22f, 0.28f);
+    float m2 = rng_range(rng, 0.08f, 0.12f);
 
     push_zone(zones, hard, 0, 0, W, H, 3, hard.color);
     push_zone(zones, mid, W * m2, H * m2, W * (1.f - m2), H * (1.f - m2), 2, mid.color);
@@ -402,29 +445,242 @@ void berm(MapTerrain &t, ThemePalette const &p, uint32_t &rng, float W, float H,
 
 void safe_arteries(MapTerrain &t, ThemePalette const &p, uint32_t &rng,
                    float W, float H, float cx, float cy, uint8_t map_id) {
-    float ch = rng_range(rng, 480.f, 620.f); // wide enough for many players
+    // 大路：十字主干加宽；斜向为小路
+    float big = rng_range(rng, 560.f, 720.f);
+    float small = rng_range(rng, 380.f, 480.f);
     push_feat(t, TerrainKind::kChannel, TerrainShape::kRiver, TerrainFlags::kNoAttack,
-              cx, 400.f, cx, H - 400.f, p.channel, (uint8_t)(3 + map_id), ch);
+              cx, 400.f, cx, H - 400.f, p.channel, (uint8_t)(3 + map_id), big);
     push_feat(t, TerrainKind::kChannel, TerrainShape::kRiver, TerrainFlags::kNoAttack,
-              400.f, cy, W - 400.f, cy, p.channel, (uint8_t)(13 + map_id), ch);
+              400.f, cy, W - 400.f, cy, p.channel, (uint8_t)(13 + map_id), big);
     float d = rng_range(rng, 0.25f, 0.75f);
     push_feat(t, TerrainKind::kChannel, TerrainShape::kRiver, TerrainFlags::kNoAttack,
               W * 0.08f, H * d, W * 0.92f, H * (1.f - d * 0.4f), p.channel,
-              (uint8_t)(23 + map_id), ch * 0.8f);
+              (uint8_t)(23 + map_id), small);
+    // Second small diagonal for path network density
+    float d2 = rng_range(rng, 0.2f, 0.8f);
+    push_feat(t, TerrainKind::kChannel, TerrainShape::kRiver, TerrainFlags::kNoAttack,
+              W * 0.12f, H * (1.f - d2 * 0.35f), W * 0.88f, H * d2, p.channel,
+              (uint8_t)(33 + map_id), small * 0.85f);
+}
+
+// Point on a safe artery (channel) — used while rebuilding terrain.
+uint8_t point_on_channel(MapTerrain const &t, float x, float y) {
+    for (TerrainFeature const &f : t) {
+        if (f.kind != TerrainKind::kChannel) continue;
+        if (Map::point_in_feature(f, x, y)) return 1;
+    }
+    return 0;
+}
+
+// Emit up to 4 AABB remnants around a cleared rect punched out of src.
+void emit_aabb_minus_rect(MapTerrain &out, TerrainFeature const &src,
+                          float cl, float ct, float cr, float cb) {
+    float L = src.left, T = src.top, R = src.right, B = src.bottom;
+    float pl = std::max(L, cl), pt = std::max(T, ct), pr = std::min(R, cr), pb = std::min(B, cb);
+    if (pl >= pr || pt >= pb) {
+        if (out.size() < MAX_TERRAIN_PER_MAP) out.push(src);
+        return;
+    }
+    auto emit = [&](float l, float top, float r, float b) {
+        if (r - l < 80.f || b - top < 80.f) return;
+        if (out.size() >= MAX_TERRAIN_PER_MAP) return;
+        TerrainFeature g = src;
+        g.left = l; g.top = top; g.right = r; g.bottom = b;
+        out.push(g);
+    };
+    if (pt > T + 40.f) emit(L, T, R, pt);
+    if (B > pb + 40.f) emit(L, pb, R, B);
+    if (pl > L + 40.f) emit(L, pt, pl, pb);
+    if (R > pr + 40.f) emit(pr, pt, R, pb);
+}
+
+// Punch a vertical (axis==0) or horizontal (axis==1) band out of an AABB.
+void emit_aabb_minus_band(MapTerrain &out, TerrainFeature const &src,
+                          float c0, float c1, uint8_t axis) {
+    float L = src.left, T = src.top, R = src.right, B = src.bottom;
+    if (axis == 0) {
+        float a = std::max(L, c0), b = std::min(R, c1);
+        if (b <= a) {
+            if (out.size() < MAX_TERRAIN_PER_MAP) out.push(src);
+            return;
+        }
+        auto emit = [&](float l, float r) {
+            if (r - l < 80.f) return;
+            if (out.size() >= MAX_TERRAIN_PER_MAP) return;
+            TerrainFeature g = src;
+            g.left = l; g.right = r;
+            out.push(g);
+        };
+        emit(L, a);
+        emit(b, R);
+    } else {
+        float a = std::max(T, c0), b = std::min(B, c1);
+        if (b <= a) {
+            if (out.size() < MAX_TERRAIN_PER_MAP) out.push(src);
+            return;
+        }
+        auto emit = [&](float top, float bot) {
+            if (bot - top < 80.f) return;
+            if (out.size() >= MAX_TERRAIN_PER_MAP) return;
+            TerrainFeature g = src;
+            g.top = top; g.bottom = bot;
+            out.push(g);
+        };
+        emit(T, a);
+        emit(b, B);
+    }
+}
+
+// Sample channel spine through an AABB → cut band (axis + [c0,c1]).
+uint8_t channel_cut_band(TerrainFeature const &ch, float L, float T, float R, float B,
+                         float &c0, float &c1, uint8_t &axis) {
+    float hw = Map::feature_half_width(ch) + 100.f; // player-margin carve
+    float xmin = 1e9f, xmax = -1e9f, ymin = 1e9f, ymax = -1e9f;
+    int n = 0;
+    for (int i = 0; i <= 56; ++i) {
+        float t = (float)i / 56.f;
+        float cx, cy;
+        Map::river_center_at(ch, t, cx, cy);
+        if (cx + hw < L || cx - hw > R || cy + hw < T || cy - hw > B) continue;
+        xmin = std::min(xmin, cx - hw);
+        xmax = std::max(xmax, cx + hw);
+        ymin = std::min(ymin, cy - hw);
+        ymax = std::max(ymax, cy + hw);
+        ++n;
+    }
+    if (!n) return 0;
+    float xspan = xmax - xmin, yspan = ymax - ymin;
+    if (xspan <= yspan) {
+        axis = 0;
+        c0 = std::max(L, xmin);
+        c1 = std::min(R, xmax);
+    } else {
+        axis = 1;
+        c0 = std::max(T, ymin);
+        c1 = std::min(B, ymax);
+    }
+    return (c1 - c0) > 40.f ? 1 : 0;
+}
+
+// After arteries are placed: carve them (and the spawn plaza) out of impassable
+// hills/water so geometry matches collision and cannot trap players in pockets.
+void resolve_terrain_overlaps(MapTerrain &t) {
+    MapTerrain channels;
+    for (TerrainFeature const &f : t) {
+        if (f.kind == TerrainKind::kChannel && channels.size() < MAX_TERRAIN_PER_MAP)
+            channels.push(f);
+    }
+
+    float px = MAP_SPAWN_X, py = MAP_SPAWN_Y;
+    // Plaza clear box ≈ spawn ellipse (5200×4000)
+    float pl = px - 4800.f, pt = py - 3600.f, pr = px + 4800.f, pb = py + 3600.f;
+
+    MapTerrain out;
+    // Keep channels first
+    for (TerrainFeature const &f : channels) {
+        if (out.size() < MAX_TERRAIN_PER_MAP) out.push(f);
+    }
+
+    for (TerrainFeature const &f : t) {
+        if (f.kind == TerrainKind::kChannel) continue;
+        if (!(f.flags & TerrainFlags::kImpassable)) {
+            if (out.size() < MAX_TERRAIN_PER_MAP) out.push(f);
+            continue;
+        }
+
+        // Circles / ellipses: drop if center sits on artery or plaza
+        if (f.shape == TerrainShape::kCircle || f.shape == TerrainShape::kEllipse) {
+            float cx = f.left, cy = f.top;
+            if (Map::in_spawn_plaza(cx, cy) || point_on_channel(channels, cx, cy))
+                continue;
+            if (out.size() < MAX_TERRAIN_PER_MAP) out.push(f);
+            continue;
+        }
+
+        // Path waters: keep (collision already carves via channel priority)
+        if (f.shape == TerrainShape::kRiver || f.shape == TerrainShape::kSpiral) {
+            if (out.size() < MAX_TERRAIN_PER_MAP) out.push(f);
+            continue;
+        }
+
+        // AABB hills/water: punch plaza, then each channel band
+        if (f.shape != TerrainShape::kAABB) {
+            if (out.size() < MAX_TERRAIN_PER_MAP) out.push(f);
+            continue;
+        }
+
+        StaticArray<TerrainFeature, 24> rects;
+        rects.push(f);
+
+        // Plaza punch
+        {
+            StaticArray<TerrainFeature, 24> next;
+            for (uint32_t i = 0; i < rects.size(); ++i) {
+                TerrainFeature const &r = rects[i];
+                float cx = 0.5f * (r.left + r.right), cy = 0.5f * (r.top + r.bottom);
+                if (Map::in_spawn_plaza(cx, cy) &&
+                    (r.right - r.left) < 3600.f && (r.bottom - r.top) < 3600.f)
+                    continue; // small blocker wholly in plaza
+                emit_aabb_minus_rect(next, r, pl, pt, pr, pb);
+            }
+            rects = next;
+        }
+
+        // Channel punches (iterate channels × current rects)
+        for (TerrainFeature const &ch : channels) {
+            StaticArray<TerrainFeature, 48> next;
+            for (uint32_t i = 0; i < rects.size(); ++i) {
+                TerrainFeature const &r = rects[i];
+                float c0, c1;
+                uint8_t axis = 0;
+                if (!channel_cut_band(ch, r.left, r.top, r.right, r.bottom, c0, c1, axis)) {
+                    if (next.size() < 48) next.push(r);
+                    continue;
+                }
+                // Fully covered by cut → drop
+                if (axis == 0 && c0 <= r.left + 40.f && c1 >= r.right - 40.f) continue;
+                if (axis == 1 && c0 <= r.top + 40.f && c1 >= r.bottom - 40.f) continue;
+                MapTerrain tmp;
+                emit_aabb_minus_band(tmp, r, c0, c1, axis);
+                for (TerrainFeature const &g : tmp) {
+                    if (next.size() < 48) next.push(g);
+                }
+            }
+            // Copy next → rects (cap at 24 for next channel pass)
+            rects.clear();
+            for (uint32_t i = 0; i < next.size() && rects.size() < 24; ++i)
+                rects.push(next[i]);
+        }
+
+        for (uint32_t i = 0; i < rects.size(); ++i) {
+            TerrainFeature const &r = rects[i];
+            float cx = 0.5f * (r.left + r.right), cy = 0.5f * (r.top + r.bottom);
+            if (Map::in_spawn_plaza(cx, cy)) continue;
+            if (point_on_channel(channels, cx, cy)) continue;
+            if (out.size() < MAX_TERRAIN_PER_MAP) out.push(r);
+        }
+    }
+
+    t = out;
 }
 
 // ---- Biome terrain ----
 
 void gen_garden(MapTerrain &t, ThemePalette const &p, uint32_t &rng, float W, float H, float cx, float cy) {
-    float gap = rng_range(rng, 1150.f, 1450.f);
+    // 大路主廊道略加宽；迷宫内口仍由 kMinMazeGate 保底
+    float gap = rng_range(rng, 1250.f, 1600.f);
     float wall = rng_range(rng, 420.f, 580.f);
-    // Hedge maze blocks (tree-hedge walls)
-    maze_cell(t, p, rng, 30, W * 0.08f, H * 0.08f, W * 0.42f, H * 0.42f, wall, gap * 0.7f);
-    maze_cell(t, p, rng, 50, W * 0.55f, H * 0.10f, W * 0.92f, H * 0.48f, wall * 0.9f, gap * 0.65f);
-    maze_cell(t, p, rng, 70, W * 0.10f, H * 0.55f, W * 0.45f, H * 0.92f, wall, gap * 0.7f);
-    // Spiral farm → flower-heart valley
+    // Hedge maze blocks (tree-hedge walls) — 小路门宽
+    maze_cell(t, p, rng, 30, W * 0.08f, H * 0.08f, W * 0.42f, H * 0.42f, wall, gap * 0.65f);
+    maze_cell(t, p, rng, 50, W * 0.55f, H * 0.10f, W * 0.92f, H * 0.48f, wall * 0.9f, gap * 0.6f);
+    maze_cell(t, p, rng, 70, W * 0.10f, H * 0.55f, W * 0.45f, H * 0.92f, wall, gap * 0.65f);
+    // 东西向大路廊道串联迷宫与螺旋农场
+    corridor_h(t, p, 40, W * 0.18f, W * 0.82f, cy - 200.f, gap * 0.95f, wall * 0.85f, 0);
+    // Spiral farm → flower-heart valley (Boss: Flower Guardian)
+    float bx = 0.f, by = 0.f;
     spiral_farm(t, p, rng, cx + 2000.f, cy - 200.f, 0, +1, gap, wall,
-                rng_range(rng, 2600.f, 3400.f), 3, rng_range(rng, 1300.f, 1700.f), 90, 0);
+                rng_range(rng, 2600.f, 3400.f), 3, rng_range(rng, 1300.f, 1700.f), 90, 0,
+                &bx, &by);
     // Creek cutting map
     push_feat(t, TerrainKind::kWater, TerrainShape::kRiver, TerrainFlags::kImpassable,
               W * 0.12f, H * 0.20f, W * 0.88f, H * 0.82f, p.water, 110, rng_range(rng, 200.f, 280.f));
@@ -434,29 +690,54 @@ void gen_garden(MapTerrain &t, ThemePalette const &p, uint32_t &rng, float W, fl
     rock_field(t, p, rng, 120, W * 0.55f, H * 0.55f, W * 0.90f, H * 0.90f, 8, 280.f, 520.f);
     ring_valley(t, p, rng, W * 0.22f, H * 0.78f, 900.f, 400.f, 0.8f, 0.6f, 140, 0);
     ring_valley(t, p, rng, W * 0.78f, H * 0.22f, 850.f, 380.f, 2.2f, 0.55f, 160, 0); // thorn pocket
+    g_boss[MapID::kGarden] = { bx, by, (uint8_t)MobID::kFlowerGuardian };
 }
 
 void gen_desert(MapTerrain &t, ThemePalette const &p, uint32_t &rng, float W, float H, float cx, float cy) {
     float gap = rng_range(rng, 1200.f, 1550.f);
     float wall = rng_range(rng, 480.f, 650.f);
-    // Dune belts with gates
+    // Dune belts with gates.
+    // Two gates per belt: a random western gate (main progression) and one
+    // aligned with the spiral corridor so the corridor can cross the belt
+    // instead of being sealed off by it.
+    float spiral_x = cx + 5040.f;
     for (uint32_t i = 0; i < 4; ++i) {
         float y = H * (0.18f + 0.18f * (float)i) + rng_range(rng, -120.f, 120.f);
-        float gate = rng_range(rng, W * 0.25f, W * 0.75f);
+        float gate = rng_range(rng, W * 0.16f, W * 0.46f);
         float gw = gap * 0.9f;
-        hill_box(t, p, (uint8_t)(30 + i * 2), 500.f, y - wall * 0.5f, gate - gw * 0.5f, y + wall * 0.5f);
-        hill_box(t, p, (uint8_t)(31 + i * 2), gate + gw * 0.5f, y - wall * 0.5f, W - 500.f, y + wall * 0.5f);
+        float gw2 = gap * 0.75f;
+        float y0 = y - wall * 0.5f, y1 = y + wall * 0.5f;
+        uint8_t s = (uint8_t)(30 + i * 2);
+        // Segment 1: west edge → main gate
+        hill_box(t, p, s, 500.f, y0, gate - gw * 0.5f, y1);
+        // Segment 2: main gate → corridor-aligned gate
+        hill_box(t, p, (uint8_t)(s + 1), gate + gw * 0.5f, y0, spiral_x - gw2 * 0.5f, y1);
+        // Segment 3: corridor gate → east edge
+        hill_box(t, p, (uint8_t)(s + 2), spiral_x + gw2 * 0.5f, y0, W - 500.f, y1);
     }
-    // Rock canyon maze
-    maze_cell(t, p, rng, 50, W * 0.55f, H * 0.12f, W * 0.92f, H * 0.55f, wall, gap * 0.6f);
-    spiral_farm(t, p, rng, cx + 3200.f, cy - 2500.f, 1, +1, gap, wall * 0.95f,
-                rng_range(rng, 2400.f, 3100.f), 2, rng_range(rng, 1200.f, 1600.f), 80, 0);
+    // Rock canyon maze — kept inside one dune layer so it never seals a belt
+    float maze_x0 = W * 0.55f, maze_y0 = H * 0.39f, maze_x1 = W * 0.92f, maze_y1 = H * 0.52f;
+    maze_cell(t, p, rng, 50, maze_x0, maze_y0, maze_x1, maze_y1, wall, gap * 0.6f);
+    // Sandworm nest: east corridor that crosses the belts, ending in a sealed basin
+    float bw_x = 0.f, bw_y = 0.f;
+    {
+        float nest_x = spiral_x;
+        float nest_y = H * 0.24f;
+        float leg = rng_range(rng, 2600.f, 3200.f);
+        corridor_h(t, p, 70, cx + 2200.f, nest_x, nest_y, gap, wall * 0.95f, 0);
+        corridor_v(t, p, 74, nest_y, nest_y + leg, nest_x, gap, wall * 0.95f, 0);
+        bw_x = nest_x;
+        bw_y = nest_y + leg;
+        ring_valley(t, p, rng, bw_x, bw_y, rng_range(rng, 1200.f, 1600.f), 460.f, 3.0f, 0.5f, 140, 0);
+    }
     // Dry river bed
     push_feat(t, TerrainKind::kChannel, TerrainShape::kRiver, TerrainFlags::kNoAttack,
               W * 0.1f, H * 0.15f, W * 0.9f, H * 0.88f, p.channel, 100, rng_range(rng, 350.f, 450.f));
     // Oasis + sandworm basin
     ring_valley(t, p, rng, W * 0.20f, H * 0.75f, 950.f, 420.f, 1.2f, 0.55f, 120, 1);
     ring_valley(t, p, rng, W * 0.82f, H * 0.28f, 1100.f, 450.f, 3.5f, 0.5f, 140, 0);
+    // Boss: sandworm monarch at the end of the spiral nest
+    g_boss[MapID::kDesert] = { bw_x, bw_y, (uint8_t)MobID::kSandwormMonarch };
 }
 
 void gen_ocean(MapTerrain &t, ThemePalette const &p, uint32_t &rng, float W, float H, float cx, float cy) {
@@ -474,6 +755,8 @@ void gen_ocean(MapTerrain &t, ThemePalette const &p, uint32_t &rng, float W, flo
     rock_field(t, p, rng, 130, W * 0.12f, H * 0.55f, W * 0.40f, H * 0.88f, 7, 300.f, 560.f);
     ring_valley(t, p, rng, W * 0.18f, H * 0.20f, 880.f, 400.f, 0.4f, 0.55f, 150, 0);
     ring_valley(t, p, rng, W * 0.82f, H * 0.80f, 1050.f, 430.f, 2.8f, 0.5f, 170, 0); // abyss core
+    // Boss: abyss maw in the deep core basin
+    g_boss[MapID::kOcean] = { W * 0.82f, H * 0.80f, (uint8_t)MobID::kAbyssMaw };
 }
 
 void gen_snow(MapTerrain &t, ThemePalette const &p, uint32_t &rng, float W, float H, float cx, float cy) {
@@ -488,6 +771,8 @@ void gen_snow(MapTerrain &t, ThemePalette const &p, uint32_t &rng, float W, floa
               W * 0.15f, H * 0.25f, W * 0.85f, H * 0.75f, p.water, 120, rng_range(rng, 200.f, 260.f));
     rock_field(t, p, rng, 140, W * 0.55f, H * 0.55f, W * 0.90f, H * 0.90f, 6, 320.f, 580.f);
     ring_valley(t, p, rng, W * 0.80f, H * 0.20f, 1000.f, 420.f, 3.8f, 0.5f, 160, 1);
+    // Boss: winter sovereign in the frost core basin
+    g_boss[MapID::kPolar] = { W * 0.80f, H * 0.20f, (uint8_t)MobID::kWinterSovereign };
 }
 
 void gen_jungle(MapTerrain &t, ThemePalette const &p, uint32_t &rng, float W, float H, float cx, float cy) {
@@ -516,6 +801,8 @@ void gen_jungle(MapTerrain &t, ThemePalette const &p, uint32_t &rng, float W, fl
     ring_valley(t, p, rng, W * 0.22f, H * 0.78f, 880.f, 400.f, 1.0f, 0.55f, 130, 0);
     ring_valley(t, p, rng, W * 0.72f, H * 0.70f, 820.f, 380.f, 2.2f, 0.5f, 145, 0);
     ring_valley(t, p, rng, W * 0.80f, H * 0.22f, 1150.f, 460.f, 2.6f, 0.48f, 160, 0);
+    // Boss: the ancient treant waits in the primordial tree heart
+    g_boss[MapID::kJungle] = { W * 0.80f, H * 0.22f, (uint8_t)MobID::kAncientTreant };
 }
 
 void gen_ant_hell(MapTerrain &t, ThemePalette const &p, uint32_t &rng, float W, float H, float cx, float cy) {
@@ -535,8 +822,10 @@ void gen_ant_hell(MapTerrain &t, ThemePalette const &p, uint32_t &rng, float W, 
         float qx = fclamp(cx + rng_range(rng, 3500.f, 5500.f) * (rng_f(rng) < 0.5f ? 1.f : -1.f),
                           1800.f, W - 1800.f);
         float qy = fclamp(cy + rng_range(rng, 2000.f, 4000.f) * (rng_f(rng) < 0.5f ? 1.f : -1.f),
-                          1800.f, H - 1800.f);
+                          1800.f, H - 4000.f);
         ring_valley(t, p, rng, qx, qy, 1200.f, 500.f, rng_range(rng, 0.f, 6.28f), 0.45f, 140, 0);
+        // Boss: the queen ant guards her own chamber
+        g_boss[MapID::kAntHell] = { qx, qy, (uint8_t)MobID::kQueenAnt };
     }
     // Water pool chambers
     ring_valley(t, p, rng, W * 0.22f, H * 0.22f, 750.f, 360.f, 0.6f, 0.5f, 160, 1);
@@ -559,6 +848,8 @@ void gen_volcano(MapTerrain &t, ThemePalette const &p, uint32_t &rng, float W, f
     // Magma lakes + molten heart
     ring_valley(t, p, rng, W * 0.22f, H * 0.75f, 900.f, 400.f, 1.1f, 0.55f, 130, 1);
     ring_valley(t, p, rng, W * 0.78f, H * 0.25f, 1150.f, 480.f, 3.2f, 0.48f, 150, 1);
+    // Boss: molten overlord in the molten heart basin
+    g_boss[MapID::kVolcano] = { W * 0.78f, H * 0.25f, (uint8_t)MobID::kMoltenOverlord };
 }
 
 // Exactly 6 large AABBs from MAPS template — no specialty eco scatter.
@@ -566,8 +857,8 @@ void build_zones_royal(MapZones &zones, uint8_t map_id, float W, float H, float 
     zones.clear();
     MapZones const &tmpl = MAPS[map_id];
     // Keep spawn plaza at MAP_SPAWN as Outer Wall (index 0 wins when no overlay).
-    float plaza_hw = 2600.f;
-    float plaza_hh = 2100.f;
+    float plaza_hw = 5400.f;
+    float plaza_hh = 4200.f;
     for (uint32_t i = 0; i < tmpl.size() && i < 6; ++i) {
         ZoneDefinition z = tmpl[i];
         if (i == 0) {
@@ -672,6 +963,8 @@ void gen_royal(MapTerrain &t, ThemePalette const &p, uint32_t &rng, float W, flo
         push_feat(t, TerrainKind::kWater, TerrainShape::kRiver, TerrainFlags::kImpassable,
                   px - 1800.f, py + 1600.f, px + 2200.f, py - 2000.f, p.water, 170,
                   rng_range(rng, 180.f, 240.f));
+        // Boss: the fallen king holds the throne basin
+        g_boss[MapID::kRoyalCapital] = { px + 200.f, py - 100.f, (uint8_t)MobID::kFallenKing };
     }
 
     // Clear spawn plaza of stray hills near MAP_SPAWN (berm still frames map)
@@ -710,15 +1003,37 @@ void generate_one(uint8_t map_id) {
         }
     }
     safe_arteries(terrain, pal, rng, W, H, cx, cy, map_id);
+    resolve_terrain_overlaps(terrain);
 }
 
 } // namespace
+
+// Boss anchors must sit on walkable ground: a spiral end or a palace ring can
+// land inside a wall. Nudge to the closest open spot around the anchor.
+static void fix_boss_anchor(uint8_t map_id) {
+    MapGen::BossAnchor &a = g_boss[map_id];
+    if (!a.mob_id) return;
+    if (!Map::circle_hits_impassable(map_id, a.x, a.y, 110.f)) return;
+    for (uint32_t r = 80; r <= 1400; r += 80) {
+        for (uint32_t k = 0; k < 16; ++k) {
+            float ang = (float)k * (float)M_PI * 0.125f;
+            float x = a.x + std::cos(ang) * (float)r;
+            float y = a.y + std::sin(ang) * (float)r;
+            if (Map::circle_hits_impassable(map_id, x, y, 110.f)) continue;
+            a.x = x;
+            a.y = y;
+            return;
+        }
+    }
+}
 
 void MapGen::ensure(uint8_t map_id) {
     if (map_id >= MapID::kNumMaps) map_id = MapID::kGarden;
     if (g_ready[map_id]) return;
     generate_one(map_id);
     g_ready[map_id] = 1;
+    // Terrain is complete now, so the boss anchor can be validated against it.
+    fix_boss_anchor(map_id);
 #ifdef SERVERSIDE
     if (map_id == MapID::kRoyalCapital) {
         uint32_t reached = Map::sample_connectivity(map_id, 220.f);
@@ -730,5 +1045,10 @@ void MapGen::ensure(uint8_t map_id) {
 }
 MapZones const &MapGen::zones(uint8_t map_id) { ensure(map_id); return g_zones[map_id]; }
 MapTerrain const &MapGen::terrain(uint8_t map_id) { ensure(map_id); return g_terrain[map_id]; }
+MapGen::BossAnchor const &MapGen::boss_anchor(uint8_t map_id) {
+    if (map_id >= MapID::kNumMaps) map_id = MapID::kGarden;
+    ensure(map_id);
+    return g_boss[map_id];
+}
 MapZones const &map_zones(uint8_t map_id) { return MapGen::zones(map_id); }
 MapTerrain const &map_terrain(uint8_t map_id) { return MapGen::terrain(map_id); }

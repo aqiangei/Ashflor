@@ -128,9 +128,6 @@ static RotationCenter const _get_petal_rotation_center(Simulation *sim, Entity c
 void tick_player_behavior(Simulation *sim, Entity &player) {
     if (player.pending_delete) return;
     DEBUG_ONLY(assert(player.max_health > 0);)
-    // Fast channels: walkable but no attacking (leaf/sand/coral corridors)
-    if (Map::in_no_attack_zone(sim->map_id, player.get_x(), player.get_y()))
-        BitMath::unset(player.input, InputFlags::kAttacking);
     PlayerBuffs const buffs = _get_petal_passive_buffs(sim, player);
     float talent_hp = 0;
     float talent_rot = 0;
@@ -144,8 +141,9 @@ void tick_player_behavior(Simulation *sim, Entity &player) {
     }
     float health_ratio = player.health / player.max_health;
     if (!player.has_component(kMob)) {
-        player.max_health = hp_at_level(score_to_level(player.get_score())) + buffs.extra_health + talent_hp;
-        player.damage = BASE_BODY_DAMAGE + buffs.extra_damage;
+        uint32_t level = score_to_level(player.get_score());
+        player.max_health = hp_at_level(level) + buffs.extra_health + talent_hp;
+        player.damage = body_damage_at_level(level) + buffs.extra_damage;
     }
     player.health = health_ratio * player.max_health;
     if (buffs.heal > 0)

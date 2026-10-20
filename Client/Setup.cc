@@ -69,8 +69,11 @@ extern "C" {
 
     void touch_event(float x, float y, uint8_t type, uint32_t id) {
         if (type == 0) {
+            Input::ended_touches.erase(id);
+            Input::began_touches[id] = { .id = id, .x = x, .y = y };
             Input::touches.insert({id, { .id = id, .x = x, .y = y, .dx = 0, .dy = 0, .saturated = 0 }});
         } else if (type == 2) {
+            Input::ended_touches[id] = { .id = id, .x = x, .y = y };
             Input::touches.erase(id);
         } else {
             auto iter = Input::touches.find(id);

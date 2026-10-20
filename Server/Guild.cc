@@ -57,6 +57,17 @@ void Guild::notify(Client *client, std::string const &line) {
     Chat::send_to(client, ChatChannel::kChatSystem, "", line);
 }
 
+void Guild::sync_nametag(Client *client) {
+    if (client == nullptr || client->game == nullptr) return;
+    Simulation *sim = &client->game->simulation;
+    if (!sim->ent_exists(client->camera)) return;
+    Entity &camera = sim->get_ent(client->camera);
+    if (!sim->ent_alive(camera.get_player())) return;
+    Entity &player = sim->get_ent(camera.get_player());
+    if (!player.has_component(kName)) return;
+    player.set_guild(client->guild_name);
+}
+
 void Guild::send_update(Client *client) {
     if (client == nullptr || client->game == nullptr) return;
     Writer writer(Server::OUTGOING_PACKET);
@@ -98,6 +109,7 @@ void Guild::leave(Client *client) {
     uint8_t was_leader = client->guild_leader;
     client->guild_name.clear();
     client->guild_leader = 0;
+    sync_nametag(client);
     client->pending_guild_from.clear();
     client->pending_guild_ttl = 0;
     send_update(client);
@@ -154,6 +166,7 @@ uint8_t Guild::create(Client *client, std::string const &raw_name) {
     GUILDS[name] = info;
     client->guild_name = name;
     client->guild_leader = 1;
+    sync_nametag(client);
     notify(client, "[公会] 已创建公会「" + name + "」。");
     send_update(client);
     return 1;
@@ -231,6 +244,7 @@ uint8_t Guild::respond(Client *target, std::string const &from_name, uint8_t acc
     }
     target->guild_name = from->guild_name;
     target->guild_leader = 0;
+    sync_nametag(target);
     std::string msg = "[公会] " + player_name(target) + " 加入了公会。";
     for (Client *c : from->game->clients) {
         if (c != nullptr && c->guild_name == from->guild_name) {

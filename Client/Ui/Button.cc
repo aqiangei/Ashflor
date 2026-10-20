@@ -46,12 +46,13 @@ Button::Button(float w, float h, Element *l, void x(Element *, uint8_t), bool y 
 void Button::on_render(Renderer &ctx) {
     if (style.fill != 0x00000000) {
         uint32_t face = style.fill;
+        // Soft dim only — 0.72 made colorful buttons look muddy gray
         if (should_darken != nullptr && should_darken())
-            face = Renderer::HSV(face, 0.72f);
+            face = Renderer::HSV(face, 0.90f);
         else if (focus_state == kMouseDown)
-            face = Renderer::HSV(face, 0.85f);
+            face = Renderer::HSV(face, 0.88f);
         else if (focus_state == kMouseHover)
-            face = Renderer::HSV(face, 1.12f);
+            face = Renderer::HSV(face, 1.14f);
         float radius = style.round_radius > 0 ? style.round_radius : Chrome::kRadius;
         if (radius > 20.f) radius = 20.f;
         Chrome::draw_plate(ctx, width, height, face, radius, style.line_width);

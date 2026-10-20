@@ -70,11 +70,14 @@ void Simulation::on_tick() {
         ent.tick_lerp(Ui::lerp_amount);
     });
 
-    for (uint32_t i = 0; i < std::min(arena_info.player_count, LEADERBOARD_SIZE); ++i)
-        arena_info.scores[i].step(Ui::lerp_amount);
-
-    for (uint32_t i = arena_info.player_count; i < LEADERBOARD_SIZE; ++i)
-        arena_info.scores[i] = 0;
+    // Leaderboard is persisted top scores, not "online only". Zeroing past
+    // player_count wiped historical entries whenever few people were in-map.
+    for (uint32_t i = 0; i < LEADERBOARD_SIZE; ++i) {
+        if (arena_info.names[i].empty())
+            arena_info.scores[i] = 0;
+        else
+            arena_info.scores[i].step(Ui::lerp_amount);
+    }
 }
 
 void Simulation::post_tick() {

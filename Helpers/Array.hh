@@ -23,10 +23,12 @@ public:
     constexpr void push(T val) { DEBUG_ONLY(assert(length < capacity); ) values[length++] = val; };
     constexpr T pop() { DEBUG_ONLY(assert(length > 0); ) return values[--length]; };
     constexpr void clear() { length = 0; }
-    constexpr T *begin() { return &values[0]; };
-    constexpr T *end() { return &values[length]; };
-    constexpr T const *begin() const { return &values[0]; };
-    constexpr T const *end() const { return &values[length]; };
+    // Use pointer arithmetic — values[length] asserts under _GLIBCXX_ASSERTIONS
+    // when the array is full (length == capacity).
+    constexpr T *begin() { return values.data(); };
+    constexpr T *end() { return values.data() + length; };
+    constexpr T const *begin() const { return values.data(); };
+    constexpr T const *end() const { return values.data() + length; };
 };
 
 template<typename T, uint32_t max_len>

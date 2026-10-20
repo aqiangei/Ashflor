@@ -20,66 +20,81 @@
 using namespace Ui;
 
 static Element *pause_toggle_row(uint8_t *flag, I18n::Str label) {
+    uint8_t const m = Input::mobile_controls();
+    float const toggle = m ? 32.f : 40.f;
+    float const text = m ? 14.f : 22.f;
+    float const gap = m ? 8.f : 14.f;
     return new Ui::HContainer({
-        new Ui::ToggleButton(40, flag),
-        new Ui::DynamicText(22, [label](){ return I18n::tr(label); }, {
+        new Ui::ToggleButton(toggle, flag),
+        new Ui::DynamicText(text, [label](){ return I18n::tr(label); }, {
             .fill = Chrome::kTitle,
             .h_justify = Style::Left
         })
-    }, 0, 14, { .h_justify = Style::Left });
+    }, 0, gap, { .h_justify = Style::Left });
 }
 
 Element *Ui::make_pause_menu() {
-    // ~2x previous pause panel (was ~160px controls)
+    // Desktop keeps the large panel; mobile shrinks type so the sheet fits.
+    uint8_t const m = Input::mobile_controls();
+    float const title = m ? 20.f : 36.f;
+    float const btn_label = m ? 15.f : 28.f;
+    float const row_label = m ? 14.f : 22.f;
+    float const section = m ? 12.f : 20.f;
+    float const hint = m ? 11.f : 18.f;
+    float const btn_w = m ? 220.f : 320.f;
+    float const pad = m ? 14.f : 28.f;
+    float const gap = m ? 8.f : 14.f;
+
     Element *elt = new Ui::VContainer({
-        new Ui::DynamicText(36, [](){ return I18n::tr(I18n::kPauseMenu); }, {
+        new Ui::DynamicText(title, [](){ return I18n::tr(I18n::kPauseMenu); }, {
             .fill = Chrome::kTitle,
             .h_justify = Style::Left
         }),
-        new Ui::Button(320, 64,
-            new Ui::DynamicText(28, [](){ return I18n::tr(I18n::kResume); }),
+        new Ui::Button(btn_w, m ? 40.f : 64.f,
+            new Ui::DynamicText(btn_label, [](){ return I18n::tr(I18n::kResume); }),
             [](Element *, uint8_t e){
                 if (e == Ui::kClick) Game::pause_menu_open = 0;
             },
             nullptr,
             { .fill = Chrome::kBtnMoss, .line_width = 0, .round_radius = Chrome::kRadius }
         ),
-        new Ui::Button(320, 56,
-            new Ui::DynamicText(22, [](){ return I18n::tr(I18n::kPartyInviteNear); }),
+        new Ui::Button(btn_w, m ? 36.f : 56.f,
+            new Ui::DynamicText(row_label, [](){ return I18n::tr(I18n::kPartyInviteNear); }),
             [](Element *, uint8_t e){
                 if (e == Ui::kClick) Game::party_invite_nearest();
             },
             nullptr,
             { .fill = Chrome::kBtnSlate, .line_width = 0, .round_radius = Chrome::kRadius }
         ),
-        new Ui::Button(320, 56,
-            new Ui::DynamicText(22, [](){ return I18n::tr(I18n::kPartyLeave); }),
+        new Ui::Button(btn_w, m ? 36.f : 56.f,
+            new Ui::DynamicText(row_label, [](){ return I18n::tr(I18n::kPartyLeave); }),
             [](Element *, uint8_t e){
                 if (e == Ui::kClick) Game::party_leave();
             },
             [](){ return Game::party_member_count == 0; },
             { .fill = Chrome::kBtnIron, .line_width = 0, .round_radius = Chrome::kRadius }
         ),
-        new Ui::DynamicText(20, [](){
+        new Ui::DynamicText(section, [](){
             return I18n::use_chinese ? std::string{"—— 操作 ——"} : std::string{"— Controls —"};
         }, { .fill = Chrome::kMuted, .h_justify = Style::Left }),
         pause_toggle_row(&Input::keyboard_movement, I18n::kKeyboardMovement),
         pause_toggle_row(&Input::movement_helper, I18n::kMovementHelper),
         pause_toggle_row(&Input::invert_attack, I18n::kInvertAttack),
+        pause_toggle_row(&Input::invert_defend, I18n::kInvertDefend),
         pause_toggle_row(&Input::request_mobile, I18n::kRequestMobile),
-        new Ui::Button(320, 48,
-            new Ui::DynamicText(20, [](){ return I18n::tr(I18n::kFullscreen); }),
+        new Ui::Button(btn_w, m ? 34.f : 48.f,
+            new Ui::DynamicText(section, [](){ return I18n::tr(I18n::kFullscreen); }),
             [](Element *, uint8_t e){
                 if (e == Ui::kClick) DOM::toggle_fullscreen();
             },
             nullptr,
             { .fill = Chrome::kBtnSlate, .line_width = 0, .round_radius = Chrome::kRadius }
         ),
-        new Ui::DynamicText(18, [](){ return I18n::tr(I18n::kEscHint); }, {
+        new Ui::DynamicText(hint, [](){ return I18n::tr(I18n::kEscHint); }, {
             .fill = Chrome::kBody,
             .h_justify = Style::Left
         })
-    }, 28, 14, {
+    }, pad, gap, {
         .fill = Chrome::kPanelDeep, .line_width = 0, .round_radius = Chrome::kRadius,
         .should_render = [](){
             return Game::pause_menu_open && Game::alive() && Game::should_render_game_ui();
@@ -87,8 +102,8 @@ Element *Ui::make_pause_menu() {
         .h_justify = Style::Left,
         .v_justify = Style::Top
     });
-    elt->x = 16;
-    elt->y = 64;
+    elt->x = m ? 10.f : 16.f;
+    elt->y = m ? 70.f : 64.f;
     Ui::pause_menu_root = elt;
     return elt;
 }
@@ -246,8 +261,30 @@ Element *Ui::make_game_topbar() {
 
     Element *guild_btn = Ui::make_guild_top_button();
 
+    Element *boost_btn = new Ui::Button(40, 40,
+        new Ui::StaticIcon([](Element *, Renderer &ctx){
+            ctx.set_fill(0xffffffff);
+            ctx.begin_path();
+            for (int i = 0; i < 10; ++i) {
+                float a = -M_PI / 2 + i * M_PI / 5;
+                float r = (i & 1) ? 8.f : 18.f;
+                float x = cosf(a) * r, y = sinf(a) * r;
+                if (i == 0) ctx.move_to(x, y);
+                else ctx.line_to(x, y);
+            }
+            ctx.close_path();
+            ctx.fill();
+        }, 25, 25),
+        [](Element *, uint8_t e){
+            if (e == Ui::kClick) Game::toggle_game_panel(Game::kPanelBoost);
+        },
+        [](){ return Game::game_panel == Game::kPanelBoost; },
+        { .fill = 0xffd5ad24, .line_width = 0, .round_radius = Chrome::kRadius }
+    );
+
     Element *elt = new Ui::HContainer({
         gear,
+        boost_btn,
         guild_btn,
         mob_btn,
         trophy_btn,

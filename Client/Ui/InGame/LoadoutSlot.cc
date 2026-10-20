@@ -136,9 +136,9 @@ public:
         ctx.draw_text(label.c_str(), { .size = Input::is_mobile ? 18.f : 16.f });
         ctx.translate(0, height * 0.40f);
         if (Input::is_mobile)
-            ctx.draw_text(I18n::use_chinese ? "拖环" : "Drag", { .size = 11, .fill = 0xffdddddd });
+            ctx.draw_text(I18n::use_chinese ? "拖环" : "Drag", { .fill = 0xffdddddd, .size = 11 });
         else
-            ctx.draw_text("Q·E", { .size = 11, .fill = 0xffdddddd });
+            ctx.draw_text("Q·E", { .fill = 0xffdddddd, .size = 11 });
     }
 };
 
@@ -169,7 +169,11 @@ void UiLoadoutSlot::on_render(Renderer &ctx) {
     // Rarity-tinted slot (zorr / florr_clone loadout bar)
     uint32_t saved_fill = style.fill;
     if (position < 2 * MAX_SLOT_COUNT) {
-        PetalID::T pid = Game::cached_loadout[position];
+        // position is dynamic UI index; secondary lives at [n,2n) in cache
+        uint8_t static_i = loadout_dynamic_to_static(position);
+        PetalID::T pid = PetalID::kNone;
+        if (static_i < 2 * MAX_SLOT_COUNT)
+            pid = Game::cached_loadout[static_i];
         if (pid != PetalID::kNone && pid < PetalID::kNumPetals) {
             uint8_t r = PETAL_DATA[pid].rarity;
             if (r < RarityID::kNumRarities)

@@ -10,12 +10,15 @@ enum Clientbound {
     kClientUpdate,
     kAccountResult,
     kChatMessage,
-    kPartyUpdate,
+    kPartyUpdate, // count, [name, flags, hp%, x, y]*, revive%
     kCraftUpdate,
     kSpawnResult,
     kTalentUpdate,
     kInvitePrompt, // type, from_name — pending party/guild invite toast
-    kGuildUpdate
+    kGuildUpdate,
+    kLoadoutPresetSync,
+    kBoostUpdate,
+    kLeaderboardStats // multi-category stats board (name/value rows)
 };
 
 enum InviteType : uint8_t {
@@ -47,15 +50,34 @@ enum Serverbound {
     kGuildCreate,   // guild name
     kGuildInvite,   // target player name
     kGuildLeave,
-    kClientLeave // voluntary return to title — keep WS, despawn flower only
+    kClientLeave, // voluntary return to title — keep WS, despawn flower only
+    kLoadoutPresetSave,
+    kLoadoutPresetApply,
+    kBankWithdraw, // equip one copy from backpack stacks
+    kLeaderboardRequest, // ask the server for the stats board
+    kBankDeposit, // unequip primary/secondary → backpack stacks
+    kBoostToggle // arg = 0/1 — pause or resume triple-drop bonus timers
+};
+
+// Categories shown as separate columns on the leaderboard board.
+// Order is part of the wire format: keep in sync with the client UI.
+enum LeaderboardCategory : uint8_t {
+    kLbPlayTime = 0, // seconds online
+    kLbLevel,        // account level
+    kLbMessages,     // chat messages sent
+    kLbKills,        // players killed
+    kLbCrafts,       // craft attempts
+    kLbScore,        // best score ever reached
+    kLbCategoryCount
 };
 
 enum CraftMode : uint8_t {
     kCraftGamble = 0,     // arg = PetalID → consume 5, chance at higher
     kCraftExchange = 1,   // arg = PetalID → EV-cost consume, guaranteed
     kCraftBuyRarity = 2,  // arg = rarity → random petal of that rarity
-    kCraftBuySpecial = 3, // arg = PetalID special
-    kCraftGambleAll = 4   // arg = PetalID → craft every possible batch
+    kCraftBuySpecial = 3, // arg = PetalID special (legacy coin shop)
+    kCraftGambleAll = 4,  // arg = PetalID → craft every possible batch
+    kCraftRecipe = 5      // arg = recipe index → consume ingredients, give result
 };
 
 enum CraftResultCode : uint8_t {
@@ -67,6 +89,16 @@ enum CraftResultCode : uint8_t {
     kCraftNoCoins = 5,
     kCraftBought = 6,
     kCraftInvFull = 7
+};
+
+enum LoadoutPresetResult : uint8_t {
+    kPresetSynced = 0,
+    kPresetSaved,
+    kPresetApplied,
+    kPresetEmpty,
+    kPresetAppliedAdjusted,
+    kPresetNeedAccount,
+    kPresetAppliedBanked
 };
 
 enum AccountAuthMode {

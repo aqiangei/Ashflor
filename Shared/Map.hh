@@ -11,8 +11,29 @@
 #endif
 
 SERVER_ONLY(class Simulation;)
+SERVER_ONLY(class Entity;)
 
 namespace Map {
+    // 抽样参数：40% 的生成走等概率选区（保证小生态区不被大环带淹没）
+    inline constexpr float kUniformZoneShare = 0.4f;
+    // 玩家近身多少单位内不生成新怪
+    inline constexpr float kMinSpawnPlayerDist = 800.f;
+    // 贴障类落点的探墙距离上限（超过视为"该方向没有墙"）
+    inline constexpr float kWallProbe = 900.f;
+    // 伏击类（P1）允许在更远处找墙
+    inline constexpr float kWallProbeNear = 1600.f;
+    // 同款精英跨 Zone 唯一半径（总纲 R6）
+    inline constexpr float kEliteUniqueRadius = 1500.f;
+    // 迷宫格口硬下限（总纲 §1.2 / R7）
+    inline constexpr float kMinMazeGate = 800.f;
+
+    // Ellipse around the fixed center spawn. Aggressive zones must not fill it.
+    inline bool in_spawn_plaza(float x, float y) {
+        float dx = (x - MAP_SPAWN_X) / 5200.f;
+        float dy = (y - MAP_SPAWN_Y) / 4000.f;
+        return dx * dx + dy * dy < 1.f;
+    }
+
     extern uint32_t difficulty_at_level(uint32_t);
     extern uint32_t get_zone_from_pos(uint8_t map_id, float, float);
     extern uint32_t get_suitable_difficulty_zone(uint8_t map_id, uint32_t);
@@ -35,8 +56,24 @@ namespace Map {
 
     #ifdef SERVERSIDE
     extern void remove_mob(Simulation *, uint32_t);
+    extern void remove_mob(Simulation *, Entity const &);
     extern void spawn_random_mob(Simulation *, float, float);
+    // 按 Zone 密度加权选区 → 按落点类别选点 → 抽怪生成
+    extern void spawn_zone_mob(Simulation *);
     extern bool find_spawn_location(Simulation *, float, Vector &);
+    // 在指定 Zone 内按落点类别采样一个合法落点；成功返回 1
+    extern uint8_t sample_spawn_point(Simulation *, uint32_t zone_id, uint8_t mob_id, float &x, float &y);
+    // Zone 权重 = density × 独占面积；返回被抽中的 Zone 索引。
+    extern uint32_t pick_spawn_zone(uint8_t map_id);
+    // 落点相关查询
+    extern uint8_t in_safe_channel(uint8_t map_id, float x, float y);
+    extern float open_clearance(uint8_t map_id, float x, float y, float radius, float max_dist);
+    extern float corridor_reach(uint8_t map_id, float x, float y, float dx, float dy, float radius, float max_dist);
+    // Boss 锚点（每图至多一个）；无 Boss 时返回 0
+    extern uint8_t boss_anchor(uint8_t map_id, float &x, float &y, uint8_t &mob_id);
+    // 生成一只怪到指定点（套用 Zone 难度倍率并记账）
+    extern void _spawn_mob_at(Simulation *, uint32_t zone_id, uint8_t mob_id, float x, float y);
+    extern uint8_t _spawn_zone_mob_once(Simulation *);
     #endif
 
     // Walkable BFS from spawn — returns how many of the sampled goals are reachable.

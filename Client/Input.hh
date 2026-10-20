@@ -54,6 +54,9 @@ namespace Input {
     extern std::unordered_set<char> keys_held;
     extern std::unordered_set<char> keys_held_this_tick;
     extern std::unordered_map<uint32_t, Touch> touches;
+    extern std::unordered_map<uint32_t, Touch> began_touches;
+    // Final canvas coordinates survive until the frame consumes a touchend.
+    extern std::unordered_map<uint32_t, Touch> ended_touches;
     //use these for text input
     //extern std::vector<uint32_t> keys_pressed_this_tick;
     extern std::string clipboard;

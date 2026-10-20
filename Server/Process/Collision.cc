@@ -6,6 +6,7 @@
 
 #include <Shared/Simulation.hh>
 #include <Shared/Entity.hh>
+#include <Shared/Recipe.hh>
 #include <Shared/StaticData.hh>
 #include <Shared/Binary.hh>
 
@@ -29,11 +30,12 @@ static bool _should_interact(Entity const &ent1, Entity const &ent2) {
     return false;
 }
 
-static void _add_to_craft_bank(Client *client, PetalID::T id) {
+// Overflow into backpack stacks when inventory slots are full.
+static void _add_to_backpack_stack(Client *client, PetalID::T id) {
     if (client == nullptr || id == PetalID::kNone || id >= PetalID::kNumPetals) return;
     if (client->craft_bank[id] < 1000000)
-        client->craft_bank[id] += 1;
-    AccountStore::capture(client);
+        ++client->craft_bank[id];
+    AccountStore::capture_nosave(client);
     client_sync_craft(client);
 }
 
@@ -46,26 +48,30 @@ static void _pickup_drop(Simulation *sim, Entity &player, Entity &drop) {
     }
 
     PetalID::T drop_id = drop.get_drop_id();
-    for (uint32_t i = 0; i <  player.get_loadout_count() + MAX_SLOT_COUNT; ++i) {
-        if (player.get_loadout_ids(i) != PetalID::kNone) continue;
-        player.set_loadout_ids(i, drop_id);
-        drop.set_x(player.get_x());
-        drop.set_y(player.get_y());
-        BitMath::unset(drop.flags, EntityFlags::kIsDespawning);
-        sim->request_delete(drop.id);
-        {
-            Client *client = Server::client_by_camera(sim, player.get_parent());
-            if (client != nullptr) AccountStore::capture(client);
+    auto place = [&](uint32_t begin, uint32_t end) -> bool {
+        for (uint32_t i = begin; i < end; ++i) {
+            if (player.get_loadout_ids(i) != PetalID::kNone) continue;
+            player.set_loadout_ids(i, drop_id);
+            drop.set_x(player.get_x());
+            drop.set_y(player.get_y());
+            // Ownership moves from the world drop into this inventory slot.
+            BitMath::unset(drop.flags, EntityFlags::kIsDespawning);
+            sim->request_delete(drop.id);
+            if (Client *client = Server::client_by_camera(sim, player.get_parent()))
+                AccountStore::capture_nosave(client);
+            return true;
         }
-        return;
-    }
-    // Inventory full → craft material bank (always despawn the drop)
+        return false;
+    };
+    uint32_t const n = player.get_loadout_count();
+    if (Recipe::is_bag_only(drop_id)) {
+        if (place(n, n + MAX_SLOT_COUNT)) return;
+    } else if (place(n, n + MAX_SLOT_COUNT) || place(0, n)) return;
+    // Slots full — still goes into the backpack (same panel as slot copies).
     Client *client = Server::client_by_camera(sim, player.get_parent());
-    if (client != nullptr)
-        _add_to_craft_bank(client, drop_id);
+    if (client != nullptr) _add_to_backpack_stack(client, drop_id);
     drop.set_x(player.get_x());
     drop.set_y(player.get_y());
-    BitMath::unset(drop.flags, EntityFlags::kIsDespawning);
     sim->request_delete(drop.id);
 }
 

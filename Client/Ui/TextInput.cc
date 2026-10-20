@@ -2,10 +2,15 @@
 
 #include <Client/Ui/Extern.hh>
 #include <Client/DOM.hh>
+#include <Client/Input.hh>
+
+#include <Helpers/UTF8.hh>
 
 #include <cmath>
 
 using namespace Ui;
+
+static TextInput *g_active_text_input = nullptr;
 
 static std::string _gen_nonce() {
     return "fjs" + std::to_string(static_cast<uint32_t>(frand() * 49263 + 672));
@@ -13,7 +18,7 @@ static std::string _gen_nonce() {
 
 TextInput::TextInput(std::string &r, float w, float h, uint32_t m, Style s, uint8_t password) : 
     Element(w, h, s), name(_gen_nonce()), ref(r), max(m),
-    is_password(password), password_masked(password ? 1 : 0) {
+    is_password(password), password_masked(password ? 1 : 0), editing(0) {
     style.fill = 0xffeeeeee;
     style.stroke_hsv = 0;
     DOM::create_text_input(name.c_str(), max, is_password ? 1 : 0);
@@ -27,14 +32,26 @@ void TextInput::set_password_masked(uint8_t masked) {
 }
 
 void TextInput::focus() {
+    if (g_active_text_input != nullptr && g_active_text_input != this)
+        g_active_text_input->blur();
+    editing = 1;
+    g_active_text_input = this;
     DOM::element_show(name.c_str());
     DOM::update_text(name.c_str(), ref, max);
     DOM::focus_element(name.c_str());
 }
 
 void TextInput::blur() {
+    if (!editing && g_active_text_input != this) {
+        DOM::element_hide(name.c_str());
+        return;
+    }
+    sync_from_dom();
     DOM::blur_active();
     DOM::element_hide(name.c_str());
+    editing = 0;
+    if (g_active_text_input == this)
+        g_active_text_input = nullptr;
 }
 
 void TextInput::sync_from_dom() {
@@ -49,16 +66,49 @@ uint8_t TextInput::contains_screen_point(float x, float y) const {
 void TextInput::on_event(uint8_t event) {
     if (event == kMouseDown || event == kClick)
         focus();
+    // Do not blur on kFocusLost: while editing, the HTML <input> sits above the
+    // canvas, so canvas focus flickers even though the user is still typing.
 }
 
 void TextInput::on_render(Renderer &ctx) {
+    Element::on_render(ctx);
+    if (!editing) {
+        // Idle: canvas-only. Hiding the DOM overlay stops outside taps from
+        // re-focusing a leftover <input> and popping the mobile keyboard.
+        DOM::element_hide(name.c_str());
+        if (!ref.empty()) {
+            std::string shown = ref;
+            if (is_password && password_masked) {
+                UTF8Parser p(ref);
+                uint32_t n = 0;
+                while (!p.at_end()) { p.next_symbol(); ++n; }
+                shown.assign(n, '*');
+            }
+            ctx.draw_text(shown.c_str(), {
+                .fill = 0xff111111,
+                .size = height * 0.45f,
+                .stroke_scale = 0
+            });
+        }
+        return;
+    }
     DOM::element_show(name.c_str());
     DOM::update_pos_and_dimension(name.c_str(), screen_x, screen_y, width * Ui::scale, height * Ui::scale);
     ref = DOM::retrieve_text(name.c_str(), max);
     DOM::update_text(name.c_str(), ref, max);
-    Element::on_render(ctx);
 }
 
 void TextInput::on_render_skip(Renderer &ctx) {
-    DOM::element_hide(name.c_str());
+    if (editing) blur();
+    else DOM::element_hide(name.c_str());
+}
+
+void Ui::dismiss_active_text_input_at(float x, float y) {
+    if (g_active_text_input == nullptr) return;
+    if (g_active_text_input->contains_screen_point(x, y)) return;
+    g_active_text_input->blur();
+}
+
+TextInput *Ui::active_text_input() {
+    return g_active_text_input;
 }

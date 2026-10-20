@@ -15,6 +15,8 @@
 #include <Shared/StaticData.hh>
 
 #include <array>
+#include <iostream>
+#include <string>
 #include <vector>
 
 static void _update_client(Simulation *sim, Client *client) {
@@ -85,12 +87,32 @@ void GameInstance::init(uint8_t id) {
     simulation.map_id = id;
     simulation.arena_info.set_map_id(id);
     // Density-capped fill (was ENTITY_CAP/2 = 4096 attempts × 8 maps → boot+CPU hog).
-    // Zone caps inside spawn_random_mob still apply; this only limits attempts.
-    constexpr uint32_t kInitSpawnAttempts = 720;
+    // Zone caps inside spawn_zone_mob still apply; this only limits attempts.
+    // Keep init lean: occupied-map tick must stay well under 50ms for input feel.
+    constexpr uint32_t kInitSpawnAttempts = 360;
     for (uint32_t i = 0; i < kInitSpawnAttempts; ++i)
-        Map::spawn_random_mob(&simulation, frand() * ARENA_WIDTH, frand() * ARENA_HEIGHT);
-    // Light bot fill — 8 maps × 6 bots was ~48 AI flowers every tick (node pegged at 100%)
-    constexpr uint32_t kBotCount = 2;
+        Map::spawn_zone_mob(&simulation);
+    // Startup diagnostics: which mob species actually spawned in this biome.
+    // Cheap (one pass) and makes "did my new monsters actually spawn?" checkable
+    // from `journalctl -u ashflor` without a live client.
+    {
+        // active_entities is only rebuilt inside tick(), so refresh it first.
+        simulation.refresh_active_entities();
+        uint32_t counts[MobID::kNumMobs] = {};
+        simulation.for_each<kMob>([&](Simulation *, Entity &mob) {
+            MobID::T mid = mob.get_mob_id();
+            if (mid < MobID::kNumMobs) ++counts[mid];
+        });
+        std::string line = "[mobs] map " + std::to_string((int)id) + ":";
+        for (MobID::T mid = 0; mid < MobID::kNumMobs; ++mid) {
+            if (counts[mid] == 0) continue;
+            line += " " + std::string(MOB_DATA[mid].name) + "=" + std::to_string(counts[mid]);
+        }
+        std::cout << line << std::endl;
+    }
+    // Bots are full camera+AI flowers; 8 maps × N was the main tick budget eater.
+    // Disable until the single-thread WASM sim has headroom again.
+    constexpr uint32_t kBotCount = 0;
     for (uint32_t i = 0; i < kBotCount; ++i) {
         Entity &cam = alloc_cpu_camera(&simulation, NULL_ENTITY);
         Entity &player = alloc_player(&simulation, cam.get_team());
@@ -140,6 +162,7 @@ static void process_map_portals(GameInstance *game) {
             Map::resolve_circle_terrain(dest->map_id, dxp, dyp, BASE_FLOWER_RADIUS + 8);
             player_spawn_at(&dest->simulation, ncam, nplayer, dxp, dyp);
             nplayer.set_name(name);
+            nplayer.set_guild(client->guild_name);
             client->play_name = name;
             // Long enough to walk off hub before another portal can fire
             nplayer.immunity_ticks = (game_tick_t)(4.0f * TPS);
@@ -223,6 +246,8 @@ void GameInstance::remove_client(Client *client) {
             LeaderboardStore::flush();
         }
     }
+    // Move the session stat counters into the leaderboard store
+    client_flush_stats(client);
     AccountStore::capture(client);
     AccountStore::logout(client);
     Party::leave(client);

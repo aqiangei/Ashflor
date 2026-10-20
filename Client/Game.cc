@@ -2,6 +2,7 @@
 
 #include <Client/DOM.hh>
 #include <Client/Debug.hh>
+#include <Client/I18n.hh>
 #include <Client/Input.hh>
 #include <Client/Particle.hh>
 #include <Client/Setup.hh>
@@ -17,11 +18,15 @@
 #include <Shared/StaticData.hh>
 #include <Shared/Talent.hh>
 
+#include <Helpers/Bits.hh>
 #include <Helpers/Math.hh>
 
+#include <algorithm>
 #include <cmath>
 #include <cstdlib>
+#include <iostream>
 #include <string>
+#include <vector>
 
 #include <emscripten.h>
 
@@ -46,8 +51,13 @@ namespace Game {
     std::string username;
     std::string password;
     std::string account_status;
+    uint32_t daily_bonus_seconds = 0;
+    uint32_t offline_bonus_seconds = 0;
+    uint8_t bonus_enabled = 1;
+    double bonus_synced_at = 0;
     uint64_t session_token = 0;
     uint8_t pending_auto_login = 0;
+    uint8_t spawn_after_auth = 0;
     uint8_t account_logged_in = 0;
     uint8_t auth_panel = 0;
     std::string disconnect_message;
@@ -57,10 +67,15 @@ namespace Game {
 
     double timestamp = 0;
 
+    LeaderboardBoard leaderboard_board;
+    double leaderboard_board_at = 0;
+
     double score = 0;
     float overlevel_timer = 0;
     float slot_indicator_opacity = 0;
     float transition_circle = 0;
+    double spawn_request_at = 0;
+    uint8_t spawn_retries = 0;
 
     uint32_t respawn_level = 1;
 
@@ -87,6 +102,7 @@ namespace Game {
     float chat_menu_x = 0;
     float chat_menu_y = 0;
     std::string party_status;
+    std::vector<PartyMember> party_members;
     uint8_t party_member_count = 0;
     uint8_t revive_progress = 0;
     uint8_t awaiting_party_revive = 0;
@@ -105,8 +121,17 @@ namespace Game {
     std::array<PetalID::T, 2 * MAX_SLOT_COUNT> guest_petals = {PetalID::kNone};
     std::array<uint32_t, PetalID::kNumPetals> guest_craft_bank = {};
     uint32_t guest_coins = 0;
+    uint8_t guest_talent_hp = 0;
+    uint8_t guest_talent_rot = 0;
     uint8_t talent_hp = 0;
     uint8_t talent_rot = 0;
+    uint8_t talent_pending = 0;
+    uint8_t talent_pending_id = 0;
+    uint8_t talent_pending_rank = 0;
+    std::string talent_status;
+    std::array<LoadoutPreset, LOADOUT_PRESET_COUNT> loadout_presets = {};
+    uint8_t active_loadout_preset = LOADOUT_PRESET_COUNT;
+    std::string loadout_preset_status;
     uint8_t rot_speed_setting = 7;
     float rot_speed_f = 7.f;
     float rot_hint_opacity = 0.f;
@@ -181,6 +206,9 @@ void Game::init() {
     DOM::cache_client();
     Storage::retrieve();
     reset();
+    // Last visit was logged in: show the form with the saved password, do not sign in.
+    if (!username.empty() && !password.empty())
+        auth_panel = 1;
     // Brand lives inside make_title_input_box so it cannot overlap the form
     title_ui_window.add_child(
         Ui::make_title_input_box()
@@ -219,6 +247,9 @@ void Game::init() {
         Ui::make_health_bar()
     );
     game_ui_window.add_child(
+        Ui::make_boss_health_bar()
+    );
+    game_ui_window.add_child(
         Ui::make_minimap()
     );
     game_ui_window.add_child(
@@ -232,6 +263,9 @@ void Game::init() {
     );
     game_ui_window.add_child(
         Ui::make_mobile_defend_button()
+    );
+    game_ui_window.add_child(
+        Ui::make_mobile_swap_button()
     );
     for (uint8_t i = 0; i < MAX_SLOT_COUNT * 2; ++i) game_ui_window.add_child(new Ui::UiLoadoutPetal(i));
     game_ui_window.add_child(
@@ -275,6 +309,9 @@ void Game::init() {
         Ui::make_inventory_panel()
     );
     game_ui_window.add_child(
+        Ui::make_presets_panel()
+    );
+    game_ui_window.add_child(
         Ui::make_talents_panel()
     );
     game_ui_window.add_child(
@@ -282,6 +319,9 @@ void Game::init() {
     );
     game_ui_window.add_child(
         Ui::make_special_craft_panel()
+    );
+    game_ui_window.add_child(
+        Ui::make_boost_panel()
     );
     Ui::make_petal_tooltips();
     other_ui_window.add_child(
@@ -331,6 +371,7 @@ void Game::reset() {
     chat_menu_open = 0;
     chat_menu_name.clear();
     party_status.clear();
+    party_members.clear();
     party_member_count = 0;
     revive_progress = 0;
     awaiting_party_revive = 0;
@@ -343,7 +384,12 @@ void Game::reset() {
     guild_panel_open = 0;
     guild_create_draft.clear();
     account_logged_in = 0;
+    daily_bonus_seconds = 0;
+    offline_bonus_seconds = 0;
+    bonus_enabled = 1;
+    bonus_synced_at = 0;
     pending_auto_login = 0;
+    spawn_after_auth = 0;
     account_status.clear();
     auth_panel = 0;
     score = 0;
@@ -358,10 +404,18 @@ void Game::reset() {
     if (guest_save_valid) {
         craft_bank = guest_craft_bank;
         coins = guest_coins;
+        talent_hp = guest_talent_hp;
+        talent_rot = guest_talent_rot;
     } else {
         craft_bank = {};
         coins = 0;
+        talent_hp = talent_rot = 0;
     }
+    talent_pending = 0;
+    talent_status.clear();
+    loadout_presets = {};
+    active_loadout_preset = LOADOUT_PRESET_COUNT;
+    loadout_preset_status.clear();
     craft_tray_id = PetalID::kNone;
     craft_tray_count = 0;
     simulation.reset();
@@ -382,8 +436,8 @@ void Game::send_guest_progress() {
     for (uint32_t i = 0; i < PetalID::kNumPetals; ++i)
         writer.write<uint32_t>(guest_craft_bank[i]);
     writer.write<uint32_t>(guest_coins);
-    writer.write<uint8_t>(talent_hp);
-    writer.write<uint8_t>(talent_rot);
+    writer.write<uint8_t>(guest_talent_hp);
+    writer.write<uint8_t>(guest_talent_rot);
     socket.send(writer.packet, writer.at - writer.packet);
 }
 
@@ -391,17 +445,22 @@ void Game::sync_guest_progress() {
     if (account_logged_in) return;
     guest_craft_bank = craft_bank;
     guest_coins = coins;
+    guest_talent_hp = talent_hp;
+    guest_talent_rot = talent_rot;
     if (alive()) {
-        guest_level = (uint8_t) std::min<uint32_t>(score_to_level(score), 255);
-        if (guest_level < 1) guest_level = 1;
+        uint8_t lv = (uint8_t) std::min<uint32_t>(score_to_level(score), 255);
+        if (lv < 1) lv = 1;
+        // High-water mark — never let a mid-life sync drop stored guest level.
+        if (lv > guest_level || !guest_save_valid) guest_level = lv;
         for (uint32_t i = 0; i < 2 * MAX_SLOT_COUNT; ++i)
             guest_petals[i] = cached_loadout[i];
         guest_save_valid = 1;
     } else if (simulation.ent_exists(camera_id)) {
         // Dead: camera inventory preserves slot layout (primary + backpack).
         Entity const &camera = simulation.get_ent(camera_id);
-        guest_level = camera.get_respawn_level();
-        if (guest_level < 1) guest_level = 1;
+        uint8_t lv = camera.get_respawn_level();
+        if (lv < 1) lv = 1;
+        if (lv > guest_level || !guest_save_valid) guest_level = lv;
         for (uint32_t i = 0; i < 2 * MAX_SLOT_COUNT; ++i)
             guest_petals[i] = camera.get_inventory(i);
         guest_save_valid = 1;
@@ -417,7 +476,12 @@ uint8_t Game::game_panel_blocking() {
 }
 
 void Game::toggle_game_panel(uint8_t panel) {
-    if (!alive() || leave_confirm_open) return;
+    // Death screen: bag / talents / craft / recipes / presets stay usable
+    uint8_t const death_panel = panel == kPanelInventory
+        || panel == kPanelPresets || panel == kPanelTalents
+        || panel == kPanelCraft || panel == kPanelSpecial;
+    if ((!alive() && !(on_game_screen && death_panel))
+        || leave_confirm_open) return;
     if (chat_open) close_chat();
     if (pause_menu_open) pause_menu_open = 0;
     if (game_panel == panel) {
@@ -520,6 +584,11 @@ void Game::invite_respond(uint8_t accept) {
     writer.write<uint8_t>(accept ? 1 : 0);
     writer.write<std::string>(invite_from);
     socket.send(writer.packet, writer.at - writer.packet);
+    invite_open = 0;
+    invite_from.clear();
+}
+
+void Game::invite_dismiss() {
     invite_open = 0;
     invite_from.clear();
 }
@@ -643,7 +712,8 @@ void Game::tick(double time) {
     Game::timestamp = time;
     Ui::dt = time - g_last_time;
     // Slightly snappier entity lerp (was 0.24); still smooth under variable dt
-    Ui::lerp_amount = 1 - pow(1 - 0.28, Ui::dt * 60 / 1000);
+    // Higher base → less visual lag behind server snapshots (was 0.28)
+    Ui::lerp_amount = 1 - pow(1 - 0.42, Ui::dt * 60 / 1000);
     g_last_time = time;
     simulation.tick();
     
@@ -673,8 +743,17 @@ void Game::tick(double time) {
             PetalID::T server_id = player.get_loadout_ids(i);
             Ui::UiLoadoutPetal *slot = Ui::UiLoadout::petal_slots[i];
             if (slot != nullptr && slot->no_change_ticks > 0) {
-                if (server_id == cached_loadout[i])
+                if (server_id == cached_loadout[i]) {
                     slot->no_change_ticks = 0;
+                } else if (cached_loadout[i] == PetalID::kNone
+                    && server_id != PetalID::kNone) {
+                    // Pickup / server grant into an empty slot — never hide behind
+                    // an optimistic swap lock or the bag looks empty.
+                    cached_loadout[i] = server_id;
+                    slot->no_change_ticks = 0;
+                } else if (--slot->no_change_ticks == 0) {
+                    cached_loadout[i] = server_id;
+                }
             } else {
                 cached_loadout[i] = server_id;
             }
@@ -703,10 +782,15 @@ void Game::tick(double time) {
                 Ui::UiLoadoutPetal *slot = Ui::UiLoadout::petal_slots[i];
                 // Dead UI does not run LoadoutPetal should_render — tick down here
                 if (slot != nullptr && slot->no_change_ticks > 0) {
-                    if (server_id == cached_loadout[i])
+                    if (server_id == cached_loadout[i]) {
                         slot->no_change_ticks = 0;
-                    else if (--slot->no_change_ticks == 0)
+                    } else if (cached_loadout[i] == PetalID::kNone
+                        && server_id != PetalID::kNone) {
                         cached_loadout[i] = server_id;
+                        slot->no_change_ticks = 0;
+                    } else if (--slot->no_change_ticks == 0) {
+                        cached_loadout[i] = server_id;
+                    }
                 } else {
                     cached_loadout[i] = server_id;
                 }
@@ -736,12 +820,25 @@ void Game::tick(double time) {
     // Element::poll_events — skipping saturated here made joystick/A/B lose focus
     // after one frame and zeroed movement.
     if (Input::is_mobile) {
-        for (auto &x : Input::touches) {
-            Input::Touch const &touch = x.second;
+        // A touch handler may spawn/respawn and clear Input::touches. Iterate
+        // IDs separately so that clearing the map cannot invalidate this loop.
+        std::vector<uint32_t> touch_ids;
+        touch_ids.reserve(Input::touches.size());
+        for (auto const &[id, touch] : Input::touches) touch_ids.push_back(id);
+        for (uint32_t id : touch_ids) {
+            auto it = Input::touches.find(id);
+            if (it == Input::touches.end()) continue;
+            Input::Touch const touch = it->second;
+            // Fresh taps outside the active field dismiss keyboard (canvas
+            // preventDefault otherwise keeps the HTML <input> focused).
+            if (!touch.saturated)
+                Ui::dismiss_active_text_input_at(touch.x, touch.y);
             Game::poll_ui_event({ .id = touch.id, .x = touch.x, .y = touch.y, .press = 1 });
         }
     }
     else {
+        if (BitMath::at(Input::mouse_buttons_pressed, Input::LeftMouse))
+            Ui::dismiss_active_text_input_at(Input::mouse_x, Input::mouse_y);
         Game::poll_ui_event({ .id = 0, .x = Input::mouse_x, .y = Input::mouse_y, .press = 0 });
     }
 
@@ -778,7 +875,8 @@ void Game::tick(double time) {
         renderer.set_global_alpha(0.85);
         renderer.translate(renderer.width/2,renderer.height/2);
         renderer.draw_image(game_ui_renderer);
-    // Number keys: 1:1 swap primary[i] ↔ secondary[i]. R = swap all. T = unequip.
+    // K+1..0 selects presets 1..10; L+1..0 selects 11..20.
+    // Plain number keys still swap primary[i] with secondary[i].
     // Q/E = hold for continuous linear spin rate (not discrete taps).
     if (!Game::pause_menu_open && !Game::chat_open && !Game::leave_confirm_open
             && !Game::game_panel_blocking()) {
@@ -791,15 +889,25 @@ void Game::tick(double time) {
                 Game::nudge_rot_speed(+rot_rate * dt_s);
             if (Input::keys_held_this_tick.contains('R'))
                 Game::swap_all_petals();
-            for (uint8_t i = 0; i < Game::loadout_count; ++i) {
-                if (!Input::keys_held_this_tick.contains(SLOT_KEYBINDS[i])) continue;
-                uint8_t sec = (uint8_t) (Game::loadout_count + i);
-                // Skip no-op empty↔empty
-                if (Game::cached_loadout[i] == PetalID::kNone
-                    && Game::cached_loadout[sec] == PetalID::kNone)
-                    continue;
-                Ui::ui_swap_petals(i, sec);
-                break;
+            bool const k_held = Input::keys_held.contains('K');
+            bool const l_held = Input::keys_held.contains('L');
+            if (k_held || l_held) {
+                for (uint8_t i = 0; i < 10; ++i) {
+                    char digit = i == 9 ? '0' : (char)('1' + i);
+                    if (!Input::keys_held_this_tick.contains(digit)) continue;
+                    Game::apply_loadout_preset((uint8_t) ((k_held ? 0 : 10) + i));
+                    break;
+                }
+            } else {
+                for (uint8_t i = 0; i < Game::loadout_count; ++i) {
+                    if (!Input::keys_held_this_tick.contains(SLOT_KEYBINDS[i])) continue;
+                    uint8_t sec = (uint8_t) (Game::loadout_count + i);
+                    if (Game::cached_loadout[i] == PetalID::kNone
+                        && Game::cached_loadout[sec] == PetalID::kNone)
+                        continue;
+                    Ui::ui_swap_petals(i, sec);
+                    break;
+                }
             }
             // T = unequip selected secondary (or primary if keyed) → backpack
             if (Input::keys_held_this_tick.contains('T')
@@ -856,14 +964,10 @@ void Game::tick(double time) {
             || BitMath::at(Input::mouse_buttons_state, Input::LeftMouse);
         uint8_t secondary = Input::keys_held.contains('\x10')
             || (BitMath::at(Input::mouse_buttons_state, Input::RightMouse) && !chat_menu_open);
-        // Two toggles used to remap independently and could map BOTH actions onto
-        // the same key; server prefers attack so defend looked "broken", and with
-        // only invert_attack on, LMB did nothing. Treat either flag as full swap.
-        uint8_t swapped = Input::invert_attack | Input::invert_defend;
-        Input::invert_attack = swapped;
-        Input::invert_defend = swapped;
-        uint8_t attack = swapped ? secondary : primary;
-        uint8_t defend = swapped ? primary : secondary;
+        // Invert attack → fire attack on secondary binds; invert defend → defend on primary.
+        // Turning both on is a full swap (LMB↔RMB, Space↔Shift).
+        uint8_t attack = Input::invert_attack ? secondary : primary;
+        uint8_t defend = Input::invert_defend ? primary : secondary;
         Input::game_inputs.flags = (attack << InputFlags::kAttacking) | (defend << InputFlags::kDefending);
     }
 
@@ -875,6 +979,8 @@ void Game::tick(double time) {
         minimap_expanded = !minimap_expanded;
     if (Input::keys_held_this_tick.contains(9) && chat_open)
         cycle_chat_channel();
+    // After UI render so slot screen positions are current. One shot per gesture.
+    Ui::finish_bag_gesture();
     if (chat_menu_open && BitMath::at(Input::mouse_buttons_released, Input::LeftMouse))
         close_chat_menu();
     // Chat stays open while aiming/attacking with the mouse; Esc closes (not click-outside)
@@ -916,6 +1022,36 @@ void Game::tick(double time) {
         float factor = 1.f - Input::wheel_delta * 0.0012f;
         camera_zoom = fclamp(camera_zoom * factor, 0.55f, 2.2f);
         Input::wheel_delta = 0;
+    }
+
+    // Spawn watchdog — keep retrying until alive. Name conflicts / brief
+    // server stalls used to stop after 20 tries and strand the death screen.
+    if (spawn_request_at > 0) {
+        if (alive()) {
+            spawn_request_at = 0;
+            spawn_retries = 0;
+            if (account_status.find("重试") != std::string::npos
+                || account_status.find("Retrying") != std::string::npos)
+                account_status.clear();
+        } else {
+            // Back off: 1.2s → 2.5s → 4s (cap) so we don't flood the server
+            double wait_ms = 1200.0 + (double) std::min<uint8_t>(spawn_retries, 8) * 350.0;
+            if (wait_ms > 4000.0) wait_ms = 4000.0;
+            if (timestamp - spawn_request_at > wait_ms) {
+                if (spawn_retries < 250) ++spawn_retries;
+                if (spawn_retries == 1
+                    || (spawn_retries % 5 == 0 && account_status.empty()))
+                    account_status = I18n::use_chinese
+                        ? "正在重试进入游戏…"
+                        : "Retrying to enter the game…";
+                if (spawn_retries == 20 || spawn_retries == 60)
+                    std::cout << "spawn still waiting after " << (uint32_t) spawn_retries
+                              << " retries (camera=" << (simulation.ent_exists(camera_id) ? 1 : 0)
+                              << " ready=" << (uint32_t) simulation_ready
+                              << " screen=" << (uint32_t) on_game_screen << ")" << std::endl;
+                send_spawn_request();
+            }
+        }
     }
 
     //clearing operations

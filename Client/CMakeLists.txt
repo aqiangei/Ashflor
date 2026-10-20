@@ -36,6 +36,7 @@ set(SRCS
     Ui/InGame/InputFreeze.cc
     Ui/InGame/Leaderboard.cc
     Ui/InGame/LevelBar.cc
+    Ui/InGame/BossHealthBar.cc
     Ui/InGame/LoadoutPetal.cc
     Ui/InGame/LoadoutSlot.cc
     Ui/InGame/Map.cc
@@ -72,6 +73,7 @@ set(SRCS
     ../Shared/Binary.cc
     ../Shared/Config.cc
     ../Shared/Craft.cc
+    ../Shared/Recipe.cc
     ../Shared/Entity.cc
     ../Shared/EntityDef.cc
     ../Shared/Map.cc

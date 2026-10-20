@@ -46,38 +46,39 @@ inline std::array const MAPS = std::to_array<MapZones>({
     MapZones({
         {
             .left = 0, .top = 0, .right = (float)ARENA_WIDTH, .bottom = (float)ARENA_HEIGHT,
-            .density = 2.6f, .drop_multiplier = 0.05,
+            .density = 2.6f, .drop_multiplier = 0.35,
             .spawns = {
                 { MobID::kDarkLadybug, 120000 }, { MobID::kHornet, 120000 }, { MobID::kSpider, 100000 },
-                { MobID::kEvilCentipede, 18000 }, { MobID::kMassiveBeetle, 2800 }, { MobID::kAntHole, 2500 },
+                { MobID::kEvilCentipede, 18000 }, { MobID::kMassiveBeetle, 2800 },
+                { MobID::kBoulder, 2500 },
                 { MobID::kSquare, 1 }
             },
-            .difficulty = 3, .color = 0xff246b3d, .name = "Garden"
+            .difficulty = 3, .color = 0xff8FC777, .name = "Garden"
         },
         {
             .left = 2200, .top = 2200, .right = 15800, .bottom = 15800,
-            .density = 2.5f, .drop_multiplier = 0.12,
+            .density = 2.5f, .drop_multiplier = 0.20,
             .spawns = {
                 { MobID::kSpider, 100000 }, { MobID::kHornet, 100000 }, { MobID::kBeetle, 80000 },
                 { MobID::kEvilCentipede, 12000 }, { MobID::kMassiveBeetle, 2000 }, { MobID::kSquare, 1 }
             },
-            .difficulty = 2, .color = 0xff2d8a50, .name = "Garden"
+            .difficulty = 2, .color = 0xffA8D484, .name = "Garden"
         },
         {
             .left = 4800, .top = 4800, .right = 13200, .bottom = 13200,
-            .density = 2.2f, .drop_multiplier = 0.22,
+            .density = 2.2f, .drop_multiplier = 0.10,
             .spawns = {
                 { MobID::kBee, 100000 }, { MobID::kLadybug, 90000 }, { MobID::kBeetle, 60000 },
-                { MobID::kCentipede, 15000 }, { MobID::kAntHole, 2000 }, { MobID::kSquare, 1 }
+                { MobID::kCentipede, 15000 }, { MobID::kShinyLadybug, 2000 }, { MobID::kSquare, 1 }
             },
-            .difficulty = 1, .color = 0xff349f5c, .name = "Garden"
+            .difficulty = 1, .color = MapTheme::GARDEN_GROUND, .name = "Garden"
         },
         {
-            // Spawn hub — sparse passive rocks + ladybugs for a soft buffer
+            // Spawn hub — sparse, low-level passive creatures only.
             .left = 7200, .top = 7200, .right = 10800, .bottom = 10800,
-            .density = 0.2f, .drop_multiplier = 0.35,
+            .density = 0.04f, .drop_multiplier = 0.02,
             .spawns = {
-                { MobID::kRock, 600000 }, { MobID::kLadybug, 200000 }, { MobID::kSquare, 1 }
+                { MobID::kRock, 600000 }, { MobID::kLadybug, 400000 }
             },
             .difficulty = 0, .color = MapTheme::GARDEN_GROUND, .name = "Garden"
         }
@@ -86,37 +87,40 @@ inline std::array const MAPS = std::to_array<MapZones>({
     MapZones({
         {
             .left = 0, .top = 0, .right = (float)ARENA_WIDTH, .bottom = (float)ARENA_HEIGHT,
-            .density = 2.6f, .drop_multiplier = 0.04,
+            .density = 2.6f, .drop_multiplier = 0.34,
             .spawns = {
-                { MobID::kScorpion, 140000 }, { MobID::kBeetle, 120000 }, { MobID::kSandstorm, 100000 },
-                { MobID::kDesertCentipede, 22000 }, { MobID::kMassiveBeetle, 3000 }, { MobID::kAntHole, 2800 },
-                { MobID::kSquare, 1 }
+                { MobID::kDuneSpider, 105000 }, { MobID::kSandstorm, 90000 },
+                { MobID::kScorpion, 85000 }, { MobID::kDesertCentipede, 6000 },
+                { MobID::kDuneTitan, 3500 }, { MobID::kSquare, 1 }
             },
             .difficulty = 3, .color = 0xffb57a2a, .name = "Desert"
         },
         {
             .left = 2200, .top = 2200, .right = 15800, .bottom = 15800,
-            .density = 2.5f, .drop_multiplier = 0.1,
+            .density = 2.5f, .drop_multiplier = 0.19,
             .spawns = {
-                { MobID::kBeetle, 120000 }, { MobID::kScorpion, 100000 }, { MobID::kSandstorm, 90000 },
-                { MobID::kDesertCentipede, 20000 }, { MobID::kMassiveBeetle, 2200 }, { MobID::kSquare, 1 }
+                { MobID::kCactus, 130000 }, { MobID::kDuneBeetle, 130000 },
+                { MobID::kDuneSpider, 105000 }, { MobID::kDuneHornet, 95000 },
+                { MobID::kScorpion, 85000 }, { MobID::kSquare, 1 }
             },
             .difficulty = 2, .color = 0xffc9923c, .name = "Desert"
         },
         {
             .left = 4800, .top = 4800, .right = 13200, .bottom = 13200,
-            .density = 2.2f, .drop_multiplier = 0.18,
+            .density = 2.2f, .drop_multiplier = 0.09,
             .spawns = {
-                { MobID::kCactus, 280000 }, { MobID::kBeetle, 80000 }, { MobID::kSandstorm, 50000 },
-                { MobID::kLadybug, 40000 }, { MobID::kSquare, 1 }
+                { MobID::kCactus, 130000 }, { MobID::kDuneBeetle, 130000 },
+                { MobID::kSandMite, 155000 }, { MobID::kScorpion, 85000 },
+                { MobID::kSquare, 1 }
             },
             .difficulty = 1, .color = 0xffd4a84b, .name = "Desert"
         },
         {
+            // Spawn hub — the dune's own two passive creatures only.
             .left = 7200, .top = 7200, .right = 10800, .bottom = 10800,
-            .density = 0.2f, .drop_multiplier = 0.3,
+            .density = 0.04f, .drop_multiplier = 0.02,
             .spawns = {
-                { MobID::kRock, 550000 }, { MobID::kLadybug, 250000 }, { MobID::kSquare, 1 }
+                { MobID::kDuneStone, 145000 }, { MobID::kSandMite, 155000 }
             },
             .difficulty = 0, .color = MapTheme::DESERT_GROUND, .name = "Desert"
         }
@@ -125,36 +129,40 @@ inline std::array const MAPS = std::to_array<MapZones>({
     MapZones({
         {
             .left = 0, .top = 0, .right = (float)ARENA_WIDTH, .bottom = (float)ARENA_HEIGHT,
-            .density = 2.6f, .drop_multiplier = 0.035,
+            .density = 2.6f, .drop_multiplier = 0.33,
             .spawns = {
-                { MobID::kHornet, 140000 }, { MobID::kEvilCentipede, 25000 }, { MobID::kMassiveBeetle, 3200 },
-                { MobID::kBoulder, 120000 }, { MobID::kSquare, 1 }
+                { MobID::kSeaLeech, 95000 }, { MobID::kMorayEel, 90000 },
+                { MobID::kInkCuttle, 6500 }, { MobID::kAbyssShark, 3500 },
+                { MobID::kSquare, 1 }
             },
             .difficulty = 3, .color = 0xff023e8a, .name = "Ocean"
         },
         {
             .left = 2200, .top = 2200, .right = 15800, .bottom = 15800,
-            .density = 2.5f, .drop_multiplier = 0.08,
+            .density = 2.5f, .drop_multiplier = 0.18,
             .spawns = {
-                { MobID::kHornet, 120000 }, { MobID::kBeetle, 100000 }, { MobID::kEvilCentipede, 18000 },
-                { MobID::kMassiveBeetle, 2400 }, { MobID::kSquare, 1 }
+                { MobID::kSpinePuffer, 105000 }, { MobID::kSeaLeech, 95000 },
+                { MobID::kMorayEel, 90000 }, { MobID::kReefCrab, 100000 },
+                { MobID::kSquare, 1 }
             },
             .difficulty = 2, .color = 0xff005582, .name = "Ocean"
         },
         {
             .left = 4800, .top = 4800, .right = 13200, .bottom = 13200,
-            .density = 2.2f, .drop_multiplier = 0.14,
+            .density = 2.2f, .drop_multiplier = 0.08,
             .spawns = {
-                { MobID::kRock, 160000 }, { MobID::kBoulder, 120000 }, { MobID::kBee, 70000 },
-                { MobID::kSandstorm, 60000 }, { MobID::kSquare, 1 }
+                { MobID::kMoonJelly, 110000 }, { MobID::kCoralStar, 120000 },
+                { MobID::kReefCrab, 100000 }, { MobID::kSeaFry, 150000 },
+                { MobID::kSquare, 1 }
             },
             .difficulty = 1, .color = 0xff00669c, .name = "Ocean"
         },
         {
+            // Spawn hub — the ocean's own two passive creatures only.
             .left = 7200, .top = 7200, .right = 10800, .bottom = 10800,
-            .density = 0.2f, .drop_multiplier = 0.28,
+            .density = 0.04f, .drop_multiplier = 0.02,
             .spawns = {
-                { MobID::kRock, 600000 }, { MobID::kLadybug, 200000 }, { MobID::kSquare, 1 }
+                { MobID::kReefStone, 140000 }, { MobID::kSeaFry, 150000 }
             },
             .difficulty = 0, .color = MapTheme::OCEAN_GROUND, .name = "Ocean"
         }
@@ -163,37 +171,40 @@ inline std::array const MAPS = std::to_array<MapZones>({
     MapZones({
         {
             .left = 0, .top = 0, .right = (float)ARENA_WIDTH, .bottom = (float)ARENA_HEIGHT,
-            .density = 2.6f, .drop_multiplier = 0.03,
+            .density = 2.6f, .drop_multiplier = 0.32,
             .spawns = {
-                { MobID::kDarkLadybug, 140000 }, { MobID::kSpider, 130000 }, { MobID::kHornet, 120000 },
-                { MobID::kEvilCentipede, 25000 }, { MobID::kMassiveBeetle, 3200 }, { MobID::kAntHole, 2800 },
-                { MobID::kSquare, 1 }
+                { MobID::kRimeCentipede, 100000 }, { MobID::kBlizzardWisp, 110000 },
+                { MobID::kGlacierBeast, 90000 }, { MobID::kFrostYeti, 6500 },
+                { MobID::kIceGolem, 3500 }, { MobID::kSquare, 1 }
             },
             .difficulty = 3, .color = 0xff6c757d, .name = "Snow"
         },
         {
             .left = 2200, .top = 2200, .right = 15800, .bottom = 15800,
-            .density = 2.5f, .drop_multiplier = 0.06,
+            .density = 2.5f, .drop_multiplier = 0.17,
             .spawns = {
-                { MobID::kDarkLadybug, 130000 }, { MobID::kHornet, 120000 }, { MobID::kEvilCentipede, 20000 },
-                { MobID::kMassiveBeetle, 2600 }, { MobID::kSquare, 1 }
+                { MobID::kRimeCentipede, 100000 }, { MobID::kBlizzardWisp, 110000 },
+                { MobID::kGlacierBeast, 90000 }, { MobID::kIceSpider, 120000 },
+                { MobID::kFrostHornet, 105000 }, { MobID::kSquare, 1 }
             },
             .difficulty = 2, .color = 0xff868e96, .name = "Snow"
         },
         {
             .left = 4800, .top = 4800, .right = 13200, .bottom = 13200,
-            .density = 2.2f, .drop_multiplier = 0.12,
+            .density = 2.2f, .drop_multiplier = 0.07,
             .spawns = {
-                { MobID::kBoulder, 160000 }, { MobID::kSpider, 80000 }, { MobID::kBee, 70000 },
+                { MobID::kSnowHare, 135000 }, { MobID::kIceSpider, 120000 },
+                { MobID::kFrostHornet, 105000 }, { MobID::kSnowMite, 155000 },
                 { MobID::kSquare, 1 }
             },
             .difficulty = 1, .color = 0xff9aa3ab, .name = "Snow"
         },
         {
+            // Spawn hub — the snowfield's own two passive creatures only.
             .left = 7200, .top = 7200, .right = 10800, .bottom = 10800,
-            .density = 0.2f, .drop_multiplier = 0.25,
+            .density = 0.04f, .drop_multiplier = 0.02,
             .spawns = {
-                { MobID::kRock, 600000 }, { MobID::kLadybug, 200000 }, { MobID::kSquare, 1 }
+                { MobID::kFrostStone, 145000 }, { MobID::kSnowMite, 155000 }
             },
             .difficulty = 0, .color = MapTheme::POLAR_GROUND, .name = "Snow"
         }
@@ -204,7 +215,7 @@ inline std::array const MAPS = std::to_array<MapZones>({
         {
             // hard / Deep
             .left = 0, .top = 0, .right = (float)ARENA_WIDTH, .bottom = (float)ARENA_HEIGHT,
-            .density = 2.8f, .drop_multiplier = 0.035,
+            .density = 2.8f, .drop_multiplier = 0.34,
             .spawns = {
                 { MobID::kEmeraldMantis, 120000 }, { MobID::kStoneGuardian, 80000 },
                 { MobID::kCarnivorousPlant, 100000 }, { MobID::kVineBug, 90000 },
@@ -215,7 +226,7 @@ inline std::array const MAPS = std::to_array<MapZones>({
         {
             // mid
             .left = 2200, .top = 2200, .right = 15800, .bottom = 15800,
-            .density = 2.6f, .drop_multiplier = 0.08,
+            .density = 2.6f, .drop_multiplier = 0.18,
             .spawns = {
                 { MobID::kJungleSpider, 130000 }, { MobID::kPoisonToad, 90000 },
                 { MobID::kSporeMushroom, 100000 }, { MobID::kRiverCrab, 80000 },
@@ -226,7 +237,7 @@ inline std::array const MAPS = std::to_array<MapZones>({
         {
             // soft / Edge
             .left = 4800, .top = 4800, .right = 13200, .bottom = 13200,
-            .density = 2.3f, .drop_multiplier = 0.15,
+            .density = 2.3f, .drop_multiplier = 0.09,
             .spawns = {
                 { MobID::kLeafBeetle, 140000 }, { MobID::kJungleMite, 130000 },
                 { MobID::kVineBug, 90000 }, { MobID::kJungleWasp, 90000 },
@@ -235,12 +246,11 @@ inline std::array const MAPS = std::to_array<MapZones>({
             .difficulty = 1, .color = 0xff40916c, .name = "Jungle Edge"
         },
         {
-            // hub
+            // hub — no wasps/mites; those chase on sight
             .left = 7200, .top = 7200, .right = 10800, .bottom = 10800,
-            .density = 0.22f, .drop_multiplier = 0.28,
+            .density = 0.04f, .drop_multiplier = 0.02,
             .spawns = {
-                { MobID::kLeafBeetle, 300000 }, { MobID::kJungleMite, 280000 },
-                { MobID::kJungleWasp, 150000 }, { MobID::kSquare, 1 }
+                { MobID::kJungleStone, 140000 }, { MobID::kJungleCrawler, 150000 }
             },
             .difficulty = 0, .color = MapTheme::JUNGLE_GROUND, .name = "Jungle Hub"
         }
@@ -249,36 +259,39 @@ inline std::array const MAPS = std::to_array<MapZones>({
     MapZones({
         {
             .left = 0, .top = 0, .right = (float)ARENA_WIDTH, .bottom = (float)ARENA_HEIGHT,
-            .density = 2.8f, .drop_multiplier = 0.05,
+            .density = 2.8f, .drop_multiplier = 0.35,
             .spawns = {
-                { MobID::kSoldierAnt, 160000 }, { MobID::kWorkerAnt, 140000 }, { MobID::kAntHole, 8000 },
-                { MobID::kMassiveBeetle, 2800 }, { MobID::kSquare, 1 }
+                { MobID::kSoldierAnt, 160000 }, { MobID::kWorkerAnt, 140000 },
+                { MobID::kAntHole, 8000 }, { MobID::kQueenAnt, 3500 },
+                { MobID::kSquare, 1 }
             },
             .difficulty = 3, .color = 0xff582f0e, .name = "Ant Hell"
         },
         {
             .left = 2200, .top = 2200, .right = 15800, .bottom = 15800,
-            .density = 2.6f, .drop_multiplier = 0.1,
+            .density = 2.6f, .drop_multiplier = 0.19,
             .spawns = {
-                { MobID::kWorkerAnt, 150000 }, { MobID::kSoldierAnt, 120000 }, { MobID::kBabyAnt, 100000 },
-                { MobID::kAntHole, 5000 }, { MobID::kSquare, 1 }
+                { MobID::kWorkerAnt, 150000 }, { MobID::kSoldierAnt, 120000 },
+                { MobID::kBabyAnt, 100000 }, { MobID::kAntHole, 5000 },
+                { MobID::kSquare, 1 }
             },
             .difficulty = 2, .color = 0xff6f4518, .name = "Ant Hell"
         },
         {
             .left = 4800, .top = 4800, .right = 13200, .bottom = 13200,
-            .density = 2.3f, .drop_multiplier = 0.18,
+            .density = 2.3f, .drop_multiplier = 0.10,
             .spawns = {
-                { MobID::kBabyAnt, 180000 }, { MobID::kWorkerAnt, 120000 }, { MobID::kAntHole, 3000 },
-                { MobID::kSquare, 1 }
+                { MobID::kBabyAnt, 180000 }, { MobID::kWorkerAnt, 120000 },
+                { MobID::kAntHole, 3000 }, { MobID::kSquare, 1 }
             },
             .difficulty = 1, .color = 0xffa98467, .name = "Ant Hell"
         },
         {
+            // Spawn hub — ant-hell passive creatures only (no garden imports).
             .left = 7200, .top = 7200, .right = 10800, .bottom = 10800,
-            .density = 0.25f, .drop_multiplier = 0.28,
+            .density = 0.04f, .drop_multiplier = 0.02,
             .spawns = {
-                { MobID::kBabyAnt, 400000 }, { MobID::kRock, 400000 }, { MobID::kSquare, 1 }
+                { MobID::kAntHole, 140000 }, { MobID::kBabyAnt, 150000 }
             },
             .difficulty = 0, .color = MapTheme::ANT_GROUND, .name = "Ant Hell"
         }
@@ -287,36 +300,40 @@ inline std::array const MAPS = std::to_array<MapZones>({
     MapZones({
         {
             .left = 0, .top = 0, .right = (float)ARENA_WIDTH, .bottom = (float)ARENA_HEIGHT,
-            .density = 2.6f, .drop_multiplier = 0.035,
+            .density = 2.6f, .drop_multiplier = 0.33,
             .spawns = {
-                { MobID::kSoldierAnt, 140000 }, { MobID::kBeetle, 100000 }, { MobID::kHornet, 90000 },
-                { MobID::kMassiveBeetle, 3200 }, { MobID::kSquare, 1 }
+                { MobID::kMagmaCrab, 105000 }, { MobID::kFireSpider, 110000 },
+                { MobID::kMagmaCentipede, 95000 }, { MobID::kObsidianGolem, 6500 },
+                { MobID::kLavaColossus, 3500 }, { MobID::kSquare, 1 }
             },
             .difficulty = 3, .color = 0xff1a1a2e, .name = "Volcano"
         },
         {
             .left = 2200, .top = 2200, .right = 15800, .bottom = 15800,
-            .density = 2.5f, .drop_multiplier = 0.08,
+            .density = 2.5f, .drop_multiplier = 0.18,
             .spawns = {
-                { MobID::kSoldierAnt, 120000 }, { MobID::kBeetle, 100000 }, { MobID::kSpider, 80000 },
-                { MobID::kSquare, 1 }
+                { MobID::kCinderMoth, 135000 }, { MobID::kLavaBeetle, 125000 },
+                { MobID::kEmberWasp, 105000 }, { MobID::kMagmaCrab, 105000 },
+                { MobID::kFireSpider, 110000 }, { MobID::kSquare, 1 }
             },
             .difficulty = 2, .color = 0xff3d405b, .name = "Volcano"
         },
         {
             .left = 4800, .top = 4800, .right = 13200, .bottom = 13200,
-            .density = 2.2f, .drop_multiplier = 0.14,
+            .density = 2.2f, .drop_multiplier = 0.08,
             .spawns = {
-                { MobID::kRock, 160000 }, { MobID::kBoulder, 120000 }, { MobID::kBeetle, 80000 },
+                { MobID::kAshMite, 155000 }, { MobID::kCinderMoth, 135000 },
+                { MobID::kLavaBeetle, 125000 }, { MobID::kEmberWasp, 105000 },
                 { MobID::kSquare, 1 }
             },
             .difficulty = 1, .color = 0xff4a4e69, .name = "Volcano"
         },
         {
+            // Spawn hub — the volcano's own two passive creatures only.
             .left = 7200, .top = 7200, .right = 10800, .bottom = 10800,
-            .density = 0.2f, .drop_multiplier = 0.26,
+            .density = 0.04f, .drop_multiplier = 0.02,
             .spawns = {
-                { MobID::kRock, 550000 }, { MobID::kLadybug, 250000 }, { MobID::kSquare, 1 }
+                { MobID::kEmberStone, 145000 }, { MobID::kAshMite, 155000 }
             },
             .difficulty = 0, .color = MapTheme::VOLCANO_GROUND, .name = "Volcano"
         }
@@ -326,17 +343,16 @@ inline std::array const MAPS = std::to_array<MapZones>({
         {
             // 0 Outer Wall — spawn-safe base (covers arena; later zones overlay)
             .left = 0, .top = 0, .right = (float)ARENA_WIDTH, .bottom = (float)ARENA_HEIGHT,
-            .density = 0.35f, .drop_multiplier = 0.30,
+            .density = 0.04f, .drop_multiplier = 0.02,
             .spawns = {
-                { MobID::kWanderingGuard, 450000 }, { MobID::kStoneBeetle, 300000 },
-                { MobID::kRustMite, 250000 }, { MobID::kSquare, 1 }
+                { MobID::kRoyalBoulder, 140000 }, { MobID::kRoyalPebble, 150000 }
             },
             .difficulty = 0, .color = MapTheme::ROYAL_GROUND, .name = "Outer Wall"
         },
         {
             // 1 Common Quarter — west / south
             .left = 800, .top = 7500, .right = 12500, .bottom = 19200,
-            .density = 2.3f, .drop_multiplier = 0.18,
+            .density = 2.3f, .drop_multiplier = 0.09,
             .spawns = {
                 { MobID::kRustMite, 300000 }, { MobID::kMimicChest, 250000 },
                 { MobID::kCoinBeetle, 200000 }, { MobID::kWanderingGuard, 250000 },
@@ -347,7 +363,7 @@ inline std::array const MAPS = std::to_array<MapZones>({
         {
             // 2 Royal Garden — east
             .left = 15500, .top = 3500, .right = 27200, .bottom = 16500,
-            .density = 2.4f, .drop_multiplier = 0.12,
+            .density = 2.4f, .drop_multiplier = 0.17,
             .spawns = {
                 { MobID::kRoyalBee, 450000 }, { MobID::kThornBug, 350000 },
                 { MobID::kCoinBeetle, 200000 }, { MobID::kSquare, 1 }
@@ -357,7 +373,7 @@ inline std::array const MAPS = std::to_array<MapZones>({
         {
             // 3 Barracks — north
             .left = 5000, .top = 400, .right = 23000, .bottom = 7200,
-            .density = 2.5f, .drop_multiplier = 0.10,
+            .density = 2.5f, .drop_multiplier = 0.19,
             .spawns = {
                 { MobID::kWanderingGuard, 200000 }, { MobID::kShieldSentinel, 350000 },
                 { MobID::kSpearSentinel, 300000 }, { MobID::kStoneBeetle, 150000 },
@@ -368,7 +384,7 @@ inline std::array const MAPS = std::to_array<MapZones>({
         {
             // 4 Ruined Quarter — northwest
             .left = 600, .top = 800, .right = 10500, .bottom = 9500,
-            .density = 2.6f, .drop_multiplier = 0.06,
+            .density = 2.6f, .drop_multiplier = 0.32,
             .spawns = {
                 { MobID::kPhantomOrb, 400000 }, { MobID::kFallenKnight, 250000 },
                 { MobID::kMimicChest, 200000 }, { MobID::kRustMite, 150000 },
@@ -379,7 +395,7 @@ inline std::array const MAPS = std::to_array<MapZones>({
         {
             // 5 Royal Palace — NE of center (leave spawn plaza at MAP_SPAWN clear)
             .left = 14500, .top = 4500, .right = 24500, .bottom = 11500,
-            .density = 2.7f, .drop_multiplier = 0.04,
+            .density = 2.7f, .drop_multiplier = 0.35,
             .spawns = {
                 { MobID::kShieldSentinel, 350000 }, { MobID::kSpearSentinel, 300000 },
                 { MobID::kFallenKnight, 250000 }, { MobID::kWanderingGuard, 100000 },
@@ -450,3 +466,21 @@ extern uint32_t level_to_score(uint32_t);
 extern uint32_t loadout_slots_at_level(uint32_t);
 
 extern float hp_at_level(uint32_t);
+extern float body_damage_at_level(uint32_t);
+
+// Map-anchor bosses (one per biome). Used for screen boss HP bars, etc.
+inline uint8_t is_boss_mob(MobID::T id) {
+    switch (id) {
+        case MobID::kFlowerGuardian:
+        case MobID::kSandwormMonarch:
+        case MobID::kAbyssMaw:
+        case MobID::kWinterSovereign:
+        case MobID::kAncientTreant:
+        case MobID::kQueenAnt:
+        case MobID::kMoltenOverlord:
+        case MobID::kFallenKing:
+            return 1;
+        default:
+            return 0;
+    }
+}

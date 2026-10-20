@@ -42,6 +42,7 @@ set(SOURCES
     ../Shared/Binary.cc
     ../Shared/Config.cc
     ../Shared/Craft.cc
+    ../Shared/Recipe.cc
     ../Shared/Entity.cc
     ../Shared/EntityDef.cc
     ../Shared/Map.cc

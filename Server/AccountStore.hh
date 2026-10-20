@@ -1,6 +1,7 @@
 #pragma once
 
 #include <Shared/StaticData.hh>
+#include <Shared/LoadoutPreset.hh>
 
 #include <array>
 #include <cstdint>
@@ -24,7 +25,12 @@ struct Account {
     uint32_t craft_attempts = 0; // successful+failed 5-in-1 batches
     uint8_t talent_hp = 0;
     uint8_t talent_rot = 0;
+    std::array<LoadoutPreset, LOADOUT_PRESET_COUNT> loadout_presets = {};
     uint64_t session_hash = 0;
+    uint32_t bonus_day = 0;             // Beijing calendar day
+    uint32_t daily_bonus_seconds = 0;   // up to one hour per day
+    uint32_t offline_bonus_seconds = 0; // earned at 1:10, capped at three hours
+    uint64_t last_seen_epoch = 0;
 };
 
 namespace AccountStore {
@@ -36,6 +42,9 @@ namespace AccountStore {
     // capture_nosave + save()
     void capture(Client *);
     uint32_t registered_count();
+    // Publish every account's level to the leaderboard store so the ranked
+    // "level" column is populated before the player logs in again.
+    void seed_leaderboard_levels();
     uint64_t hash_password(std::string const &username, std::string const &password);
     uint8_t valid_username(std::string const &);
     uint8_t valid_password(std::string const &);

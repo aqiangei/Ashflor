@@ -84,7 +84,8 @@ SINGLE(Score, score, uint32_t)
 
 #define FIELDS_Name \
 SINGLE(Name, name, std::string) \
-SINGLE(Name, nametag_visible, uint8_t)
+SINGLE(Name, nametag_visible, uint8_t) \
+SINGLE(Name, guild, std::string)
 
 #ifdef SERVERSIDE
 #define PER_EXTRA_FIELD \

@@ -3,6 +3,7 @@
 #include <Server/Chat.hh>
 #include <Server/Client.hh>
 #include <Server/Game.hh>
+#include <Server/Guild.hh>
 #include <Server/Server.hh>
 #include <Server/Spawn.hh>
 
@@ -12,6 +13,7 @@
 #include <Shared/Simulation.hh>
 #include <Shared/StaticData.hh>
 
+#include <Helpers/Math.hh>
 #include <Helpers/UTF8.hh>
 
 #include <cmath>
@@ -68,6 +70,7 @@ void Party::notify(Client *client, std::string const &line) {
 
 void Party::send_update(Client *client) {
     if (client == nullptr || client->game == nullptr) return;
+    Simulation *sim = &client->game->simulation;
     Writer writer(Server::OUTGOING_PACKET);
     writer.write<uint8_t>(Clientbound::kPartyUpdate);
     std::vector<Client *> members;
@@ -85,6 +88,25 @@ void Party::send_update(Client *client) {
         if (c->awaiting_revive) flags |= 2;
         if (c == client) flags |= 4;
         writer.write<uint8_t>(flags);
+        uint8_t hp = 0;
+        float x = -1.f;
+        float y = -1.f;
+        if (c->awaiting_revive) {
+            x = c->corpse_x;
+            y = c->corpse_y;
+        } else if (sim->ent_exists(c->camera)) {
+            Entity &camera = sim->get_ent(c->camera);
+            if (sim->ent_alive(camera.get_player())) {
+                Entity &player = sim->get_ent(camera.get_player());
+                if (player.max_health > 0.f)
+                    hp = (uint8_t) fclamp(player.health / player.max_health * 100.f, 0.f, 100.f);
+                x = player.get_x();
+                y = player.get_y();
+            }
+        }
+        writer.write<uint8_t>(hp);
+        writer.write<float>(x);
+        writer.write<float>(y);
     }
     writer.write<uint8_t>(client->revive_progress > REVIVE_TICKS ? 100 :
         (uint8_t) (client->revive_progress * 100 / REVIVE_TICKS));
@@ -323,6 +345,7 @@ static void do_revive(Client *dead) {
     }
     Entity &player = alloc_player(sim, camera.get_team());
     player_spawn_at(sim, camera, player, x, y);
+    Guild::sync_nametag(dead);
     Party::apply_team(dead);
     std::string msg = "[队伍] " + player_name(dead) + " 已被复活！";
     for (Client *c : dead->game->clients) {
@@ -344,6 +367,15 @@ void Party::tick(GameInstance *game) {
                 notify(c, "[队伍] 组队邀请已过期。");
                 c->pending_party_from.clear();
             }
+        }
+    }
+    // Refresh teammate HP / positions for HUD + minimap (~4 Hz)
+    static uint8_t party_hud_cd = 0;
+    if (++party_hud_cd >= 5) {
+        party_hud_cd = 0;
+        for (Client *c : game->clients) {
+            if (c != nullptr && c->party_id != 0)
+                send_update(c);
         }
     }
     for (Client *dead : game->clients) {

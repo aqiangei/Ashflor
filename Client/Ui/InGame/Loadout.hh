@@ -42,6 +42,7 @@ namespace Ui {
         uint8_t curr_pos;
         uint8_t no_change_ticks;
         uint8_t selected;
+        uint8_t drag_from_bag;
         uint8_t fly_hint; // bag click → slot fly animation
         PetalID::T petal_id;
         PetalID::T last_id;
@@ -50,6 +51,7 @@ namespace Ui {
         virtual void on_render(Renderer &) override;
         virtual void on_render_skip(Renderer &) override;
         virtual void on_event(uint8_t) override;
+        virtual void poll_events(ScreenEvent const &) override;
     };
 
     namespace UiLoadout {
@@ -69,13 +71,15 @@ namespace Ui {
     void backward_secondary_select();
     void ui_delete_petal(uint8_t); // drop on ground (wire: kPetalDelete)
     void ui_swap_petals(uint8_t, uint8_t);
-    // Bag click: primary L→R then secondary L→R; fly hint; 0 if full
+    // Bag click: empty/Basic primary L→R, then empty secondary; 0 if full
     uint8_t ui_auto_equip_from_bag(uint8_t bag_pos, float screen_x, float screen_y);
     // Click primary↔paired secondary (equip out / retract)
     void ui_toggle_petal_slot(uint8_t static_pos);
-    // Move equipped petal into first empty pure backpack slot
-    uint8_t ui_unequip_to_backpack(uint8_t static_pos);
-    // Pack pure-bag slots left (no gaps)
+    // Unequip → backpack stacks (never secondary)
+    uint8_t ui_unequip_to_backpack(uint8_t static_pos, float x = -1, float y = -1);
+    // Visible inventory cell under a screen-space drop, or 0xFF.
+    uint8_t bag_drop_target(float x, float y);
+    // Pack inventory cells left (no gaps)
     void ui_compact_backpack();
     // Abort in-flight petal drag without swapping (blur / visibility)
     void cancel_petal_drags();
@@ -83,6 +87,13 @@ namespace Ui {
     uint8_t find_loadout_drop_target(float x, float y);
     uint8_t loadout_dynamic_to_static(uint8_t dynamic_pos);
     void begin_petal_drag(uint8_t static_pos, uint32_t touch_id);
+    // Inventory cell press. finish_bag_gesture resolves tap, hold, and drop.
+    void begin_bag_gesture(uint8_t static_pos, float x, float y, uint32_t touch_id);
+    void finish_bag_gesture();
+    // True while a bag tap/drag is in progress (blocks scroll + outside-close)
+    uint8_t bag_gesture_busy();
+    // True if (x,y) hits the bottom loadout bar (primary/secondary/trash)
+    uint8_t loadout_bar_hit(float x, float y);
     // True while a loadout petal is held over the open inventory panel
     uint8_t loadout_drag_over_bag(float x, float y);
 }

@@ -1,5 +1,6 @@
 #include <Shared/Craft.hh>
 
+#include <Shared/Recipe.hh>
 #include <Shared/StaticData.hh>
 
 #include <Helpers/Math.hh>
@@ -53,10 +54,11 @@ namespace Craft {
         static std::vector<PetalID::T> pools[RarityID::kNumRarities];
         static uint8_t inited = 0;
         if (!inited) {
-            for (PetalID::T id = 1; id < PetalID::kNumPetals; ++id) {
+            for (uint32_t id = 1; id < (uint32_t) PetalID::kNumPetals; ++id) {
+                if (Recipe::is_bag_only((PetalID::T) id)) continue;
                 uint8_t r = PETAL_DATA[id].rarity;
                 if (r < RarityID::kNumRarities)
-                    pools[r].push_back(id);
+                    pools[r].push_back((PetalID::T) id);
             }
             inited = 1;
         }
@@ -73,10 +75,10 @@ namespace Craft {
         if (!inited) {
             for (uint8_t r = 0; r < RarityID::kNumRarities; ++r)
                 first[r] = PetalID::kNone;
-            for (PetalID::T id = 1; id < PetalID::kNumPetals; ++id) {
+            for (uint32_t id = 1; id < (uint32_t) PetalID::kNumPetals; ++id) {
                 uint8_t r = PETAL_DATA[id].rarity;
                 if (r < RarityID::kNumRarities && first[r] == PetalID::kNone)
-                    first[r] = id;
+                    first[r] = (PetalID::T) id;
             }
             inited = 1;
         }
@@ -87,25 +89,26 @@ namespace Craft {
     static PetalID::T find_same_name_at_rarity(PetalID::T from, uint8_t rarity) {
         if (from == PetalID::kNone || from >= PetalID::kNumPetals) return PetalID::kNone;
         char const *name = PETAL_DATA[from].name;
-        for (PetalID::T id = 1; id < PetalID::kNumPetals; ++id) {
+        for (uint32_t id = 1; id < (uint32_t) PetalID::kNumPetals; ++id) {
             if (PETAL_DATA[id].rarity != rarity) continue;
             if (std::strcmp(PETAL_DATA[id].name, name) == 0)
-                return id;
+                return (PetalID::T) id;
         }
         return PetalID::kNone;
     }
 
     uint8_t can_upgrade_petal(PetalID::T id) {
         if (id == PetalID::kNone || id >= PetalID::kNumPetals) return 0;
-        return PETAL_DATA[id].rarity < RarityID::kUnique;
+        uint8_t r = PETAL_DATA[id].rarity;
+        if (r >= RarityID::kUnique - 1) return 0;
+        return find_same_name_at_rarity(id, (uint8_t) (r + 1)) != PetalID::kNone;
     }
 
     PetalID::T craft_result(PetalID::T from) {
         if (!can_upgrade_petal(from)) return PetalID::kNone;
         uint8_t next_r = (uint8_t) (PETAL_DATA[from].rarity + 1);
-        PetalID::T same = find_same_name_at_rarity(from, next_r);
-        if (same != PetalID::kNone) return same;
-        return random_petal_of_rarity(next_r);
+        // Same English name only — never random into another petal family.
+        return find_same_name_at_rarity(from, next_r);
     }
 
     uint32_t coins_from_mob(uint8_t mob_rarity) {

@@ -3,6 +3,7 @@
 #include <Shared/Binary.hh>
 #include <Shared/EntityDef.hh>
 #include <Shared/StaticDefinitions.hh>
+#include <Shared/LoadoutPreset.hh>
 
 #include <array>
 #include <cstdint>
@@ -33,8 +34,20 @@ public:
     std::array<uint32_t, PetalID::kNumPetals> craft_bank = {};
     uint32_t coins = 0;
     uint32_t craft_attempts = 0;
+    // Leaderboard board counters, flushed into LeaderboardStore periodically
+    uint32_t stat_playtime = 0; // seconds online
+    uint32_t stat_messages = 0; // chat messages sent
+    uint32_t stat_kills = 0;    // players killed
+    uint32_t stat_crafts = 0;   // craft attempts
     uint8_t talent_hp = 0;
     uint8_t talent_rot = 0;
+    std::array<LoadoutPreset, LOADOUT_PRESET_COUNT> loadout_presets = {};
+    uint32_t bonus_day = 0;
+    uint32_t daily_bonus_seconds = 0;
+    uint32_t offline_bonus_seconds = 0;
+    uint8_t bonus_enabled = 1; // player can pause timers / triple drops anytime
+    uint64_t last_bonus_tick = 0;
+    uint64_t last_bonus_sync = 0;
     uint8_t rot_speed_setting = 7; // Q/E wheel 0..10
     uint64_t last_chat_ms = 0;
     uint32_t party_id = 0;
@@ -69,6 +82,9 @@ public:
 // Award mob-kill coins and sync craft/coin bank to the client
 void client_award_coins(Client *, uint32_t amount);
 void client_sync_craft(Client *);
+void client_tick_bonus(Client *);
+// Move the session counters of a client into the leaderboard store
+void client_flush_stats(Client *);
 
 #ifdef WASM_SERVER
 class WebSocket {

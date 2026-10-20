@@ -25,6 +25,9 @@ void Simulation::reset() {
     spatial_hash.refresh(ARENA_WIDTH, ARENA_HEIGHT);
     petal_count_tracker = {0};
     zone_mob_counts = {0};
+    plaza_mob_count = 0;
+    boss_respawn_ticks = 0;
+    boss_ever_spawned = 0;
     #endif
 }
 
@@ -78,12 +81,16 @@ void Simulation::_delete_ent(EntityID const &id) {
 }
 
 void Simulation::tick() {
+    refresh_active_entities();
+    on_tick();
+}
+
+void Simulation::refresh_active_entities() {
     active_entities.clear();
     for (EntityID::id_type i = 1; i < ENTITY_CAP; ++i) {
         if (!BitMath::at_arr(entity_tracker.data(), i)) continue;
         active_entities.push(entities[i].id.id);
     }
-    on_tick();
 }
 
 void Simulation::for_each_entity(std::function<void(Simulation *, Entity &)> cb) { \

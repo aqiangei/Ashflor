@@ -6,6 +6,8 @@
 #include <Shared/Simulation.hh>
 #include <Shared/StaticData.hh>
 
+#include <Helpers/Vector.hh>
+
 #include <cmath>
 
 void tick_petal_behavior(Simulation *sim, Entity &petal) {
@@ -41,6 +43,22 @@ void tick_petal_behavior(Simulation *sim, Entity &petal) {
             petal.acceleration.set(delta.x * 0.5, delta.y * 0.5);
         } else {
             petal.acceleration.set(0,0);
+        }
+        // Grounded Monstera: heal same-team flowers inside the rooted aura.
+        if (petal_data.attributes.aura_heal > 0 && petal_data.attributes.aura_radius > 0) {
+            float const R = petal_data.attributes.aura_radius;
+            float const heal = petal_data.attributes.aura_heal / TPS;
+            float const px = petal.get_x();
+            float const py = petal.get_y();
+            EntityID const team = petal.get_team();
+            sim->spatial_hash.query(px, py, R, R, [&](Simulation *s, Entity &ent) {
+                if (!ent.has_component(kFlower) || !ent.has_component(kHealth)) return;
+                if (!(ent.get_team() == team)) return;
+                float dx = ent.get_x() - px;
+                float dy = ent.get_y() - py;
+                if (dx * dx + dy * dy > R * R) return;
+                inflict_heal(s, ent, heal);
+            });
         }
         return;
     }
@@ -124,6 +142,20 @@ void tick_petal_behavior(Simulation *sim, Entity &petal) {
             */
             break;
         }
+        case PetalID::kMonstera:
+            if (BitMath::at(player.input, InputFlags::kAttacking)
+                || BitMath::at(player.input, InputFlags::kDefending)) {
+                Vector delta(petal.get_x() - player.get_x(), petal.get_y() - player.get_y());
+                petal.friction = DEFAULT_FRICTION;
+                float angle = delta.angle();
+                petal.acceleration.unit_normal(angle).set_magnitude(18 * PLAYER_ACCELERATION);
+                // Reuse split_projectile as client "rooted" visual flag.
+                petal.set_split_projectile(1);
+                float dur = petal_data.attributes.aura_duration > 0
+                    ? petal_data.attributes.aura_duration : 18.f;
+                entity_set_despawn_tick(petal, (game_tick_t)(dur * TPS));
+            }
+            break;
         default:
             break;
     }

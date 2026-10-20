@@ -7,6 +7,7 @@
 #include <Shared/Config.hh>
 #include <Shared/Craft.hh>
 #include <Shared/StaticData.hh>
+#include <Shared/Talent.hh>
 
 #include <cstring>
 #include <string>
@@ -141,9 +142,9 @@ public:
     X(12, Input::invert_attack) \
     X(13, Input::invert_defend) \
     X(19, Input::request_mobile) \
-    X(14, Game::session_token) \
-    X(15, Game::talent_hp) \
-    X(16, Game::talent_rot) \
+    X(20, Game::password) \
+    X(15, Game::guest_talent_hp) \
+    X(16, Game::guest_talent_rot) \
     X(17, Game::rot_speed_setting)
 
 #define X(ct, name) static auto checker_##ct = MutationObserver(name);
@@ -184,10 +185,8 @@ void Storage::retrieve() {
                 I18n::use_chinese = BitMath::at(opts, 2);
             else
                 I18n::use_chinese = 1;
-            // Either bit from older clients ⇒ swapped; keep both flags equal
-            uint8_t swapped = BitMath::at(opts, 4) | BitMath::at(opts, 5);
-            Input::invert_attack = swapped;
-            Input::invert_defend = swapped;
+            Input::invert_attack = BitMath::at(opts, 4);
+            Input::invert_defend = BitMath::at(opts, 5);
             // bit7 = request_mobile explicitly saved; else default to device probe
             if (BitMath::at(opts, 7))
                 Input::request_mobile = BitMath::at(opts, 6);
@@ -224,18 +223,14 @@ void Storage::retrieve() {
         }
     }
     {
-        uint32_t len = StorageProtocol::retrieve("session", 64);
-        if (len > 0) {
+        // Remembered password only. Session is not restored, so the user must press Login.
+        uint32_t len = StorageProtocol::retrieve("password", sizeof(uint32_t) * MAX_PASSWORD_LENGTH + 4);
+        if (len > 0 && len <= sizeof(uint32_t) * MAX_PASSWORD_LENGTH + 4) {
             Decoder reader(&StorageProtocol::buffer[0]);
-            std::string tok = reader.read<std::string>();
-            uint64_t v = 0;
-            for (unsigned char c : tok) {
-                if (c < '0' || c > '9') { v = 0; break; }
-                v = v * 10 + (uint64_t) (c - '0');
-            }
-            Game::session_token = v;
+            Game::password = reader.read<std::string>();
         }
     }
+    bool guest_talents_loaded = false;
     {
         uint32_t len = StorageProtocol::retrieve("guest", StorageProtocol::MAX_LENGTH);
         if (len >= 2 + 2 * MAX_SLOT_COUNT) {
@@ -254,16 +249,29 @@ void Storage::retrieve() {
             if (reader.at < StorageProtocol::buffer + len)
                 remain = (uint32_t) ((StorageProtocol::buffer + len - reader.at) / 4);
             uint32_t bank_n = PetalID::kNumPetals;
+            // Fast5+Heavy5+Twin4 appended after Stinger Legendary
+            constexpr uint32_t kCommonLadderAdded = 14;
             constexpr uint32_t kStingerLegAdded = 1;
             constexpr uint32_t kJungleAdded = 12;
             constexpr uint32_t kLadderAdded = 43;
             constexpr uint32_t kRoyalAdded = 12;
             uint32_t const n = (uint32_t)PetalID::kNumPetals;
-            uint32_t const prev_stinger = n > kStingerLegAdded ? n - kStingerLegAdded : n;
+            constexpr uint32_t kMonsteraAdded = 1;
+            constexpr uint32_t kCoinAdded = 1;
+            uint32_t const prev_monstera = n > kMonsteraAdded ? n - kMonsteraAdded : n;
+            uint32_t const prev_coin = prev_monstera > kCoinAdded ? prev_monstera - kCoinAdded : prev_monstera;
+            uint32_t const prev_common = n > kCommonLadderAdded ? n - kCommonLadderAdded : n;
+            uint32_t const prev_stinger = prev_common > kStingerLegAdded ? prev_common - kStingerLegAdded : prev_common;
             uint32_t const prev_jungle = prev_stinger > kJungleAdded ? prev_stinger - kJungleAdded : prev_stinger;
-            uint32_t const prev_ladder = prev_jungle > kLadderAdded ? prev_jungle - kLadderAdded : prev_jungle;
+            uint32_t const prev_ladder = prev_jungle > kLadderAdded ? prev_jungle - kLadderAdded : prev_ladder;
             uint32_t const prev_royal = prev_ladder > kRoyalAdded ? prev_ladder - kRoyalAdded : prev_ladder;
-            if (remain < bank_n && remain >= prev_stinger)
+            if (remain < bank_n && remain >= prev_monstera)
+                bank_n = prev_monstera;
+            else if (remain < bank_n && remain >= prev_coin)
+                bank_n = prev_coin;
+            else if (remain < bank_n && remain >= prev_common)
+                bank_n = prev_common;
+            else if (remain < bank_n && remain >= prev_stinger)
                 bank_n = prev_stinger;
             else if (remain < bank_n && remain >= prev_jungle)
                 bank_n = prev_jungle;
@@ -285,6 +293,17 @@ void Storage::retrieve() {
                 if (reader.at + 4 <= StorageProtocol::buffer + len)
                     Game::guest_coins = reader.read<uint32_t>();
             }
+            if (reader.at + 2 <= StorageProtocol::buffer + len) {
+                Game::guest_talent_hp = reader.read<uint8_t>();
+                Game::guest_talent_rot = reader.read<uint8_t>();
+                guest_talents_loaded = true;
+            }
+            if (Game::guest_coins > 0) {
+                uint64_t sum = (uint64_t) Game::guest_craft_bank[PetalID::kCoin] + Game::guest_coins;
+                if (sum > 1000000000ull) sum = 1000000000ull;
+                Game::guest_craft_bank[PetalID::kCoin] = (uint32_t) sum;
+                Game::guest_coins = 0;
+            }
             if (Game::guest_save_valid) {
                 Game::craft_bank = Game::guest_craft_bank;
                 Game::coins = Game::guest_coins;
@@ -295,14 +314,23 @@ void Storage::retrieve() {
         uint32_t len = StorageProtocol::retrieve("talents", 8);
         if (len >= 3) {
             Decoder reader(&StorageProtocol::buffer[0]);
-            Game::talent_hp = reader.read<uint8_t>();
-            Game::talent_rot = reader.read<uint8_t>();
+            uint8_t legacy_hp = reader.read<uint8_t>();
+            uint8_t legacy_rot = reader.read<uint8_t>();
+            if (!guest_talents_loaded && Game::session_token == 0) {
+                Game::guest_talent_hp = legacy_hp;
+                Game::guest_talent_rot = legacy_rot;
+            }
             uint8_t rs = reader.read<uint8_t>();
             if (rs > 10) rs = 7;
             Game::rot_speed_setting = rs;
             Game::rot_speed_f = (float) rs;
         }
     }
+    uint8_t max_rank = Talent::max_rank(Game::guest_level);
+    if (Game::guest_talent_hp > max_rank) Game::guest_talent_hp = max_rank;
+    if (Game::guest_talent_rot > max_rank) Game::guest_talent_rot = max_rank;
+    Game::talent_hp = Game::guest_talent_hp;
+    Game::talent_rot = Game::guest_talent_rot;
     #ifdef DEBUG
     for (MobID::T i = 0; i < MobID::kNumMobs; ++i) Game::seen_mobs[i] = 1;
     for (PetalID::T i = PetalID::kBasic; i < PetalID::kNumPetals; ++i) Game::seen_petals[i] = 1;
@@ -317,8 +345,8 @@ void Storage::set() {
     should_update = 0;
     {
         Encoder writer(&StorageProtocol::buffer[0]);
-        for (PetalID::T id = PetalID::kBasic; id < PetalID::kNumPetals; ++id)
-            if (Game::seen_petals[id]) writer.write<uint8_t>(id);
+        for (uint32_t id = PetalID::kBasic; id < (uint32_t) PetalID::kNumPetals; ++id)
+            if (Game::seen_petals[id]) writer.write<uint8_t>((uint8_t) id);
         StorageProtocol::store("petals", writer.at - writer.base);
     }
     {
@@ -344,8 +372,8 @@ void Storage::set() {
     }
     {
         Encoder writer(&StorageProtocol::buffer[0]);
-        writer.write<std::string>(std::to_string(Game::session_token));
-        StorageProtocol::store("session", writer.at - writer.base);
+        writer.write<std::string>(Game::password);
+        StorageProtocol::store("password", writer.at - writer.base);
     }
     {
         Encoder writer(&StorageProtocol::buffer[0]);
@@ -370,12 +398,14 @@ void Storage::set() {
         for (uint32_t i = 0; i < PetalID::kNumPetals; ++i)
             writer.write<uint32_t>(Game::guest_craft_bank[i]);
         writer.write<uint32_t>(Game::guest_coins);
+        writer.write<uint8_t>(Game::guest_talent_hp);
+        writer.write<uint8_t>(Game::guest_talent_rot);
         StorageProtocol::store("guest", writer.at - writer.base);
     }
     {
         Encoder writer(&StorageProtocol::buffer[0]);
-        writer.write<uint8_t>(Game::talent_hp);
-        writer.write<uint8_t>(Game::talent_rot);
+        writer.write<uint8_t>(Game::guest_talent_hp);
+        writer.write<uint8_t>(Game::guest_talent_rot);
         writer.write<uint8_t>(Game::rot_speed_setting);
         StorageProtocol::store("talents", writer.at - writer.base);
     }

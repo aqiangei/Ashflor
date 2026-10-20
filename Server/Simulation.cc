@@ -11,6 +11,7 @@
 #include <Shared/Map.hh>
 
 #include <algorithm>
+#include <iostream>
 #include <vector>
 
 static void calculate_leaderboard(Simulation *sim) {
@@ -59,73 +60,47 @@ static void calculate_leaderboard(Simulation *sim) {
     }
 }
 
-static void ensure_fallen_king(Simulation *sim) {
-    if (sim->map_id != MapID::kRoyalCapital) return;
-    // Single Royal room process state: never spawned | waiting after death | ready
-    static bool ever_spawned = false;
-    static int32_t respawn_ticks = 0;
+// 每图唯一的 Boss：由 MapGen 提供的锚点驱动，活着时不再生成，死了 45 秒重生。
+static void ensure_boss(Simulation *sim) {
+    float bx = 0.f, by = 0.f;
+    uint8_t mob_id = 0;
+    if (!Map::boss_anchor(sim->map_id, bx, by, mob_id)) return;
     bool alive = false;
     sim->for_each<kMob>([&](Simulation *, Entity &m) {
-        if (m.get_mob_id() == MobID::kFallenKing && !m.pending_delete) alive = true;
+        if (m.get_mob_id() == mob_id && !m.pending_delete) alive = true;
     });
     if (alive) return;
-    if (ever_spawned) {
-        if (respawn_ticks <= 0)
-            respawn_ticks = 45 * (int32_t)TPS;
-        if (--respawn_ticks > 0) return;
+    if (sim->boss_ever_spawned) {
+        if (sim->boss_respawn_ticks <= 0)
+            sim->boss_respawn_ticks = 45 * (int32_t)TPS;
+        if (--sim->boss_respawn_ticks > 0) return;
     }
-    // Align with Ai.cc palace clamp center
-    float kx = ARENA_WIDTH * 0.5f + 4200.f;
-    float ky = ARENA_HEIGHT * 0.5f - 1800.f;
-    Map::resolve_circle_terrain(sim->map_id, kx, ky, 100.f);
-    alloc_mob(sim, MobID::kFallenKing, kx, ky, NULL_ENTITY, [](Entity &mob) {
-        mob.score_reward = MOB_DATA[MobID::kFallenKing].xp;
+    Map::resolve_circle_terrain(sim->map_id, bx, by, 100.f);
+    std::cout << "[boss] map " << (int)sim->map_id << " spawning " << MOB_DATA[mob_id].name
+              << " at (" << (int)bx << "," << (int)by << ")" << std::endl;
+    alloc_mob(sim, (MobID::T)mob_id, bx, by, NULL_ENTITY, [](Entity &mob) {
+        mob.score_reward = MOB_DATA[mob.get_mob_id()].xp;
         BitMath::set(mob.flags, EntityFlags::kHasCulling);
         mob.detection_radius = 1400.f;
-        mob.zone = 5; // palace zone index (not zone-count tracked)
+        mob.zone = 0xFF;   // 不计入任何 Zone 的刷怪计数
     });
-    ever_spawned = true;
-    respawn_ticks = 0;
-}
-
-static void ensure_ancient_treant(Simulation *sim) {
-    if (sim->map_id != MapID::kJungle) return;
-    static bool ever_spawned = false;
-    static int32_t respawn_ticks = 0;
-    bool alive = false;
-    sim->for_each<kMob>([&](Simulation *, Entity &m) {
-        if (m.get_mob_id() == MobID::kAncientTreant && !m.pending_delete) alive = true;
-    });
-    if (alive) return;
-    if (ever_spawned) {
-        if (respawn_ticks <= 0)
-            respawn_ticks = 45 * (int32_t)TPS;
-        if (--respawn_ticks > 0) return;
-    }
-    // Heart of Jungle — north of spawn plaza
-    float kx = ARENA_WIDTH * 0.5f;
-    float ky = ARENA_HEIGHT * 0.5f - 4200.f;
-    Map::resolve_circle_terrain(sim->map_id, kx, ky, 120.f);
-    alloc_mob(sim, MobID::kAncientTreant, kx, ky, NULL_ENTITY, [](Entity &mob) {
-        mob.score_reward = MOB_DATA[MobID::kAncientTreant].xp;
-        BitMath::set(mob.flags, EntityFlags::kHasCulling);
-        mob.detection_radius = 1400.f;
-        mob.zone = 0;
-    });
-    ever_spawned = true;
-    respawn_ticks = 0;
+    sim->boss_ever_spawned = 1;
+    sim->boss_respawn_ticks = 0;
 }
 
 void Simulation::on_tick() {
     spatial_hash.refresh(ARENA_WIDTH, ARENA_HEIGHT);
-    ensure_fallen_king(this);
-    ensure_ancient_treant(this);
+    ensure_boss(this);
+    // 刷怪速率随在线人数缩放（总纲 R4）：基础 4/s，每名玩家 +1，上限 12/s
     if (frand() < 1.0f / TPS) {
-        for (uint32_t i = 0; i < 10; ++i) {
-            Vector v;
-            if (Map::find_spawn_location(this, 500, v))
-                Map::spawn_random_mob(this, v.x, v.y);
-        }
+        uint32_t players = 0;
+        for_each<kFlower>([&](Simulation *, Entity &ent) {
+            if (!ent.has_component(kMob)) ++players;
+        });
+        uint32_t batches = 4u + players;
+        if (batches > 12u) batches = 12u;
+        for (uint32_t i = 0; i < batches; ++i)
+            Map::spawn_zone_mob(this);
     }
     for_each_entity([](Simulation *sim, Entity &ent) {
         if (ent.has_component(kPhysics))

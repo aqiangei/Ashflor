@@ -36,7 +36,7 @@ namespace Ui {
     extern Element *game_topbar_root;
     extern Element *panel_buttons_root;
     extern Element *game_side_buttons_root;
-    extern Element *game_panel_roots[5];
+    extern Element *game_panel_roots[7];
 
     // Toggle title/in-game info panels (leaderboard, galleries, …)
     void toggle_panel(uint8_t panel);

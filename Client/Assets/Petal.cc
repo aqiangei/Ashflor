@@ -3,6 +3,7 @@
 #include <Client/I18n.hh>
 #include <Client/StaticData.hh>
 
+#include <cassert>
 #include <cmath>
 #include <cstring>
 
@@ -1476,10 +1477,110 @@ void draw_static_petal_single(PetalID::T id, Renderer &ctx) {
             ctx.arc(0, 0, 4);
             ctx.fill();
             break;
-        default:
-            assert(id < PetalID::kNumPetals);
-            assert(!"didn't cover petal render");
+        case PetalID::kCoin:
+            ctx.scale(r / 12.f);
+            ctx.set_fill(0xffF6D56A);
+            ctx.set_stroke(0xff8A5A12);
+            ctx.set_line_width(2.5f);
+            ctx.begin_path();
+            ctx.arc(0, 0, 12);
+            ctx.fill();
+            ctx.stroke();
+            ctx.set_fill(0xffE2B23A);
+            ctx.begin_path();
+            ctx.arc(0, 0, 8.5f);
+            ctx.fill();
+            ctx.set_fill(0xffFFF4C2);
+            ctx.begin_path();
+            ctx.ellipse(0, -2.2f, 3.2f, 5.2f);
+            ctx.fill();
+            ctx.rotate(2.2f);
+            ctx.begin_path();
+            ctx.ellipse(0, -2.2f, 3.2f, 5.2f);
+            ctx.fill();
+            ctx.rotate(2.2f);
+            ctx.begin_path();
+            ctx.ellipse(0, -2.2f, 3.2f, 5.2f);
+            ctx.fill();
+            ctx.set_fill(0xffC98418);
+            ctx.begin_path();
+            ctx.arc(0, 0, 1.6f);
+            ctx.fill();
             break;
+        case PetalID::kMonstera: {
+            // Fenestrated monstera leaf — deep jungle green with oval holes.
+            ctx.scale(r / 15.f);
+            ctx.set_fill(0xff2F8A4A);
+            ctx.set_stroke(0xff1B5A32);
+            ctx.set_line_width(2.8f);
+            ctx.round_line_cap();
+            ctx.round_line_join();
+            ctx.begin_path();
+            ctx.move_to(-12, 2);
+            ctx.bcurve_to(-10, -14, 2, -18, 12, -10);
+            ctx.bcurve_to(16, -4, 14, 8, 6, 14);
+            ctx.bcurve_to(-2, 18, -12, 12, -12, 2);
+            ctx.close_path();
+            ctx.fill();
+            ctx.stroke();
+            // Midrib
+            ctx.set_stroke(0xff1B5A32);
+            ctx.set_line_width(2.2f);
+            ctx.begin_path();
+            ctx.move_to(-8, 2);
+            ctx.qcurve_to(0, -2, 10, -6);
+            ctx.stroke();
+            // Fenestrations (characteristic holes)
+            ctx.set_fill(0xff1E6B3A);
+            ctx.begin_path();
+            ctx.ellipse(-2, -4, 2.6f, 3.8f);
+            ctx.fill();
+            ctx.begin_path();
+            ctx.ellipse(5, -2, 2.2f, 3.2f);
+            ctx.fill();
+            ctx.begin_path();
+            ctx.ellipse(1, 6, 2.4f, 2.8f);
+            ctx.fill();
+            // Edge notches
+            ctx.set_stroke(0xff3FA85C);
+            ctx.set_line_width(1.6f);
+            ctx.begin_path();
+            ctx.move_to(8, -8);
+            ctx.line_to(11, -5);
+            ctx.move_to(-6, 10);
+            ctx.line_to(-3, 13);
+            ctx.stroke();
+            break;
+        }
+        default: {
+            // Craft materials / new products: bright rarity chip (kid cartoon style)
+            assert(id < PetalID::kNumPetals);
+            float s = fmaxf(8.f, r);
+            uint32_t fill = RARITY_COLORS[PETAL_DATA[id].rarity % RarityID::kNumRarities];
+            ctx.set_fill(fill);
+            ctx.set_stroke(0xff222222);
+            ctx.set_line_width(2.2f);
+            ctx.begin_path();
+            ctx.round_rect(-s, -s, s * 2, s * 2, 4.f);
+            ctx.fill();
+            ctx.stroke();
+            ctx.set_fill(0xffffffff);
+            ctx.begin_path();
+            ctx.arc(-s * 0.25f, -s * 0.3f, s * 0.35f);
+            ctx.fill();
+            if (PETAL_DATA[id].count == 0) {
+                // Material gem sparkle
+                ctx.set_fill(0xfffff4c2);
+                ctx.begin_path();
+                ctx.move_to(0, -s * 0.55f);
+                ctx.line_to(s * 0.28f, 0);
+                ctx.line_to(0, s * 0.55f);
+                ctx.line_to(-s * 0.28f, 0);
+                ctx.close_path();
+                ctx.fill();
+            }
+            break;
+        }
     }
 }
 

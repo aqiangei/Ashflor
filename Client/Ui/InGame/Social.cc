@@ -9,6 +9,7 @@
 
 #include <Client/Game.hh>
 #include <Client/I18n.hh>
+#include <Client/Input.hh>
 #include <Client/Render/Renderer.hh>
 
 #include <Shared/Binary.hh>
@@ -49,35 +50,66 @@ static void iconpark_guild(Renderer &ctx) {
 }
 
 Element *Ui::make_invite_toast() {
+    // One card only (new invite replaces). Mobile: tappable but not huge —
+    // close stays <56px wide so Button won't inflate it to a 64² blob.
+    uint8_t const mobile = Input::mobile_controls();
+    float const title_sz = mobile ? 15.f : 14.f;
+    float const name_sz = mobile ? 14.f : 13.f;
+    float const btn_label = mobile ? 14.f : 13.f;
+    float const close_w = mobile ? 48.f : 32.f;
+    float const close_h = mobile ? 40.f : 28.f;
+    float const act_w = mobile ? 100.f : 88.f;
+    float const act_h = mobile ? 40.f : 32.f;
+    float const pad = mobile ? 10.f : 12.f;
+    float const gap = mobile ? 8.f : 8.f;
+
     Element *elt = new Ui::VContainer({
-        new Ui::DynamicText(14, [](){
-            if (Game::invite_type == InviteType::kInviteGuild)
-                return I18n::tr(I18n::kInviteGuildTitle);
-            return I18n::tr(I18n::kInvitePartyTitle);
-        }, { .fill = Chrome::kTitle, .h_justify = Style::Left }),
-        new Ui::DynamicText(13, [](){
-            return Game::invite_from;
+        new Ui::HFlexContainer(
+            new Ui::DynamicText(title_sz, [](){
+                if (Game::invite_type == InviteType::kInviteGuild)
+                    return I18n::tr(I18n::kInviteGuildTitle);
+                return I18n::tr(I18n::kInvitePartyTitle);
+            }, { .fill = Chrome::kTitle, .h_justify = Style::Left }),
+            new Ui::Button(close_w, close_h,
+                new Ui::DynamicText(mobile ? 16.f : 14.f, [](){ return std::string{"X"}; }),
+                [](Element *, uint8_t e){
+                    if (e == Ui::kClick) Game::invite_dismiss();
+                },
+                nullptr,
+                { .fill = Chrome::kBtnIron, .line_width = 0, .round_radius = Chrome::kRadius }),
+            0, 8, {}
+        ),
+        new Ui::DynamicText(name_sz, [](){
+            if (Game::invite_from.empty()) return std::string{};
+            if (I18n::use_chinese)
+                return std::string{"来自 "} + Game::invite_from;
+            return std::string{"From "} + Game::invite_from;
         }, { .fill = Chrome::kGold, .h_justify = Style::Left }),
         new Ui::HContainer({
-            new Ui::Button(88, 30,
-                new Ui::DynamicText(13, [](){ return I18n::tr(I18n::kInviteAccept); }),
+            new Ui::Button(act_w, act_h,
+                new Ui::DynamicText(btn_label, [](){ return I18n::tr(I18n::kInviteAccept); }),
                 [](Element *, uint8_t e){
                     if (e == Ui::kClick) Game::invite_respond(1);
                 },
                 nullptr,
                 { .fill = Chrome::kBtnMoss, .line_width = 0, .round_radius = Chrome::kRadius }),
-            new Ui::Button(88, 30,
-                new Ui::DynamicText(13, [](){ return I18n::tr(I18n::kInviteReject); }),
+            new Ui::Button(act_w, act_h,
+                new Ui::DynamicText(btn_label, [](){ return I18n::tr(I18n::kInviteReject); }),
                 [](Element *, uint8_t e){
                     if (e == Ui::kClick) Game::invite_respond(0);
                 },
                 nullptr,
                 { .fill = Chrome::kBtnDanger, .line_width = 0, .round_radius = Chrome::kRadius })
-        }, 0, 8, { .h_justify = Style::Left })
-    }, 12, 8, {
+        }, 0, gap, { .h_justify = Style::Left })
+    }, pad, gap, {
         .fill = Chrome::kPanelDeep, .line_width = 0, .round_radius = Chrome::kRadius,
         .animate = [](Element *elt, Renderer &ctx){
-            ctx.translate((1.f - (float) elt->animation) * -40.f, 0);
+            // Slide in from left; re-anchor under topbar each frame (mobile toggle)
+            uint8_t const m = Input::mobile_controls();
+            elt->x = m ? 10.f : 12.f;
+            // Topbar bottom ≈ 66; sit just under it, above / over HP strip briefly
+            elt->y = m ? 70.f : 68.f;
+            ctx.translate((1.f - (float) elt->animation) * -48.f, 0);
         },
         .should_render = [](){
             return Game::invite_open
@@ -88,9 +120,8 @@ Element *Ui::make_invite_toast() {
         .v_justify = Style::Top,
         .layer = 1
     });
-    // Below topbar row (gear ~40 + pad)
-    elt->x = 12;
-    elt->y = 64;
+    elt->x = mobile ? 10.f : 12.f;
+    elt->y = mobile ? 70.f : 68.f;
     return elt;
 }
 
@@ -167,6 +198,10 @@ Element *Ui::make_guild_panel() {
     }, 14, 8, {
         .fill = Chrome::kPanelDeep, .line_width = 0, .round_radius = Chrome::kRadius,
         .animate = [](Element *elt, Renderer &ctx){
+            // Yield top-left to the invite toast when both would stack
+            uint8_t const m = Input::mobile_controls();
+            elt->x = m ? 10.f : 12.f;
+            elt->y = (Game::invite_open ? (m ? 210.f : 190.f) : (m ? 70.f : 68.f));
             ctx.translate(0, (1.f - (float) elt->animation) * -20.f);
         },
         .should_render = [](){
@@ -178,8 +213,8 @@ Element *Ui::make_guild_panel() {
         .v_justify = Style::Top,
         .layer = 1
     });
-    elt->x = 12;
-    elt->y = 64;
+    elt->x = Input::mobile_controls() ? 10.f : 12.f;
+    elt->y = Input::mobile_controls() ? 70.f : 68.f;
     return elt;
 }
 

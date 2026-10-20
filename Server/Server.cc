@@ -44,12 +44,14 @@ void Server::tick() {
     ++tick_n;
     uint32_t online = 0;
     for (uint8_t i = 0; i < MapID::kNumMaps; ++i) {
-        // Empty maps (no WS clients): tick at 1/3 rate. Bots/mobs stay alive but
-        // 8 full sims/frame was burning the single-thread WASM server (~140ms/tick).
-        if (Server::games[i].clients.empty() && ((tick_n + i) % 3) != 0) {
+        // Empty maps (no WS clients): tick at 1/6 rate. 8 maps at full rate
+        // still push tick >40ms and make move/attack feel delayed.
+        if (Server::games[i].clients.empty() && ((tick_n + i) % 6) != 0) {
             continue;
         }
         Server::games[i].tick();
+        for (Client *c : Server::games[i].clients)
+            client_tick_bonus(c);
         online += (uint32_t) Server::games[i].clients.size();
     }
     Server::player_count = online;
@@ -57,6 +59,28 @@ void Server::tick() {
     if (++lb_flush_ticks >= 25) { // ~1s at 25 TPS
         lb_flush_ticks = 0;
         LeaderboardStore::flush();
+        // Play time counter: one second per connected, spawned player
+        for (uint8_t i = 0; i < MapID::kNumMaps; ++i) {
+            for (Client *c : Server::games[i].clients) {
+                if (c == nullptr || c->play_name.empty()) continue;
+                if (c->stat_playtime < 4000000000u)
+                    ++c->stat_playtime;
+            }
+        }
+    }
+    // Push the session stat counters into the leaderboard store (~5s)
+    static uint32_t stat_flush_ticks = 0;
+    if (++stat_flush_ticks >= 125) {
+        stat_flush_ticks = 0;
+        uint8_t any = 0;
+        for (uint8_t i = 0; i < MapID::kNumMaps; ++i) {
+            for (Client *c : Server::games[i].clients) {
+                if (c == nullptr) continue;
+                client_flush_stats(c);
+                any = 1;
+            }
+        }
+        if (any) LeaderboardStore::flush();
     }
     // Periodic full account snapshot for all logged-in clients (~5s)
     static uint32_t acc_flush_ticks = 0;
@@ -90,6 +114,9 @@ void Server::tick() {
 void Server::init() {
     AccountStore::load();
     LeaderboardStore::load();
+    // Seed the ranked "level" column from the saved accounts
+    AccountStore::seed_leaderboard_levels();
+    LeaderboardStore::flush();
     if (Server::games == nullptr)
         Server::games = new GameInstance[MapID::kNumMaps];
     for (uint8_t i = 0; i < MapID::kNumMaps; ++i)
