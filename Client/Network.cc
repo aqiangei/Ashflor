@@ -98,11 +98,16 @@ void Game::on_message(uint8_t *ptr, uint32_t len) {
                 on_game_screen = 0;
                 send_guest_progress();
             } else if (was_auto && !account_logged_in) {
-                // Already online elsewhere or stale token → play as guest this connection
+                // Resume/login failed → guest this connection; open form if credentials rejected
                 ensure_guest_id();
                 talent_hp = guest_talent_hp;
                 talent_rot = guest_talent_rot;
                 send_guest_progress();
+                if (result == AccountResultCode::kAccountWrongPass ||
+                    result == AccountResultCode::kAccountNotFound ||
+                    result == AccountResultCode::kAccountInvalidUser ||
+                    result == AccountResultCode::kAccountInvalidPass)
+                    auth_panel = 1;
             }
             if (spawn_after_auth) {
                 spawn_after_auth = 0;

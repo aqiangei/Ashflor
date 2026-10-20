@@ -257,7 +257,7 @@ void Storage::retrieve() {
         }
     }
     {
-        // Remembered password only. Session is not restored, so the user must press Login.
+        // Remembered password: used for auto-login after WS verify (see Socket.cc).
         uint32_t len = StorageProtocol::retrieve("password", sizeof(uint32_t) * MAX_PASSWORD_LENGTH + 4);
         if (len > 0 && len <= sizeof(uint32_t) * MAX_PASSWORD_LENGTH + 4) {
             Decoder reader(&StorageProtocol::buffer[0]);

@@ -213,6 +213,10 @@ Element *Ui::make_title_input_box() {
                         return I18n::use_chinese
                             ? std::string{"账号已登录 · "} + Game::username
                             : std::string{"Signed in · "} + Game::username;
+                    if (Game::pending_auto_login && !Game::username.empty())
+                        return I18n::use_chinese
+                            ? std::string{"正在登录 · "} + Game::username
+                            : std::string{"Signing in · "} + Game::username;
                     return I18n::use_chinese
                         ? std::string{"游客模式 · 本机进度"}
                         : std::string{"Guest · local progress"};
@@ -257,7 +261,10 @@ Element *Ui::make_title_input_box() {
                             )
                         }, 0, 16, {})
                     }, 0, 8, { .no_animation = 1 }),
-                    [](){ return Game::account_logged_in != 0; }
+                    [](){
+                        return Game::account_logged_in != 0 ||
+                            (Game::pending_auto_login != 0 && !Game::username.empty());
+                    }
                 ),
                 new Ui::DynamicText(13, [](){ return I18n::tr(I18n::kOrPressEnterSpawn); }, {
                     .fill = Chrome::kHint
@@ -330,6 +337,10 @@ Element *Ui::make_title_input_box() {
                                 return I18n::use_chinese
                                     ? std::string{"账号进度自动保存"}
                                     : std::string{"Account progress saved automatically"};
+                            if (Game::pending_auto_login)
+                                return I18n::use_chinese
+                                    ? std::string{"正在自动登录…"}
+                                    : std::string{"Signing in…"};
                             if (!Game::account_status.empty()) return Game::account_status;
                             return std::string{I18n::tr(I18n::kGuestHint)};
                         }, { .fill = Chrome::kHint })
@@ -564,7 +575,8 @@ Element *Ui::make_debug_stats() {
             if (!Game::in_game()) {
                 return I18n::use_chinese ? std::string{"局外"} : std::string{"title"};
             }
-            uint32_t ents = Game::simulation.active_entities.size();
+            uint32_t ents = 0;
+            Game::simulation.for_each_entity([&](Simulation *, Entity &){ ++ents; });
             if (Game::alive() && Game::simulation.ent_exists(Game::camera_id)) {
                 Entity const &cam = Game::simulation.get_ent(Game::camera_id);
                 return std::format("ents {}  cam {:.0f},{:.0f}  lv {}",

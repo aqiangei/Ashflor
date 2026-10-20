@@ -120,7 +120,7 @@ static void make_mob_tooltip(MobID::T id) {
         new Ui::Element(0, 6),
         make_mob_stat_container(id),
     };
-    if (!MOB_DATA[id].drops.empty()) {
+    if (MOB_DATA[id].drops.size() > 0) {
         children.push_back(new Ui::Element(0, 8));
         children.push_back(new Ui::DynamicText(12, [](){
             return I18n::use_chinese ? std::string("掉落") : std::string("Drops");

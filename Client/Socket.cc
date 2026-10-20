@@ -73,12 +73,17 @@ extern "C" {
                 if (Module._ashflorSetReconnectDelay)
                     Module._ashflorSetReconnectDelay(0);
             });
-            // After verify: resume browser session, else restore guest save
+            // After verify: resume session → saved account login → guest save
             if (pending_guest_progress) {
                 pending_guest_progress = 0;
                 if (Game::session_token != 0 && !Game::username.empty())
                     Game::account_resume();
-                else
+                else if (!Game::username.empty() && !Game::password.empty()) {
+                    Game::pending_auto_login = 1;
+                    Game::account_status = I18n::use_chinese
+                        ? "正在自动登录…" : "Signing in…";
+                    Game::account_auth(0);
+                } else
                     Game::send_guest_progress();
             }
             Game::on_message(INCOMING_PACKET, len);

@@ -215,9 +215,7 @@ void Game::init() {
     DOM::cache_client();
     Storage::retrieve();
     reset();
-    // Last visit was logged in: show the form with the saved password, do not sign in.
-    if (!username.empty() && !password.empty())
-        auth_panel = 1;
+    // Saved username+password → Socket auto-login after verify (see pending_guest_progress).
     // Brand lives inside make_title_input_box so it cannot overlap the form
     title_ui_window.add_child(
         Ui::make_title_input_box()
