@@ -644,15 +644,22 @@ static Element *make_github_octocat_icon(float size) {
     }, size, size);
 }
 
+static void open_upstream_gardn(Element *, uint8_t e) {
+    if (e == Ui::kClick) DOM::open_page("https://github.com/trigonal-bacon/gardn");
+}
+
+static void open_ashflor_repo(Element *, uint8_t e) {
+    if (e == Ui::kClick) DOM::open_page("https://github.com/aqiangei/ashflor");
+}
+
 static Element *make_labeled_github_button(
-    char const *label_zh, char const *label_en, char const *url, uint32_t fill
+    char const *label_zh, char const *label_en,
+    void (*on_click)(Element *, uint8_t), uint32_t fill
 ) {
     return new Ui::VContainer({
         new Ui::Button(46, 46,
             make_github_octocat_icon(36),
-            [url](Element *, uint8_t e){
-                if (e == Ui::kClick) DOM::open_page(url);
-            },
+            on_click,
             nullptr,
             soft_btn(fill)
         ),
@@ -666,14 +673,10 @@ Element *Ui::make_github_link_button() {
     // Right: this fork. Left of it: upstream gardn (must stay credited).
     Element *elt = new Ui::HContainer({
         make_labeled_github_button(
-            "上游 gardn", "gardn",
-            "https://github.com/trigonal-bacon/gardn",
-            Chrome::kBtnMoss
+            "上游 gardn", "gardn", open_upstream_gardn, Chrome::kBtnMoss
         ),
         make_labeled_github_button(
-            "本仓库", "ashflor",
-            "https://github.com/aqiangei/ashflor",
-            Chrome::kBtnIron
+            "本仓库", "ashflor", open_ashflor_repo, Chrome::kBtnIron
         )
     }, 10, 10, {
         .should_render = [](){ return Game::should_render_title_ui() && Game::auth_panel == 0; },
