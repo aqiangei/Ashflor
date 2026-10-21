@@ -222,6 +222,9 @@ static void _add_mob_xp(Simulation *sim, EntityID const killer_id, Entity const 
                 uint32_t const cap = level_to_score(MAX_PLAYER_LEVEL);
                 if (next > cap) next = cap;
                 flower.set_score(next);
+                if (Client *ow = Server::client_by_camera(sim, cam.id)) {
+                    if (next > ow->pending_score) ow->pending_score = next;
+                }
                 any = 1;
             }
             if (any) return;
@@ -232,6 +235,9 @@ static void _add_mob_xp(Simulation *sim, EntityID const killer_id, Entity const 
         uint32_t const cap = level_to_score(MAX_PLAYER_LEVEL);
         if (next > cap) next = cap;
         killer.set_score(next);
+        if (Client *ow = Server::client_by_camera(sim, killer.get_parent())) {
+            if (next > ow->pending_score) ow->pending_score = next;
+        }
     }
 }
 

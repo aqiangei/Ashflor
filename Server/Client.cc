@@ -1457,8 +1457,9 @@ void Client::on_message(WebSocket *ws, std::string_view message, uint64_t code) 
                 send_talent_update(client);
                 break;
             }
-            // level + inventory
-            if (client->check_invalid(validator.validate_uint32())) return;
+            // level + score + inventory
+            if (client->check_invalid(validator.validate_uint32())) return; // level
+            if (client->check_invalid(validator.validate_uint32())) return; // score
             for (uint32_t i = 0; i < 2 * MAX_SLOT_COUNT; ++i)
                 if (client->check_invalid(validator.validate_uint16())) return;
             // Trailing: coins + talents (7xu8 new, or 2xu8 legacy).
@@ -1498,6 +1499,7 @@ void Client::on_message(WebSocket *ws, std::string_view message, uint64_t code) 
                 if (client->check_invalid(validator.validate_uint8())) return;
             uint32_t level = reader.read<uint32_t>();
             if (level < 1) level = 1;
+            uint32_t score = reader.read<uint32_t>();
             Simulation *simulation = &client->game->simulation;
             if (!simulation->ent_exists(client->camera)) break;
             Entity &camera = simulation->get_ent(client->camera);
@@ -1524,7 +1526,13 @@ void Client::on_message(WebSocket *ws, std::string_view message, uint64_t code) 
             for (uint32_t i = 0; i < 2 * MAX_SLOT_COUNT; ++i)
                 PetalTracker::remove_petal(simulation, camera.get_inventory(i));
             camera.set_respawn_level(level);
-            client->pending_score = level_to_score(level);
+            {
+                uint32_t floor = level_to_score(level);
+                if (score < floor) score = floor;
+                uint32_t const cap = level_to_score(MAX_PLAYER_LEVEL);
+                if (score > cap) score = cap;
+                client->pending_score = score;
+            }
             uint32_t slots = client_slot_count(client);
             for (uint32_t i = 0; i < 2 * MAX_SLOT_COUNT; ++i) {
                 PetalID::T id = petals_tmp[i];

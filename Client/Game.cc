@@ -135,6 +135,7 @@ namespace Game {
     uint32_t coins = 0;
     uint8_t guest_save_valid = 0;
     uint32_t guest_level = 1;
+    uint32_t guest_score = 0;
     std::array<PetalID::T, 2 * MAX_SLOT_COUNT> guest_petals = {PetalID::kNone};
     std::array<uint32_t, PetalID::kNumPetals> guest_craft_bank = {};
     uint32_t guest_coins = 0;
@@ -488,7 +489,12 @@ void Game::send_guest_progress() {
         socket.send(writer.packet, writer.at - writer.packet);
         return;
     }
-    writer.write<uint32_t>(guest_level < 1 ? 1 : guest_level);
+    uint32_t lv = guest_level < 1 ? 1 : guest_level;
+    uint32_t sc = guest_score;
+    uint32_t floor = level_to_score(lv);
+    if (sc < floor) sc = floor;
+    writer.write<uint32_t>(lv);
+    writer.write<uint32_t>(sc);
     for (uint32_t i = 0; i < 2 * MAX_SLOT_COUNT; ++i)
         writer.write<PetalID::T>(guest_petals[i]);
     for (uint32_t i = 0; i < PetalID::kNumPetals; ++i)
@@ -520,9 +526,18 @@ void Game::seed_guest_from_session() {
         for (uint32_t i = 0; i < 2 * MAX_SLOT_COUNT; ++i)
             guest_petals[i] = camera.get_inventory(i);
     }
-    // High-water mark — never let a snapshot drop stored guest level.
+    // High-water mark — never let a snapshot drop stored guest level/score.
     if (lv > guest_level || !guest_save_valid) guest_level = lv;
     if (guest_level < 1) guest_level = 1;
+    uint32_t sc = guest_score;
+    if (alive() && score > sc) sc = score;
+    if (sc > guest_score || !guest_save_valid) guest_score = sc;
+    {
+        uint32_t floor = level_to_score(guest_level);
+        if (guest_score < floor) guest_score = floor;
+        uint32_t implied = score_to_level(guest_score);
+        if (implied > guest_level) guest_level = implied;
+    }
     guest_save_valid = 1;
 }
 

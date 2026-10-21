@@ -283,20 +283,32 @@ void Storage::retrieve() {
             uint8_t first = reader.read<uint8_t>();
             bool guest_ok = true;
             uint8_t petal_u16 = 0;
-            if (first == 3 || first == 2) {
-                if (len < 6 + 2 * MAX_SLOT_COUNT) {
+            if (first == 4 || first == 3 || first == 2) {
+                uint32_t need = (first == 4)
+                    ? (2 + 4 + 4 + 2 * MAX_SLOT_COUNT) // ver+valid+level+score+petals u16
+                    : (2 + 4 + 2 * MAX_SLOT_COUNT);
+                if (len < need) {
                     guest_ok = false;
                 } else {
                     Game::guest_save_valid = reader.read<uint8_t>() ? 1 : 0;
                     Game::guest_level = reader.read<uint32_t>();
-                    petal_u16 = (first == 3) ? 1 : 0;
+                    if (first == 4)
+                        Game::guest_score = reader.read<uint32_t>();
+                    else
+                        Game::guest_score = 0;
+                    petal_u16 = (first == 4 || first == 3) ? 1 : 0;
                 }
             } else {
                 Game::guest_save_valid = first ? 1 : 0;
                 Game::guest_level = reader.read<uint8_t>();
+                Game::guest_score = 0;
             }
             if (guest_ok) {
                 if (Game::guest_level < 1) Game::guest_level = 1;
+                {
+                    uint32_t floor = level_to_score(Game::guest_level);
+                    if (Game::guest_score < floor) Game::guest_score = floor;
+                }
                 for (uint32_t i = 0; i < 2 * MAX_SLOT_COUNT; ++i) {
                     PetalID::T id = petal_u16
                         ? reader.read<uint16_t>()
@@ -488,9 +500,15 @@ void Storage::set() {
     }
     {
         Encoder writer(&StorageProtocol::buffer[0]);
-        writer.write<uint8_t>(3); // guest blob: level u32 + petal ids u16
+        writer.write<uint8_t>(4); // guest blob: level+score u32 + petal ids u16
         writer.write<uint8_t>(Game::guest_save_valid);
         writer.write<uint32_t>(Game::guest_level);
+        {
+            uint32_t sc = Game::guest_score;
+            uint32_t floor = level_to_score(Game::guest_level < 1 ? 1 : Game::guest_level);
+            if (sc < floor) sc = floor;
+            writer.write<uint32_t>(sc);
+        }
         for (uint32_t i = 0; i < 2 * MAX_SLOT_COUNT; ++i)
             writer.write<uint16_t>(Game::guest_petals[i]);
         for (uint32_t i = 0; i < PetalID::kNumPetals; ++i)

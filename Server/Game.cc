@@ -317,21 +317,26 @@ void GameInstance::transfer_client(Client *client, GameInstance *dest) {
         if (simulation.ent_exists(pid) && simulation.get_ent(pid).has_component(kFlower)) {
             Entity &player = simulation.get_ent(pid);
             flush_flower_loadout_to_camera(&simulation, cam, player);
-            uint32_t lv = score_to_level(player.get_score());
+            uint32_t sc = player.get_score();
+            if (client->pending_score > sc) sc = client->pending_score;
+            uint32_t lv = score_to_level(sc);
             if (lv < 1) lv = 1;
             if (lv < cam.get_respawn_level()) lv = cam.get_respawn_level();
             snap_level = lv;
+            client->pending_score = sc;
             for (uint32_t i = 0; i < 2 * MAX_SLOT_COUNT; ++i)
                 snap_petals[i] = player.get_loadout_ids(i);
         } else {
             snap_level = cam.get_respawn_level();
             if (snap_level < 1) snap_level = 1;
+            uint32_t floor = level_to_score(snap_level);
+            if (client->pending_score < floor) client->pending_score = floor;
             for (uint32_t i = 0; i < 2 * MAX_SLOT_COUNT; ++i)
                 snap_petals[i] = cam.get_inventory(i);
         }
     }
 
-    // Persist after flush so accounts.dat gets the real loadout.
+    // Persist after flush so accounts.dat gets the real loadout + score.
     AccountStore::capture(client);
     Account *acc = client->account_name.empty()
         ? nullptr

@@ -138,8 +138,13 @@ static uint8_t bind_session(Client *client, std::string const &username, Account
     {
         uint32_t lv = acc->level < 1 ? 1 : acc->level;
         if (lv > MAX_PLAYER_LEVEL) lv = MAX_PLAYER_LEVEL;
-        // Account only stores level floor; mid-level XP is session-side.
-        client->pending_score = level_to_score(lv);
+        uint32_t floor = level_to_score(lv);
+        uint32_t sc = acc->score;
+        if (sc < floor) sc = floor;
+        uint32_t const cap = level_to_score(MAX_PLAYER_LEVEL);
+        if (sc > cap) sc = cap;
+        // Restore full mid-level XP (not just level floor).
+        client->pending_score = sc;
     }
     ACTIVE_SESSIONS.insert(username);
     if (client->game != nullptr && client->game->simulation.ent_exists(client->camera) && !client->alive())
@@ -268,6 +273,7 @@ void AccountStore::load() {
         // only exploded accounts; safe/gray rows must stay byte-identical.
         if (level < 1) level = 1;
         acc.level = level;
+        acc.score = 0; // filled from trailing s:TOKEN or derived after parse
         acc.petals.fill(PetalID::kNone);
         acc.craft_bank.fill(0);
         acc.coins = 0;
@@ -456,16 +462,37 @@ void AccountStore::load() {
             acc.craft_bank[PetalID::kCoin] = (uint32_t) sum;
             acc.coins = 0;
         }
-        // Trailing "g:<name> <leader>" after last_seen (optional for old saves).
+        // Trailing tokens after numeric fields (optional on old saves):
+        //   g:<name> <leader>   s:<score>
         {
             ls.clear();
-            std::string gtok;
-            uint32_t glead = 0;
-            if (ls >> gtok && gtok.size() >= 2 && gtok[0] == 'g' && gtok[1] == ':') {
-                std::string gname = gtok.substr(2);
-                if (gname != "-") acc.guild_name = gname;
-                if (ls >> glead) acc.guild_leader = glead ? 1 : 0;
+            std::string tok;
+            while (ls >> tok) {
+                if (tok.size() >= 2 && tok[0] == 'g' && tok[1] == ':') {
+                    std::string gname = tok.substr(2);
+                    if (gname != "-") acc.guild_name = gname;
+                    uint32_t glead = 0;
+                    if (ls >> glead) acc.guild_leader = glead ? 1 : 0;
+                } else if (tok.size() >= 2 && tok[0] == 's' && tok[1] == ':') {
+                    try {
+                        unsigned long long v = std::stoull(tok.substr(2));
+                        if (v > 0xffffffffull) v = 0xffffffffull;
+                        acc.score = (uint32_t) v;
+                    } catch (...) {
+                        acc.score = 0;
+                    }
+                }
             }
+        }
+        // Legacy rows have no s: — start at level floor. Keep score ≥ floor.
+        {
+            uint32_t floor = level_to_score(acc.level < 1 ? 1 : acc.level);
+            if (acc.score < floor) acc.score = floor;
+            uint32_t implied = score_to_level(acc.score);
+            if (implied > acc.level) acc.level = implied;
+            if (acc.level > MAX_PLAYER_LEVEL) acc.level = MAX_PLAYER_LEVEL;
+            uint32_t const cap = level_to_score(MAX_PLAYER_LEVEL);
+            if (acc.score > cap) acc.score = cap;
         }
         ACCOUNTS[acc.username] = acc;
     }
@@ -476,7 +503,7 @@ void AccountStore::load() {
 
 void AccountStore::save() {
     std::ostringstream out;
-    out << "# ashflor accounts  fields: user hash level petals[20] craft_bank[N] coins craft_attempts talent_ranks[7] session_hash presets[20][slots+10 petals] bonus_day daily_bonus offline_bonus last_seen active_preset guild_name guild_leader\n";
+    out << "# ashflor accounts  fields: user hash level petals[20] craft_bank[N] coins craft_attempts talent_ranks[7] session_hash presets[20][slots+10 petals] bonus_day daily_bonus offline_bonus last_seen active_preset g:guild leader s:score\n";
     for (auto const &kv : ACCOUNTS) {
         Account const &acc = kv.second;
         out << acc.username << ' ' << acc.pass_hash << ' ' << (uint32_t) acc.level;
@@ -498,6 +525,10 @@ void AccountStore::save() {
             << ' ' << (uint32_t) acc.active_loadout_preset;
         out << " g:" << (acc.guild_name.empty() ? "-" : acc.guild_name)
             << ' ' << (uint32_t) (acc.guild_leader ? 1 : 0);
+        uint32_t sc = acc.score;
+        uint32_t floor = level_to_score(acc.level < 1 ? 1 : acc.level);
+        if (sc < floor) sc = floor;
+        out << " s:" << sc;
         out << '\n';
     }
     write_file_atomic(ACCOUNT_FILE, out.str());
@@ -585,15 +616,18 @@ static void copy_progress(Account &acc, Client *client) {
     Entity &camera = sim->get_ent(client->camera);
     std::array<PetalID::T, 2 * MAX_SLOT_COUNT> next = {};
     next.fill(PetalID::kNone);
-    // Level is a high-water mark — never write a lower value back to the account.
+    // Level + full score are high-water marks — never regress on capture.
     uint32_t level = 1;
+    uint32_t score = 0;
     // Prefer flower loadout whenever the entity still exists — even if
     // pending_delete. While alive, camera inventory is cleared to None at spawn;
     // reading it after request_delete but before entity_on_death wipes accounts.
     EntityID pid = camera.get_player();
     if (sim->ent_exists(pid) && sim->get_ent(pid).has_component(kFlower)) {
         Entity &player = sim->get_ent(pid);
-        uint32_t lv = score_to_level(player.get_score());
+        score = player.get_score();
+        if (client->pending_score > score) score = client->pending_score;
+        uint32_t lv = score_to_level(score);
         if (lv < 1) lv = 1;
         if (lv < camera.get_respawn_level()) lv = camera.get_respawn_level();
         level = lv;
@@ -602,13 +636,30 @@ static void copy_progress(Account &acc, Client *client) {
     } else {
         level = camera.get_respawn_level();
         if (level < 1) level = 1;
+        score = level_to_score(level);
+        if (client->pending_score > score) score = client->pending_score;
+        uint32_t from_sc = score_to_level(score);
+        if (from_sc > level) level = from_sc;
         for (uint32_t i = 0; i < 2 * MAX_SLOT_COUNT; ++i)
             next[i] = camera.get_inventory(i);
     }
     // Future soft ceiling only (post-migration grind). Never wipe inventory.
     if (level > MAX_PLAYER_LEVEL) level = MAX_PLAYER_LEVEL;
+    uint32_t const cap = level_to_score(MAX_PLAYER_LEVEL);
+    if (score > cap) score = cap;
     if (level > acc.level) acc.level = level;
     if (acc.level > MAX_PLAYER_LEVEL) acc.level = MAX_PLAYER_LEVEL;
+    if (score > acc.score) acc.score = score;
+    {
+        uint32_t floor = level_to_score(acc.level);
+        if (acc.score < floor) acc.score = floor;
+        uint32_t implied = score_to_level(acc.score);
+        if (implied > acc.level) acc.level = implied;
+        if (acc.level > MAX_PLAYER_LEVEL) acc.level = MAX_PLAYER_LEVEL;
+    }
+    // Keep session pending in sync so the next spawn / reconnect matches disk.
+    if (client->pending_score < acc.score)
+        client->pending_score = acc.score;
 
     uint32_t const primary_n = account_primary_slots(acc, client);
     uint32_t const next_v = count_valuable_petals(next);
@@ -663,6 +714,7 @@ uint8_t AccountStore::register_account(Client *client, std::string const &userna
     acc.username = username;
     acc.pass_hash = hash_password(username, password);
     acc.level = 1;
+    acc.score = level_to_score(1);
     acc.petals.fill(PetalID::kNone);
     for (uint32_t i = 0; i < Talent::slot_count_from_ranks(acc.talent_ranks); ++i)
         acc.petals[i] = PetalID::kBasic;
