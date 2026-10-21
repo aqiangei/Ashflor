@@ -1531,8 +1531,6 @@ void Client::on_message(WebSocket *ws, std::string_view message, uint64_t code) 
             {
                 uint32_t floor = level_to_score(level);
                 if (score < floor) score = floor;
-                uint32_t const cap = level_to_score(MAX_PLAYER_LEVEL);
-                if (score > cap) score = cap;
                 client->pending_score = score;
             }
             uint32_t slots = client_slot_count(client);

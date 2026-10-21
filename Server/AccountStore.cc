@@ -137,12 +137,9 @@ static uint8_t bind_session(Client *client, std::string const &username, Account
     client->guild_leader = acc->guild_leader ? 1 : 0;
     {
         uint32_t lv = acc->level < 1 ? 1 : acc->level;
-        if (lv > MAX_PLAYER_LEVEL) lv = MAX_PLAYER_LEVEL;
         uint32_t floor = level_to_score(lv);
         uint32_t sc = acc->score;
         if (sc < floor) sc = floor;
-        uint32_t const cap = level_to_score(MAX_PLAYER_LEVEL);
-        if (sc > cap) sc = cap;
         // Restore full mid-level XP (not just level floor).
         client->pending_score = sc;
     }
@@ -490,9 +487,6 @@ void AccountStore::load() {
             if (acc.score < floor) acc.score = floor;
             uint32_t implied = score_to_level(acc.score);
             if (implied > acc.level) acc.level = implied;
-            if (acc.level > MAX_PLAYER_LEVEL) acc.level = MAX_PLAYER_LEVEL;
-            uint32_t const cap = level_to_score(MAX_PLAYER_LEVEL);
-            if (acc.score > cap) acc.score = cap;
         }
         ACCOUNTS[acc.username] = acc;
     }
@@ -643,19 +637,14 @@ static void copy_progress(Account &acc, Client *client) {
         for (uint32_t i = 0; i < 2 * MAX_SLOT_COUNT; ++i)
             next[i] = camera.get_inventory(i);
     }
-    // Future soft ceiling only (post-migration grind). Never wipe inventory.
-    if (level > MAX_PLAYER_LEVEL) level = MAX_PLAYER_LEVEL;
-    uint32_t const cap = level_to_score(MAX_PLAYER_LEVEL);
-    if (score > cap) score = cap;
+    // Never wipe inventory. Level/score uncapped (uint32 overflow only).
     if (level > acc.level) acc.level = level;
-    if (acc.level > MAX_PLAYER_LEVEL) acc.level = MAX_PLAYER_LEVEL;
     if (score > acc.score) acc.score = score;
     {
         uint32_t floor = level_to_score(acc.level);
         if (acc.score < floor) acc.score = floor;
         uint32_t implied = score_to_level(acc.score);
         if (implied > acc.level) acc.level = implied;
-        if (acc.level > MAX_PLAYER_LEVEL) acc.level = MAX_PLAYER_LEVEL;
     }
     // Keep session pending in sync so the next spawn / reconnect matches disk.
     if (client->pending_score < acc.score)
@@ -734,7 +723,6 @@ void AccountStore::apply_to_camera(Simulation *sim, Entity &camera, Account cons
     {
         uint32_t lv = acc.level;
         if (lv < 1) lv = 1;
-        if (lv > MAX_PLAYER_LEVEL) lv = MAX_PLAYER_LEVEL;
         camera.set_respawn_level(lv);
     }
     for (uint32_t i = 0; i < 2 * MAX_SLOT_COUNT; ++i) {
@@ -827,8 +815,6 @@ void AccountStore::capture(Client *client) {
 
 void AccountStore::note_score(Client *client, uint32_t score) {
     if (client == nullptr || score == 0) return;
-    uint32_t const cap = level_to_score(MAX_PLAYER_LEVEL);
-    if (score > cap) score = cap;
     if (score > client->pending_score)
         client->pending_score = score;
     if (client->account_name.empty()) return;
@@ -837,7 +823,6 @@ void AccountStore::note_score(Client *client, uint32_t score) {
     if (score > acc->score) acc->score = score;
     uint32_t lv = score_to_level(score);
     if (lv < 1) lv = 1;
-    if (lv > MAX_PLAYER_LEVEL) lv = MAX_PLAYER_LEVEL;
     if (lv > acc->level) acc->level = lv;
     uint32_t floor = level_to_score(acc->level);
     if (acc->score < floor) acc->score = floor;

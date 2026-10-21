@@ -14,10 +14,8 @@ inline float const MAP_SPAWN_Y = ARENA_HEIGHT * 0.5f;
 
 inline uint32_t const MAX_SLOT_COUNT = 10;
 inline uint32_t const LEVELS_PER_EXTRA_SLOT = 15;
-// Soft ceiling for *future* XP gains after the zone×combat threat bug.
-// Boot migration compresses only level>150 into ~101–130; see XpMigration
-// and todo/xp-inflation-migration-plan.md. Safe/gray accounts are untouched.
-inline uint32_t const MAX_PLAYER_LEVEL = 150;
+// Level is uncapped (score_to_level / level_to_score). One-shot XP inflation
+// migration still uses its own thresholds in XpMigration — not a live ceiling.
 inline uint32_t const LEADERBOARD_SIZE = 10;
 // Rows kept per category on the multi-column leaderboard board
 inline uint32_t const LEADERBOARD_STAT_SIZE = 10;

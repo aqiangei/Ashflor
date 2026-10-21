@@ -274,8 +274,6 @@ static void _finish_player_spawn(Simulation *sim, Entity &camera, Entity &player
         Client *owner = Server::client_by_camera(sim, camera.id);
         if (owner != nullptr && owner->pending_score > score)
             score = owner->pending_score;
-        uint32_t const cap = level_to_score(MAX_PLAYER_LEVEL);
-        if (score > cap) score = cap;
         if (owner != nullptr) owner->pending_score = score;
         player.set_score(score);
     }

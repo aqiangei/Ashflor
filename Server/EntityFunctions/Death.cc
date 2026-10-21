@@ -73,7 +73,6 @@ void flush_flower_loadout_to_camera(Simulation *sim, Entity &camera, Entity cons
     if (level < 1) level = 1;
     if (level < camera.get_respawn_level())
         level = camera.get_respawn_level();
-    if (level > MAX_PLAYER_LEVEL) level = MAX_PLAYER_LEVEL;
     for (uint32_t i = 0; i < 2 * MAX_SLOT_COUNT; ++i)
         PetalTracker::remove_petal(sim, camera.get_inventory(i));
     camera.set_respawn_level(level);
@@ -218,8 +217,7 @@ static void _add_mob_xp(Simulation *sim, EntityID const killer_id, Entity const 
                 Entity &flower = sim->get_ent(cam.get_player());
                 if (!flower.has_component(kScore)) continue;
                 uint32_t next = flower.get_score() + xp;
-                uint32_t const cap = level_to_score(MAX_PLAYER_LEVEL);
-                if (next > cap) next = cap;
+                if (next < flower.get_score()) next = UINT32_MAX;
                 flower.set_score(next);
                 if (Client *ow = Server::client_by_camera(sim, cam.id))
                     AccountStore::note_score(ow, next);
@@ -230,8 +228,7 @@ static void _add_mob_xp(Simulation *sim, EntityID const killer_id, Entity const 
     }
     {
         uint32_t next = killer.get_score() + xp;
-        uint32_t const cap = level_to_score(MAX_PLAYER_LEVEL);
-        if (next > cap) next = cap;
+        if (next < killer.get_score()) next = UINT32_MAX;
         killer.set_score(next);
         if (Client *ow = Server::client_by_camera(sim, killer.get_parent()))
             AccountStore::note_score(ow, next);
@@ -558,7 +555,6 @@ void entity_on_death(Simulation *sim, Entity const &ent) {
         if (respawn_level < 1) respawn_level = 1;
         if (respawn_level < camera.get_respawn_level())
             respawn_level = camera.get_respawn_level();
-        if (respawn_level > MAX_PLAYER_LEVEL) respawn_level = MAX_PLAYER_LEVEL;
         camera.set_respawn_level(respawn_level);
         if (Client *owner = Server::client_by_camera(sim, camera.id)) {
             uint32_t sc = ent.get_score();

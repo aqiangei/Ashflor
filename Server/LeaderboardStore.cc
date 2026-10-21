@@ -147,9 +147,6 @@ uint32_t LeaderboardStore::recorded_count() {
 
 void LeaderboardStore::record(std::string const &name, uint32_t score, uint8_t color) {
     if (name.empty()) return;
-    // Soft ceiling for *new* gains after XP fix — does not rewrite legacy rows alone.
-    uint32_t const cap = level_to_score(MAX_PLAYER_LEVEL);
-    if (score > cap) score = cap;
     auto it = ENTRIES.find(name);
     if (it == ENTRIES.end()) {
         LeaderboardEntry e;
