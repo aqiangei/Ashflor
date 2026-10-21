@@ -40,6 +40,12 @@ inline uint8_t petal_name_is(PetalID::T id, char const *name) {
         && std::strcmp(PETAL_DATA[id].name, name) == 0;
 }
 
+// Hot-path ID checks (avoid strcmp in collide / petal ticks).
+inline uint8_t petal_is_meteor(PetalID::T id) {
+    return id == PetalID::kMeteor
+        || (id >= PetalID::kMeteorCommon && id <= PetalID::kMeteorUltra);
+}
+
 using MapZones = StaticArray<struct ZoneDefinition, MAX_ZONES_PER_MAP>;
 using MapTerrain = StaticArray<struct TerrainFeature, MAX_TERRAIN_PER_MAP>;
 
