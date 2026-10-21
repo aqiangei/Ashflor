@@ -108,13 +108,19 @@ SINGLE(Name, guild, std::string)
     SINGLE(immunity_ticks, game_tick_t, =0) \
     SINGLE(dandy_ticks, game_tick_t, =0) \
     SINGLE(poison_ticks, game_tick_t, =0) \
+    SINGLE(burn_ticks, game_tick_t, =0) \
+    SINGLE(snare_ticks, game_tick_t, =0) \
     SINGLE(despawn_tick, game_tick_t, =0) \
     SINGLE(secondary_reload, game_tick_t, =0) \
     SINGLE(ai_tick, game_tick_t, =0) \
+    SINGLE(contact_hit_count, uint8_t, =0) \
     \
     SINGLE(poison_inflicted, float, =0) \
     SINGLE(poison_dealer, EntityID, =NULL_ENTITY) \
     SINGLE(poison_damage, PoisonDamage, ={}) \
+    SINGLE(burn_inflicted, float, =0) \
+    SINGLE(burn_dealer, EntityID, =NULL_ENTITY) \
+    SINGLE(burn_damage, PoisonDamage, ={}) \
     SINGLE(health, float, =0) \
     SINGLE(max_health, float, =0) \
     SINGLE(damage, float, =0) \

@@ -273,7 +273,12 @@ static char const *const PETAL_NAME_ZH[PetalID::kNumPetals] = {
     "毒茧",
     "王室甲壳",
     "蚁后徽章",
-    "蚁群之心"
+    "蚁群之心",
+    // Monstera ladder
+    "龟背竹", "龟背竹", "龟背竹", "龟背竹", "龟背竹", "龟背竹",
+    // Honey / Meteor
+    "蜂蜜",
+    "陨石"
 };
 static char const *const PETAL_DESC_ZH[PetalID::kNumPetals] = {
     "你怎么能看到这个？",
@@ -549,7 +554,17 @@ static char const *const PETAL_DESC_ZH[PetalID::kNumPetals] = {
     "封闭毒茧，兼具中毒与防御。",
     "金色内甲的王室甲片。",
     "蚁后徽章，召唤兵蚁。",
-    "琥珀色蚁群核心，治疗并带动蜂群。"
+    "琥珀色蚁群核心，治疗并带动蜂群。",
+    // Monstera ladder
+    "裂叶龟背竹。扔到地上会生根，范围内友方持续回血",
+    "裂叶龟背竹。扔到地上会生根，范围内友方持续回血",
+    "裂叶龟背竹。扔到地上会生根，范围内友方持续回血",
+    "裂叶龟背竹。扔到地上会生根，范围内友方持续回血",
+    "裂叶龟背竹。扔到地上会生根，范围内友方持续回血",
+    "裂叶龟背竹。扔到地上会生根，范围内友方持续回血",
+    // Honey / Meteor
+    "厚实的六角蜂巢琥珀。黏稠、高耐久，投出后缓慢直飞。",
+    "空心陨石岩环。高耐久地面障碍，中心可站入，外缘阻挡怪物。"
 };
 static char const *const MOB_NAME_ZH[MobID::kNumMobs] = {
     "幼蚁",

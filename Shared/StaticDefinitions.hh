@@ -111,6 +111,8 @@ namespace DamageType {
     enum : uint8_t {
         kContact,
         kPoison,
+        kBurn,
+        kSplash, // AoE follow-up; does not re-trigger splash
         kReflect
     };
 }
@@ -437,6 +439,9 @@ namespace PetalID {
         kMonsteraUnique,
         kMonsteraSuper,
         kMonsteraUltra,
+        // AFK control petals (append only; art first — gameplay wiring later)
+        kHoney,
+        kMeteor,
         kNumPetals
     };
 };
@@ -684,6 +689,22 @@ struct PetalAttributes {
     float aura_radius = 0;    // radius of the healing area
     float aura_duration = 0;  // seconds the aura stays alive after rooting
     struct PoisonDamage poison_damage;
+    struct PoisonDamage burn_damage; // contact DoT; ignores poison_armor
+    float armor_penetration = 0;     // 0-1 fraction of armor ignored
+    float bonus_vs_poisoned = 0;     // additive, e.g. 0.35 = +35%
+    float bonus_vs_slowed = 0;
+    uint8_t hit_cycle = 0;           // every N contact hits
+    float hit_cycle_factor = 2.0f;
+    float snare_seconds = 0;         // near-root immobilize
+    float splash_damage = 0;
+    float splash_radius = 0;
+    float execute_threshold = 0;     // HP ratio gate
+    float execute_factor = 1.5f;
+    float taunt_radius = 0;          // pull mob aggro to flower
+    float on_hit_heal = 0;
+    float radial_pulse_damage = 0;
+    float radial_pulse_radius = 0;
+    float aura_slow_seconds = 0;     // slow while rooted aura active
     uint8_t defend_only = 0;
     float icon_angle = 0;
     uint8_t split_projectile = 0;

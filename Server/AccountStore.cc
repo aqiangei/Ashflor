@@ -279,6 +279,7 @@ void AccountStore::load() {
             constexpr uint32_t kPresetLegacy8 = 1 + 8;
             uint32_t const n = (uint32_t) PetalID::kNumPetals;
             // Subtract append-only waves newest→oldest so old craft_bank lengths still match.
+            constexpr uint32_t kHoneyMeteorAdded = 2;
             constexpr uint32_t kMonsteraLadderAdded = 6;
             constexpr uint32_t kAntHellAdded = 12;
             constexpr uint32_t kSuperUltraAdded = 42;
@@ -295,7 +296,8 @@ void AccountStore::load() {
             auto sub = [](uint32_t cur, uint32_t amt) -> uint32_t {
                 return cur > amt ? cur - amt : cur;
             };
-            uint32_t const prev_monstera_ladder = sub(n, kMonsteraLadderAdded);
+            uint32_t const prev_honey_meteor = sub(n, kHoneyMeteorAdded);
+            uint32_t const prev_monstera_ladder = sub(prev_honey_meteor, kMonsteraLadderAdded);
             uint32_t const prev_anthell = sub(prev_monstera_ladder, kAntHellAdded);
             uint32_t const prev_super = sub(prev_anthell, kSuperUltraAdded);
             uint32_t const prev_cross = sub(prev_super, kCrossLegendAdded);
@@ -309,9 +311,9 @@ void AccountStore::load() {
             uint32_t const prev_ladder = sub(prev_jungle, kLadderAdded);
             uint32_t const prev_royal = sub(prev_ladder, kRoyalAdded);
             uint32_t const bank_candidates[] = {
-                n, prev_monstera_ladder, prev_anthell, prev_super, prev_cross,
-                prev_basecraft, prev_mats, prev_monstera, prev_coin, prev_common,
-                prev_stinger, prev_jungle, prev_ladder, prev_royal
+                n, prev_honey_meteor, prev_monstera_ladder, prev_anthell, prev_super,
+                prev_cross, prev_basecraft, prev_mats, prev_monstera, prev_coin,
+                prev_common, prev_stinger, prev_jungle, prev_ladder, prev_royal
             };
 
             auto layout_ok = [&](uint32_t petal_n, uint32_t preset_w) -> bool {

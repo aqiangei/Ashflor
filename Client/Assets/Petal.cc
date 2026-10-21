@@ -5543,6 +5543,153 @@ void draw_static_petal_single(PetalID::T id, Renderer &ctx) {
             break;
         }
 
+        case PetalID::kHoney: {
+            // Rounded amber hex — thick sticky honeycomb candy (icon + projectile)
+            ctx.scale(r / 12.f);
+            ctx.round_line_join();
+            ctx.round_line_cap();
+            float vx[6], vy[6];
+            float const R = 13.5f;
+            float const t = 0.28f;
+            for (int i = 0; i < 6; ++i) {
+                float a = i * (float)M_PI / 3.f;
+                vx[i] = std::cos(a) * R;
+                vy[i] = std::sin(a) * R;
+            }
+            auto path_rounded_hex = [&](float sx, float sy, float scale) {
+                ctx.begin_path();
+                for (int i = 0; i < 6; ++i) {
+                    int ip = (i + 5) % 6;
+                    int in = (i + 1) % 6;
+                    float cx = vx[i] * scale + sx;
+                    float cy = vy[i] * scale + sy;
+                    float px = (vx[i] + t * (vx[ip] - vx[i])) * scale + sx;
+                    float py = (vy[i] + t * (vy[ip] - vy[i])) * scale + sy;
+                    float qx = (vx[i] + t * (vx[in] - vx[i])) * scale + sx;
+                    float qy = (vy[i] + t * (vy[in] - vy[i])) * scale + sy;
+                    if (i == 0) ctx.move_to(px, py);
+                    else ctx.line_to(px, py);
+                    ctx.qcurve_to(cx, cy, qx, qy);
+                }
+                ctx.close_path();
+            };
+            path_rounded_hex(0, 0, 1.f);
+            ctx.set_fill(0xffF7CF2F);
+            ctx.fill();
+            path_rounded_hex(1.2f, 1.6f, 0.78f);
+            ctx.set_fill(0xffC8A826);
+            ctx.fill();
+            ctx.set_fill(0xffE7B647);
+            ctx.begin_path();
+            ctx.move_to(-2.5f, 1.5f);
+            ctx.qcurve_to(-4.5f, 5.5f, 0.5f, 6.2f);
+            ctx.qcurve_to(5.0f, 5.0f, 3.5f, 1.0f);
+            ctx.qcurve_to(1.0f, -1.5f, -2.5f, 1.5f);
+            ctx.close_path();
+            ctx.fill();
+            path_rounded_hex(0, 0, 1.f);
+            ctx.set_stroke(0xff8A6A1E);
+            ctx.set_line_width(2.6f);
+            ctx.stroke();
+            ctx.set_stroke(0xffFFF1A0);
+            ctx.set_line_width(2.2f);
+            ctx.begin_path();
+            ctx.partial_arc(-2.5f, -4.5f, 5.5f, 3.6f, 5.1f, 0);
+            ctx.stroke();
+            ctx.set_fill(0x66FFF8D0);
+            ctx.begin_path();
+            ctx.arc(-3.5f, -1.5f, 1.4f);
+            ctx.fill();
+            ctx.begin_path();
+            ctx.arc(4.0f, 2.5f, 1.0f);
+            ctx.fill();
+            ctx.set_stroke(0xffC8A826);
+            ctx.set_line_width(0.7f);
+            ctx.begin_path();
+            ctx.arc(-3.5f, -1.5f, 1.4f);
+            ctx.stroke();
+            ctx.begin_path();
+            ctx.arc(4.0f, 2.5f, 1.0f);
+            ctx.stroke();
+            break;
+        }
+        case PetalID::kMeteor: {
+            // Top-down hollow crater ring — standable center, rocky blocking rim
+            ctx.scale(r / 15.f);
+            ctx.round_line_join();
+            ctx.round_line_cap();
+            float const orad[8] = {
+                14.6f, 13.4f, 14.9f, 13.2f, 14.5f, 13.7f, 15.0f, 13.6f
+            };
+            float const hole = 6.3f;
+            auto path_outer = [&]() {
+                ctx.begin_path();
+                for (int i = 0; i < 8; ++i) {
+                    float a = i * (float)M_PI / 4.f - 0.18f;
+                    float x = std::cos(a) * orad[i];
+                    float y = std::sin(a) * orad[i];
+                    if (i == 0) ctx.move_to(x, y);
+                    else ctx.line_to(x, y);
+                }
+                ctx.close_path();
+            };
+            auto path_ring = [&]() {
+                path_outer();
+                ctx.reverse_arc(0, 0, hole);
+            };
+            ctx.set_fill(0x28000000);
+            ctx.begin_path();
+            ctx.ellipse(0.5f, 1.8f, 15.5f, 14.2f);
+            ctx.fill();
+            path_ring();
+            ctx.set_fill(0xff4A4558);
+            ctx.fill(1);
+            ctx.begin_path();
+            ctx.move_to(1.5f, 1.0f);
+            ctx.line_to(12.0f, 3.5f);
+            ctx.line_to(11.2f, 12.5f);
+            ctx.line_to(2.5f, 13.2f);
+            ctx.line_to(-0.5f, 8.0f);
+            ctx.close_path();
+            ctx.reverse_arc(0, 0, hole);
+            ctx.set_fill(0xff2E2B38);
+            ctx.fill(1);
+            ctx.set_stroke(0xff1A1822);
+            ctx.set_line_width(2.2f);
+            ctx.begin_path();
+            ctx.arc(0, 0, hole + 0.35f);
+            ctx.stroke();
+            ctx.set_stroke(0xff8B3A22);
+            ctx.set_line_width(1.6f);
+            ctx.begin_path();
+            ctx.arc(0, 0, hole + 1.5f);
+            ctx.stroke();
+            path_outer();
+            ctx.set_stroke(0xff14131A);
+            ctx.set_line_width(2.6f);
+            ctx.stroke();
+            ctx.begin_path();
+            ctx.arc(0, 0, hole);
+            ctx.stroke();
+            ctx.set_stroke(0xffC45A32);
+            ctx.set_line_width(1.5f);
+            ctx.begin_path();
+            ctx.move_to(8.5f, -6.5f);
+            ctx.line_to(11.8f, -4.0f);
+            ctx.move_to(-10.5f, 3.0f);
+            ctx.line_to(-13.2f, 5.5f);
+            ctx.move_to(4.0f, 11.0f);
+            ctx.line_to(7.2f, 13.0f);
+            ctx.stroke();
+            ctx.set_stroke(0xff8A8499);
+            ctx.set_line_width(1.8f);
+            ctx.begin_path();
+            ctx.partial_arc(-6.5f, -7.5f, 4.5f, 3.4f, 5.0f, 0);
+            ctx.stroke();
+            break;
+        }
+
+
         default: {
             // Normal petal shape tinted by rarity (materials / new craft results).
             assert(id < PetalID::kNumPetals);

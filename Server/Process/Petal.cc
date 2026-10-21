@@ -45,20 +45,28 @@ void tick_petal_behavior(Simulation *sim, Entity &petal) {
         } else {
             petal.acceleration.set(0,0);
         }
-        // Grounded Monstera: heal same-team flowers inside the rooted aura.
-        if (petal_data.attributes.aura_heal > 0 && petal_data.attributes.aura_radius > 0) {
+        // Grounded aura: heal allies and/or slow enemies inside radius.
+        if (petal_data.attributes.aura_radius > 0
+            && (petal_data.attributes.aura_heal > 0 || petal_data.attributes.aura_slow_seconds > 0)) {
             float const R = petal_data.attributes.aura_radius;
             float const heal = petal_data.attributes.aura_heal / TPS;
             float const px = petal.get_x();
             float const py = petal.get_y();
             EntityID const team = petal.get_team();
+            game_tick_t const slow_ticks =
+                (game_tick_t)(petal_data.attributes.aura_slow_seconds * TPS);
             sim->spatial_hash.query(px, py, R, R, [&](Simulation *s, Entity &ent) {
-                if (!ent.has_component(kFlower) || !ent.has_component(kHealth)) return;
-                if (!(ent.get_team() == team)) return;
                 float dx = ent.get_x() - px;
                 float dy = ent.get_y() - py;
                 if (dx * dx + dy * dy > R * R) return;
-                inflict_heal(s, ent, heal);
+                if (petal_data.attributes.aura_heal > 0
+                    && ent.has_component(kFlower) && ent.has_component(kHealth)
+                    && ent.get_team() == team) {
+                    inflict_heal(s, ent, heal);
+                }
+                if (slow_ticks > 0 && ent.has_component(kMob) && !(ent.get_team() == team)) {
+                    if (ent.slow_ticks < slow_ticks) ent.slow_ticks = slow_ticks;
+                }
             });
         }
         return;
@@ -66,6 +74,27 @@ void tick_petal_behavior(Simulation *sim, Entity &petal) {
     if (petal_data.attributes.secondary_reload == 0) return;
     if (petal.secondary_reload <= petal_data.attributes.secondary_reload * TPS) {
         ++petal.secondary_reload;
+        return;
+    }
+    // Radial pulse: damage enemies around the flower when attacking.
+    if (petal_data.attributes.radial_pulse_damage > 0
+        && petal_data.attributes.radial_pulse_radius > 0
+        && BitMath::at(player.input, InputFlags::kAttacking)) {
+        float const R = petal_data.attributes.radial_pulse_radius;
+        float const dmg = petal_data.attributes.radial_pulse_damage;
+        float const px = player.get_x();
+        float const py = player.get_y();
+        EntityID const team = player.get_team();
+        EntityID const src = petal.id;
+        sim->spatial_hash.query(px, py, R, R, [&](Simulation *s, Entity &ent) {
+            if (!ent.has_component(kHealth) || !ent.has_component(kMob)) return;
+            if (ent.get_team() == team) return;
+            float dx = ent.get_x() - px;
+            float dy = ent.get_y() - py;
+            if (dx * dx + dy * dy > R * R) return;
+            inflict_damage(s, src, ent.id, dmg, DamageType::kSplash);
+        });
+        petal.secondary_reload = 0;
         return;
     }
     if (petal_data.attributes.burst_heal > 0 && player.health < player.max_health && player.dandy_ticks == 0) {
@@ -153,6 +182,7 @@ void tick_petal_behavior(Simulation *sim, Entity &petal) {
         case PetalID::kMonsteraUltra:
         case PetalID::kPollenSandstorm:
         case PetalID::kWorldTreeSeed:
+        case PetalID::kChronoVortex:
             if (BitMath::at(player.input, InputFlags::kAttacking)
                 || BitMath::at(player.input, InputFlags::kDefending)) {
                 Vector delta(petal.get_x() - player.get_x(), petal.get_y() - player.get_y());

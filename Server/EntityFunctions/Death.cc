@@ -222,6 +222,7 @@ void entity_on_death(Simulation *sim, Entity const &ent) {
             else camera.set_killed_by("");
             // No PvP kill counter — players cannot kill each other.
         } else if (ent.poison_ticks > 0) camera.set_killed_by("Poison");
+        else if (ent.burn_ticks > 0) camera.set_killed_by("Burn");
         else camera.set_killed_by("");
     }
     if (ent.has_component(kMob)) {

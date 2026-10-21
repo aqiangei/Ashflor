@@ -83,6 +83,18 @@ static Ui::Element *make_petal_stat_container(PetalID::T id) {
             new Ui::StaticText(12, format_number(attrs.poison_damage.time * attrs.poison_damage.damage) + " (" + format_number(attrs.poison_damage.damage) + "/s)")
         }, 0, 5, { .h_justify = Style::Left }));
     }
+    if (attrs.burn_damage.damage > 0) {
+        stats.push_back(new Ui::HContainer({
+            new Ui::StaticText(12, "Burn", { .fill = 0xffff8844 }),
+            new Ui::StaticText(12, format_number(attrs.burn_damage.time * attrs.burn_damage.damage) + " (" + format_number(attrs.burn_damage.damage) + "/s)")
+        }, 0, 5, { .h_justify = Style::Left }));
+    }
+    if (attrs.armor_penetration > 0) {
+        stats.push_back(new Ui::HContainer({
+            new Ui::StaticText(12, "Armor Pen", { .fill = 0xffaaaaaa }),
+            new Ui::StaticText(12, format_pct(attrs.armor_penetration * 100))
+        }, 0, 5, { .h_justify = Style::Left }));
+    }
     if (attrs.extra_health > 0) {
         stats.push_back(new Ui::HContainer({
             new Ui::DynamicText(12, [](){ return I18n::tr(I18n::kFlowerHealth); }, { .fill = 0xff77ff77 }),

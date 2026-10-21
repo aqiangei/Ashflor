@@ -16,6 +16,14 @@ void tick_health_behavior(Simulation *sim, Entity &ent) {
         ent.poison_inflicted = 0;
         ent.poison_dealer = NULL_ENTITY;
     }
+    if (ent.burn_ticks > 0 && !ent.has_component(kPetal)) {
+        ent.burn_ticks--;
+        inflict_damage(sim, ent.burn_dealer, ent.id, ent.burn_inflicted, DamageType::kBurn);
+        if (ent.burn_ticks % (TPS / 2) != 0) ent.set_damaged(0);
+    } else {
+        ent.burn_inflicted = 0;
+        ent.burn_dealer = NULL_ENTITY;
+    }
     if (ent.dandy_ticks > 0) --ent.dandy_ticks;
     if (ent.health <= 0) sim->request_delete(ent.id);
     if (ent.max_health == 0) return;

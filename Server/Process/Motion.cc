@@ -31,7 +31,10 @@ void tick_entity_motion(Simulation *sim, Entity &ent) {
     float const ox = ent.get_x();
     float const oy = ent.get_y();
 
-    if (ent.slow_ticks > 0) {
+    if (ent.snare_ticks > 0) {
+        ent.speed_ratio *= 0.05f;
+        --ent.snare_ticks;
+    } else if (ent.slow_ticks > 0) {
         ent.speed_ratio *= 0.5;
         --ent.slow_ticks;
     }

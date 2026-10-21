@@ -202,6 +202,7 @@ Entity &alloc_petal(Simulation *sim, PetalID::T petal_id, Entity const &parent) 
     petal.damage = petal_data.damage;
     petal.set_health_ratio(1);
     petal.poison_damage = petal_data.attributes.poison_damage;
+    petal.burn_damage = petal_data.attributes.burn_damage;
     petal.armor = petal_data.attributes.armor;
     petal.slow_inflict = TPS * petal_data.attributes.slow_inflict_seconds;
 

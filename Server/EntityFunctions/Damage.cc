@@ -36,8 +36,40 @@ void inflict_damage(Simulation *sim, EntityID const atk_id, EntityID const def_i
         if (is_player_faction(sim, attacker) && is_player_faction(sim, defender))
             return;
     }
-    if (type == DamageType::kContact) amt -= defender.armor;
-    else if (type == DamageType::kPoison) amt -= defender.poison_armor;
+    // Petal contact modifiers (read live from PETAL_DATA).
+    if (type == DamageType::kContact && sim->ent_alive(atk_id)) {
+        Entity &atk = sim->get_ent(atk_id);
+        if (atk.has_component(kPetal)) {
+            PetalAttributes const &A = PETAL_DATA[atk.get_petal_id()].attributes;
+            if (A.bonus_vs_poisoned > 0 && defender.poison_ticks > 0)
+                amt *= (1.f + A.bonus_vs_poisoned);
+            if (A.bonus_vs_slowed > 0 && defender.slow_ticks > 0)
+                amt *= (1.f + A.bonus_vs_slowed);
+            if (A.hit_cycle > 1) {
+                ++atk.contact_hit_count;
+                if (atk.contact_hit_count >= A.hit_cycle) {
+                    atk.contact_hit_count = 0;
+                    amt *= (A.hit_cycle_factor > 0.f ? A.hit_cycle_factor : 2.f);
+                }
+            }
+            if (A.execute_threshold > 0.f && defender.max_health > 0.f
+                && defender.health / defender.max_health <= A.execute_threshold)
+                amt *= (A.execute_factor > 0.f ? A.execute_factor : 1.5f);
+            float armor_mit = defender.armor;
+            if (A.armor_penetration > 0.f) {
+                float pen = A.armor_penetration;
+                if (pen > 1.f) pen = 1.f;
+                armor_mit *= (1.f - pen);
+            }
+            amt -= armor_mit;
+        } else {
+            amt -= defender.armor;
+        }
+    } else if (type == DamageType::kContact) {
+        amt -= defender.armor;
+    } else if (type == DamageType::kPoison) {
+        amt -= defender.poison_armor;
+    }
     // Shield Sentinel: frontal damage reduction (~60% when hit from facing arc)
     if (type == DamageType::kContact
         && defender.has_component(kMob)
@@ -164,6 +196,58 @@ void inflict_damage(Simulation *sim, EntityID const atk_id, EntityID const def_i
         defender.poison_ticks = attacker.poison_damage.time * TPS;
         defender.poison_inflicted = attacker.poison_damage.damage / TPS;
         defender.poison_dealer = defender.last_damaged_by;
+    }
+    if (type == DamageType::kContact && defender.burn_ticks < attacker.burn_damage.time * TPS) {
+        defender.burn_ticks = attacker.burn_damage.time * TPS;
+        defender.burn_inflicted = attacker.burn_damage.damage / TPS;
+        defender.burn_dealer = defender.last_damaged_by;
+    }
+
+    if (type == DamageType::kContact && attacker.has_component(kPetal) && damage_dealt > 0.f) {
+        PetalAttributes const &A = PETAL_DATA[attacker.get_petal_id()].attributes;
+        if (A.snare_seconds > 0.f) {
+            game_tick_t sn = (game_tick_t)(A.snare_seconds * TPS);
+            if (defender.snare_ticks < sn) defender.snare_ticks = sn;
+        }
+        if (A.on_hit_heal > 0.f && sim->ent_alive(attacker.get_parent())) {
+            Entity &flower = sim->get_ent(attacker.get_parent());
+            if (flower.has_component(kFlower) && flower.has_component(kHealth))
+                inflict_heal(sim, flower, A.on_hit_heal);
+        }
+        if (A.taunt_radius > 0.f && sim->ent_alive(attacker.base_entity)) {
+            float const R = A.taunt_radius;
+            float const px = defender.get_x();
+            float const py = defender.get_y();
+            EntityID flower_id = attacker.base_entity;
+            EntityID atk_team = attacker.get_team();
+            sim->spatial_hash.query(px, py, R, R, [&](Simulation *s, Entity &ent) {
+                if (!ent.has_component(kMob)) return;
+                if (ent.get_team() == atk_team) return;
+                float dx = ent.get_x() - px;
+                float dy = ent.get_y() - py;
+                if (dx * dx + dy * dy > R * R) return;
+                ent.target = flower_id;
+            });
+        }
+        if (A.splash_damage > 0.f && A.splash_radius > 0.f) {
+            float const R = A.splash_radius;
+            float const px = defender.get_x();
+            float const py = defender.get_y();
+            float const splash = A.splash_damage;
+            EntityID atk_team = attacker.get_team();
+            EntityID skip = def_id;
+            EntityID src = atk_id;
+            sim->spatial_hash.query(px, py, R, R, [&](Simulation *s, Entity &ent) {
+                if (ent.id == skip) return;
+                if (!ent.has_component(kHealth)) return;
+                if (ent.get_team() == atk_team) return;
+                if (ent.has_component(kPetal) || ent.has_component(kDrop)) return;
+                float dx = ent.get_x() - px;
+                float dy = ent.get_y() - py;
+                if (dx * dx + dy * dy > R * R) return;
+                inflict_damage(s, src, ent.id, splash, DamageType::kSplash);
+            });
+        }
     }
 }
 
