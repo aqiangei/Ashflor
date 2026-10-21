@@ -2,6 +2,7 @@
 
 #include <Server/Client.hh>
 #include <Server/EntityFunctions.hh>
+#include <Server/Party.hh>
 #include <Server/Server.hh>
 #include <Server/Spawn.hh>
 #include <Shared/Entity.hh>
@@ -128,17 +129,25 @@ static RotationCenter const _get_petal_rotation_center(Simulation *sim, Entity c
 void tick_player_behavior(Simulation *sim, Entity &player) {
     if (player.pending_delete) return;
     DEBUG_ONLY(assert(player.max_health > 0);)
-    PlayerBuffs const buffs = _get_petal_passive_buffs(sim, player);
+    PlayerBuffs buffs = _get_petal_passive_buffs(sim, player);
     float talent_hp = 0;
     float talent_rot = 0;
+    float talent_reload = 1.f;
+    float talent_petal_hp = 1.f;
     float rot_mult = Talent::rot_setting_mult(Talent::kRotSettingDefault);
     if (!player.has_component(kMob)) {
         if (Client *owner = Server::client_by_camera(sim, player.get_parent())) {
-            talent_hp = Talent::health_bonus(owner->talent_hp);
-            talent_rot = Talent::rot_bonus(owner->talent_rot);
+            uint8_t const *r = owner->talent_ranks;
+            talent_hp = Talent::health_bonus(r[TalentID::kHealth]);
+            talent_rot = Talent::rot_bonus(r[TalentID::kRotSpeed]);
+            buffs.extra_range += Talent::range_bonus(r[TalentID::kAttackRange]);
+            talent_reload = Talent::reload_mult(r[TalentID::kCooldown]);
+            buffs.magnet_radius += Talent::magnet_bonus(r[TalentID::kMagnet]);
+            talent_petal_hp = Talent::petal_health_mult(r[TalentID::kPetalArmor]);
             rot_mult = Talent::rot_setting_mult(owner->rot_speed_setting);
         }
     }
+    buffs.reload_factor *= talent_reload;
     float health_ratio = player.health / player.max_health;
     if (!player.has_component(kMob)) {
         uint32_t level = score_to_level(player.get_score());
@@ -166,23 +175,27 @@ void tick_player_behavior(Simulation *sim, Entity &player) {
     if (buffs.move_speed_factor != 1.f &&
         (player.acceleration.x != 0.f || player.acceleration.y != 0.f))
         player.acceleration *= buffs.move_speed_factor;
-    if (buffs.magnet_radius > 0.f) {
-        float r2 = buffs.magnet_radius * buffs.magnet_radius;
-        float pickup_r = player.get_radius() + 25.f + 8.f;
+    // Proximity pickup always (spatial-hash collide can miss edge cases).
+    // Magnet optionally pulls from farther away.
+    {
+        float pickup_r = player.get_radius() + 30.f + 12.f;
         float pickup_r2 = pickup_r * pickup_r;
+        float magnet_r = buffs.magnet_radius;
+        float magnet_r2 = magnet_r > 0.f ? magnet_r * magnet_r : 0.f;
+        Client *owner = Server::client_by_camera(sim, player.get_parent());
         sim->for_each<kDrop>([&](Simulation *, Entity &drop) {
             if (drop.pending_delete) return;
-            // Private loot: only pull drops owned by this solo/party (or unowned after lock).
+            // Team piles: owner/party only. Unowned: brief immunity then FFA.
             if (drop.get_team() != NULL_ENTITY) {
-                if (!(drop.get_team() == player.get_team())) return;
+                if (!(drop.get_team() == player.get_team())
+                    && !Party::can_take_drop(owner, sim, drop.get_team()))
+                    return;
             } else if (drop.immunity_ticks > 0) {
                 return;
             }
             float dx = player.get_x() - drop.get_x();
             float dy = player.get_y() - drop.get_y();
             float d2 = dx * dx + dy * dy;
-            if (d2 > r2) return;
-            // Already overlapping flower — pick up immediately (avoids magnet orbit)
             if (d2 <= pickup_r2) {
                 drop.velocity.set(0, 0);
                 drop.acceleration.set(0, 0);
@@ -190,13 +203,12 @@ void tick_player_behavior(Simulation *sim, Entity &player) {
                 on_collide(sim, player, drop);
                 return;
             }
+            if (magnet_r2 <= 0.f || d2 > magnet_r2) return;
             if (d2 <= 1.f) return;
             float dist = std::sqrt(d2);
-            // Pull harder at range, ease off near the flower so drops don't slingshot
-            float t = dist / buffs.magnet_radius;
+            float t = dist / magnet_r;
             float pull = PLAYER_ACCELERATION * (3.f + 5.f * t);
             drop.acceleration.set(dx / dist * pull, dy / dist * pull);
-            // Kill excess tangential speed so loot doesn't orbit
             float vx = drop.velocity.x;
             float vy = drop.velocity.y;
             float radial = (vx * dx + vy * dy) / dist;
@@ -212,7 +224,7 @@ void tick_player_behavior(Simulation *sim, Entity &player) {
         LoadoutSlot &slot = player.loadout[i];
         //player.set_loadout_ids(i, slot.id);
         //other way around. loadout_ids should dictate loadout
-        if (slot.get_petal_id() != player.get_loadout_ids(i) || player.get_overlevel_timer() >= PETAL_DISABLE_DELAY * TPS)
+        if (slot.get_petal_id() != player.get_loadout_ids(i))
             slot.update_id(sim, player.get_loadout_ids(i));
         PetalID::T slot_petal_id = slot.get_petal_id();
         struct PetalData const &petal_data = PETAL_DATA[slot_petal_id];
@@ -220,11 +232,6 @@ void tick_player_behavior(Simulation *sim, Entity &player) {
 
         if (slot_petal_id == PetalID::kNone || petal_data.count == 0)
             continue;
-        //if overleveled timer too large
-        if (player.get_overlevel_timer() >= PETAL_DISABLE_DELAY * TPS) {
-            player.set_loadout_reloads(i, 0);
-            continue;
-        }
         float min_reload = 1;
         for (uint32_t j = 0; j < slot.size(); ++j) {
             LoadoutPetal &petal_slot = slot.petals[j];
@@ -236,9 +243,14 @@ void tick_player_behavior(Simulation *sim, Entity &player) {
                 min_reload = std::min(min_reload, this_reload);
                 if (petal_slot.reload >= reload_time) {
                     petal_slot.ent_id = alloc_petal(sim, slot_petal_id, player).id;
-                    sim->get_ent(petal_slot.ent_id).damage *= buffs.damage_factor;
-                    sim->get_ent(petal_slot.ent_id).set_x(rotation_center.x);
-                    sim->get_ent(petal_slot.ent_id).set_y(rotation_center.y);
+                    Entity &spawned = sim->get_ent(petal_slot.ent_id);
+                    spawned.damage *= buffs.damage_factor;
+                    if (talent_petal_hp != 1.f) {
+                        spawned.max_health *= talent_petal_hp;
+                        spawned.health = spawned.max_health;
+                    }
+                    spawned.set_x(rotation_center.x);
+                    spawned.set_y(rotation_center.y);
                     petal_slot.reload = 0;
                     slot.already_spawned = 1;
                 } 

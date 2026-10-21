@@ -3311,6 +3311,119 @@ void draw_static_mob(MobID::T mob_id, Renderer &ctx, MobRenderAttributes attr) {
             ctx.fill();
             break;
         }
+        case MobID::kPushCrate: {
+            // Mario wood crate + Zelda seal stamp
+            ctx.scale(radius / 28.f);
+            ctx.set_fill(0xffC4A36A);
+            ctx.set_stroke(0xff6B4E2E);
+            ctx.set_line_width(3.5f);
+            ctx.round_line_join();
+            ctx.begin_path();
+            ctx.round_rect(-22, -22, 44, 44, 4);
+            ctx.fill();
+            ctx.stroke();
+            ctx.set_stroke(0xff8B6840);
+            ctx.set_line_width(2.5f);
+            ctx.begin_path();
+            ctx.move_to(-22, 0); ctx.line_to(22, 0);
+            ctx.move_to(0, -22); ctx.line_to(0, 22);
+            ctx.stroke();
+            ctx.set_fill(0xffE8D5A3);
+            ctx.begin_path();
+            ctx.arc(0, 0, 8);
+            ctx.fill();
+            ctx.set_stroke(0xff5A3D22);
+            ctx.set_line_width(2);
+            ctx.begin_path();
+            ctx.arc(0, 0, 8);
+            ctx.stroke();
+            break;
+        }
+        case MobID::kYahahaPad: {
+            // Soft glowing Korok/seal mark on the ground
+            ctx.scale(radius / 22.f);
+            ctx.set_global_alpha(0.55f);
+            ctx.set_fill(0xff7CFF8A);
+            ctx.begin_path();
+            ctx.arc(0, 0, 22);
+            ctx.fill();
+            ctx.set_global_alpha(0.9f);
+            ctx.set_stroke(0xffFFE08A);
+            ctx.set_line_width(3);
+            ctx.begin_path();
+            ctx.arc(0, 0, 16);
+            ctx.stroke();
+            ctx.set_fill(0xfffff8ec);
+            ctx.begin_path();
+            ctx.arc(0, 0, 5);
+            ctx.fill();
+            ctx.set_global_alpha(1.f);
+            break;
+        }
+        case MobID::kTreasureNpc: {
+            // Mashup silhouette: leaf cloak + rust helm + coin pouch
+            ctx.scale(radius / 32.f);
+            ctx.set_fill(0xff4A7A3A);
+            ctx.begin_path();
+            ctx.ellipse(0, 8, 18, 14);
+            ctx.fill();
+            ctx.set_fill(0xffF0D878);
+            ctx.begin_path();
+            ctx.arc(0, -6, 14);
+            ctx.fill();
+            ctx.set_fill(0xff6B6B6B);
+            ctx.begin_path();
+            ctx.ellipse(0, -14, 16, 8);
+            ctx.fill();
+            ctx.set_fill(0xff3A3A3A);
+            ctx.begin_path();
+            ctx.arc(-5, -8, 2.2f);
+            ctx.arc(5, -8, 2.2f);
+            ctx.fill();
+            ctx.set_fill(0xffC9A227);
+            ctx.begin_path();
+            ctx.arc(14, 10, 7);
+            ctx.fill();
+            ctx.set_stroke(0xff5A3D22);
+            ctx.set_line_width(2);
+            ctx.begin_path();
+            ctx.move_to(-10, -18);
+            ctx.qcurve_to(-22, -28, -8, -32);
+            ctx.qcurve_to(0, -24, -4, -16);
+            ctx.close_path();
+            ctx.set_fill(0xff6FAF4A);
+            ctx.fill();
+            ctx.stroke();
+            break;
+        }
+        case MobID::kLootChest: {
+            // Friendly Zelda/Mario chest (gold trim, no teeth)
+            ctx.scale(radius / 29.f);
+            ctx.set_fill(0xffA86B3C);
+            ctx.set_stroke(0xff4B2C21);
+            ctx.set_line_width(3);
+            ctx.round_line_join();
+            ctx.begin_path();
+            ctx.round_rect(-22.f, -18.f, 44, 36, 4);
+            ctx.fill();
+            ctx.stroke();
+            ctx.set_fill(0xffF0CB70);
+            ctx.begin_path();
+            ctx.round_rect(-22.f, -18.f, 44, 10, 3);
+            ctx.fill();
+            ctx.set_fill(0xffE5B95C);
+            ctx.set_stroke(0xff87622F);
+            ctx.set_line_width(2);
+            ctx.begin_path();
+            ctx.round_rect(-5.f, -4.f, 10, 12, 2);
+            ctx.fill();
+            ctx.stroke();
+            ctx.set_fill(0xff7CFF8A);
+            ctx.begin_path();
+            ctx.arc(0, 2, 2.5f);
+            ctx.fill();
+            break;
+        }
         default:
             assert(!"Didn't cover mob render");
             break;

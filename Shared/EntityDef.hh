@@ -54,7 +54,6 @@ SINGLE(Relations, parent, EntityID) \
 SINGLE(Relations, color, uint8_t)
 
 #define FIELDS_Flower \
-SINGLE(Flower, overlevel_timer, float) \
 SINGLE(Flower, loadout_count, uint8_t) \
 SINGLE(Flower, face_flags, uint8_t) \
 SINGLE(Flower, equip_flags, uint8_t) \
@@ -70,7 +69,8 @@ SINGLE(Health, health_ratio, Float) \
 SINGLE(Health, damaged, StickyFlag)
 
 #define FIELDS_Mob \
-SINGLE(Mob, mob_id, MobID::T)
+SINGLE(Mob, mob_id, MobID::T) \
+SINGLE(Mob, rarity, uint8_t)
 
 #define FIELDS_Drop \
 SINGLE(Drop, drop_id, PetalID::T) \
@@ -122,9 +122,11 @@ SINGLE(Name, guild, std::string)
     SINGLE(poison_armor, float, =0) \
     SINGLE(damage_reflection, float, =0) \
     SINGLE(last_damaged_by, EntityID, =NULL_ENTITY) \
-    /* Teams (solo camera / party leader) that damaged this mob — private loot units. */ \
+    /* Teams (solo / party leader camera) + cumulative damage for loot eligibility.
+       Damage persists for the mob's life (player respawn does not clear it). */ \
     SINGLE(loot_claim_n, uint8_t, =0) \
     MULTIPLE(loot_claim_teams, EntityID, 16, =NULL_ENTITY) \
+    MULTIPLE(loot_claim_damage, float, 16, =0) \
     SINGLE(score_reward, uint32_t, =0) \
     \
     SINGLE(base_entity, EntityID, =NULL_ENTITY) \
@@ -134,6 +136,9 @@ SINGLE(Name, guild, std::string)
     SINGLE(ai_state, uint8_t, =0) \
     \
     SINGLE(zone, uint8_t, =0) \
+    /* Wild leash home = spawn point (not zone AABB center — outer zones span the whole map) */ \
+    SINGLE(home_x, float, =0) \
+    SINGLE(home_y, float, =0) \
     SINGLE(deletion_tick, uint8_t, =0) \
     SINGLE(deleted_petals, circ_arr_t, ={})
 #else
@@ -146,7 +151,10 @@ SINGLE(Name, guild, std::string)
     SINGLE(eye_y, float, =0) \
     SINGLE(mouth, float, =15) \
     SINGLE(animation, float, =0) \
-    SINGLE(damage_flash, float, =0)
+    SINGLE(damage_flash, float, =0) \
+    /* Floating combat text: last synced health_ratio.anchor() */ \
+    SINGLE(prev_health_ratio, float, =1) \
+    SINGLE(health_ratio_seen, uint8_t, =0)
 #endif
 
 class EntityID {

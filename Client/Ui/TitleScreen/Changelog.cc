@@ -43,6 +43,28 @@ static Element *make_entries(std::initializer_list<std::pair<char const *, char 
 
 static Element *make_changelog_contents() {
     Element *elt = new Ui::VContainer({
+        make_date("2026年10月21日", "October 21st 2026"),
+        make_entries({
+            {"地图难度环对齐花瓣九档稀有度：G 键小地图同色；刷怪本环为主、相邻为次并缩放强度",
+             "Nine map rings match petal rarities (G-key colors); spawns primary/adjacent with scaled power"},
+            {"掉落私有强化：未组队看不见也捡不到他人掉落；需打满 5% 血（Boss 1%）才有 loot；重生不清空累计伤害",
+             "Private loot: no see/pick others' drops off-party; need 5% HP (boss 1%); damage survives respawn"},
+            {"战斗飘字：花瓣打怪跳红色伤害；玩家回血跳粉色 +数字",
+             "Combat floats: red damage on mobs; pink +heal on the player"},
+            {"经验条悬停显示本级当前/目标经验",
+             "XP bar hover shows current/target into the level"},
+            {"龟背竹光环加大，并补齐 Epic→Ultra 阶梯（范围随稀有度递增）",
+             "Monstera aura larger + Epic→Ultra ladder (radius scales with rarity)"},
+            {"怪物图鉴去掉「属性随地图难度缩放」说明",
+             "Mob gallery: removed map-scaling disclaimer"},
+            {"八图 Yahaha 宝藏：靠近专属 NPC 看聊天指引，推动木箱到发光印记；完成自动弹奖励并入背包",
+             "All 8 maps: Yahaha treasures — approach themed NPCs for chat hints, push crates onto pads; auto loot toast → bag"},
+            {"商店多 Tab：奇物 / 素材 / 稀有素材 / 组合件 / 随机包；掉落与区币按合成节奏重平衡",
+             "Shop tabs: specials/mats/rare mats/combos/random; drops & zone coins rebalanced vs craft"},
+            {"聊天：私信显示「发送者 → 对象」；/ 指令 Tab 补全与预测提示",
+             "Chat: whispers show sender → target; slash Tab-complete with prediction hint"},
+        }),
+        make_divider(),
         make_date("2026年10月20日", "October 20th 2026"),
         make_entries({
             {"公会面板：在线/离线分栏、会长置顶标识、公告栏（会长可改）、在线成员一键组队",
@@ -95,12 +117,12 @@ static Element *make_changelog_contents() {
              "Chat: Enter/soft-Send works; Send button; no send mid-IME"},
             {"经验线性、死亡等级不回退；每升一级 +1 天赋点",
              "Linear XP, no level loss on death; +1 talent per level"},
-            {"刷怪按落点类别采样；Zone 加权；出生广场安全区，外圈怪不追进",
-             "Spawn by site class; zone weighting; plaza safe, outside mobs stay out"},
+            {"刷怪按落点类别采样；Zone 加权；仅中心复活点无仇恨，外圈照常追",
+             "Spawn by site class; zone weighting; no-aggro only at hub respawn pad"},
             {"河道/大路从山体水域凿通动脉，减少口袋卡死",
              "Carve road/river arteries through hills/water to cut dead pockets"},
-            {"多维排行榜：在线时长 / 等级 / 发言 / 击杀 / 合成 / 最高分",
-             "Multi-stat leaderboard: time/level/chat/kills/crafts/best score"},
+            {"多维排行榜：在线时长 / 等级 / 发言 / 击杀 / 合成",
+             "Multi-stat leaderboard: time/level/chat/kills/crafts"},
             {"组队 HUD：队友血量与坐标；小地图粉点与倒地标记；公会名上屏",
              "Party HUD: teammate HP/pos; minimap pink dots; guild name on nametag"},
             {"三倍掉落可随时开关；点输入框外关键盘；去掉首页重生携带预览",
@@ -121,8 +143,8 @@ static Element *make_changelog_contents() {
         make_divider(),
         make_date("2026年10月19日", "October 19th 2026"),
         make_entries({
-            {"出生广场扩大，只刷少量石头/瓢虫/蜜蜂；外圈怪不追进广场",
-             "Larger spawn plaza: few rocks/ladybugs/bees; outside mobs do not chase in"},
+            {"出生广场扩大，只刷少量石头/瓢虫/蜜蜂；无仇恨仅限中心复活点",
+             "Larger spawn plaza: few rocks/ladybugs/bees; no-aggro only at hub respawn"},
         }),
         make_divider(),
         make_date("2026年10月15日", "October 15th 2026"),
@@ -302,13 +324,12 @@ Element *Ui::make_changelog() {
         .line_width = 0,
         .round_radius = Chrome::kRadius,
         .animate = [](Element *elt, Renderer &ctx){
-            elt->y = Game::alive() ? 170.f : 84.f;
+            elt->y = 84.f;
             ctx.translate(0, (elt->animation - 1) * elt->height);
         },
         .should_render = [](){
-            if (Ui::panel_open != Panel::kChangelog) return false;
-            return Game::should_render_title_ui()
-                || (Game::should_render_game_ui() && Game::alive());
+            return Ui::panel_open == Panel::kChangelog
+                && Game::should_render_title_ui();
         },
         .h_justify = Style::Left,
         .v_justify = Style::Top

@@ -2,6 +2,7 @@
 #include <Client/DOM.hh>
 #include <Client/Game.hh>
 #include <Client/I18n.hh>
+#include <Client/Storage.hh>
 
 #include <Shared/Binary.hh>
 #include <Shared/Config.hh>
@@ -39,7 +40,23 @@ extern "C" {
             std::printf("Disconnected [%d](%s)\n", len, reason);
             uint8_t intentional_leave =
                 (len == 1000 && reason && std::strcmp(reason, "leave") == 0) ? 1 : 0;
-            if (std::strlen(reason))
+            uint8_t kicked_elsewhere =
+                (reason && std::strcmp(reason, "Logged in elsewhere") == 0) ? 1 : 0;
+            if (kicked_elsewhere) {
+                // Another login took this account — do not auto-resume and steal back.
+                // Sticky notice survives Game::reset and shows in account_status
+                // (same slot as wrong password).
+                Game::session_token = 0;
+                Game::account_logged_in = 0;
+                Game::password.clear();
+                Game::pending_auto_login = 0;
+                Game::spawn_after_auth = 0;
+                Game::pending_kick_notice = 1;
+                Game::account_status = I18n::tr(I18n::kAuthAlreadyIn);
+                Game::auth_panel = 1;
+                Game::disconnect_message = Game::account_status;
+                Storage::set();
+            } else if (std::strlen(reason))
                 Game::disconnect_message = I18n::format_disconnected(len, reason);
             else
                 Game::disconnect_message = I18n::format_disconnected(len, "");
@@ -47,20 +64,22 @@ extern "C" {
                 // 4003 = CloseReason::kOutdated — need hard refresh, not silent retry
                 // 1006 = tab backgrounded / network drop
                 // 1001 / 1012 = server going away / service restart (redeploy)
-                char const *zh = (len == 4003)
-                    ? "客户端版本过旧，正在自动刷新…"
-                    : (len == 1006)
-                        ? "已切到后台或网络中断，正在重连"
-                        : (len == 1001 || len == 1012)
-                            ? "服务器更新或停服，正在重连"
-                            : "连接断开，正在重连";
-                EM_ASM({
-                    if (Module.showReconnectOverlay)
-                        Module.showReconnectOverlay(UTF8ToString($0));
-                    // Slow auto-retry on outdated so tip stays readable before reload
-                    if ($1 === 4003 && Module._ashflorSetReconnectDelay)
-                        Module._ashflorSetReconnectDelay(8000);
-                }, zh, (int) len);
+                // Kick: skip reconnect overlay — title account_status carries the tip.
+                if (!kicked_elsewhere) {
+                    char const *zh = (len == 4003)
+                        ? "客户端版本过旧，正在自动刷新…"
+                        : (len == 1006)
+                            ? "已切到后台或网络中断，正在重连"
+                            : (len == 1001 || len == 1012)
+                                ? "服务器更新或停服，正在重连"
+                                : "连接断开，正在重连";
+                    EM_ASM({
+                        if (Module.showReconnectOverlay)
+                            Module.showReconnectOverlay(UTF8ToString($0));
+                        if ($1 === 4003 && Module._ashflorSetReconnectDelay)
+                            Module._ashflorSetReconnectDelay(8000);
+                    }, zh, (int) len);
+                }
                 if (len == CloseReason::kOutdated)
                     DOM::update_client(1200);
             }
@@ -76,7 +95,12 @@ extern "C" {
             // After verify: resume session → saved account login → guest save
             if (pending_guest_progress) {
                 pending_guest_progress = 0;
-                if (Game::session_token != 0 && !Game::username.empty())
+                if (Game::pending_kick_notice) {
+                    // Stay on title with the kick tip; do not auto-resume.
+                    Game::send_guest_progress();
+                    Game::account_status = I18n::tr(I18n::kAuthAlreadyIn);
+                    Game::auth_panel = 1;
+                } else if (Game::session_token != 0 && !Game::username.empty())
                     Game::account_resume();
                 else if (!Game::username.empty() && !Game::password.empty()) {
                     Game::pending_auto_login = 1;

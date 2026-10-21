@@ -13,13 +13,15 @@ enum Clientbound {
     kPartyUpdate, // count, [name, flags, hp%, x, y]*, revive%
     kCraftUpdate,
     kSpawnResult,
-    kTalentUpdate,
+    kTalentUpdate, // 7× u8 ranks (TalentID::kNum)
+    kOnlineRoster, // count + [name, map_id, guild, level]*
     kInvitePrompt, // type, from_name — pending party/guild invite toast
     kGuildUpdate, // name, announcement, count, [name, flags, level]*  flags:1 leader 2 online 4 self
     kLoadoutPresetSync,
     kBoostUpdate,
     kLeaderboardStats, // multi-category stats board (name/value rows)
-    kLifeSummary // this-life mob kills + petal pickups (shown on death)
+    kLifeSummary, // this-life mob kills + petal pickups (shown on death)
+    kLootToast // petal_id, amount, title — auto fade reward popup
 };
 
 enum InviteType : uint8_t {
@@ -45,7 +47,8 @@ enum Serverbound {
     kPetalCraft,
     kGuestProgress,
     kAccountLogout,
-    kTalentSpend,
+    kTalentSpend,  // u8 talent_id  (+1 rank)
+    kTalentRefund, // u8 talent_id (0xFF = reset all)
     kHeartbeat, // app-level keepalive (background tabs freeze rAF)
     kInviteRespond, // type, accept(0/1), from_name
     kGuildCreate,   // guild name
@@ -54,22 +57,24 @@ enum Serverbound {
     kClientLeave, // voluntary return to title — keep WS, despawn flower only
     kLoadoutPresetSave,
     kLoadoutPresetApply,
-    kBankWithdraw, // equip one copy from backpack stacks
+    kBankWithdraw, // petal_id + dest(u8); dest 0xFF = auto-equip
     kLeaderboardRequest, // ask the server for the stats board
     kBankDeposit, // unequip primary/secondary → backpack stacks
     kBoostToggle, // arg = 0/1 — pause or resume triple-drop bonus timers
-    kGuildSetAnno  // announcement text (leader only)
+    kGuildSetAnno, // announcement text (leader only)
+    kTalentSetRank // u8 talent_id, u8 target_rank — jump / rollback on one branch
 };
 
 // Categories shown as separate columns on the leaderboard board.
 // Order is part of the wire format: keep in sync with the client UI.
+// Best score is still persisted via LeaderboardStore::record / fill_top,
+// but is no longer a board column (keeps playtime values readable).
 enum LeaderboardCategory : uint8_t {
     kLbPlayTime = 0, // seconds online
     kLbLevel,        // account level
     kLbMessages,     // chat messages sent
     kLbKills,        // players killed
     kLbCrafts,       // craft attempts
-    kLbScore,        // best score ever reached
     kLbCategoryCount
 };
 
@@ -132,7 +137,8 @@ enum ChatChannel : uint8_t {
     kChatParty = 1,
     kChatGuild = 2,
     kChatWhisper = 3,
-    kChatSystem = 4
+    kChatSystem = 4,
+    kChatServer = 5 // cross-map 全服广播
 };
 
 class Writer {

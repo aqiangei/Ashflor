@@ -2,6 +2,7 @@
 #include <Server/AccountStore.hh>
 #include <Server/Client.hh>
 #include <Server/Game.hh>
+#include <Server/Party.hh>
 #include <Server/Server.hh>
 
 #include <Shared/Simulation.hh>
@@ -41,10 +42,13 @@ static void _add_to_backpack_stack(Client *client, PetalID::T id) {
 
 static void _pickup_drop(Simulation *sim, Entity &player, Entity &drop) {
     if (!sim->ent_alive(player.get_parent())) return;
-    // Private loot: team-tagged drops are forever exclusive to that solo/party.
-    // Unowned drops (NULL team) are locked briefly, then free-for-all.
+    // Private loot: team-tagged piles are owner/party only (never FFA).
+    // Unowned piles: brief immunity then anyone. Party shares mob XP (Death::_add_score).
+    Client *client = Server::client_by_camera(sim, player.get_parent());
     if (drop.get_team() != NULL_ENTITY) {
-        if (!(drop.get_team() == player.get_team())) return;
+        if (!(drop.get_team() == player.get_team())
+            && !Party::can_take_drop(client, sim, drop.get_team()))
+            return;
     } else if (drop.immunity_ticks > 0) {
         return;
     }
@@ -52,7 +56,6 @@ static void _pickup_drop(Simulation *sim, Entity &player, Entity &drop) {
     PetalID::T drop_id = drop.get_drop_id();
     uint16_t qty = drop.get_drop_count();
     if (qty < 1) qty = 1;
-    Client *client = Server::client_by_camera(sim, player.get_parent());
     auto place_one = [&](uint32_t begin, uint32_t end) -> bool {
         for (uint32_t i = begin; i < end; ++i) {
             if (player.get_loadout_ids(i) != PetalID::kNone) continue;
@@ -62,6 +65,9 @@ static void _pickup_drop(Simulation *sim, Entity &player, Entity &drop) {
         return false;
     };
     uint32_t const n = player.get_loadout_count();
+    // Slot fills sync via loadout_ids entity delta. Overflow into craft_bank
+    // must push kCraftUpdate or the bag UI stays stale until a full refresh.
+    uint8_t craft_dirty = 0;
     for (uint16_t q = 0; q < qty; ++q) {
         uint8_t placed = 0;
         if (Recipe::is_bag_only(drop_id)) {
@@ -75,6 +81,7 @@ static void _pickup_drop(Simulation *sim, Entity &player, Entity &drop) {
                     client->craft_bank[drop_id] += (uint32_t) (qty - q);
                 else
                     client->craft_bank[drop_id] = 1000000;
+                craft_dirty = 1;
                 for (uint16_t c = q; c < qty; ++c)
                     client_credit_petal_pick(client, drop_id);
             }
@@ -84,7 +91,7 @@ static void _pickup_drop(Simulation *sim, Entity &player, Entity &drop) {
     }
     if (client != nullptr) {
         AccountStore::capture_nosave(client);
-        if (Recipe::is_bag_only(drop_id))
+        if (craft_dirty || Recipe::is_bag_only(drop_id))
             client_sync_craft(client);
     }
     drop.set_x(player.get_x());
@@ -139,7 +146,11 @@ void on_collide(Simulation *sim, Entity &ent1, Entity &ent2) {
         else
             separation.normalize();
         float ratio = ent2.mass / (ent1.mass + ent2.mass);
-        if (!(ent1.get_team() == ent2.get_team())) {
+        // Players still block each other (soft push / overlap resolve), but no
+        // knockback shove — that was the only PvP feel to remove.
+        uint8_t const both_players =
+            is_player_faction(sim, ent1) && is_player_faction(sim, ent2);
+        if (!both_players && !(ent1.get_team() == ent2.get_team())) {
             if (ent1.has_component(kFlower) && !ent2.has_component(kPetal))
                 _cancel_movement(ent1, separation, ent2.velocity - ent1.velocity);
             else

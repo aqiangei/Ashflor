@@ -15,6 +15,7 @@ namespace Ui {
         };
         extern Element *settings;
         extern Element *petal_gallery;
+        extern Element *petal_gallery_alt; // in-game copy
         extern Element *mob_gallery;
         extern Element *mob_gallery_alt; // in-game copy
         extern Element *leaderboard;
@@ -36,7 +37,8 @@ namespace Ui {
     extern Element *game_topbar_root;
     extern Element *panel_buttons_root;
     extern Element *game_side_buttons_root;
-    extern Element *game_panel_roots[7];
+    extern Element *chat_panel_root;
+    extern Element *game_panel_roots[8];
 
     // Toggle title/in-game info panels (leaderboard, galleries, …)
     void toggle_panel(uint8_t panel);

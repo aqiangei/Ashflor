@@ -2,6 +2,7 @@
 
 #include <Shared/StaticData.hh>
 #include <Shared/LoadoutPreset.hh>
+#include <Shared/Talent.hh>
 
 #include <array>
 #include <cstdint>
@@ -23,14 +24,18 @@ struct Account {
     std::array<uint32_t, PetalID::kNumPetals> craft_bank = {};
     uint32_t coins = 0;
     uint32_t craft_attempts = 0; // successful+failed 5-in-1 batches
-    uint8_t talent_hp = 0;
-    uint8_t talent_rot = 0;
+    uint8_t talent_ranks[TalentID::kNum] = {};
     std::array<LoadoutPreset, LOADOUT_PRESET_COUNT> loadout_presets = {};
+    // 0..19 = last used K1-10 / L1-10; LOADOUT_PRESET_COUNT = none
+    uint8_t active_loadout_preset = LOADOUT_PRESET_COUNT;
     uint64_t session_hash = 0;
     uint32_t bonus_day = 0;             // Beijing calendar day
     uint32_t daily_bonus_seconds = 0;   // up to one hour per day
     uint32_t offline_bonus_seconds = 0; // earned at 1:10, capped at three hours
     uint64_t last_seen_epoch = 0;
+    // Guild membership (no spaces in name). "-" in the file means none.
+    std::string guild_name;
+    uint8_t guild_leader = 0;
 };
 
 namespace AccountStore {
@@ -58,4 +63,6 @@ namespace AccountStore {
     void logout(Client *, uint8_t revoke_session = 0);
     uint64_t current_session(std::string const &username);
     void apply_to_camera(Simulation *, Entity &, Account const &);
+    // Drop ACTIVE_SESSIONS entries with no live Client (crash / half-closed WS).
+    void prune_stale_sessions();
 };

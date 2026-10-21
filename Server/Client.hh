@@ -4,6 +4,7 @@
 #include <Shared/EntityDef.hh>
 #include <Shared/StaticDefinitions.hh>
 #include <Shared/LoadoutPreset.hh>
+#include <Shared/Talent.hh>
 
 #include <array>
 #include <cstdint>
@@ -37,24 +38,30 @@ public:
     // Leaderboard board counters, flushed into LeaderboardStore periodically
     uint32_t stat_playtime = 0; // seconds online
     uint32_t stat_messages = 0; // chat messages sent
-    uint32_t stat_kills = 0;    // players killed
+    uint32_t stat_kills = 0;    // legacy PvP field (unused; no player kills)
     uint32_t stat_crafts = 0;   // craft attempts
     // This-life tallies — reset on spawn, sent on death for the summary panels.
     std::array<uint16_t, MobID::kNumMobs> life_mob_kills = {};
     std::array<uint16_t, PetalID::kNumPetals> life_petal_picks = {};
-    uint8_t talent_hp = 0;
-    uint8_t talent_rot = 0;
+    uint8_t talent_ranks[TalentID::kNum] = {};
     std::array<LoadoutPreset, LOADOUT_PRESET_COUNT> loadout_presets = {};
     // 0..19 active cloud preset; LOADOUT_PRESET_COUNT = none yet
     uint8_t active_loadout_preset = LOADOUT_PRESET_COUNT;
     uint32_t bonus_day = 0;
     uint32_t daily_bonus_seconds = 0;
     uint32_t offline_bonus_seconds = 0;
-    uint8_t bonus_enabled = 1; // player can pause timers / triple drops anytime
+    uint8_t bonus_enabled = 0; // off by default; player must toggle on
     uint64_t last_bonus_tick = 0;
     uint64_t last_bonus_sync = 0;
     uint8_t rot_speed_setting = 7; // Q/E wheel 0..10
     uint64_t last_chat_ms = 0;
+    uint64_t last_server_chat_ms = 0; // 全服频道单独冷却
+    std::string last_whisper_from; // for /r /reply
+    // Bit i set → puzzle claimed on MapID i this session
+    uint8_t treasure_claimed = 0;
+    // Bits map*2+chest → walk-up loot chests claimed
+    uint16_t treasure_chest_claimed = 0;
+    uint32_t treasure_hint_cd = 0; // ticks until next NPC hint
     uint32_t party_id = 0;
     uint8_t party_leader = 0;
     std::string pending_party_from;
@@ -96,6 +103,9 @@ public:
 
 // Award mob-kill coins and sync craft/coin bank to the client
 void client_award_coins(Client *, uint32_t amount);
+// Put one petal in bag/bank and sync (treasure / shop / admin)
+uint8_t client_award_petal(Client *, PetalID::T id);
+void client_send_loot_toast(Client *, PetalID::T id, uint16_t amount, std::string const &title);
 void client_sync_craft(Client *);
 void client_tick_bonus(Client *);
 // Move the session counters of a client into the leaderboard store

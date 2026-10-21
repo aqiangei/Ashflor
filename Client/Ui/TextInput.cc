@@ -2,6 +2,7 @@
 
 #include <Client/Ui/Extern.hh>
 #include <Client/DOM.hh>
+#include <Client/Game.hh>
 #include <Client/Input.hh>
 
 #include <Helpers/UTF8.hh>
@@ -58,6 +59,16 @@ void TextInput::sync_from_dom() {
     ref = DOM::retrieve_text(name.c_str(), max);
 }
 
+void TextInput::clear() {
+    ref.clear();
+    DOM::update_text(name.c_str(), ref, max);
+}
+
+void TextInput::set_text(std::string const &s) {
+    ref = s;
+    DOM::update_text(name.c_str(), ref, max);
+}
+
 uint8_t TextInput::contains_screen_point(float x, float y) const {
     return std::abs(x - screen_x) <= width * Ui::scale / 2
         && std::abs(y - screen_y) <= height * Ui::scale / 2;
@@ -106,6 +117,15 @@ void TextInput::on_render_skip(Renderer &ctx) {
 void Ui::dismiss_active_text_input_at(float x, float y) {
     if (g_active_text_input == nullptr) return;
     if (g_active_text_input->contains_screen_point(x, y)) return;
+    // Chat: only blur when press is still inside the chat panel (e.g. Send).
+    // Presses outside the panel are handled by try_close_popups → close_chat().
+    if (Game::chat_open && chat_panel_root != nullptr) {
+        float hw = chat_panel_root->width * Ui::scale / 2;
+        float hh = chat_panel_root->height * Ui::scale / 2;
+        uint8_t in_panel = std::abs(x - chat_panel_root->screen_x) <= hw
+            && std::abs(y - chat_panel_root->screen_y) <= hh;
+        if (!in_panel) return;
+    }
     g_active_text_input->blur();
 }
 

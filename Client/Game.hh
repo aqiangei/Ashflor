@@ -9,6 +9,7 @@
 #include <Shared/Simulation.hh>
 #include <Shared/StaticDefinitions.hh>
 #include <Shared/LoadoutPreset.hh>
+#include <Shared/Talent.hh>
 
 #include <array>
 #include <string>
@@ -19,8 +20,9 @@ namespace Game {
     struct ChatLine {
         uint8_t channel = ChatChannel::kChatNearby;
         std::string sender;
+        std::string whisper_to; // private: recipient; empty otherwise
         std::string text;
-        double expires_at = 0;
+        double created_at = 0; // Game::timestamp; used for collapsed fade
     };
 
     struct SpeechBubble {
@@ -28,7 +30,30 @@ namespace Game {
         double expires_at = 0;
     };
 
-    constexpr uint32_t CHAT_HISTORY = 8;
+    // Top-of-screen banner for admin (aqa) 全服 broadcasts — boss-bar style.
+    struct ScreenAnnounce {
+        std::string sender;
+        std::string text;
+        double expires_at = 0;
+    };
+    extern ScreenAnnounce screen_announce;
+    constexpr double SCREEN_ANNOUNCE_MS = 7000;
+
+    // Auto fade-in/out treasure reward (no click) — does not block input
+    struct LootToast {
+        PetalID::T petal_id = PetalID::kNone;
+        uint16_t amount = 0;
+        std::string title;
+        double expires_at = 0;
+    };
+    extern LootToast loot_toast;
+    constexpr double LOOT_TOAST_MS = 4200;
+
+    // Full history while chat is focused (scrollable). Collapsed UI only
+    // shows lines younger than CHAT_COLLAPSE_FADE_MS.
+    constexpr uint32_t CHAT_HISTORY = 48;
+    constexpr double CHAT_COLLAPSE_HOLD_MS = 4500;  // full opacity while collapsed
+    constexpr double CHAT_COLLAPSE_FADE_MS = 2500;   // then fade out
 
     // One row of the leaderboard board (name + value in the row's category)
     struct LeaderboardStatRow {
@@ -68,6 +93,8 @@ namespace Game {
     extern uint8_t spawn_after_auth;
     extern uint8_t account_logged_in;
     extern uint8_t auth_panel; // 0 closed, 1 login, 2 register
+    // Survives Game::reset so "kicked elsewhere" can show in account_status.
+    extern uint8_t pending_kick_notice;
     extern std::string disconnect_message;
     extern std::array<uint8_t, PetalID::kNumPetals> seen_petals;
     extern std::array<uint8_t, MobID::kNumMobs> seen_mobs;
@@ -89,7 +116,6 @@ namespace Game {
     void request_leaderboard_board();
     
     extern double score;
-    extern float overlevel_timer;
     extern float slot_indicator_opacity;
     extern float transition_circle;
     // Spawn watchdog: timestamp of the last spawn request + retry count.
@@ -108,24 +134,35 @@ namespace Game {
     extern uint8_t show_debug;
     extern uint8_t selected_map; // MapID for title-screen world select
     extern uint8_t minimap_expanded; // 0 compact full-map, 1 larger full-map (toggle M)
+    struct OnlineRosterEntry {
+        std::string name;
+        uint8_t map_id = 0;
+        std::string guild;
+        uint32_t level = 1;
+    };
+    extern std::vector<OnlineRosterEntry> online_roster;
     extern float camera_zoom; // client zoom multiplier (default 1.28 = slightly closer)
+    void persist_camera_zoom(); // localStorage cam_zoom (florr_clone-style recall)
     extern uint8_t pause_menu_open;
     extern uint8_t leave_confirm_open;
     extern uint8_t game_panel; // 0 none, see kPanel*
     enum : uint8_t {
         kPanelNone = 0,
-        kPanelInventory = 1, // B
+        kPanelInventory = 1, // X
         kPanelTalents = 2,   // Z
         kPanelCraft = 3,     // C
         kPanelSpecial = 4,   // V
         kPanelPresets = 5,   // reserved; switch via K/L+digit, no side button
-        kPanelBoost = 6      // daily / offline drop bonus
+        kPanelBoost = 6,     // daily / offline drop bonus
+        kPanelShop = 7,      // rare petal coin shop
+        kPanelCount = 8
     };
     extern uint8_t chat_open;
     extern uint8_t chat_channel;
     extern std::string chat_whisper_to;
     extern std::string chat_draft;
     extern std::vector<ChatLine> chat_lines;
+    extern uint8_t chat_scroll_to_end; // set on open / new line while focused
     extern std::unordered_map<std::string, SpeechBubble> speech_bubbles;
     extern uint8_t chat_menu_open;
     extern std::string chat_menu_name;
@@ -153,6 +190,8 @@ namespace Game {
         std::string name;
         uint8_t flags = 0; // 1=leader 2=online 4=self
         uint32_t level = 1;
+        float x = -1.f; // live map pos (same room); <0 if offline / elsewhere
+        float y = -1.f;
     };
     extern std::vector<GuildMember> guild_members;
     extern std::string guild_announcement;
@@ -178,10 +217,8 @@ namespace Game {
     extern std::array<PetalID::T, 2 * MAX_SLOT_COUNT> guest_petals;
     extern std::array<uint32_t, PetalID::kNumPetals> guest_craft_bank;
     extern uint32_t guest_coins;
-    extern uint8_t guest_talent_hp;
-    extern uint8_t guest_talent_rot;
-    extern uint8_t talent_hp;
-    extern uint8_t talent_rot;
+    extern std::array<uint8_t, TalentID::kNum> guest_talent_ranks;
+    extern std::array<uint8_t, TalentID::kNum> talent_ranks;
     extern uint8_t talent_pending;
     extern uint8_t talent_pending_id;
     extern uint8_t talent_pending_rank;
@@ -201,8 +238,8 @@ namespace Game {
     void set_rot_speed_from_frac(float frac01);
     void save_loadout_preset(uint8_t index);
     void apply_loadout_preset(uint8_t index);
-    // Equip one copy from backpack stacks onto the loadout bar.
-    void withdraw_bank_petal(PetalID::T id);
+    // Equip one copy from backpack stacks. dest 0xFF = auto (empty/Basic/…).
+    void withdraw_bank_petal(PetalID::T id, uint8_t dest = (uint8_t) -1);
     // Unequip primary/secondary into backpack stacks.
     void deposit_bank_petal(uint8_t static_pos);
     // Next non-empty cloud preset after the active one (wraps). Returns 1 if sent.
@@ -214,6 +251,9 @@ namespace Game {
     void reset();
     void send_guest_progress();
     void sync_guest_progress();
+    // Snapshot current session into guest_* (even while logged in). Used on logout
+    // so the title UI does not fall back to an empty/frozen guest save.
+    void seed_guest_from_session();
     uint8_t alive();
     uint8_t in_game();
     uint8_t should_render_title_ui();
@@ -225,7 +265,13 @@ namespace Game {
     void send_chat();
     void open_chat();
     void close_chat();
-    void push_chat_line(uint8_t channel, std::string const &sender, std::string const &text);
+    void push_chat_line(uint8_t channel, std::string const &sender, std::string const &text,
+                        std::string const &whisper_to = {});
+    // Slash-command Tab complete; returns 1 if draft was changed
+    uint8_t try_chat_tab_complete();
+    // Ghost prediction for the input row (empty if none)
+    void refresh_chat_completion_hint();
+    extern std::string chat_completion_hint;
     void cycle_chat_channel();
     void open_chat_menu(std::string const &name, float x, float y);
     void close_chat_menu();
@@ -257,10 +303,13 @@ namespace Game {
     void account_resume();
     void account_logout();
     void talent_spend(uint8_t talent_id);
+    void talent_refund(uint8_t talent_id); // 0xFF = reset all
+    // Jump one branch to target_rank (spend up or refund down).
+    void talent_set_rank(uint8_t talent_id, uint8_t target_rank);
     void delete_petal(uint8_t);
     void swap_petals(uint8_t, uint8_t);
     void swap_all_petals();
-    void craft_petals(uint8_t mode, PetalID::T petal_id);
+    void craft_petals(uint8_t mode, PetalID::T petal_id, uint16_t max_batches = 1);
     void craft_buy_rarity(uint8_t rarity);
     void craft_buy_special(PetalID::T id);
     void craft_recipe(uint16_t recipe_index);
@@ -270,6 +319,8 @@ namespace Game {
     uint32_t craft_owned(PetalID::T id);
     uint32_t craft_available(PetalID::T id);
     void craft_tray_add(PetalID::T id, uint32_t amount);
+    // Return petals from the craft tray back into the available pool.
+    void craft_tray_remove(uint32_t amount);
     void craft_tray_clear();
     void on_message(uint8_t *, uint32_t);
     void poll_ui_event(Ui::ScreenEvent const &);

@@ -7,12 +7,24 @@
 #include <Helpers/Bits.hh>
 #include <Helpers/Macros.hh>
 
+#include <cmath>
+
 using namespace Ui;
 
-ScrollBar::ScrollBar() : Element(10, 100, { .fill = 0xaa5a3a1a, .round_radius = 5 }) {
-    style.animate = [&](Element *elt, Renderer &ctx){
-        if (elt->style.layer && BitMath::at(Input::mouse_buttons_released, Input::LeftMouse))
-            elt->style.layer = 0;
+ScrollBar::ScrollBar() : Element(10, 100, {
+    .fill = 0xaa5a3a1a,
+    .round_radius = 5
+}) {
+    style.animate = [this](Element *, Renderer &){
+        if (!style.layer) return;
+        // Desktop: clear grab on mouse up. Mobile: clear when the finger lifts.
+        if (!Input::is_mobile) {
+            if (BitMath::at(Input::mouse_buttons_released, Input::LeftMouse))
+                style.layer = 0;
+            return;
+        }
+        if (touch_id == (uint32_t) -1 || !Input::touches.contains(touch_id))
+            style.layer = 0;
     };
 }
 
@@ -41,18 +53,52 @@ void ScrollContainer::on_render(Renderer &ctx) {
             lerp_scroll += Input::wheel_delta / ratio;
             Input::wheel_delta = 0; // consume so camera zoom does not also fire
         }
-        if (scroll->style.layer) lerp_scroll += (Input::mouse_y - Input::prev_mouse_y);
-        // Don't scroll while a bag petal tap/drag is active — mobile scroll
-        // was eating click-to-equip and turning taps into no-op "drags".
-        if (Input::is_mobile
-            && Ui::UiLoadout::num_petals_selected == 0
-            && !Ui::bag_gesture_busy()) {
-            auto iter = Input::touches.find(touch_id);
-            if (iter != Input::touches.end())
-                lerp_scroll -= iter->second.dy / ratio;
-            else
-                touch_id = (uint32_t)-1;
+
+        // Thumb drag: desktop uses mouse delta; mobile follows the finger
+        // that grabbed the bar (same touch_id as this container).
+        if (scroll->style.layer) {
+            if (Input::is_mobile) {
+                auto it = Input::touches.find(touch_id);
+                if (it != Input::touches.end())
+                    lerp_scroll += it->second.dy;
+            } else {
+                lerp_scroll += (Input::mouse_y - Input::prev_mouse_y);
+            }
         }
+
+        // Content-area swipe. Soft petal presses must not block scrolling —
+        // only a committed petal/bag drag (past slop, finger left the bag)
+        // does. Once we scroll, cancel the soft press so release does not
+        // equip/swap.
+        if (Input::is_mobile && !Ui::petal_drag_committed()) {
+            auto iter = Input::touches.find(touch_id);
+            if (iter != Input::touches.end()) {
+                if (!scroll_dragging) {
+                    float dist = std::hypot(iter->second.x - touch_press_x,
+                                            iter->second.y - touch_press_y);
+                    // Prefer vertical list scroll over accidental petal-drag
+                    // when the swipe is mostly up/down inside this viewport.
+                    float adx = std::fabs(iter->second.x - touch_press_x);
+                    float ady = std::fabs(iter->second.y - touch_press_y);
+                    uint8_t vertical_bias = ady >= adx * 0.85f
+                        && ady >= Input::pointer_slop() * 0.55f;
+                    if (dist >= Input::pointer_slop() || vertical_bias) {
+                        scroll_dragging = 1;
+                        if (Ui::bag_gesture_busy() || Ui::UiLoadout::num_petals_selected != 0)
+                            Ui::cancel_petal_drags();
+                    }
+                }
+                if (scroll_dragging)
+                    lerp_scroll -= iter->second.dy / ratio;
+            } else {
+                touch_id = (uint32_t)-1;
+                scroll_dragging = 0;
+            }
+        } else if (Input::is_mobile && Ui::petal_drag_committed()) {
+            // Petal owns the gesture — do not also scroll.
+            scroll_dragging = 0;
+        }
+
         lerp_scroll = fclamp(lerp_scroll, 0, height - scroll->height);
         scroll->y = lerp(scroll->y, lerp_scroll, Ui::lerp_amount);
         content->y = lerp(content->y, -ratio * lerp_scroll, Ui::lerp_amount);
@@ -61,6 +107,7 @@ void ScrollContainer::on_render(Renderer &ctx) {
     RenderContext c(&ctx);
     ctx.clip_rect(0,0,width,height);
     for (Element *elt : children) {
+        if (!elt->visible) continue;
         RenderContext context(&ctx);
         ctx.translate(elt->x, elt->y);
         ctx.translate(elt->style.h_justify * (width - elt->width) / 2, elt->style.v_justify * (height - elt->height) / 2);
@@ -70,8 +117,7 @@ void ScrollContainer::on_render(Renderer &ctx) {
 
 void ScrollContainer::refactor() {
     DEBUG_ONLY(assert(children.size() == 2));
-    // Content left-aligned, scrollbar flush to the right edge of the viewport.
-    // (Both Left would park the bar near the middle via justify math.)
+    // Content left-aligned, scrollbar flush right. Hide bar when content fits.
     Element *content = children[0];
     Element *bar = children[1];
     content->refactor();
@@ -82,11 +128,31 @@ void ScrollContainer::refactor() {
     bar->style.v_justify = Style::Top;
     content->x = 0;
     bar->x = 0;
-    width = content->width + inner_pad + bar->width;
+    uint8_t need_bar = content->height > height + 0.5f;
+    bar->visible = need_bar;
+    if (!need_bar) {
+        bar->width = 0;
+        lerp_scroll = 0;
+        content->y = 0;
+        bar->y = 0;
+        width = content->width;
+    } else {
+        // Desktop thin track; mobile needs a fat hit target for thumb drag.
+        bar->width = Input::is_mobile ? 28.f : 10.f;
+        width = content->width + inner_pad + bar->width;
+    }
 }
 
 void ScrollContainer::poll_events(ScreenEvent const &event) {
+    uint32_t prev_touch = touch_id;
     Element::poll_events(event);
+    if (touch_id != prev_touch && touch_id != (uint32_t) -1) {
+        touch_press_x = event.x;
+        touch_press_y = event.y;
+        scroll_dragging = 0;
+    }
+    if (touch_id == (uint32_t) -1)
+        scroll_dragging = 0;
     if (Ui::focused != this) return;
     // children[0]=content, children[1]=scrollbar. Container::poll_events only
     // walks descendants when Ui::focused == content; if the touch sits in the

@@ -2,17 +2,23 @@
 
 #include <Client/Ui/Container.hh>
 #include <Client/Ui/DynamicText.hh>
+#include <Client/Ui/ScrollContainer.hh>
 #include <Client/Game.hh>
+#include <Client/Input.hh>
 #include <Client/I18n.hh>
 #include <Client/Ui/Extern.hh>
 
 #include <Shared/Map.hh>
+#include <Shared/StaticDefinitions.hh>
 #include <Client/StaticData.hh>
+#include <Shared/RarityScale.hh>
 #include <Helpers/Math.hh>
 
 #include <algorithm>
 #include <cmath>
+#include <format>
 #include <memory>
+#include <string>
 #include <vector>
 
 using namespace Ui;
@@ -21,39 +27,52 @@ namespace {
 struct MinimapLayer {
     uint8_t map_id;
     float width;
+    bool levels;
     std::unique_ptr<Renderer> canvas;
 };
 
 std::vector<MinimapLayer> minimap_layers;
 
-Renderer &static_minimap(uint8_t map_id, float width, float height) {
+Renderer &static_minimap(uint8_t map_id, float width, float height, bool levels) {
+    // Snap width so float noise cannot miss the cache and rebuild terrain.
+    float const wkey = std::round(width);
     for (MinimapLayer &layer : minimap_layers) {
-        if (layer.map_id == map_id && layer.width == width)
+        if (layer.map_id == map_id && layer.width == wkey && layer.levels == levels)
             return *layer.canvas;
     }
-    if (minimap_layers.size() >= MapID::kNumMaps + 2) minimap_layers.clear();
-    minimap_layers.push_back({map_id, width, std::make_unique<Renderer>()});
+    // Drop oldest — never wipe the whole cache (that made G hitch every time).
+    constexpr size_t kMaxLayers = 24;
+    if (minimap_layers.size() >= kMaxLayers)
+        minimap_layers.erase(minimap_layers.begin());
+    minimap_layers.push_back({map_id, wkey, levels, std::make_unique<Renderer>()});
     Renderer &canvas = *minimap_layers.back().canvas;
-    canvas.set_dimensions(width, height);
+    canvas.set_dimensions(wkey, height);
     canvas.reset();
     canvas.clear();
-    float const sx = width / (float)ARENA_WIDTH;
+    float const sx = wkey / (float)ARENA_WIDTH;
     float const sy = height / (float)ARENA_HEIGHT;
 
-    MapZones const &zones = map_zones(map_id);
-    uint32_t ring_n = zones.size() < 4 ? zones.size() : 4;
-    for (uint32_t i = 0; i < ring_n; ++i) {
-        ZoneDefinition const &def = zones[i];
-        canvas.set_fill(def.color);
-        canvas.fill_rect(def.left * sx, def.top * sy,
-                         (def.right - def.left) * sx, (def.bottom - def.top) * sy);
+    canvas.set_fill(0xffF8F8F4);
+    canvas.fill_rect(0, 0, width, height);
+    if (levels) {
+        // Later, more specific zones overwrite broad rings. Obstacles are
+        // painted afterward, so colour appears only on walkable space.
+        // Colours = petal rarity (Common → Ultra).
+        for (ZoneDefinition const &def : map_zones(map_id)) {
+            uint8_t tier = (uint8_t)std::min<uint32_t>(def.difficulty, MAX_DIFFICULTY);
+            canvas.set_fill(RARITY_COLORS[tier]);
+            canvas.fill_rect(def.left * sx, def.top * sy,
+                             (def.right - def.left) * sx, (def.bottom - def.top) * sy);
+        }
     }
     float oxs[TERRAIN_OUTLINE_MAX];
     float oys[TERRAIN_OUTLINE_MAX];
     for (TerrainFeature const &f : map_terrain(map_id)) {
+        if (levels && !(f.flags & TerrainFlags::kImpassable)) continue;
         uint32_t n = Map::terrain_outline(f, oxs, oys, TERRAIN_OUTLINE_MAX);
         if (n < 3) continue;
-        canvas.set_fill(f.color);
+        canvas.set_fill((f.flags & TerrainFlags::kImpassable)
+            ? 0xff08090B : 0xffF8F8F4);
         canvas.begin_path();
         canvas.move_to(oxs[0] * sx, oys[0] * sy);
         for (uint32_t i = 1; i < n; ++i)
@@ -103,7 +122,8 @@ void Minimap::on_render(Renderer &ctx) {
         uint8_t mid = Game::simulation.arena_info.map_id;
         if (mid >= MapID::kNumMaps) mid = MapID::kGarden;
 
-        ctx.draw_image_at(static_minimap(mid, width, height), 0.f, 0.f);
+        bool const show_levels = Input::keys_held.contains('G');
+        ctx.draw_image_at(static_minimap(mid, width, height, show_levels), 0.f, 0.f);
 
         float self_x = -1.f;
         float self_y = -1.f;
@@ -128,10 +148,22 @@ void Minimap::on_render(Renderer &ctx) {
             }
             return false;
         };
+        auto is_guildmate_at = [](float wx, float wy) -> bool {
+            if (Game::guild_name.empty()) return false;
+            for (Game::GuildMember const &m : Game::guild_members) {
+                if (m.flags & 4) continue; // self
+                if (!(m.flags & 2)) continue; // offline
+                if (!(m.x >= 0.f && m.y >= 0.f)) continue;
+                if (std::abs(m.x - wx) < 80.f && std::abs(m.y - wy) < 80.f)
+                    return true;
+            }
+            return false;
+        };
 
         // Other players (arena sync — every living flower on this map)
         float const pr_other = Game::minimap_expanded ? 4.5f : 3.8f;
         constexpr uint32_t kTeammatePink = 0xffff69b4;
+        constexpr uint32_t kGuildBlue = 0xff3d9eff;
         for (uint32_t i = 0; i < MINIMAP_PLAYER_CAP; ++i) {
             float wx = Game::simulation.arena_info.minimap_x[i];
             float wy = Game::simulation.arena_info.minimap_y[i];
@@ -143,7 +175,12 @@ void Minimap::on_render(Renderer &ctx) {
             float py = (wy - top) * sy;
             uint8_t color = Game::simulation.arena_info.minimap_colors[i];
             if (color >= ColorID::kNumColors) color = 0;
-            uint32_t fill = is_teammate_at(wx, wy) ? kTeammatePink : FLOWER_COLORS[color];
+            // Party pink > guild blue > default flower color
+            uint32_t fill = FLOWER_COLORS[color];
+            if (is_teammate_at(wx, wy))
+                fill = kTeammatePink;
+            else if (is_guildmate_at(wx, wy))
+                fill = kGuildBlue;
             // White halo so dots stay visible on green/blue zones
             ctx.set_fill(0xeeffffff);
             ctx.begin_path();
@@ -213,15 +250,41 @@ void Minimap::on_render(Renderer &ctx) {
     }
 }
 
+static Element *make_online_roster_list() {
+    std::vector<Element *> rows;
+    rows.push_back(new Ui::DynamicText(12, [](){
+        return I18n::use_chinese
+            ? std::format("在线 {} 人", Game::online_roster.size())
+            : std::format("Online {}", Game::online_roster.size());
+    }, { .fill = 0xffe8dcc8, .h_justify = Style::Left }));
+    for (uint8_t i = 0; i < 12; ++i) {
+        rows.push_back(new Ui::DynamicText(11, [i](){
+            if (i >= Game::online_roster.size()) return std::string{};
+            Game::OnlineRosterEntry const &e = Game::online_roster[i];
+            char const *map = I18n::map_name(e.map_id);
+            if (e.guild.empty())
+                return std::format("{}  Lv{}  {}", e.name, e.level, map);
+            return std::format("{}  Lv{}  {}  [{}]", e.name, e.level, map, e.guild);
+        }, {
+            .fill = 0xffcfc3b0,
+            .h_justify = Style::Left,
+            .should_render = [i](){ return i < Game::online_roster.size(); }
+        }));
+    }
+    return new Ui::VContainer(rows, 4, 2, { .no_animation = 1 });
+}
+
 Element *Ui::make_minimap() {
     Element *map = new Ui::Minimap(280);
+    Element *roster = new Ui::ScrollContainer(make_online_roster_list(), 140);
     Element *elt = new Ui::VContainer({
         map,
         new Ui::DynamicText(11, [](){
             return Game::minimap_expanded
                 ? (I18n::use_chinese ? "M 缩小" : "M shrink")
                 : (I18n::use_chinese ? "M 放大" : "M enlarge");
-        }, { .fill = 0xffdddddd })
+        }, { .fill = 0xffdddddd }),
+        roster
     }, 6, 4, {
         .fill = 0x00000000,
         .should_render = [](){ return Game::should_render_game_ui() && Game::alive(); },

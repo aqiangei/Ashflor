@@ -12,18 +12,20 @@ inline uint32_t const ARENA_HEIGHT = 20000;
 inline float const MAP_SPAWN_X = ARENA_WIDTH * 0.5f;
 inline float const MAP_SPAWN_Y = ARENA_HEIGHT * 0.5f;
 
-inline uint32_t const MAX_SLOT_COUNT = 8;
+inline uint32_t const MAX_SLOT_COUNT = 10;
 inline uint32_t const LEVELS_PER_EXTRA_SLOT = 15;
 inline uint32_t const LEADERBOARD_SIZE = 10;
 // Rows kept per category on the multi-column leaderboard board
 inline uint32_t const LEADERBOARD_STAT_SIZE = 10;
 inline uint32_t const MINIMAP_PLAYER_CAP = 128;
 inline uint32_t const MAX_PETALS_IN_CLUMP = 4;
-inline uint32_t const MAX_DIFFICULTY = 3;
+// Matches RarityID::kNumRarities - 1 (Common..Ultra). Zone difficulty == petal rarity.
+inline uint32_t const MAX_DIFFICULTY = 8;
 inline uint32_t const MAX_DROPS_PER_MOB = 8;
 // Concept maps need many specialty Zone AABBs + large terrain pieces
 inline uint32_t const MAX_ZONES_PER_MAP = 48;
-inline uint32_t const MAX_TERRAIN_PER_MAP = 192;
+// Corridor/gate/ford channel paint + pocket bridges need headroom past legacy 192.
+inline uint32_t const MAX_TERRAIN_PER_MAP = 280;
 inline uint32_t const TERRAIN_OUTLINE_MAX = 72;
 
 namespace MapID {
@@ -60,8 +62,7 @@ namespace TerrainShape {
 
 namespace TerrainFlags {
     enum : uint8_t {
-        kImpassable = 1 << 0,
-        kNoAttack = 1 << 1
+        kImpassable = 1 << 0
     };
 }
 
@@ -429,6 +430,13 @@ namespace PetalID {
         kRoyalCarapace,
         kQueensEmblem,
         kColonyHeart,
+        // Monstera rarity ladder (append only; same English name for craft_result)
+        kMonsteraEpic,
+        kMonsteraLegendary,
+        kMonsteraMythic,
+        kMonsteraUnique,
+        kMonsteraSuper,
+        kMonsteraUltra,
         kNumPetals
     };
 };
@@ -553,6 +561,11 @@ namespace MobID {
         kSporeAnt,
         kFangAnt,
         kRoyalSentinel,
+        // Yahaha / treasure props (append only) — push puzzles + guide NPCs
+        kPushCrate,
+        kYahahaPad,
+        kTreasureNpc,
+        kLootChest, // walk-up Yahaha chest (not Mimic)
         kNumMobs
     };
 };

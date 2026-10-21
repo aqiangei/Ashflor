@@ -153,18 +153,44 @@ uint8_t Ui::ui_auto_equip_from_bag(uint8_t bag_pos, float screen_x, float screen
     return 1;
 }
 
-static void apply_unequip_fly(UiLoadoutPetal *at_dest, float from_sx, float from_sy) {
+static void apply_unequip_fly(UiLoadoutPetal *at_dest, float from_sx, float from_sy,
+                             float from_w = 60.f, float from_h = 60.f) {
     if (at_dest == nullptr) return;
     PetalID::T id = Game::cached_loadout[at_dest->static_pos];
-    if (id != PetalID::kNone) {
-        at_dest->petal_id = id;
-        at_dest->last_id = id;
-    }
+    if (id == PetalID::kNone || id >= PetalID::kNumPetals) return;
+    at_dest->petal_id = id;
+    at_dest->last_id = id;
     at_dest->x = (from_sx - Ui::window_width / 2) / Ui::scale;
     at_dest->y = (from_sy - Ui::window_height / 2) / Ui::scale;
+    at_dest->width = from_w;
+    at_dest->height = from_h;
     at_dest->fly_hint = 1;
     at_dest->style.layer = 1;
     at_dest->showed = 1;
+}
+
+static void slot_screen_rect(uint8_t static_pos, float &sx, float &sy, float &sw, float &sh) {
+    uint8_t dyn = static_to_dynamic(static_pos);
+    UiLoadoutPetal *w = Ui::UiLoadout::petal_slots[static_pos];
+    UiLoadoutSlot *bg = dyn < 2 * MAX_SLOT_COUNT + 1
+        ? Ui::UiLoadout::petal_backgrounds[dyn] : nullptr;
+    if (w != nullptr && w->showed && w->last_id != PetalID::kNone) {
+        sx = w->screen_x;
+        sy = w->screen_y;
+        sw = w->width > 1.f ? w->width : 60.f;
+        sh = w->height > 1.f ? w->height : 60.f;
+        return;
+    }
+    if (bg != nullptr) {
+        sx = bg->screen_x;
+        sy = bg->screen_y;
+        sw = bg->width;
+        sh = bg->height;
+        return;
+    }
+    sx = Ui::window_width / 2;
+    sy = Ui::window_height;
+    sw = sh = 60.f;
 }
 
 uint8_t Ui::ui_unequip_to_backpack(uint8_t static_pos, float x, float y) {
@@ -197,14 +223,25 @@ void Ui::ui_compact_backpack() {
 static uint8_t bag_gesture_active = 0;
 static uint8_t bag_gesture_dragging = 0;
 static uint8_t bag_gesture_pos = 0;
+static PetalID::T bag_gesture_bank_id = PetalID::kNone;
+static uint8_t bag_gesture_selected_bump = 0;
 static float bag_gesture_x = 0;
 static float bag_gesture_y = 0;
 static uint32_t bag_gesture_touch = (uint32_t) -1;
 static double bag_gesture_started = 0;
 
+static void bag_gesture_clear_selection_bump() {
+    if (!bag_gesture_selected_bump) return;
+    if (Ui::UiLoadout::num_petals_selected > 0)
+        --Ui::UiLoadout::num_petals_selected;
+    bag_gesture_selected_bump = 0;
+}
+
 void Ui::cancel_petal_drags() {
     bag_gesture_active = 0;
     bag_gesture_dragging = 0;
+    bag_gesture_bank_id = PetalID::kNone;
+    bag_gesture_clear_selection_bump();
     for (uint8_t i = 0; i < 2 * MAX_SLOT_COUNT; ++i) {
         UiLoadoutPetal *p = Ui::UiLoadout::petal_slots[i];
         if (p == nullptr || !p->selected) continue;
@@ -226,12 +263,22 @@ uint8_t Ui::loadout_drag_over_bag(float x, float y) {
     return fabsf(x - panel->screen_x) <= hw && fabsf(y - panel->screen_y) <= hh;
 }
 
-static void swap_paired_with_fly(uint8_t from_pos, uint8_t to_pos) {
-    UiLoadoutPetal *from = Ui::UiLoadout::petal_slots[from_pos];
-    float sx = from != nullptr ? from->screen_x : Ui::window_width / 2;
-    float sy = from != nullptr ? from->screen_y : Ui::window_height;
+void Ui::ui_swap_paired_slots(uint8_t from_pos, uint8_t to_pos) {
+    if (from_pos >= 2 * MAX_SLOT_COUNT || to_pos >= 2 * MAX_SLOT_COUNT) return;
+    if (from_pos == to_pos) return;
+    PetalID::T id_a = Game::cached_loadout[from_pos];
+    PetalID::T id_b = Game::cached_loadout[to_pos];
+    if (id_a == id_b) return;
+    float ax, ay, aw, ah, bx, by, bw, bh;
+    slot_screen_rect(from_pos, ax, ay, aw, ah);
+    slot_screen_rect(to_pos, bx, by, bw, bh);
     ui_swap_petals(from_pos, to_pos);
-    apply_unequip_fly(Ui::UiLoadout::petal_slots[to_pos], sx, sy);
+    // Widgets stay on their slot index; content crossed — each flies from the
+    // other's old screen rect into its new home (primary ↔ secondary).
+    if (id_b != PetalID::kNone)
+        apply_unequip_fly(Ui::UiLoadout::petal_slots[from_pos], bx, by, bw, bh);
+    if (id_a != PetalID::kNone)
+        apply_unequip_fly(Ui::UiLoadout::petal_slots[to_pos], ax, ay, aw, ah);
 }
 
 void Ui::ui_toggle_petal_slot(uint8_t static_pos) {
@@ -247,7 +294,7 @@ void Ui::ui_toggle_petal_slot(uint8_t static_pos) {
             ui_unequip_to_backpack(static_pos);
             return;
         }
-        swap_paired_with_fly(static_pos, sec);
+        ui_swap_paired_slots(static_pos, sec);
         return;
     }
     if (static_pos < 2 * n) {
@@ -256,7 +303,7 @@ void Ui::ui_toggle_petal_slot(uint8_t static_pos) {
             ui_unequip_to_backpack(static_pos);
             return;
         }
-        swap_paired_with_fly(static_pos, pri);
+        ui_swap_paired_slots(static_pos, pri);
         return;
     }
 }
@@ -294,6 +341,54 @@ uint8_t Ui::bag_gesture_busy() {
     return bag_gesture_active;
 }
 
+// Soft bag press still inside the open inventory (and not on a loadout slot)
+// must stay scrollable — fast vertical swipes jump past drag_slop otherwise.
+static uint8_t bag_press_scrollable(float mx, float my) {
+    if (!Input::is_mobile) return 0;
+    if (Game::game_panel != Game::kPanelInventory) return 0;
+    if (Ui::find_loadout_drop_target(mx, my) != (uint8_t) -1) return 0;
+    return Ui::loadout_drag_over_bag(mx, my);
+}
+
+uint8_t Ui::petal_drag_committed() {
+    float const slop = Input::pointer_slop();
+    if (bag_gesture_dragging) return 1;
+    if (bag_gesture_active) {
+        float mx = bag_gesture_x;
+        float my = bag_gesture_y;
+        auto it = Input::touches.find(bag_gesture_touch);
+        if (it != Input::touches.end()) {
+            mx = it->second.x;
+            my = it->second.y;
+        } else {
+            auto ended = Input::ended_touches.find(bag_gesture_touch);
+            if (ended != Input::ended_touches.end()) {
+                mx = ended->second.x;
+                my = ended->second.y;
+            }
+        }
+        // Match finish_bag_gesture drag threshold so scroll can win soft presses.
+        if (std::hypot(mx - bag_gesture_x, my - bag_gesture_y) >= slop * 1.6f) {
+            if (bag_press_scrollable(mx, my)) return 0;
+            return 1;
+        }
+    }
+    for (uint8_t i = 0; i < 2 * MAX_SLOT_COUNT; ++i) {
+        UiLoadoutPetal *p = Ui::UiLoadout::petal_slots[i];
+        if (p == nullptr || !p->selected) continue;
+        float mx = Input::mouse_x;
+        float my = Input::mouse_y;
+        auto it = Input::touches.find(p->persistent_touch_id);
+        if (it != Input::touches.end()) {
+            mx = it->second.x;
+            my = it->second.y;
+        }
+        if (std::hypot(mx - p->press_x, my - p->press_y) >= slop)
+            return 1;
+    }
+    return 0;
+}
+
 uint8_t Ui::loadout_bar_hit(float x, float y) {
     float const pad = Input::is_mobile ? 48.f : 20.f;
     for (uint8_t i = 0; i < 2 * MAX_SLOT_COUNT + 1; ++i) {
@@ -306,21 +401,39 @@ uint8_t Ui::loadout_bar_hit(float x, float y) {
     return 0;
 }
 
-void Ui::begin_bag_gesture(uint8_t static_pos, float x, float y, uint32_t touch_id) {
-    if (static_pos >= 2 * MAX_SLOT_COUNT) return;
-    if (Game::cached_loadout[static_pos] == PetalID::kNone) return;
+void Ui::begin_bag_gesture(uint8_t static_pos, float x, float y, uint32_t touch_id,
+                           PetalID::T bank_id) {
+    uint8_t from_bank = static_pos == (uint8_t) -1;
+    if (from_bank) {
+        if (bank_id == PetalID::kNone || bank_id >= PetalID::kNumPetals) return;
+        if (Game::craft_bank[bank_id] == 0 || Recipe::is_bag_only(bank_id)) return;
+    } else {
+        if (static_pos >= 2 * MAX_SLOT_COUNT) return;
+        if (Game::cached_loadout[static_pos] == PetalID::kNone) return;
+        bank_id = PetalID::kNone;
+    }
     // Mobile delivers kMouseDown every held frame — do not reset mid-gesture.
     if (bag_gesture_active
         && bag_gesture_pos == static_pos
+        && bag_gesture_bank_id == bank_id
         && bag_gesture_touch == touch_id)
         return;
+    bag_gesture_clear_selection_bump();
     bag_gesture_active = 1;
     bag_gesture_dragging = 0;
     bag_gesture_pos = static_pos;
+    bag_gesture_bank_id = bank_id;
     bag_gesture_x = x;
     bag_gesture_y = y;
     bag_gesture_touch = touch_id;
     bag_gesture_started = Game::timestamp;
+}
+
+PetalID::T Ui::bag_gesture_ghost_petal() {
+    // Slot-copy drags already have a UiLoadoutPetal ghost — only bank stacks
+    // need this floating icon.
+    if (!bag_gesture_active || !bag_gesture_dragging) return PetalID::kNone;
+    return bag_gesture_bank_id;
 }
 
 void Ui::finish_bag_gesture() {
@@ -347,45 +460,71 @@ void Ui::finish_bag_gesture() {
     float dist = std::hypot(mx - bag_gesture_x, my - bag_gesture_y);
     uint8_t over_slot = find_loadout_drop_target(mx, my) != (uint8_t) -1;
     float drag_slop = Input::is_mobile ? Input::pointer_slop() * 1.6f : Input::pointer_slop();
+    uint8_t from_bank = bag_gesture_pos == (uint8_t) -1;
+    // Inside open bag: vertical swipe scrolls the list. Only promote to a
+    // loadout drag once the finger leaves the panel or lands on a slot.
+    uint8_t keep_soft = bag_press_scrollable(mx, my);
     if (!bag_gesture_dragging
+        && !keep_soft
         && dist >= Input::pointer_slop()
         && (over_slot || dist >= drag_slop)) {
         bag_gesture_dragging = 1;
-        begin_petal_drag(bag_gesture_pos, bag_gesture_touch);
+        // Collapse backpack while aiming at loadout slots so the bar is clear.
+        if (Game::game_panel == Game::kPanelInventory)
+            Game::close_game_panel();
+        if (from_bank) {
+            if (!bag_gesture_selected_bump) {
+                ++Ui::UiLoadout::num_petals_selected;
+                bag_gesture_selected_bump = 1;
+            }
+        } else {
+            begin_petal_drag(bag_gesture_pos, bag_gesture_touch);
+        }
     }
     if (!released) return;
     uint8_t pos = bag_gesture_pos;
+    PetalID::T bank_id = bag_gesture_bank_id;
     uint8_t was_drag = bag_gesture_dragging;
     bag_gesture_active = 0;
     bag_gesture_dragging = 0;
-    UiLoadoutPetal *p = Ui::UiLoadout::petal_slots[pos];
-    if (p != nullptr && p->selected) {
-        --Ui::UiLoadout::num_petals_selected;
-        p->selected = 0;
-        p->drag_from_bag = 0;
-        p->style.layer = 0;
-        p->persistent_touch_id = (uint32_t) -1;
+    bag_gesture_bank_id = PetalID::kNone;
+    bag_gesture_clear_selection_bump();
+    if (!from_bank) {
+        UiLoadoutPetal *p = Ui::UiLoadout::petal_slots[pos];
+        if (p != nullptr && p->selected) {
+            --Ui::UiLoadout::num_petals_selected;
+            p->selected = 0;
+            p->drag_from_bag = 0;
+            p->style.layer = 0;
+            p->persistent_touch_id = (uint32_t) -1;
+        }
     }
-    if (Game::cached_loadout[pos] == PetalID::kNone) return;
     // A deliberate long hold only inspects the petal. A short tap equips.
     if (!was_drag) {
         if (Input::is_mobile && Game::timestamp - bag_gesture_started >= 450)
             return;
-        ui_auto_equip_from_bag(pos, bag_gesture_x, bag_gesture_y);
+        // Moved past slop inside the bag = scroll/swipe, not tap-to-equip.
+        if (Input::is_mobile && dist >= Input::pointer_slop())
+            return;
+        if (from_bank)
+            Game::withdraw_bank_petal(bank_id);
+        else if (Game::cached_loadout[pos] != PetalID::kNone)
+            ui_auto_equip_from_bag(pos, bag_gesture_x, bag_gesture_y);
         return;
     }
     // Releasing a drag away from a slot returns it to the bag.
     if (!over_slot) return;
     uint8_t dyn = find_loadout_drop_target(mx, my);
     if (dyn == 2 * MAX_SLOT_COUNT) {
-        ui_delete_petal(pos);
+        if (!from_bank) ui_delete_petal(pos);
         return;
     }
-    if (dyn != (uint8_t) -1) {
-        uint8_t dest = loadout_dynamic_to_static(dyn);
-        if (dest != pos)
-            ui_swap_petals(dest, pos);
-    }
+    if (dyn == (uint8_t) -1) return;
+    uint8_t dest = loadout_dynamic_to_static(dyn);
+    if (from_bank)
+        Game::withdraw_bank_petal(bank_id, dest);
+    else if (Game::cached_loadout[pos] != PetalID::kNone && dest != pos)
+        ui_swap_petals(dest, pos);
 }
 
 void Ui::begin_petal_drag(uint8_t static_pos, uint32_t touch_id) {
@@ -398,6 +537,8 @@ void Ui::begin_petal_drag(uint8_t static_pos, uint32_t touch_id) {
         p->selected = 1;
     }
     p->drag_from_bag = 1;
+    if (Game::game_panel == Game::kPanelInventory)
+        Game::close_game_panel();
     Ui::UiLoadout::selected_with_keys = MAX_SLOT_COUNT;
     p->style.layer = 1;
     // Snap ghost to cursor so bag-origin drags don't jump from the bottom bar
@@ -486,6 +627,13 @@ UiLoadoutPetal::UiLoadoutPetal(uint8_t pos) : Element(60, 60),
             float drag_dist = std::hypot(mouse_x - press_x, mouse_y - press_y);
             float const kClickSlop = Input::pointer_slop();
             uint8_t is_click = drag_dist < kClickSlop;
+            // Past slop = dragging; hide inspect tip so it doesn't stick to the finger.
+            if (!is_click || released)
+                rendering_tooltip = 0;
+            else if (last_id != PetalID::kNone) {
+                rendering_tooltip = 1;
+                tooltip = Ui::UiLoadout::petal_tooltips[last_id];
+            }
             // Bag-origin drags: InventoryBagSlot owns click + drop (avoids
             // double-swap when this widget runs before the bag cell).
             if (drag_from_bag) {
@@ -576,7 +724,8 @@ UiLoadoutPetal::UiLoadoutPetal(uint8_t pos) : Element(60, 60),
             if (fly_hint) {
                 style.layer = 1;
                 if (!showed) showed = 1;
-                lerp_amt = Ui::lerp_amount * 1.6f; // snappier bag↔slot path
+                // Primary↔secondary crosses a short gap — keep it readable.
+                lerp_amt = Ui::lerp_amount * 2.1f;
             } else {
                 style.layer = 0;
                 if (!showed) lerp_amt = 1;
@@ -676,12 +825,70 @@ void UiLoadoutPetal::on_event(uint8_t event) {
         selected = 1;
         drag_from_bag = 0;
         Ui::UiLoadout::selected_with_keys = MAX_SLOT_COUNT;
+        // Hold-to-inspect on mobile (and press ahead of drag on desktop): tip
+        // stays until the pointer moves past slop (see animate).
+        if (last_id != PetalID::kNone) {
+            rendering_tooltip = 1;
+            tooltip = Ui::UiLoadout::petal_tooltips[last_id];
+        } else {
+            rendering_tooltip = 0;
+        }
+        return;
+    }
+    if (event == kFocusLost) {
         rendering_tooltip = 0;
         return;
     }
-    if (event != kFocusLost && (!selected || Input::is_mobile) && last_id != PetalID::kNone) {
+    // Desktop hover / mobile hold without drag
+    if ((!selected || Input::is_mobile) && last_id != PetalID::kNone) {
         rendering_tooltip = 1;
         tooltip = Ui::UiLoadout::petal_tooltips[last_id];
-    } else 
+    } else {
         rendering_tooltip = 0;
+    }
+}
+
+class BagDragGhost final : public Element {
+public:
+    BagDragGhost() : Element(60, 60, { .no_animation = 1, .no_polling = 1 }) {
+        style.layer = 1;
+        style.should_render = [](){
+            return Game::alive() && Ui::bag_gesture_ghost_petal() != PetalID::kNone;
+        };
+        style.animate = [](Element *elt, Renderer &){
+            float mx = Input::mouse_x;
+            float my = Input::mouse_y;
+            if (Input::is_mobile) {
+                for (auto const &[id, touch] : Input::touches) {
+                    (void) id;
+                    mx = touch.x;
+                    my = touch.y;
+                    break;
+                }
+            }
+            elt->x = (mx - Ui::window_width / 2) / Ui::scale;
+            elt->y = (my - Ui::window_height / 2) / Ui::scale;
+            uint8_t dyn = find_loadout_drop_target(mx, my);
+            if (dyn != (uint8_t) -1 && dyn != 2 * MAX_SLOT_COUNT) {
+                UiLoadoutSlot *slot = Ui::UiLoadout::petal_backgrounds[dyn];
+                if (slot != nullptr) {
+                    elt->width = lerp(elt->width, slot->width, Ui::lerp_amount);
+                    elt->height = lerp(elt->height, slot->height, Ui::lerp_amount);
+                    return;
+                }
+            }
+            elt->width = lerp(elt->width, 64.f, Ui::lerp_amount);
+            elt->height = lerp(elt->height, 64.f, Ui::lerp_amount);
+        };
+    }
+    void on_render(Renderer &ctx) override {
+        PetalID::T id = Ui::bag_gesture_ghost_petal();
+        if (id == PetalID::kNone || id >= PetalID::kNumPetals) return;
+        ctx.scale(width / 60.f);
+        draw_loadout_background(ctx, id);
+    }
+};
+
+Element *Ui::make_bag_drag_ghost() {
+    return new BagDragGhost();
 }

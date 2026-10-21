@@ -25,6 +25,8 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdlib>
+#include <cstring>
+#include <format>
 #include <iostream>
 #include <string>
 #include <vector>
@@ -54,13 +56,14 @@ namespace Game {
     std::string account_status;
     uint32_t daily_bonus_seconds = 0;
     uint32_t offline_bonus_seconds = 0;
-    uint8_t bonus_enabled = 1;
+    uint8_t bonus_enabled = 0; // off until the player toggles it on
     double bonus_synced_at = 0;
     uint64_t session_token = 0;
     uint8_t pending_auto_login = 0;
     uint8_t spawn_after_auth = 0;
     uint8_t account_logged_in = 0;
     uint8_t auth_panel = 0;
+    uint8_t pending_kick_notice = 0;
     std::string disconnect_message;
     std::array<uint8_t, PetalID::kNumPetals> seen_petals;
     std::array<uint8_t, MobID::kNumMobs> seen_mobs;
@@ -75,7 +78,6 @@ namespace Game {
     double leaderboard_board_at = 0;
 
     double score = 0;
-    float overlevel_timer = 0;
     float slot_indicator_opacity = 0;
     float transition_circle = 0;
     double spawn_request_at = 0;
@@ -91,6 +93,7 @@ namespace Game {
     uint8_t show_debug = 0;
     uint8_t selected_map = MapID::kGarden;
     uint8_t minimap_expanded = 0;
+    std::vector<OnlineRosterEntry> online_roster;
     // >1 = closer / smaller view. Default slightly zoomed-in vs old 1.0.
     float camera_zoom = 1.28f;
     uint8_t pause_menu_open = 0;
@@ -99,9 +102,13 @@ namespace Game {
     uint8_t chat_open = 0;
     uint8_t chat_channel = ChatChannel::kChatNearby;
     std::string chat_whisper_to;
+    std::string chat_completion_hint;
     std::string chat_draft;
     std::vector<ChatLine> chat_lines;
+    uint8_t chat_scroll_to_end = 0;
     std::unordered_map<std::string, SpeechBubble> speech_bubbles;
+    ScreenAnnounce screen_announce;
+    LootToast loot_toast;
     uint8_t chat_menu_open = 0;
     std::string chat_menu_name;
     float chat_menu_x = 0;
@@ -129,10 +136,8 @@ namespace Game {
     std::array<PetalID::T, 2 * MAX_SLOT_COUNT> guest_petals = {PetalID::kNone};
     std::array<uint32_t, PetalID::kNumPetals> guest_craft_bank = {};
     uint32_t guest_coins = 0;
-    uint8_t guest_talent_hp = 0;
-    uint8_t guest_talent_rot = 0;
-    uint8_t talent_hp = 0;
-    uint8_t talent_rot = 0;
+    std::array<uint8_t, TalentID::kNum> guest_talent_ranks = {};
+    std::array<uint8_t, TalentID::kNum> talent_ranks = {};
     uint8_t talent_pending = 0;
     uint8_t talent_pending_id = 0;
     uint8_t talent_pending_rank = 0;
@@ -197,6 +202,15 @@ static std::string make_guest_id() {
     return id;
 }
 
+void Game::persist_camera_zoom() {
+    StorageProtocol::Encoder writer(&StorageProtocol::buffer[0]);
+    uint16_t z = (uint16_t) (camera_zoom * 100.f + 0.5f);
+    if (z < 55) z = 55;
+    if (z > 220) z = 220;
+    writer.write<uint16_t>(z);
+    StorageProtocol::store("cam_zoom", (uint32_t) (writer.at - writer.base));
+}
+
 void Game::ensure_guest_id() {
     if (!guest_id_valid(guest_id))
         guest_id = make_guest_id();
@@ -257,6 +271,12 @@ void Game::init() {
         Ui::make_boss_health_bar()
     );
     game_ui_window.add_child(
+        Ui::make_server_announce_banner()
+    );
+    game_ui_window.add_child(
+        Ui::make_loot_toast()
+    );
+    game_ui_window.add_child(
         Ui::make_minimap()
     );
     game_ui_window.add_child(
@@ -275,9 +295,8 @@ void Game::init() {
         Ui::make_mobile_swap_button()
     );
     for (uint8_t i = 0; i < MAX_SLOT_COUNT * 2; ++i) game_ui_window.add_child(new Ui::UiLoadoutPetal(i));
-    game_ui_window.add_child(
-        Ui::make_overlevel_indicator()
-    );
+    game_ui_window.add_child(Ui::make_bag_drag_ghost());
+    game_ui_window.add_child(Ui::make_craft_fx_layer());
     game_ui_window.add_child(
         Ui::make_stat_screen()
     );
@@ -293,6 +312,9 @@ void Game::init() {
     );
     game_ui_window.add_child(
         Ui::make_mob_gallery()
+    );
+    game_ui_window.add_child(
+        Ui::make_petal_gallery()
     );
     game_ui_window.add_child(
         Ui::make_pause_menu()
@@ -329,6 +351,9 @@ void Game::init() {
     );
     game_ui_window.add_child(
         Ui::make_special_craft_panel()
+    );
+    game_ui_window.add_child(
+        Ui::make_shop_panel()
     );
     game_ui_window.add_child(
         Ui::make_boost_panel()
@@ -375,10 +400,13 @@ void Game::reset() {
     leave_confirm_open = 0;
     game_panel = 0;
     chat_open = 0;
+    chat_scroll_to_end = 0;
     chat_channel = ChatChannel::kChatNearby;
     chat_whisper_to.clear();
     chat_draft.clear();
     chat_lines.clear();
+    screen_announce = {};
+    loot_toast = {};
     chat_menu_open = 0;
     chat_menu_name.clear();
     party_status.clear();
@@ -400,14 +428,19 @@ void Game::reset() {
     account_logged_in = 0;
     daily_bonus_seconds = 0;
     offline_bonus_seconds = 0;
-    bonus_enabled = 1;
+    bonus_enabled = 0;
     bonus_synced_at = 0;
     pending_auto_login = 0;
     spawn_after_auth = 0;
-    account_status.clear();
-    auth_panel = 0;
+    // Keep kick notice across reconnect so it shows where wrong-password does.
+    if (pending_kick_notice) {
+        account_status = I18n::tr(I18n::kAuthAlreadyIn);
+        auth_panel = 1;
+    } else {
+        account_status.clear();
+        auth_panel = 0;
+    }
     score = 0;
-    overlevel_timer = 0;
     slot_indicator_opacity = 0;
     transition_circle = 0;
     respawn_level = guest_save_valid ? guest_level : 1;
@@ -418,12 +451,13 @@ void Game::reset() {
     if (guest_save_valid) {
         craft_bank = guest_craft_bank;
         coins = guest_coins;
-        talent_hp = guest_talent_hp;
-        talent_rot = guest_talent_rot;
+        for (uint8_t i = 0; i < TalentID::kNum; ++i)
+            talent_ranks[i] = guest_talent_ranks[i];
     } else {
         craft_bank = {};
         coins = 0;
-        talent_hp = talent_rot = 0;
+        for (uint8_t i = 0; i < TalentID::kNum; ++i)
+            talent_ranks[i] = 0;
     }
     talent_pending = 0;
     talent_status.clear();
@@ -451,35 +485,41 @@ void Game::send_guest_progress() {
     for (uint32_t i = 0; i < PetalID::kNumPetals; ++i)
         writer.write<uint32_t>(guest_craft_bank[i]);
     writer.write<uint32_t>(guest_coins);
-    writer.write<uint8_t>(guest_talent_hp);
-    writer.write<uint8_t>(guest_talent_rot);
+    for (uint8_t i = 0; i < TalentID::kNum; ++i)
+        writer.write<uint8_t>(guest_talent_ranks[i]);
     socket.send(writer.packet, writer.at - writer.packet);
+}
+
+void Game::seed_guest_from_session() {
+    guest_craft_bank = craft_bank;
+    guest_coins = coins;
+    for (uint8_t i = 0; i < TalentID::kNum; ++i)
+        guest_talent_ranks[i] = talent_ranks[i];
+    uint32_t lv = respawn_level < 1 ? 1 : respawn_level;
+    if (alive()) {
+        uint32_t from_score = score_to_level(score);
+        if (from_score < 1) from_score = 1;
+        if (from_score > lv) lv = from_score;
+        for (uint32_t i = 0; i < 2 * MAX_SLOT_COUNT; ++i)
+            guest_petals[i] = cached_loadout[i];
+    } else if (simulation.ent_exists(camera_id)) {
+        // Dead / title: camera inventory preserves slot layout (primary + backpack).
+        Entity const &camera = simulation.get_ent(camera_id);
+        uint32_t cam_lv = camera.get_respawn_level();
+        if (cam_lv < 1) cam_lv = 1;
+        if (cam_lv > lv) lv = cam_lv;
+        for (uint32_t i = 0; i < 2 * MAX_SLOT_COUNT; ++i)
+            guest_petals[i] = camera.get_inventory(i);
+    }
+    // High-water mark — never let a snapshot drop stored guest level.
+    if (lv > guest_level || !guest_save_valid) guest_level = lv;
+    if (guest_level < 1) guest_level = 1;
+    guest_save_valid = 1;
 }
 
 void Game::sync_guest_progress() {
     if (account_logged_in) return;
-    guest_craft_bank = craft_bank;
-    guest_coins = coins;
-    guest_talent_hp = talent_hp;
-    guest_talent_rot = talent_rot;
-    if (alive()) {
-        uint32_t lv = score_to_level(score);
-        if (lv < 1) lv = 1;
-        // High-water mark — never let a mid-life sync drop stored guest level.
-        if (lv > guest_level || !guest_save_valid) guest_level = lv;
-        for (uint32_t i = 0; i < 2 * MAX_SLOT_COUNT; ++i)
-            guest_petals[i] = cached_loadout[i];
-        guest_save_valid = 1;
-    } else if (simulation.ent_exists(camera_id)) {
-        // Dead: camera inventory preserves slot layout (primary + backpack).
-        Entity const &camera = simulation.get_ent(camera_id);
-        uint32_t lv = camera.get_respawn_level();
-        if (lv < 1) lv = 1;
-        if (lv > guest_level || !guest_save_valid) guest_level = lv;
-        for (uint32_t i = 0; i < 2 * MAX_SLOT_COUNT; ++i)
-            guest_petals[i] = camera.get_inventory(i);
-        guest_save_valid = 1;
-    }
+    seed_guest_from_session();
 }
 
 void Game::close_game_panel() {
@@ -494,7 +534,8 @@ void Game::toggle_game_panel(uint8_t panel) {
     // Death screen: bag / talents / craft / recipes / presets stay usable
     uint8_t const death_panel = panel == kPanelInventory
         || panel == kPanelPresets || panel == kPanelTalents
-        || panel == kPanelCraft || panel == kPanelSpecial;
+        || panel == kPanelCraft || panel == kPanelSpecial
+        || panel == kPanelShop;
     if ((!alive() && !(on_game_screen && death_panel))
         || leave_confirm_open) return;
     if (chat_open) close_chat();
@@ -514,9 +555,16 @@ void Game::open_chat() {
     if (!alive() || pause_menu_open || leave_confirm_open) return;
     close_game_panel();
     chat_open = 1;
-    // Keep mouse aim / attack; drop held letter keys so they don't leak into binds
+    chat_scroll_to_end = 1;
+    // Drop held letter keys so they don't leak into binds / chat draft.
+    // Mobile: also stop the flower while the soft keyboard is up.
     Input::keys_held.clear();
     Input::keys_held_this_tick.clear();
+    if (Input::mobile_controls()) {
+        Input::game_inputs.x = 0;
+        Input::game_inputs.y = 0;
+        Input::game_inputs.flags = 0;
+    }
     if (Ui::TextInput *input = Ui::chat_text_input())
         input->focus();
 }
@@ -524,35 +572,186 @@ void Game::open_chat() {
 void Game::close_chat() {
     if (!chat_open) return;
     chat_open = 0;
-    chat_draft.clear();
+    chat_completion_hint.clear();
     close_chat_menu();
-    if (Ui::TextInput *input = Ui::chat_text_input())
+    // Clear DOM before blur — blur() syncs from the overlay and would otherwise
+    // put the just-sent message back into chat_draft.
+    if (Ui::TextInput *input = Ui::chat_text_input()) {
+        input->clear();
         input->blur();
+    } else {
+        chat_draft.clear();
+    }
 }
 
-void Game::push_chat_line(uint8_t channel, std::string const &sender, std::string const &text) {
+void Game::push_chat_line(uint8_t channel, std::string const &sender, std::string const &text,
+                          std::string const &whisper_to) {
     if (text.empty() && sender.empty()) return;
-    chat_lines.push_back({ channel, sender, text, timestamp + 12000 });
+    chat_lines.push_back({ channel, sender, whisper_to, text, timestamp });
     while (chat_lines.size() > CHAT_HISTORY)
         chat_lines.erase(chat_lines.begin());
-    // Overhead bubble above speaker (~5s); skip system lines
+    if (chat_open) chat_scroll_to_end = 1;
+    // Overhead bubble above speaker (~8s); skip system lines
     if (!sender.empty() && !text.empty() && channel != ChatChannel::kChatSystem)
-        speech_bubbles[sender] = { text, timestamp + 5000 };
+        speech_bubbles[sender] = { text, timestamp + 8000 };
+    // Admin account aqa → soft top banner for every in-game client (like boss HP).
+    if (channel == ChatChannel::kChatServer && sender == "aqa" && !text.empty()) {
+        screen_announce.sender = sender;
+        screen_announce.text = text;
+        screen_announce.expires_at = timestamp + SCREEN_ANNOUNCE_MS;
+    }
 }
 
 void Game::cycle_chat_channel() {
     if (!chat_open) return;
+    // Nearby → Party → Guild → Server → Whisper(if set) → Nearby
     if (chat_channel == ChatChannel::kChatNearby)
         chat_channel = ChatChannel::kChatParty;
     else if (chat_channel == ChatChannel::kChatParty)
         chat_channel = ChatChannel::kChatGuild;
-    else if (chat_channel == ChatChannel::kChatGuild) {
+    else if (chat_channel == ChatChannel::kChatGuild)
+        chat_channel = ChatChannel::kChatServer;
+    else if (chat_channel == ChatChannel::kChatServer) {
         if (!chat_whisper_to.empty())
             chat_channel = ChatChannel::kChatWhisper;
         else
             chat_channel = ChatChannel::kChatNearby;
     } else
         chat_channel = ChatChannel::kChatNearby;
+}
+
+// Slash commands offered for Tab complete (short forms first).
+static char const *const kChatSlashCmds[] = {
+    "/w", "/whisper", "/密语", "/私聊",
+    "/r", "/reply", "/回复",
+    "/local", "/附近",
+    "/squad", "/party", "/组队聊",
+    "/guild", "/公会",
+    "/server", "/全服",
+    "/invite", "/组队",
+    "/leave", "/离队",
+    "/guild-create", "/创建公会",
+    "/guild-invite", "/公会邀请",
+    "/guild-leave", "/退会",
+    "/guild-motd", "/公告",
+    "/help", "/帮助",
+};
+
+static uint8_t chat_cmd_needs_name(std::string const &cmd) {
+    return cmd == "/w" || cmd == "/whisper" || cmd == "/密语" || cmd == "/私聊"
+        || cmd == "/invite" || cmd == "/组队"
+        || cmd == "/guild-invite" || cmd == "/公会邀请";
+}
+
+static void collect_chat_name_candidates(std::vector<std::string> &out) {
+    auto add = [&](std::string const &n) {
+        if (n.empty()) return;
+        for (auto const &x : out) if (x == n) return;
+        out.push_back(n);
+    };
+    if (!chat_whisper_to.empty()) add(chat_whisper_to);
+    for (auto const &m : party_members) add(m.name);
+    for (auto const &line : chat_lines) {
+        add(line.sender);
+        add(line.whisper_to);
+    }
+}
+
+static std::vector<std::string> chat_completion_matches(std::string const &draft) {
+    std::vector<std::string> matches;
+    if (draft.empty() || draft.front() != '/') return matches;
+    size_t sp = draft.find_first_of(" \t");
+    std::string head = sp == std::string::npos ? draft : draft.substr(0, sp);
+    std::string rest = sp == std::string::npos ? std::string{} : draft.substr(sp + 1);
+    while (!rest.empty() && (rest.front() == ' ' || rest.front() == '\t'))
+        rest.erase(rest.begin());
+
+    if (sp == std::string::npos) {
+        // Completing the command itself
+        for (char const *cmd : kChatSlashCmds) {
+            if (std::strncmp(cmd, head.c_str(), head.size()) == 0)
+                matches.push_back(cmd);
+        }
+        return matches;
+    }
+
+    // Completing a player name after /w|/invite|…
+    if (!chat_cmd_needs_name(head)) return matches;
+    size_t sp2 = rest.find_first_of(" \t");
+    if (sp2 != std::string::npos) return matches; // already past the name
+    std::string prefix = rest;
+    std::vector<std::string> names;
+    collect_chat_name_candidates(names);
+    for (auto const &n : names) {
+        if (prefix.empty() || n.compare(0, prefix.size(), prefix) == 0)
+            matches.push_back(head + " " + n);
+    }
+    return matches;
+}
+
+static uint32_t g_chat_tab_cycle = 0;
+
+uint8_t Game::try_chat_tab_complete() {
+    if (!chat_open) return 0;
+    if (Ui::TextInput *input = Ui::chat_text_input())
+        input->sync_from_dom();
+    std::vector<std::string> matches = chat_completion_matches(chat_draft);
+    if (matches.empty()) return 0;
+    uint32_t idx = g_chat_tab_cycle % (uint32_t) matches.size();
+    ++g_chat_tab_cycle;
+    std::string filled = matches[idx];
+    uint8_t has_name = filled.find(' ') != std::string::npos;
+    uint8_t bare_no_args = filled == "/help" || filled == "/帮助"
+        || filled == "/leave" || filled == "/离队"
+        || filled == "/guild-leave" || filled == "/退会";
+    // Trailing space: ready to type args / message (except bare no-arg cmds)
+    if (!bare_no_args && (filled.empty() || filled.back() != ' '))
+        filled.push_back(' ');
+    (void) has_name;
+    chat_draft = filled;
+    if (Ui::TextInput *input = Ui::chat_text_input())
+        input->set_text(chat_draft);
+    refresh_chat_completion_hint();
+    return 1;
+}
+
+void Game::refresh_chat_completion_hint() {
+    chat_completion_hint.clear();
+    if (!chat_open) return;
+    if (Ui::TextInput *input = Ui::chat_text_input())
+        input->sync_from_dom();
+    static std::string last_draft_for_cycle;
+    if (chat_draft != last_draft_for_cycle) {
+        // User typed — reset cycle so Tab starts from the first match again
+        if (chat_draft.size() < last_draft_for_cycle.size()
+            || last_draft_for_cycle.empty()
+            || chat_draft.compare(0, last_draft_for_cycle.size(), last_draft_for_cycle) != 0)
+            g_chat_tab_cycle = 0;
+        last_draft_for_cycle = chat_draft;
+    }
+    std::vector<std::string> matches = chat_completion_matches(chat_draft);
+    if (matches.empty()) return;
+    std::string best = matches[g_chat_tab_cycle % matches.size()];
+    for (auto const &m : matches) {
+        if (m.size() > chat_draft.size()
+            && m.compare(0, chat_draft.size(), chat_draft) == 0) {
+            best = m;
+            break;
+        }
+    }
+    if (best.size() <= chat_draft.size()) {
+        if (matches.size() > 1) {
+            chat_completion_hint = I18n::use_chinese
+                ? std::format("Tab 切换（{}/{}）· {}",
+                    (g_chat_tab_cycle % matches.size()) + 1, matches.size(), best)
+                : std::format("Tab cycle ({}/{}) · {}",
+                    (g_chat_tab_cycle % matches.size()) + 1, matches.size(), best);
+        }
+        return;
+    }
+    chat_completion_hint = I18n::use_chinese
+        ? std::format("Tab → {}", best)
+        : std::format("Tab → {}", best);
 }
 
 void Game::open_chat_menu(std::string const &name, float x, float y) {
@@ -698,8 +897,11 @@ void Game::return_to_title() {
     on_game_screen = 0;
     awaiting_party_revive = 0;
     revive_progress = 0;
-    camera_zoom = 1.28f;
+    // Keep camera_zoom — recalled from cam_zoom localStorage across sessions
     speech_bubbles.clear();
+    // Drop bonus is match-scoped — always off on the title screen.
+    if (bonus_enabled)
+        set_bonus_enabled(0);
     // Keep WebSocket — soft-despawn flower only (was close 1000 "leave")
     if (socket.ready) {
         Writer writer(static_cast<uint8_t *>(OUTGOING_PACKET));
@@ -781,15 +983,12 @@ void Game::tick(double time) {
             if (slot != nullptr && slot->no_change_ticks > 0) {
                 if (server_id == cached_loadout[i]) {
                     slot->no_change_ticks = 0;
-                } else if (cached_loadout[i] == PetalID::kNone
-                    && server_id != PetalID::kNone) {
-                    // Pickup / server grant into an empty slot — never hide behind
-                    // an optimistic swap lock or the bag looks empty.
-                    cached_loadout[i] = server_id;
-                    slot->no_change_ticks = 0;
                 } else if (--slot->no_change_ticks == 0) {
                     cached_loadout[i] = server_id;
                 }
+                // Do NOT treat "cached empty, server still has petal" as a pickup.
+                // Optimistic move-to-empty clears the source slot first; restoring
+                // here made drag/click into empty primary/secondary no-ops.
             } else {
                 cached_loadout[i] = server_id;
             }
@@ -797,10 +996,8 @@ void Game::tick(double time) {
                 Game::seen_petals[cached_loadout[i]] = 1;
         }
         score = player.get_score();
-        overlevel_timer = player.get_overlevel_timer();
     } else {
         player_id = NULL_ENTITY;
-        overlevel_timer = 0;
         pause_menu_open = 0;
         leave_confirm_open = 0;
         // Dead / title: clear movement so mobile joystick / attack can't leak
@@ -811,7 +1008,7 @@ void Game::tick(double time) {
         // Sync camera inventory so death/title bag + loadout edit stay accurate
         if (simulation.ent_exists(camera_id)) {
             Entity const &camera = simulation.get_ent(camera_id);
-            Game::loadout_count = (uint8_t) loadout_slots_at_level(camera.get_respawn_level());
+            Game::loadout_count = Talent::slot_count_from_ranks(Game::talent_ranks);
             for (uint32_t i = 0; i < MAX_SLOT_COUNT + Game::loadout_count
                 && i < 2 * MAX_SLOT_COUNT; ++i) {
                 PetalID::T server_id = camera.get_inventory(i);
@@ -819,10 +1016,6 @@ void Game::tick(double time) {
                 // Dead UI does not run LoadoutPetal should_render — tick down here
                 if (slot != nullptr && slot->no_change_ticks > 0) {
                     if (server_id == cached_loadout[i]) {
-                        slot->no_change_ticks = 0;
-                    } else if (cached_loadout[i] == PetalID::kNone
-                        && server_id != PetalID::kNone) {
-                        cached_loadout[i] = server_id;
                         slot->no_change_ticks = 0;
                     } else if (--slot->no_change_ticks == 0) {
                         cached_loadout[i] = server_id;
@@ -841,8 +1034,7 @@ void Game::tick(double time) {
         if (chat_open) close_chat();
     }
 
-    while (!chat_lines.empty() && chat_lines.front().expires_at <= timestamp)
-        chat_lines.erase(chat_lines.begin());
+    // chat_lines kept for focused history; collapsed UI fades via created_at
     for (auto it = speech_bubbles.begin(); it != speech_bubbles.end(); ) {
         if (it->second.expires_at <= timestamp)
             it = speech_bubbles.erase(it);
@@ -941,7 +1133,8 @@ void Game::tick(double time) {
                     if (Game::cached_loadout[i] == PetalID::kNone
                         && Game::cached_loadout[sec] == PetalID::kNone)
                         continue;
-                    Ui::ui_swap_petals(i, sec);
+                    // Same cross-fly as click / R-swap-all
+                    Ui::ui_swap_paired_slots(i, sec);
                     break;
                 }
             }
@@ -978,9 +1171,16 @@ void Game::tick(double time) {
     other_ui_window.render(renderer);
 
     //no rendering past this point
-    // Touch HUD owns movement/flags when Request Mobile is on
-    if (!Input::mobile_controls()) {
-        if (Input::keyboard_movement) {
+    // Touch HUD owns movement/flags when Request Mobile is on.
+    // Chat open: desktop keeps mouse-aim move (WASD can't reach the game while
+    // the HTML input is focused); mobile stands still.
+    if (chat_open && Input::mobile_controls()) {
+        Input::game_inputs.x = 0;
+        Input::game_inputs.y = 0;
+        Input::game_inputs.flags = 0;
+    } else if (!Input::mobile_controls()) {
+        // While typing, prefer mouse aim so keyboard-mode players can still move
+        if (Input::keyboard_movement && !chat_open) {
             Input::game_inputs.x = 300 * (Input::keys_held.contains('D') - Input::keys_held.contains('A') + Input::keys_held.contains(39) - Input::keys_held.contains(37));
             Input::game_inputs.y = 300 * (Input::keys_held.contains('S') - Input::keys_held.contains('W') + Input::keys_held.contains(40) - Input::keys_held.contains(38));
         } else {
@@ -1016,14 +1216,17 @@ void Game::tick(double time) {
         show_debug = !show_debug;
     if (Input::keys_held_this_tick.contains('M') && alive() && !chat_open && !leave_confirm_open)
         minimap_expanded = !minimap_expanded;
-    if (Input::keys_held_this_tick.contains(9) && chat_open)
-        cycle_chat_channel();
+    if (chat_open) refresh_chat_completion_hint();
+    if (Input::keys_held_this_tick.contains(9) && chat_open) {
+        // Slash draft → Tab completes; otherwise cycle channel (旧行为)
+        if (!try_chat_tab_complete())
+            cycle_chat_channel();
+    }
     // After UI render so slot screen positions are current. One shot per gesture.
     Ui::finish_bag_gesture();
     if (chat_menu_open && BitMath::at(Input::mouse_buttons_released, Input::LeftMouse))
         close_chat_menu();
-    // Chat stays open while aiming/attacking with the mouse; Esc closes (not click-outside)
-    // Click outside any open popup / drawer → close it
+    // Click outside chat / popups / drawers → close them (Esc still works)
     Ui::try_close_popups_outside_click();
     if (Input::keys_held_this_tick.contains(27) && Game::alive()) {
         if (chat_menu_open) close_chat_menu();
@@ -1032,10 +1235,10 @@ void Game::tick(double time) {
         else if (game_panel != kPanelNone) close_game_panel();
         else toggle_pause();
     }
-    // B opens bag on death screen too (camera inventory edit before respawn)
+    // X opens bag on death screen too (camera inventory edit before respawn)
     if (!chat_open && !leave_confirm_open
         && (Game::alive() || Game::on_game_screen)) {
-        if (Input::keys_held_this_tick.contains('B'))
+        if (Input::keys_held_this_tick.contains('X'))
             toggle_game_panel(kPanelInventory);
         if (Game::alive()) {
             if (Input::keys_held_this_tick.contains('Z'))
@@ -1060,47 +1263,113 @@ void Game::tick(double time) {
         }
     }
 
+    // Unequipping Antenna/Observer: restore default zoom (don't keep FOV-adjusted zoom).
+    if (alive() && simulation.ent_exists(camera_id)) {
+        static float prev_cam_fov = BASE_FOV;
+        float cur_fov = simulation.get_ent(camera_id).get_fov();
+        if (prev_cam_fov < BASE_FOV * 0.92f && cur_fov >= BASE_FOV * 0.92f)
+            camera_zoom = 1.28f;
+        prev_cam_fov = cur_fov;
+    }
+
     // Wheel zoom — disabled while a game panel (bag/craft/…) is open so scroll owns the wheel
     if (alive() && !chat_open && game_panel == kPanelNone && Input::wheel_delta != 0) {
         float factor = 1.f - Input::wheel_delta * 0.0012f;
-        camera_zoom = fclamp(camera_zoom * factor, 0.55f, 2.2f);
+        float next = fclamp(camera_zoom * factor, 0.55f, 2.2f);
+        if (next != camera_zoom) {
+            camera_zoom = next;
+            persist_camera_zoom();
+        }
         Input::wheel_delta = 0;
     }
 
-    // Mobile pinch-to-zoom (two fingers). Same clamp as wheel zoom.
+    // Mobile pinch-to-zoom (anchor-based, like Maps / florr_clone feel):
+    // zoom = startZoom * (dist / startDist). Skip joystick / A / B / R / loadout
+    // fingers. Sequential two-finger placement works (not same-frame only).
     {
-        static float pinch_prev = 0.f;
+        static float pinch_start_dist = 0.f;
+        static float pinch_start_zoom = 1.f;
         static uint8_t pinch_on = 0;
-        uint8_t can_pinch = alive() && !chat_open && game_panel == kPanelNone
-            && Input::mobile_controls() && Input::touches.size() >= 2;
-        if (can_pinch) {
-            auto it = Input::touches.begin();
-            Input::Touch const &a = it->second;
-            ++it;
-            Input::Touch const &b = it->second;
-            float dx = a.x - b.x;
-            float dy = a.y - b.y;
-            float dist = std::sqrt(dx * dx + dy * dy);
-            if (pinch_on && pinch_prev > 8.f && dist > 8.f) {
-                float factor = dist / pinch_prev;
-                // Soften one-frame spikes from finger jitter
-                if (factor < 0.85f) factor = 0.85f;
-                if (factor > 1.18f) factor = 1.18f;
-                camera_zoom = fclamp(camera_zoom * factor, 0.55f, 2.2f);
-            }
-            pinch_prev = dist;
-            pinch_on = 1;
-            // Mark both fingers so joystick / A-B stop fighting the pinch
-            Input::touches[a.id].saturated = 1;
-            Input::touches[b.id].saturated = 1;
-        } else {
+        static uint8_t pinch_armed = 0;
+        static uint32_t pinch_id_a = (uint32_t) -1;
+        static uint32_t pinch_id_b = (uint32_t) -1;
+        auto end_pinch = [&](uint8_t save) {
+            if (save && pinch_on) persist_camera_zoom();
             pinch_on = 0;
-            pinch_prev = 0.f;
+            pinch_armed = 0;
+            pinch_start_dist = 0.f;
+            pinch_id_a = (uint32_t) -1;
+            pinch_id_b = (uint32_t) -1;
+        };
+        uint8_t can_try = alive() && !chat_open && game_panel == kPanelNone
+            && Input::mobile_controls();
+        if (!can_try) {
+            end_pinch(1);
+        } else {
+            Input::Touch const *cands[8] = {};
+            uint32_t cand_n = 0;
+            for (auto const &[id, t] : Input::touches) {
+                if (Ui::mobile_touch_is_control(id)) continue;
+                if (Ui::loadout_bar_hit(t.x, t.y)) continue;
+                if (cand_n < 8) cands[cand_n++] = &t;
+            }
+            Input::Touch const *a = nullptr;
+            Input::Touch const *b = nullptr;
+            if (pinch_on) {
+                auto ia = Input::touches.find(pinch_id_a);
+                auto ib = Input::touches.find(pinch_id_b);
+                if (ia != Input::touches.end() && ib != Input::touches.end()
+                    && !Ui::mobile_touch_is_control(pinch_id_a)
+                    && !Ui::mobile_touch_is_control(pinch_id_b)) {
+                    a = &ia->second;
+                    b = &ib->second;
+                } else {
+                    end_pinch(1);
+                }
+            }
+            if (a == nullptr && cand_n >= 2) {
+                a = cands[0];
+                b = cands[1];
+                float dx = a->x - b->x;
+                float dy = a->y - b->y;
+                float dist = std::sqrt(dx * dx + dy * dy);
+                // Need a real span (~40 CSS px at dpr≤2) before arming a pinch.
+                if (dist >= 48.f) {
+                    pinch_id_a = a->id;
+                    pinch_id_b = b->id;
+                    pinch_start_dist = dist;
+                    pinch_start_zoom = camera_zoom;
+                    pinch_on = 1;
+                    pinch_armed = 0;
+                } else {
+                    a = nullptr;
+                    b = nullptr;
+                }
+            }
+            if (a != nullptr && b != nullptr && pinch_on) {
+                float dx = a->x - b->x;
+                float dy = a->y - b->y;
+                float dist = std::sqrt(dx * dx + dy * dy);
+                if (pinch_start_dist > 24.f && dist > 24.f) {
+                    float ratio = dist / pinch_start_dist;
+                    // Ignore finger-settle jitter until the span changes ~4%.
+                    if (!pinch_armed && std::fabs(ratio - 1.f) > 0.04f)
+                        pinch_armed = 1;
+                    if (pinch_armed)
+                        camera_zoom = fclamp(pinch_start_zoom * ratio, 0.55f, 2.2f);
+                }
+                Input::touches[a->id].saturated = 1;
+                Input::touches[b->id].saturated = 1;
+            } else if (pinch_on) {
+                end_pinch(1);
+            }
         }
     }
 
-    // Spawn watchdog — keep retrying until alive. Name conflicts / brief
-    // server stalls used to stop after 20 tries and strand the death screen.
+    // Spawn watchdog — only while intentionally waiting to enter (title /
+    // death Continue). Never keep firing kClientSpawn mid-fight: a desync
+    // where the client thinks it is dead but the server flower is alive used
+    // to force a respawn into all-Basic and wipe the account loadout.
     if (spawn_request_at > 0) {
         if (alive()) {
             spawn_request_at = 0;
@@ -1108,6 +1377,10 @@ void Game::tick(double time) {
             if (account_status.find("重试") != std::string::npos
                 || account_status.find("Retrying") != std::string::npos)
                 account_status.clear();
+        } else if (leaving_to_title) {
+            // Soft-leave in progress — do not keep requesting spawn.
+            spawn_request_at = 0;
+            spawn_retries = 0;
         } else {
             // Back off: 1.2s → 2.5s → 4s (cap) so we don't flood the server
             double wait_ms = 1200.0 + (double) std::min<uint8_t>(spawn_retries, 8) * 350.0;

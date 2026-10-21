@@ -66,3 +66,5 @@ public:
 std::string format_pct(float);
 std::string format_score(float);
 std::string format_number(float);
+// Stack badge: x12 / x1.2k / x1.5m
+std::string format_stack(uint32_t);

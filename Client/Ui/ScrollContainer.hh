@@ -22,5 +22,9 @@ namespace Ui {
         virtual void on_render(Renderer &) override;
         virtual void poll_events(ScreenEvent const &) override;
         virtual void refactor() override;
+    private:
+        float touch_press_x = 0;
+        float touch_press_y = 0;
+        uint8_t scroll_dragging = 0;
     };
 }

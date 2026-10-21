@@ -1,11 +1,40 @@
 #include <Shared/Simulation.hh>
 
 #include <Client/Game.hh>
+#include <Client/Particle.hh>
 
 #include <Client/Ui/Extern.hh>
 
+#include <Shared/RarityScale.hh>
+#include <Shared/StaticData.hh>
+
 #include <cmath>
 #include <iostream>
+
+namespace {
+float estimate_max_hp(Entity const &ent) {
+    if (ent.has_component(kMob)) {
+        MobID::T mid = ent.get_mob_id();
+        if (mid >= MobID::kNumMobs) return 100.f;
+        float base = MOB_DATA[mid].health.get_single(0.5f);
+        uint8_t br = MOB_DATA[mid].rarity;
+        uint8_t sr = ent.get_rarity();
+        if (sr >= RarityID::kNumRarities) sr = br;
+        float hp = base * mob_spawn_threat_mult(br, sr);
+        if (hp < 1.f) hp = 1.f;
+        return hp;
+    }
+    if (ent.has_component(kFlower)) {
+        uint32_t lv = 1;
+        if (ent.has_component(kScore))
+            lv = score_to_level(ent.get_score());
+        float hp = hp_at_level(lv);
+        if (hp < 1.f) hp = 1.f;
+        return hp;
+    }
+    return 100.f;
+}
+} // namespace
 
 void Entity::tick_lerp(float amt) {
     if (has_component(kPhysics)) {
@@ -35,10 +64,38 @@ void Entity::tick_lerp(float amt) {
         Game::respawn_level = respawn_level;
     }
     if (has_component(kHealth)) {
+        float const target = health_ratio.anchor();
+        if (!health_ratio_seen) {
+            prev_health_ratio = target;
+            health_ratio_seen = 1;
+        } else {
+            float const delta = target - prev_health_ratio;
+            // Mob damage pops (petal / contact / poison — any HP drop with damaged flag).
+            if (damaged && delta < -0.0004f
+                && has_component(kMob) && !has_component(kPetal)
+                && !pending_delete) {
+                float amt = -delta * estimate_max_hp(*this);
+                Particle::add_damage_number(
+                    id, (float) get_x(), (float) get_y() - (float) get_radius() * 0.6f, amt);
+            }
+            // Local player heal pops (pink).
+            if (delta > 0.0004f
+                && has_component(kFlower) && !has_component(kMob)
+                && id == Game::player_id && !pending_delete) {
+                float amt = delta * estimate_max_hp(*this);
+                Particle::add_heal_number(
+                    (float) get_x(), (float) get_y() - (float) get_radius() * 0.85f, amt);
+            }
+            if (std::fabs(delta) > 1e-6f)
+                prev_health_ratio = target;
+        }
+        if (pending_delete)
+            Particle::clear_combat_accum(id);
+
         health_ratio.step(amt);
         if (damaged == 1 && damage_flash < 0.1 && !pending_delete)
             damage_flash = 1;
-        else //damage_flash = fclamp(damage_flash - Ui::dt / 150, 0, 1);
+        else
             damage_flash = lerp(damage_flash, 0, amt);
         if (damaged)
             last_damaged_time = Game::timestamp;

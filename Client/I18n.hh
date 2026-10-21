@@ -63,9 +63,6 @@ namespace I18n {
         kExtraReload,
         kMoveSpeed,
         kMinimap,
-        kMoveRight,
-        kOverleveled,
-        kUnableAttack,
         kDelete, // legacy key; UI shows Drop (地上)
         kLvlFlower,
         kExtraSlotAt,
@@ -113,6 +110,7 @@ namespace I18n {
         kChatInviteParty,
         kChatInviteGuild,
         kChatWhisper,
+        kChatServer,
         kInviteAccept,
         kInviteReject,
         kInvitePartyTitle,

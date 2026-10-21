@@ -1,4 +1,5 @@
 #include <Client/Ui/InGame/GameInfo.hh>
+#include <Client/Ui/InGame/HudIcons.hh>
 
 #include <Client/Ui/Button.hh>
 #include <Client/Ui/Chrome.hh>
@@ -25,32 +26,6 @@
 #endif
 
 using namespace Ui;
-
-// IconPark "every-user" spirit — two people (heads + torso arcs)
-static void iconpark_guild(Renderer &ctx) {
-    float s = 40.f / 48.f;
-    ctx.scale(s);
-    ctx.translate(-24.f, -24.f);
-    ctx.set_fill(0xffffffff);
-    ctx.set_stroke(0xffffffff);
-    ctx.set_line_width(3.2f);
-    ctx.round_line_cap();
-    ctx.round_line_join();
-    // left person
-    ctx.begin_path();
-    ctx.arc(15.f, 13.f, 5.5f);
-    ctx.fill();
-    ctx.begin_path();
-    ctx.partial_arc(15.f, 36.f, 11.f, (float) M_PI, 0.f, 0);
-    ctx.stroke();
-    // right person
-    ctx.begin_path();
-    ctx.arc(33.f, 14.f, 5.f);
-    ctx.fill();
-    ctx.begin_path();
-    ctx.partial_arc(33.f, 36.f, 10.f, (float) M_PI, 0.f, 0);
-    ctx.stroke();
-}
 
 Element *Ui::make_invite_toast() {
     // One card only (new invite replaces). Mobile: tappable but not huge —
@@ -145,8 +120,14 @@ public:
         }), index(i) {}
 
     void refactor() override {
-        width = Input::mobile_controls() ? 260.f : 300.f;
+        width = Input::mobile_controls() ? 320.f : 360.f;
         height = 30.f;
+        // Layout runs before render. If we keep a stale visible=0 (panel was
+        // closed / skipped), VContainer collapses and ScrollContainer clips at
+        // width 0 — rows never get Element::render, so they stay stuck blank.
+        uint8_t want = style.should_render ? style.should_render() : 1;
+        visible = want;
+        animation.set(want);
     }
 
     void on_render(Renderer &ctx) override {
@@ -209,6 +190,30 @@ public:
     }
 };
 
+class GuildMemberScroll final : public Ui::ScrollContainer {
+    float viewport_h;
+public:
+    GuildMemberScroll(Element *content, float h)
+        : Ui::ScrollContainer(content, h), viewport_h(h) {
+        always_capture_wheel = 1;
+        style.should_render = [](){ return !Game::guild_name.empty(); };
+        style.h_justify = Style::Left;
+        style.no_animation = 1;
+    }
+    void refactor() override {
+        if (style.should_render) {
+            uint8_t want = style.should_render();
+            visible = want;
+            animation.set(want);
+        }
+        Ui::ScrollContainer::refactor();
+        height = viewport_h;
+        // Never collapse to a zero-width clip while the panel is open.
+        float min_w = Input::mobile_controls() ? 320.f : 360.f;
+        if (visible && width < min_w) width = min_w;
+    }
+};
+
 static Element *make_guild_member_list() {
     std::vector<Element *> rows;
     for (uint8_t i = 0; i < kGuildMemberSlots; ++i)
@@ -219,19 +224,14 @@ static Element *make_guild_member_list() {
         .no_animation = 1
     });
     float h = Input::mobile_controls() ? 140.f : 180.f;
-    auto *scroll = new Ui::ScrollContainer(list, h);
-    scroll->always_capture_wheel = 1;
-    scroll->style.should_render = [](){ return !Game::guild_name.empty(); };
-    scroll->style.h_justify = Style::Left;
-    scroll->style.no_animation = 1;
-    return scroll;
+    return new GuildMemberScroll(list, h);
 }
 
 Element *Ui::make_guild_panel() {
     uint8_t const mobile = Input::mobile_controls();
-    float const panel_w = mobile ? 280.f : 320.f;
+    float const panel_w = mobile ? 340.f : 400.f;
 
-    Element *name_input = new Ui::TextInput(Game::guild_create_draft, mobile ? 150.f : 160.f, 32, 12, {
+    Element *name_input = new Ui::TextInput(Game::guild_create_draft, mobile ? 200.f : 220.f, 32, 12, {
         .line_width = 0,
         .round_radius = Chrome::kRadius,
         .should_render = [](){
@@ -239,7 +239,7 @@ Element *Ui::make_guild_panel() {
         }
     });
 
-    Element *anno_input = new Ui::TextInput(Game::guild_anno_draft, mobile ? 170.f : 200.f, 30, 80, {
+    Element *anno_input = new Ui::TextInput(Game::guild_anno_draft, mobile ? 220.f : 260.f, 30, 80, {
         .line_width = 0,
         .round_radius = Chrome::kRadius,
         .should_render = [](){
@@ -317,8 +317,10 @@ Element *Ui::make_guild_panel() {
         }),
 
         new Ui::DynamicText(12, [](){
-            return std::format("{} ({})", I18n::tr(I18n::kGuildMembers),
-                (unsigned) Game::guild_member_count);
+            // Prefer live vector size so the header matches rendered rows.
+            uint32_t n = (uint32_t) Game::guild_members.size();
+            if (n == 0) n = Game::guild_member_count;
+            return std::format("{} ({})", I18n::tr(I18n::kGuildMembers), n);
         }, {
             .fill = Chrome::kTitle,
             .should_render = [](){ return !Game::guild_name.empty(); },
@@ -392,10 +394,7 @@ Element *Ui::make_guild_panel() {
 
 Element *Ui::make_guild_top_button() {
     return new Ui::Button(40, 40,
-        new Ui::StaticIcon([](Element *elt, Renderer &ctx){
-            iconpark_guild(ctx);
-            (void) elt;
-        }, 26, 26),
+        make_hud_icon(hud_icon_guild, 26.f),
         [](Element *, uint8_t e){
             if (e == Ui::kClick) {
                 Game::pause_menu_open = 0;

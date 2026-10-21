@@ -72,6 +72,8 @@ namespace Ui {
     void backward_secondary_select();
     void ui_delete_petal(uint8_t); // drop on ground (wire: kPetalDelete)
     void ui_swap_petals(uint8_t, uint8_t);
+    // Primary ↔ paired secondary with cross-fly animation
+    void ui_swap_paired_slots(uint8_t from_pos, uint8_t to_pos);
     // Bag click: empty/Basic primary L→R, then empty secondary; 0 if full
     uint8_t ui_auto_equip_from_bag(uint8_t bag_pos, float screen_x, float screen_y);
     // Click primary↔paired secondary (equip out / retract)
@@ -89,10 +91,19 @@ namespace Ui {
     uint8_t loadout_dynamic_to_static(uint8_t dynamic_pos);
     void begin_petal_drag(uint8_t static_pos, uint32_t touch_id);
     // Inventory cell press. finish_bag_gesture resolves tap, hold, and drop.
-    void begin_bag_gesture(uint8_t static_pos, float x, float y, uint32_t touch_id);
+    // static_pos 0xFF + bank_id → stack-only (no slot copy) drag/tap.
+    void begin_bag_gesture(uint8_t static_pos, float x, float y, uint32_t touch_id,
+                           PetalID::T bank_id = PetalID::kNone);
     void finish_bag_gesture();
+    // Petal drawn under the cursor while dragging a bank stack, else kNone.
+    PetalID::T bag_gesture_ghost_petal();
+    // Floating cursor ghost for bank-stack bag drags.
+    Element *make_bag_drag_ghost();
     // True while a bag tap/drag is in progress (blocks scroll + outside-close)
     uint8_t bag_gesture_busy();
+    // True only after a petal/bag press has moved past slop (real drag).
+    // Soft presses still allow ScrollContainer to take over for scrolling.
+    uint8_t petal_drag_committed();
     // True if (x,y) hits the bottom loadout bar (primary/secondary/trash)
     uint8_t loadout_bar_hit(float x, float y);
     // True while a loadout petal is held over the open inventory panel

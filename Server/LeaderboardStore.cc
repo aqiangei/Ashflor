@@ -197,7 +197,6 @@ uint64_t LeaderboardStore::stat_value(LeaderboardEntry const &entry, uint8_t cat
         case kLbMessages: return entry.messages;
         case kLbKills: return entry.kills;
         case kLbCrafts: return entry.crafts;
-        case kLbScore: return entry.score;
         default: return 0;
     }
 }
@@ -220,12 +219,11 @@ void LeaderboardStore::add_stat(std::string const &name, uint8_t category, uint3
         case kLbMessages: before = e.messages; break;
         case kLbKills: before = e.kills; break;
         case kLbCrafts: before = e.crafts; break;
-        case kLbScore: before = e.score; break;
         default: return;
     }
     uint32_t after = before;
-    if (category == kLbLevel || category == kLbScore)
-        after = amount > before ? amount : before; // level and best score only go up
+    if (category == kLbLevel)
+        after = amount > before ? amount : before; // level only goes up
     else
         after = before + amount; // counters accumulate across sessions
     if (after == before) return;
@@ -235,7 +233,6 @@ void LeaderboardStore::add_stat(std::string const &name, uint8_t category, uint3
         case kLbMessages: e.messages = after; break;
         case kLbKills: e.kills = after; break;
         case kLbCrafts: e.crafts = after; break;
-        case kLbScore: e.score = after; break;
         default: break;
     }
     DIRTY = 1;

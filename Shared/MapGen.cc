@@ -1,11 +1,14 @@
 #include <Shared/MapGen.hh>
 #include <Shared/Map.hh>
+#include <Shared/RarityScale.hh>
 #include <Helpers/Math.hh>
 
+#include <algorithm>
 #include <cmath>
 #include <cstdint>
 #include <initializer_list>
 #include <iostream>
+#include <vector>
 
 #ifndef M_PI
 #define M_PI 3.14159265358979323846
@@ -80,6 +83,13 @@ void corridor_h(MapTerrain &t, ThemePalette const &p, uint8_t s,
     auto box = water ? water_box : hill_box;
     box(t, p, s, x0, y_mid - half - wall_t, x1, y_mid - half);
     box(t, p, (uint8_t)(s + 1), x0, y_mid + half, x1, y_mid + half + wall_t);
+    // Paint the travel lane so walkable gaps aren't invisible against ground fill.
+    if (!water) {
+        float lane = std::min(half * 0.55f, 280.f);
+        push_feat(t, TerrainKind::kChannel, TerrainShape::kAABB, 0,
+                  std::min(x0, x1), y_mid - lane, std::max(x0, x1), y_mid + lane,
+                  p.channel, (uint8_t)(s + 2), 0.f);
+    }
 }
 void corridor_v(MapTerrain &t, ThemePalette const &p, uint8_t s,
                 float y0, float y1, float x_mid, float gap, float wall_t, uint8_t water) {
@@ -87,13 +97,26 @@ void corridor_v(MapTerrain &t, ThemePalette const &p, uint8_t s,
     auto box = water ? water_box : hill_box;
     box(t, p, s, x_mid - half - wall_t, y0, x_mid - half, y1);
     box(t, p, (uint8_t)(s + 1), x_mid + half, y0, x_mid + half + wall_t, y1);
+    if (!water) {
+        float lane = std::min(half * 0.55f, 280.f);
+        push_feat(t, TerrainKind::kChannel, TerrainShape::kAABB, 0,
+                  x_mid - lane, std::min(y0, y1), x_mid + lane, std::max(y0, y1),
+                  p.channel, (uint8_t)(s + 2), 0.f);
+    }
 }
 
 // Ring of thick wall segments with one gate — large open interior for multiplayer fights.
+// Enclosed area is ~15× the legacy radius (radius × √15); walls thicken modestly.
 void ring_valley(MapTerrain &t, ThemePalette const &p, uint32_t &rng,
                  float cx, float cy, float inner_r, float wall_t,
                  float gate_ang, float gate_arc, uint8_t seed0, uint8_t water) {
-    uint32_t segs = 12;
+    constexpr float kAreaScaleR = 3.873f; // sqrt(15)
+    inner_r *= kAreaScaleR;
+    wall_t *= 2.0f;
+    float max_r = std::min((float)ARENA_WIDTH, (float)ARENA_HEIGHT) * 0.30f;
+    if (inner_r > max_r) inner_r = max_r;
+    // More segments so the longer circumference still reads as a smooth ring.
+    uint32_t segs = 18;
     for (uint32_t i = 0; i < segs; ++i) {
         float a0 = (float)(2.0 * M_PI) * ((float)i / (float)segs);
         float a1 = (float)(2.0 * M_PI) * ((float)(i + 1) / (float)segs);
@@ -104,8 +127,8 @@ void ring_valley(MapTerrain &t, ThemePalette const &p, uint32_t &rng,
         if (std::fabs(d) < gate_arc * 0.5f) continue;
         float mx = cx + std::cos(amid) * (inner_r + wall_t * 0.4f);
         float my = cy + std::sin(amid) * (inner_r + wall_t * 0.4f);
-        float hw = wall_t * 0.5f + inner_r * 0.16f;
-        float hh = wall_t * 0.8f;
+        float hw = wall_t * 0.5f + inner_r * 0.12f;
+        float hh = wall_t * 0.75f;
         if (water) water_box(t, p, (uint8_t)(seed0 + i), mx - hw, my - hh, mx + hw, my + hh);
         else hill_box(t, p, (uint8_t)(seed0 + i), mx - hw, my - hh, mx + hw, my + hh);
     }
@@ -162,10 +185,33 @@ void maze_cell(MapTerrain &t, ThemePalette const &p, uint32_t &rng, uint8_t s,
         hill_box(t, p, ss, x0, T, x1, gy - gh * 0.5f);
         hill_box(t, p, (uint8_t)(ss + 1), x0, gy + gh * 0.5f, x1, B);
     };
-    punch_h(T, T + thick, L + w * rng_range(rng, 0.25f, 0.75f), s);
-    punch_h(B - thick, B, L + w * rng_range(rng, 0.25f, 0.75f), (uint8_t)(s + 4));
-    punch_v(L, L + thick, T + h * rng_range(rng, 0.25f, 0.75f), (uint8_t)(s + 8));
-    punch_v(R - thick, R, T + h * rng_range(rng, 0.25f, 0.75f), (uint8_t)(s + 12));
+    float gx_n = L + w * rng_range(rng, 0.25f, 0.75f);
+    float gx_s = L + w * rng_range(rng, 0.25f, 0.75f);
+    float gy_w = T + h * rng_range(rng, 0.25f, 0.75f);
+    float gy_e = T + h * rng_range(rng, 0.25f, 0.75f);
+    punch_h(T, T + thick, gx_n, s);
+    punch_h(B - thick, B, gx_s, (uint8_t)(s + 4));
+    punch_v(L, L + thick, gy_w, (uint8_t)(s + 8));
+    punch_v(R - thick, R, gy_e, (uint8_t)(s + 12));
+    // Gate floors — short channel strips so openings read as paths, not bare ground.
+    auto gate_h = [&](float y0, float y1, float gx, uint8_t ss) {
+        float mid = 0.5f * (y0 + y1);
+        float hh = std::max(36.f, (y1 - y0) * 0.35f);
+        push_feat(t, TerrainKind::kChannel, TerrainShape::kAABB, 0,
+                  gx - gw * 0.45f, mid - hh, gx + gw * 0.45f, mid + hh,
+                  p.channel, ss, 0.f);
+    };
+    auto gate_v = [&](float x0, float x1, float gy, uint8_t ss) {
+        float mid = 0.5f * (x0 + x1);
+        float hw = std::max(36.f, (x1 - x0) * 0.35f);
+        push_feat(t, TerrainKind::kChannel, TerrainShape::kAABB, 0,
+                  mid - hw, gy - gh * 0.45f, mid + hw, gy + gh * 0.45f,
+                  p.channel, ss, 0.f);
+    };
+    gate_h(T, T + thick, gx_n, (uint8_t)(s + 20));
+    gate_h(B - thick, B, gx_s, (uint8_t)(s + 21));
+    gate_v(L, L + thick, gy_w, (uint8_t)(s + 22));
+    gate_v(R - thick, R, gy_e, (uint8_t)(s + 23));
 }
 
 void rock_field(MapTerrain &t, ThemePalette const &p, uint32_t &rng, uint8_t s0,
@@ -197,11 +243,9 @@ ZoneDefinition eco_from(ZoneDefinition base, char const *name, uint8_t diff,
     z.name = name;
     z.difficulty = diff;
     z.density = base.density * density_mul;
-    // Hard pockets: denser threat + richer rarity tilt (外环/Boss 周边奖励)
-    if (diff >= 3)
-        z.drop_multiplier = base.drop_multiplier < 0.7f ? base.drop_multiplier * 1.2f : base.drop_multiplier;
-    else if (diff == 2)
-        z.drop_multiplier = base.drop_multiplier < 0.45f ? base.drop_multiplier * 1.15f : base.drop_multiplier;
+    z.drop_multiplier = zone_drop_tilt(diff);
+    if (diff >= RarityID::kLegendary)
+        z.drop_multiplier = fclamp(z.drop_multiplier * 1.15f, 0.f, 0.85f);
     z.spawns.clear();
     for (SpawnChance s : spawns) z.spawns.push(s);
     return z;
@@ -234,13 +278,13 @@ void append_biome_ecos(MapZones &zones, uint8_t map_id, ZoneDefinition const &ha
         add(eco_from(mid, "Hedge Maze", 2, 1.05f, {
             { MobID::kSpider, 110000 }, { MobID::kBee, 90000 }, { MobID::kBeetle, 80000 },
             { MobID::kCentipede, 14000 }, { MobID::kSquare, 1 }}), 2400.f, 3600.f, 3);
-        add(eco_from(mid, "Creek Banks", 2, 1.0f, {
+        add(eco_from(mid, "Creek Banks", 3, 1.0f, {
             { MobID::kHornet, 100000 }, { MobID::kBee, 90000 }, { MobID::kLadybug, 70000 },
             { MobID::kSquare, 1 }}), 2200.f, 3400.f, 2);
-        add(eco_from(hard, "Thorn Field", 3, 1.3f, {
+        add(eco_from(hard, "Thorn Field", 4, 1.3f, {
             { MobID::kDarkLadybug, 130000 }, { MobID::kHornet, 110000 }, { MobID::kSpider, 100000 },
             { MobID::kEvilCentipede, 26000 }, { MobID::kSquare, 1 }}), 2000.f, 3000.f, 2);
-        add(eco_from(hard, "Flower Heart", 3, 1.45f, {
+        add(eco_from(hard, "Flower Heart", 6, 1.45f, {
             { MobID::kMassiveBeetle, 16000 }, { MobID::kHornet, 120000 },
             { MobID::kDarkLadybug, 100000 }, { MobID::kBoulder, 10000 },
             { MobID::kSquare, 1 }}), 3600.f, 4800.f, 1);
@@ -254,15 +298,15 @@ void append_biome_ecos(MapZones &zones, uint8_t map_id, ZoneDefinition const &ha
             { MobID::kCactus, 130000 }, { MobID::kDuneBeetle, 130000 },
             { MobID::kDuneSpider, 105000 }, { MobID::kDuneHornet, 95000 },
             { MobID::kScorpion, 85000 }, { MobID::kSquare, 1 }}), 2400.f, 3600.f, 3);
-        add(eco_from(mid, "Dry River", 2, 1.0f, {
+        add(eco_from(mid, "Dry River", 3, 1.0f, {
             { MobID::kDuneBeetle, 130000 }, { MobID::kDuneSpider, 105000 },
             { MobID::kDuneHornet, 95000 }, { MobID::kSandstorm, 90000 },
             { MobID::kScorpion, 85000 }, { MobID::kSquare, 1 }}), 2200.f, 3400.f, 2);
-        add(eco_from(hard, "Bone Yard", 3, 1.3f, {
+        add(eco_from(hard, "Bone Yard", 4, 1.3f, {
             { MobID::kDuneSpider, 105000 }, { MobID::kSandstorm, 90000 },
             { MobID::kScorpion, 85000 }, { MobID::kDesertCentipede, 22000 },
             { MobID::kDuneTitan, 14000 }, { MobID::kSquare, 1 }}), 2000.f, 3000.f, 2);
-        add(eco_from(hard, "Sandworm Nest", 3, 1.45f, {
+        add(eco_from(hard, "Sandworm Nest", 6, 1.45f, {
             { MobID::kSandstorm, 90000 }, { MobID::kScorpion, 85000 },
             { MobID::kDesertCentipede, 22000 }, { MobID::kDuneTitan, 14000 },
             { MobID::kSquare, 1 }}), 3600.f, 4800.f, 1);
@@ -276,15 +320,15 @@ void append_biome_ecos(MapZones &zones, uint8_t map_id, ZoneDefinition const &ha
             { MobID::kMoonJelly, 110000 }, { MobID::kCoralStar, 120000 },
             { MobID::kReefCrab, 100000 }, { MobID::kSpinePuffer, 105000 },
             { MobID::kSquare, 1 }}), 2400.f, 3600.f, 3);
-        add(eco_from(mid, "Kelp Forest", 2, 1.0f, {
+        add(eco_from(mid, "Kelp Forest", 3, 1.0f, {
             { MobID::kReefCrab, 100000 }, { MobID::kSpinePuffer, 105000 },
             { MobID::kSeaLeech, 24000 }, { MobID::kMorayEel, 70000 },
             { MobID::kSquare, 1 }}), 2200.f, 3400.f, 2);
-        add(eco_from(hard, "Shipwreck", 3, 1.3f, {
+        add(eco_from(hard, "Shipwreck", 4, 1.3f, {
             { MobID::kSpinePuffer, 105000 }, { MobID::kSeaLeech, 24000 },
             { MobID::kMorayEel, 70000 }, { MobID::kInkCuttle, 20000 },
             { MobID::kAbyssShark, 14000 }, { MobID::kSquare, 1 }}), 2000.f, 3000.f, 2);
-        add(eco_from(hard, "Abyss Core", 3, 1.45f, {
+        add(eco_from(hard, "Abyss Core", 6, 1.45f, {
             { MobID::kSeaLeech, 24000 }, { MobID::kMorayEel, 70000 },
             { MobID::kInkCuttle, 20000 }, { MobID::kAbyssShark, 14000 },
             { MobID::kSquare, 1 }}), 3600.f, 4800.f, 1);
@@ -298,15 +342,15 @@ void append_biome_ecos(MapZones &zones, uint8_t map_id, ZoneDefinition const &ha
             { MobID::kSnowHare, 135000 }, { MobID::kIceSpider, 120000 },
             { MobID::kFrostHornet, 105000 }, { MobID::kRimeCentipede, 22000 },
             { MobID::kGlacierBeast, 90000 }, { MobID::kSquare, 1 }}), 2400.f, 3600.f, 3);
-        add(eco_from(mid, "Ice River", 2, 1.0f, {
+        add(eco_from(mid, "Ice River", 3, 1.0f, {
             { MobID::kIceSpider, 120000 }, { MobID::kRimeCentipede, 22000 },
             { MobID::kBlizzardWisp, 110000 }, { MobID::kGlacierBeast, 90000 },
             { MobID::kSquare, 1 }}), 2200.f, 3400.f, 2);
-        add(eco_from(hard, "Frost Rift", 3, 1.3f, {
+        add(eco_from(hard, "Frost Rift", 4, 1.3f, {
             { MobID::kRimeCentipede, 22000 }, { MobID::kBlizzardWisp, 110000 },
             { MobID::kGlacierBeast, 90000 }, { MobID::kFrostYeti, 18000 },
             { MobID::kIceGolem, 14000 }, { MobID::kSquare, 1 }}), 2000.f, 3000.f, 2);
-        add(eco_from(hard, "Frost Core", 3, 1.45f, {
+        add(eco_from(hard, "Frost Core", 6, 1.45f, {
             { MobID::kRimeCentipede, 22000 }, { MobID::kGlacierBeast, 90000 },
             { MobID::kFrostYeti, 18000 }, { MobID::kIceGolem, 14000 },
             { MobID::kSquare, 1 }}), 3600.f, 4800.f, 1);
@@ -323,14 +367,14 @@ void append_biome_ecos(MapZones &zones, uint8_t map_id, ZoneDefinition const &ha
             { MobID::kPoisonToad, 110000 }, { MobID::kSporeMushroom, 120000 },
             { MobID::kCarnivorousPlant, 80000 }, { MobID::kJungleMite, 90000 },
             { MobID::kJungleWasp, 100000 }, { MobID::kSquare, 1 }}), 2200.f, 3400.f, 2);
-        add(eco_from(mid, "Jungle River", 2, 1.0f, {
+        add(eco_from(mid, "Jungle River", 3, 1.0f, {
             { MobID::kRiverCrab, 130000 }, { MobID::kPoisonToad, 100000 }, { MobID::kJungleSpider, 110000 },
             { MobID::kJungleWasp, 100000 }, { MobID::kSquare, 1 }}), 2200.f, 3400.f, 2);
-        add(eco_from(hard, "Ancient Ruins", 3, 1.35f, {
+        add(eco_from(hard, "Ancient Ruins", 4, 1.35f, {
             { MobID::kEmeraldMantis, 110000 }, { MobID::kJungleSpider, 100000 },
             { MobID::kStoneGuardian, 90000 }, { MobID::kCarnivorousPlant, 80000 },
             { MobID::kJungleWasp, 100000 }, { MobID::kSquare, 1 }}), 2000.f, 3000.f, 2);
-        add(eco_from(hard, "Heart of Jungle", 3, 1.5f, {
+        add(eco_from(hard, "Heart of Jungle", 6, 1.5f, {
             { MobID::kEmeraldMantis, 100000 }, { MobID::kStoneGuardian, 110000 },
             { MobID::kCarnivorousPlant, 100000 }, { MobID::kVineBug, 80000 },
             { MobID::kJungleWasp, 100000 }, { MobID::kSquare, 1 }}), 3600.f, 4800.f, 1);
@@ -345,15 +389,15 @@ void append_biome_ecos(MapZones &zones, uint8_t map_id, ZoneDefinition const &ha
             { MobID::kFangAnt, 90000 }, { MobID::kScoutAnt, 70000 },
             { MobID::kBabyAnt, 60000 }, { MobID::kAntHole, 5000 },
             { MobID::kSquare, 1 }}), 2400.f, 3600.f, 4);
-        add(eco_from(mid, "Fungal Farm", 2, 1.05f, {
+        add(eco_from(mid, "Fungal Farm", 3, 1.05f, {
             { MobID::kWorkerAnt, 110000 }, { MobID::kBabyAnt, 100000 },
             { MobID::kSporeAnt, 95000 }, { MobID::kBroodCarrier, 80000 },
             { MobID::kAntHole, 4000 }, { MobID::kSquare, 1 }}), 2200.f, 3400.f, 3);
-        add(eco_from(hard, "Soldier Patrol", 3, 1.35f, {
+        add(eco_from(hard, "Soldier Patrol", 4, 1.35f, {
             { MobID::kSoldierAnt, 120000 }, { MobID::kTunnelGuard, 100000 },
             { MobID::kArmoredAnt, 90000 }, { MobID::kWingedAnt, 70000 },
             { MobID::kAntHole, 14000 }, { MobID::kSquare, 1 }}), 2000.f, 3000.f, 3);
-        add(eco_from(hard, "Queen Nest", 3, 1.55f, {
+        add(eco_from(hard, "Queen Nest", 6, 1.55f, {
             { MobID::kRoyalSentinel, 120000 }, { MobID::kSoldierAnt, 100000 },
             { MobID::kTunnelGuard, 70000 }, { MobID::kAntHole, 18000 },
             { MobID::kSquare, 1 }}), 3600.f, 4800.f, 1);
@@ -367,15 +411,15 @@ void append_biome_ecos(MapZones &zones, uint8_t map_id, ZoneDefinition const &ha
             { MobID::kCinderMoth, 135000 }, { MobID::kLavaBeetle, 125000 },
             { MobID::kEmberWasp, 105000 }, { MobID::kMagmaCrab, 105000 },
             { MobID::kFireSpider, 110000 }, { MobID::kSquare, 1 }}), 2400.f, 3600.f, 3);
-        add(eco_from(mid, "Lava Banks", 2, 1.0f, {
+        add(eco_from(mid, "Lava Banks", 3, 1.0f, {
             { MobID::kLavaBeetle, 125000 }, { MobID::kMagmaCrab, 105000 },
             { MobID::kFireSpider, 110000 }, { MobID::kMagmaCentipede, 22000 },
             { MobID::kSquare, 1 }}), 2200.f, 3400.f, 2);
-        add(eco_from(hard, "Magma Nest", 3, 1.35f, {
+        add(eco_from(hard, "Magma Nest", 7, 1.35f, {
             { MobID::kMagmaCrab, 105000 }, { MobID::kFireSpider, 110000 },
             { MobID::kMagmaCentipede, 22000 }, { MobID::kObsidianGolem, 18000 },
             { MobID::kLavaColossus, 14000 }, { MobID::kSquare, 1 }}), 2000.f, 3000.f, 2);
-        add(eco_from(hard, "Molten Heart", 3, 1.5f, {
+        add(eco_from(hard, "Molten Heart", 8, 1.5f, {
             { MobID::kFireSpider, 110000 }, { MobID::kMagmaCentipede, 22000 },
             { MobID::kObsidianGolem, 18000 }, { MobID::kLavaColossus, 14000 },
             { MobID::kSquare, 1 }}), 3600.f, 4800.f, 1);
@@ -393,8 +437,10 @@ void append_biome_ecos(MapZones &zones, uint8_t map_id, ZoneDefinition const &ha
             // Prefer corners / mid-rings via angle buckets
             float ang = (float)(2.0 * M_PI) * ((float)(pi * 3 + n) + rng_f(rng) * 0.35f) / 12.f;
             float dist = rng_range(rng, 3800.f, 10500.f);
-            if (pk.def.difficulty >= 3) dist = rng_range(rng, 6500.f, 11500.f);
-            else if (pk.def.difficulty <= 1) dist = rng_range(rng, 3200.f, 7500.f);
+            if (pk.def.difficulty >= RarityID::kLegendary)
+                dist = rng_range(rng, 6500.f, 11500.f);
+            else if (pk.def.difficulty <= RarityID::kUnusual)
+                dist = rng_range(rng, 3200.f, 7500.f);
             // The spawn hub must stay free of eco pockets. Push the pocket outward
             // along its own bearing until its AABB clears the hub rectangle —
             // a plain "distance > X" test dropped most pockets near the centre.
@@ -411,31 +457,53 @@ void append_biome_ecos(MapZones &zones, uint8_t map_id, ZoneDefinition const &ha
             float my = cy + std::sin(ang) * dist;
             float x = fclamp(mx - ww * 0.5f, 350.f, W - ww - 350.f);
             float y = fclamp(my - hh * 0.5f, 350.f, H - hh - 350.f);
-            // Color = ring color for that difficulty (paint ignores pockets anyway)
-            uint32_t col = (pk.def.difficulty >= 3) ? hard.color
-                         : (pk.def.difficulty == 2) ? mid.color : soft.color;
+            uint32_t col = RARITY_COLORS[std::min<uint32_t>(pk.def.difficulty, MAX_DIFFICULTY)];
             push_zone(zones, pk.def, x, y, x + ww, y + hh, (uint8_t)pk.def.difficulty, col);
         }
     }
 }
 
-// Difficulty rings + biome eco-pockets (later indices win for spawns).
+// Rarity rings (Common hub → Ultra outer) + biome eco-pockets (later indices win).
 void build_zones(MapZones &zones, uint8_t map_id, uint32_t &rng,
                  float W, float H, float cx, float cy) {
     zones.clear();
     MapZones const &tmpl = MAPS[map_id];
     ZoneDefinition hard = tmpl[0], mid = tmpl[1], soft = tmpl[2], hub = tmpl[3];
 
-    // Compact plaza — leave room for large eco zones / path network (少空旷、大 Zone).
-    float hub_hw = rng_range(rng, 3200.f, 3800.f);
-    float hub_hh = rng_range(rng, 2400.f, 3000.f);
-    float m1 = rng_range(rng, 0.22f, 0.28f);
-    float m2 = rng_range(rng, 0.08f, 0.12f);
+    float hub_hw = rng_range(rng, 2800.f, 3400.f);
+    float hub_hh = rng_range(rng, 2100.f, 2600.f);
 
-    push_zone(zones, hard, 0, 0, W, H, 3, hard.color);
-    push_zone(zones, mid, W * m2, H * m2, W * (1.f - m2), H * (1.f - m2), 2, mid.color);
-    push_zone(zones, soft, W * m1, H * m1, W * (1.f - m1), H * (1.f - m1), 1, soft.color);
-    push_zone(zones, hub, cx - hub_hw, cy - hub_hh, cx + hub_hw, cy + hub_hh, 0, hub.color);
+    // Outer → inner insets (fraction of arena). Index 0 = Ultra (full map).
+    // Nine bands align with RarityID / petal colours on the G-key minimap.
+    static float const kInset[9] = {
+        0.00f, 0.045f, 0.095f, 0.150f, 0.210f, 0.280f, 0.360f, 0.450f, 0.55f
+    };
+    auto pool_for = [&](uint32_t diff) -> ZoneDefinition {
+        if (diff == 0) return hub;
+        if (diff <= RarityID::kUnusual) return soft;
+        if (diff <= RarityID::kEpic) return mid;
+        return hard;
+    };
+    auto dens_for = [](uint32_t diff) -> float {
+        static float const k[] = {
+            0.18f, 2.4f, 2.55f, 2.7f, 2.85f, 3.0f, 3.15f, 3.25f, 3.35f
+        };
+        return k[diff > MAX_DIFFICULTY ? MAX_DIFFICULTY : diff];
+    };
+
+    for (uint32_t step = 0; step <= MAX_DIFFICULTY; ++step) {
+        uint32_t diff = MAX_DIFFICULTY - step; // Ultra first, Common last (later wins)
+        ZoneDefinition z = pool_for(diff);
+        z.density = dens_for(diff);
+        z.drop_multiplier = zone_drop_tilt(diff);
+        float m = kInset[step];
+        float l = W * m, t = H * m, r = W * (1.f - m), b = H * (1.f - m);
+        if (diff == 0) {
+            l = cx - hub_hw; t = cy - hub_hh;
+            r = cx + hub_hw; b = cy + hub_hh;
+        }
+        push_zone(zones, z, l, t, r, b, (uint8_t)diff, RARITY_COLORS[diff]);
+    }
 
     append_biome_ecos(zones, map_id, hard, mid, soft, rng, W, H, cx, cy, hub_hw, hub_hh);
 }
@@ -453,27 +521,7 @@ void berm(MapTerrain &t, ThemePalette const &p, uint32_t &rng, float W, float H,
     hill_box(t, p, 8, W - berm_t, cy + open * 0.5f, W, H - berm_t);
 }
 
-void safe_arteries(MapTerrain &t, ThemePalette const &p, uint32_t &rng,
-                   float W, float H, float cx, float cy, uint8_t map_id) {
-    // 大路：十字主干加宽；斜向为小路
-    float big = rng_range(rng, 560.f, 720.f);
-    float small = rng_range(rng, 380.f, 480.f);
-    push_feat(t, TerrainKind::kChannel, TerrainShape::kRiver, TerrainFlags::kNoAttack,
-              cx, 400.f, cx, H - 400.f, p.channel, (uint8_t)(3 + map_id), big);
-    push_feat(t, TerrainKind::kChannel, TerrainShape::kRiver, TerrainFlags::kNoAttack,
-              400.f, cy, W - 400.f, cy, p.channel, (uint8_t)(13 + map_id), big);
-    float d = rng_range(rng, 0.25f, 0.75f);
-    push_feat(t, TerrainKind::kChannel, TerrainShape::kRiver, TerrainFlags::kNoAttack,
-              W * 0.08f, H * d, W * 0.92f, H * (1.f - d * 0.4f), p.channel,
-              (uint8_t)(23 + map_id), small);
-    // Second small diagonal for path network density
-    float d2 = rng_range(rng, 0.2f, 0.8f);
-    push_feat(t, TerrainKind::kChannel, TerrainShape::kRiver, TerrainFlags::kNoAttack,
-              W * 0.12f, H * (1.f - d2 * 0.35f), W * 0.88f, H * d2, p.channel,
-              (uint8_t)(33 + map_id), small * 0.85f);
-}
-
-// Point on a safe artery (channel) — used while rebuilding terrain.
+// Point on a travel channel — used while rebuilding terrain.
 uint8_t point_on_channel(MapTerrain const &t, float x, float y) {
     for (TerrainFeature const &f : t) {
         if (f.kind != TerrainKind::kChannel) continue;
@@ -546,6 +594,23 @@ void emit_aabb_minus_band(StaticArray<TerrainFeature, Cap> &out, TerrainFeature 
 // Sample channel spine through an AABB → cut band (axis + [c0,c1]).
 uint8_t channel_cut_band(TerrainFeature const &ch, float L, float T, float R, float B,
                          float &c0, float &c1, uint8_t &axis) {
+    // Corridor/gate paint uses AABB channels — carve their box, not a fake river chord.
+    if (ch.shape == TerrainShape::kAABB) {
+        float cl = ch.left, ct = ch.top, cr = ch.right, cb = ch.bottom;
+        float iw = std::min(R, cr) - std::max(L, cl);
+        float ih = std::min(B, cb) - std::max(T, ct);
+        if (iw <= 40.f || ih <= 40.f) return 0;
+        if ((cr - cl) >= (cb - ct)) {
+            axis = 1; // horizontal lane → punch Y band
+            c0 = std::max(T, ct);
+            c1 = std::min(B, cb);
+        } else {
+            axis = 0;
+            c0 = std::max(L, cl);
+            c1 = std::min(R, cr);
+        }
+        return (c1 - c0) > 40.f ? 1 : 0;
+    }
     float hw = Map::feature_half_width(ch) + 100.f; // player-margin carve
     float xmin = 1e9f, xmax = -1e9f, ymin = 1e9f, ymax = -1e9f;
     int n = 0;
@@ -609,7 +674,8 @@ void resolve_terrain_overlaps(MapTerrain &t) {
             continue;
         }
 
-        // Path waters: keep (collision already carves via channel priority)
+        // Path waters: keep geometry; plaza bridges are added after the rebuild
+        // so dual-X rivers cannot leave a hard cross-block at the hub.
         if (f.shape == TerrainShape::kRiver || f.shape == TerrainShape::kSpiral) {
             if (out.size() < MAX_TERRAIN_PER_MAP) out.push(f);
             continue;
@@ -673,6 +739,41 @@ void resolve_terrain_overlaps(MapTerrain &t) {
         }
     }
 
+    // Impassable rivers that skim the spawn plaza get a channel ford: collision
+    // walks, and the road texture marks the gap (no invisible air-wall cross).
+    uint8_t bridge_seed = 200;
+    uint32_t n0 = out.size();
+    for (uint32_t i = 0; i < n0 && out.size() < MAX_TERRAIN_PER_MAP; ++i) {
+        TerrainFeature const &f = out[i];
+        if (!(f.flags & TerrainFlags::kImpassable)) continue;
+        if (f.shape != TerrainShape::kRiver) continue;
+        float t_lo = 2.f, t_hi = -1.f;
+        float hw = Map::feature_half_width(f) + 160.f;
+        for (int s = 0; s <= 32; ++s) {
+            float tt = (float)s / 32.f;
+            float x, y;
+            Map::river_center_at(f, tt, x, y);
+            float dx = (x - MAP_SPAWN_X) / (5200.f + hw);
+            float dy = (y - MAP_SPAWN_Y) / (4000.f + hw);
+            if (dx * dx + dy * dy >= 1.f) continue;
+            if (tt < t_lo) t_lo = tt;
+            if (tt > t_hi) t_hi = tt;
+        }
+        if (t_hi < t_lo) continue;
+        t_lo = std::max(0.f, t_lo - 0.05f);
+        t_hi = std::min(1.f, t_hi + 0.05f);
+        float x0, y0, x1, y1;
+        Map::river_center_at(f, t_lo, x0, y0);
+        Map::river_center_at(f, t_hi, x1, y1);
+        float ford_hw = hw + 40.f;
+        uint32_t ch_color = f.color;
+        for (uint8_t m = 0; m < MapID::kNumMaps; ++m) {
+            if (kThemes[m].water == f.color) { ch_color = kThemes[m].channel; break; }
+        }
+        push_feat(out, TerrainKind::kChannel, TerrainShape::kRiver, 0,
+                  x0, y0, x1, y1, ch_color, bridge_seed++, ford_hw);
+    }
+
     t = out;
 }
 
@@ -693,11 +794,8 @@ void gen_garden(MapTerrain &t, ThemePalette const &p, uint32_t &rng, float W, fl
     spiral_farm(t, p, rng, cx + 2000.f, cy - 200.f, 0, +1, gap, wall,
                 rng_range(rng, 2600.f, 3400.f), 3, rng_range(rng, 1300.f, 1700.f), 90, 0,
                 &bx, &by);
-    // Creek cutting map
-    push_feat(t, TerrainKind::kWater, TerrainShape::kRiver, TerrainFlags::kImpassable,
-              W * 0.12f, H * 0.20f, W * 0.88f, H * 0.82f, p.water, 110, rng_range(rng, 200.f, 280.f));
-    push_feat(t, TerrainKind::kWater, TerrainShape::kRiver, TerrainFlags::kImpassable,
-              W * 0.20f, H * 0.85f, W * 0.75f, H * 0.18f, p.water, 112, rng_range(rng, 180.f, 240.f));
+    // No diagonal impassable creeks — dual X rivers looked like roads and trapped
+    // players at the intersection (push-out from both banks fights itself).
     // Boulder prairie + mushroom rings
     rock_field(t, p, rng, 120, W * 0.55f, H * 0.55f, W * 0.90f, H * 0.90f, 8, 280.f, 520.f);
     ring_valley(t, p, rng, W * 0.22f, H * 0.78f, 900.f, 400.f, 0.8f, 0.6f, 140, 0);
@@ -746,8 +844,8 @@ void gen_desert(MapTerrain &t, ThemePalette const &p, uint32_t &rng, float W, fl
         bw_y = nest_y + leg;
         ring_valley(t, p, rng, bw_x, bw_y, rng_range(rng, 1200.f, 1600.f), 460.f, 3.0f, 0.5f, 140, 0);
     }
-    // Dry river bed
-    push_feat(t, TerrainKind::kChannel, TerrainShape::kRiver, TerrainFlags::kNoAttack,
+    // Dry river bed (travel road; attack allowed)
+    push_feat(t, TerrainKind::kChannel, TerrainShape::kRiver, 0,
               W * 0.1f, H * 0.15f, W * 0.9f, H * 0.88f, p.channel, 100, rng_range(rng, 350.f, 450.f));
     // Oasis + bone yard basin
     ring_valley(t, p, rng, W * 0.20f, H * 0.75f, 950.f, 420.f, 1.2f, 0.55f, 120, 1);
@@ -782,6 +880,15 @@ void gen_ocean(MapTerrain &t, ThemePalette const &p, uint32_t &rng, float W, flo
         trench(0.f, f0 - gt * 0.5f, 110);
         trench(f0 + gt * 0.5f, f1 - gt * 0.5f, 111);
         trench(f1 + gt * 0.5f, 1.f, 112);
+        // Paint fords so shallow crossings read as roads, not bare seabed.
+        auto ford = [&](float ft, uint8_t seed) {
+            float a = ft - gt * 0.45f, b = ft + gt * 0.45f;
+            push_feat(t, TerrainKind::kChannel, TerrainShape::kRiver, 0,
+                      x0 + dx * a, y0 + dy * a, x0 + dx * b, y0 + dy * b,
+                      p.channel, seed, hw + 100.f);
+        };
+        ford(f0, 113);
+        ford(f1, 114);
     }
     rock_field(t, p, rng, 130, W * 0.12f, H * 0.55f, W * 0.40f, H * 0.88f, 7, 300.f, 560.f);
     ring_valley(t, p, rng, W * 0.18f, H * 0.20f, 880.f, 400.f, 0.4f, 0.55f, 150, 0);
@@ -815,6 +922,14 @@ void gen_snow(MapTerrain &t, ThemePalette const &p, uint32_t &rng, float W, floa
         ice(0.f, f0 - gt * 0.5f, 120);
         ice(f0 + gt * 0.5f, f1 - gt * 0.5f, 121);
         ice(f1 + gt * 0.5f, 1.f, 122);
+        auto ford = [&](float ft, uint8_t seed) {
+            float a = ft - gt * 0.45f, b = ft + gt * 0.45f;
+            push_feat(t, TerrainKind::kChannel, TerrainShape::kRiver, 0,
+                      x0 + dx * a, y0 + dy * a, x0 + dx * b, y0 + dy * b,
+                      p.channel, seed, hw + 100.f);
+        };
+        ford(f0, 124);
+        ford(f1, 125);
         float mx = x0 + dx * 0.45f, my = y0 + dy * 0.45f;
         push_feat(t, TerrainKind::kWater, TerrainShape::kRiver, TerrainFlags::kImpassable,
                   mx, my, W * 0.22f, H * 0.58f, p.water, 123, hw * 0.85f);
@@ -839,11 +954,35 @@ void gen_jungle(MapTerrain &t, ThemePalette const &p, uint32_t &rng, float W, fl
     // Secondary vine corridor from SW clearing
     spiral_farm(t, p, rng, cx - 2800.f, cy + 1800.f, 1, -1, gap * 0.9f, wall * 0.85f,
                 rng_range(rng, 2200.f, 2800.f), 2, rng_range(rng, 1000.f, 1350.f), 100, 0);
-    // Swamp / river belts cutting the canopy
-    push_feat(t, TerrainKind::kWater, TerrainShape::kRiver, TerrainFlags::kImpassable,
-              W * 0.10f, H * 0.68f, W * 0.90f, H * 0.28f, p.water, 110, rng_range(rng, 230.f, 300.f));
-    push_feat(t, TerrainKind::kWater, TerrainShape::kRiver, TerrainFlags::kImpassable,
-              W * 0.18f, H * 0.15f, W * 0.78f, H * 0.88f, p.water, 112, rng_range(rng, 180.f, 240.f));
+    // Swamp belts with hub fords — unbroken dual-X rivers froze players at the
+    // spawn intersection (same trap Garden removed). Split each belt and leave
+    // a painted channel bridge at the plaza.
+    {
+        auto swamp = [&](float x0, float y0, float x1, float y1,
+                         float ford_t, uint8_t seed0, float hw) {
+            float dx = x1 - x0, dy = y1 - y0;
+            float len = std::sqrt(dx * dx + dy * dy);
+            float gt = 1200.f / std::max(len, 1.f);
+            auto seg = [&](float ta, float tb, uint8_t seed) {
+                if (tb - ta < 0.04f) return;
+                push_feat(t, TerrainKind::kWater, TerrainShape::kRiver, TerrainFlags::kImpassable,
+                          x0 + dx * ta, y0 + dy * ta, x0 + dx * tb, y0 + dy * tb,
+                          p.water, seed, hw);
+            };
+            seg(0.f, ford_t - gt * 0.5f, seed0);
+            seg(ford_t + gt * 0.5f, 1.f, (uint8_t)(seed0 + 1));
+            float fx0 = x0 + dx * (ford_t - gt * 0.45f);
+            float fy0 = y0 + dy * (ford_t - gt * 0.45f);
+            float fx1 = x0 + dx * (ford_t + gt * 0.45f);
+            float fy1 = y0 + dy * (ford_t + gt * 0.45f);
+            push_feat(t, TerrainKind::kChannel, TerrainShape::kRiver, 0,
+                      fx0, fy0, fx1, fy1, p.channel, (uint8_t)(seed0 + 2), hw + 120.f);
+        };
+        swamp(W * 0.10f, H * 0.68f, W * 0.90f, H * 0.28f, 0.48f, 110,
+              rng_range(rng, 230.f, 300.f));
+        swamp(W * 0.18f, H * 0.15f, W * 0.78f, H * 0.88f, 0.52f, 112,
+              rng_range(rng, 180.f, 240.f));
+    }
     // Giant root clusters (circular canopy blockers)
     rock_field(t, p, rng, 120, W * 0.12f, H * 0.12f, W * 0.40f, H * 0.40f, 6, 360.f, 620.f);
     rock_field(t, p, rng, 140, W * 0.60f, H * 0.58f, W * 0.90f, H * 0.88f, 5, 320.f, 560.f);
@@ -863,7 +1002,7 @@ void gen_ant_hell(MapTerrain &t, ThemePalette const &p, uint32_t &rng, float W, 
     maze_cell(t, p, rng, 40, W * 0.48f, H * 0.08f, W * 0.92f, H * 0.50f, wall, gap * 0.55f);
     maze_cell(t, p, rng, 60, W * 0.08f, H * 0.48f, W * 0.50f, H * 0.92f, wall, gap * 0.55f);
     maze_cell(t, p, rng, 80, W * 0.48f, H * 0.48f, W * 0.92f, H * 0.92f, wall, gap * 0.55f);
-    // Cross tunnels (safe channels already add arteries; add more chamber links)
+    // Cross tunnels (corridor paint marks the travel lanes)
     corridor_h(t, p, 100, W * 0.15f, W * 0.85f, H * 0.35f, gap * 0.85f, wall * 0.7f, 0);
     corridor_v(t, p, 110, H * 0.15f, H * 0.85f, W * 0.35f, gap * 0.85f, wall * 0.7f, 0);
     corridor_h(t, p, 120, W * 0.15f, W * 0.85f, H * 0.65f, gap * 0.85f, wall * 0.7f, 0);
@@ -895,6 +1034,10 @@ void gen_volcano(MapTerrain &t, ThemePalette const &p, uint32_t &rng, float W, f
         };
         seg(0.f, ford_t - gt * 0.5f, seed0);
         seg(ford_t + gt * 0.5f, 1.f, (uint8_t)(seed0 + 1));
+        float a = ford_t - gt * 0.45f, b = ford_t + gt * 0.45f;
+        push_feat(t, TerrainKind::kChannel, TerrainShape::kRiver, 0,
+                  x0 + dx * a, y0 + dy * a, x0 + dx * b, y0 + dy * b,
+                  p.channel, (uint8_t)(seed0 + 2), hw + 120.f);
     };
     lava_with_bridge(W * 0.1f, H * 0.25f, W * 0.9f, H * 0.78f, 0.45f, 30,
                      rng_range(rng, 240.f, 320.f));
@@ -1063,11 +1206,247 @@ void generate_one(uint8_t map_id) {
             default:              gen_volcano(terrain, pal, rng, W, H, cx, cy); break;
         }
     }
-    safe_arteries(terrain, pal, rng, W, H, cx, cy, map_id);
+    // No global cross/diagonal arteries — they punched a beige cross through every
+    // map and fought the biome layout. Theme-local channels (e.g. desert dry river) stay.
     resolve_terrain_overlaps(terrain);
 }
 
 } // namespace
+
+// Connect substantial walkable pockets to the spawn component. Overlapping
+// biome walls can seal a ring's intended gate; a short local channel opens the
+// nearest join without changing the rest of the terrain layout.
+static uint32_t open_sealed_pockets(uint8_t map_id) {
+    constexpr float step = 180.f;
+    constexpr float radius = 50.f;
+    uint32_t gw = (uint32_t)((float)ARENA_WIDTH / step) + 1;
+    uint32_t gh = (uint32_t)((float)ARENA_HEIGHT / step) + 1;
+    uint32_t n = gw * gh;
+    auto xy = [&](uint32_t i, float &x, float &y) {
+        x = (float)(i % gw) * step;
+        y = (float)(i / gw) * step;
+    };
+    auto neighbors = [&](uint32_t i, auto &&visit) {
+        uint32_t x = i % gw, y = i / gw;
+        if (x) visit(i - 1);
+        if (x + 1 < gw) visit(i + 1);
+        if (y) visit(i - gw);
+        if (y + 1 < gh) visit(i + gw);
+    };
+    uint32_t opened = 0;
+    for (; opened < 24 && g_terrain[map_id].size() < MAX_TERRAIN_PER_MAP; ++opened) {
+        std::vector<uint8_t> walk(n, 0);
+        for (uint32_t i = 0; i < n; ++i) {
+            float x, y;
+            xy(i, x, y);
+            if (x < radius || y < radius || x > ARENA_WIDTH - radius || y > ARENA_HEIGHT - radius) continue;
+            walk[i] = !Map::circle_hits_impassable(map_id, x, y, radius);
+        }
+        uint32_t spawn = (uint32_t)(MAP_SPAWN_Y / step) * gw + (uint32_t)(MAP_SPAWN_X / step);
+        if (!walk[spawn]) {
+            float best = 1e30f;
+            for (uint32_t i = 0; i < n; ++i) {
+                if (!walk[i]) continue;
+                float x, y;
+                xy(i, x, y);
+                float d = (x - MAP_SPAWN_X) * (x - MAP_SPAWN_X)
+                        + (y - MAP_SPAWN_Y) * (y - MAP_SPAWN_Y);
+                if (d < best) { best = d; spawn = i; }
+            }
+            if (!walk[spawn]) break;
+        }
+        std::vector<int32_t> component(n, -1);
+        std::vector<uint32_t> sizes;
+        std::vector<uint32_t> queue;
+        for (uint32_t i = 0; i < n; ++i) {
+            if (!walk[i] || component[i] >= 0) continue;
+            uint32_t id = (uint32_t)sizes.size();
+            queue.clear();
+            queue.push_back(i);
+            component[i] = (int32_t)id;
+            for (size_t qi = 0; qi < queue.size(); ++qi)
+                neighbors(queue[qi], [&](uint32_t j) {
+                    if (walk[j] && component[j] < 0) {
+                        component[j] = (int32_t)id;
+                        queue.push_back(j);
+                    }
+                });
+            sizes.push_back((uint32_t)queue.size());
+        }
+        int32_t main = component[spawn];
+        // Flood outward from every spawn-connected cell to locate the shortest
+        // barrier between it and another sizeable walkable component.
+        std::vector<int32_t> source(n, -1);
+        queue.clear();
+        for (uint32_t i = 0; i < n; ++i) {
+            if (component[i] == main) {
+                source[i] = (int32_t)i;
+                queue.push_back(i);
+            }
+        }
+        uint32_t from = n, to = n;
+        for (size_t qi = 0; qi < queue.size() && to == n; ++qi) {
+            uint32_t i = queue[qi];
+            neighbors(i, [&](uint32_t j) {
+                if (to != n || source[j] >= 0) return;
+                int32_t c = component[j];
+                if (c >= 0 && c != main && sizes[(uint32_t)c] >= 12) {
+                    from = (uint32_t)source[i];
+                    to = j;
+                    return;
+                }
+                source[j] = source[i];
+                queue.push_back(j);
+            });
+        }
+        if (to == n) break;
+        float x0, y0, x1, y1;
+        xy(from, x0, y0);
+        xy(to, x1, y1);
+        float dx = x1 - x0, dy = y1 - y0;
+        float length = std::sqrt(dx * dx + dy * dy);
+        if (length < 1.f) break;
+        float ux = dx / length, uy = dy / length;
+        x0 = fclamp(x0 - ux * 300.f, 200.f, (float)ARENA_WIDTH - 200.f);
+        y0 = fclamp(y0 - uy * 300.f, 200.f, (float)ARENA_HEIGHT - 200.f);
+        x1 = fclamp(x1 + ux * 300.f, 200.f, (float)ARENA_WIDTH - 200.f);
+        y1 = fclamp(y1 + uy * 300.f, 200.f, (float)ARENA_HEIGHT - 200.f);
+        push_feat(g_terrain[map_id], TerrainKind::kChannel, TerrainShape::kRiver, 0,
+                  x0, y0, x1, y1, kThemes[map_id].channel,
+                  (uint8_t)(191 + opened * 3 + map_id), 430.f);
+    }
+    return opened;
+}
+
+static uint32_t open_blocked_zones(uint8_t map_id) {
+    // Fine enough that thin maze walls cannot be skipped by grid adjacency.
+    constexpr float step = 100.f;
+    uint32_t gw = (uint32_t)((float)ARENA_WIDTH / step) + 1;
+    uint32_t gh = (uint32_t)((float)ARENA_HEIGHT / step) + 1;
+    uint32_t n = gw * gh;
+    std::vector<uint8_t> seen(n, 0);
+    std::vector<uint32_t> queue;
+    uint32_t spawn = (uint32_t)(MAP_SPAWN_Y / step) * gw + (uint32_t)(MAP_SPAWN_X / step);
+    if (Map::circle_hits_impassable(map_id, (float)(spawn % gw) * step,
+                                   (float)(spawn / gw) * step, 50.f)) {
+        float best = 1e30f;
+        for (uint32_t i = 0; i < n; ++i) {
+            float x = (float)(i % gw) * step, y = (float)(i / gw) * step;
+            if (Map::circle_hits_impassable(map_id, x, y, 50.f)) continue;
+            float d = (x - MAP_SPAWN_X) * (x - MAP_SPAWN_X)
+                    + (y - MAP_SPAWN_Y) * (y - MAP_SPAWN_Y);
+            if (d < best) { best = d; spawn = i; }
+        }
+    }
+    queue.push_back(spawn);
+    seen[spawn] = 1;
+    for (size_t qi = 0; qi < queue.size(); ++qi) {
+        uint32_t i = queue[qi], x = i % gw, y = i / gw;
+        auto visit = [&](uint32_t j) {
+            if (seen[j]) return;
+            float wx = (float)(j % gw) * step, wy = (float)(j / gw) * step;
+            if (wx < 50.f || wy < 50.f || wx > ARENA_WIDTH - 50.f || wy > ARENA_HEIGHT - 50.f) return;
+            if (Map::circle_hits_impassable(map_id, wx, wy, 50.f)) return;
+            seen[j] = 1;
+            queue.push_back(j);
+        };
+        if (x) visit(i - 1);
+        if (x + 1 < gw) visit(i + 1);
+        if (y) visit(i - gw);
+        if (y + 1 < gh) visit(i + gw);
+    }
+    uint32_t opened = 0;
+    for (uint32_t z = 1; z < g_zones[map_id].size(); ++z) {
+        ZoneDefinition const &zone = g_zones[map_id][z];
+        float zx = 0.5f * (zone.left + zone.right);
+        float zy = 0.5f * (zone.top + zone.bottom);
+        // Match sample_connectivity: nearest walkable cell to the zone center
+        // must be on the spawn BFS component (AABB overlap is not enough —
+        // ring valleys leave outer cells open while the pocket stays sealed).
+        bool reachable = false;
+        {
+            uint32_t ix = (uint32_t)(zx / step), iy = (uint32_t)(zy / step);
+            if (ix >= gw) ix = gw - 1;
+            if (iy >= gh) iy = gh - 1;
+            int best_x = -1, best_y = -1;
+            float best_d = 1e30f;
+            for (int r = 0; r < 12; ++r) {
+                for (int dy = -r; dy <= r; ++dy) {
+                    for (int dx = -r; dx <= r; ++dx) {
+                        int tx = (int)ix + dx, ty = (int)iy + dy;
+                        if (tx < 0 || ty < 0 || (uint32_t)tx >= gw || (uint32_t)ty >= gh) continue;
+                        float wx = (float)tx * step, wy = (float)ty * step;
+                        if (Map::circle_hits_impassable(map_id, wx, wy, 50.f)) continue;
+                        float d = (wx - zx) * (wx - zx) + (wy - zy) * (wy - zy);
+                        if (d < best_d) { best_d = d; best_x = tx; best_y = ty; }
+                    }
+                }
+                if (best_x >= 0) break;
+            }
+            if (best_x >= 0 && seen[(uint32_t)best_y * gw + (uint32_t)best_x])
+                reachable = true;
+        }
+        if (reachable || g_terrain[map_id].size() >= MAX_TERRAIN_PER_MAP) continue;
+        float best = 1e30f, sx = MAP_SPAWN_X, sy = MAP_SPAWN_Y;
+        for (uint32_t i : queue) {
+            float x = (float)(i % gw) * step, y = (float)(i / gw) * step;
+            float d = (x - zx) * (x - zx) + (y - zy) * (y - zy);
+            if (d < best) { best = d; sx = x; sy = y; }
+        }
+        // Stepped AABB pads (no river meander) so the bridge actually hits the
+        // grid cells used by connectivity BFS through thick maze/ring walls.
+        float dx = zx - sx, dy = zy - sy;
+        float len = std::sqrt(dx * dx + dy * dy);
+        if (len < 1.f) continue;
+        float ux = dx / len, uy = dy / len;
+        float pad = 420.f;
+        uint8_t seed0 = (uint8_t)(113 + z * 7 + map_id);
+        for (float t = 0.f; t <= len + 1.f && g_terrain[map_id].size() < MAX_TERRAIN_PER_MAP; t += 320.f) {
+            float cx = sx + ux * std::min(t, len);
+            float cy = sy + uy * std::min(t, len);
+            push_feat(g_terrain[map_id], TerrainKind::kChannel, TerrainShape::kAABB, 0,
+                      cx - pad, cy - pad, cx + pad, cy + pad,
+                      kThemes[map_id].channel, seed0++, 0.f);
+        }
+        ++opened;
+    }
+    return opened;
+}
+
+// Mark walkable exits around the plaza rim with short channel strips so players
+// can see where the hub opens into the biome (without a full-map beige cross).
+static void mark_plaza_rim_exits(uint8_t map_id) {
+    ThemePalette const &p = kThemes[map_id];
+    constexpr int N = 16;
+    constexpr float rad = 45.f;
+    uint8_t seed = 220;
+    for (int i = 0; i < N && g_terrain[map_id].size() < MAX_TERRAIN_PER_MAP; ++i) {
+        float a = (float)i * (float)(2.0 * M_PI / (double)N);
+        float ca = std::cos(a), sa = std::sin(a);
+        float x0 = MAP_SPAWN_X + ca * 4800.f;
+        float y0 = MAP_SPAWN_Y + sa * 3600.f;
+        float x1 = MAP_SPAWN_X + ca * 6400.f;
+        float y1 = MAP_SPAWN_Y + sa * 5000.f;
+        x0 = fclamp(x0, 200.f, (float)ARENA_WIDTH - 200.f);
+        y0 = fclamp(y0, 200.f, (float)ARENA_HEIGHT - 200.f);
+        x1 = fclamp(x1, 200.f, (float)ARENA_WIDTH - 200.f);
+        y1 = fclamp(y1, 200.f, (float)ARENA_HEIGHT - 200.f);
+        // Require a mostly walkable ray that is not already a painted channel.
+        uint32_t walk = 0, on_ch = 0, samples = 0;
+        for (int s = 0; s <= 8; ++s) {
+            float t = (float)s / 8.f;
+            float x = x0 + (x1 - x0) * t;
+            float y = y0 + (y1 - y0) * t;
+            ++samples;
+            if (!Map::circle_hits_impassable(map_id, x, y, rad)) ++walk;
+            if (Map::in_safe_channel(map_id, x, y)) ++on_ch;
+        }
+        if (walk < samples - 1) continue; // blocked exit
+        if (on_ch >= samples / 2) continue; // already marked
+        push_feat(g_terrain[map_id], TerrainKind::kChannel, TerrainShape::kRiver, 0,
+                  x0, y0, x1, y1, p.channel, seed++, 220.f);
+    }
+}
 
 // Boss anchors must sit on walkable ground: a spiral end or a palace ring can
 // land inside a wall. Nudge to the closest open spot around the anchor.
@@ -1093,15 +1472,105 @@ void MapGen::ensure(uint8_t map_id) {
     if (g_ready[map_id]) return;
     generate_one(map_id);
     g_ready[map_id] = 1;
+    uint32_t opened = 0;
+    // Multi-pass: each bridge can unlock more pockets for the next BFS.
+    for (int pass = 0; pass < 5; ++pass) {
+        uint32_t n = open_sealed_pockets(map_id);
+        n += open_blocked_zones(map_id);
+        opened += n;
+        if (!n) break;
+    }
+    mark_plaza_rim_exits(map_id);
     // Terrain is complete now, so the boss anchor can be validated against it.
     fix_boss_anchor(map_id);
-#ifdef SERVERSIDE
-    if (map_id == MapID::kRoyalCapital) {
-        uint32_t reached = Map::sample_connectivity(map_id, 220.f);
-        MapZones const &z = g_zones[map_id];
-        std::cout << "[map] Royal Capital connectivity: "
-                  << reached << "/" << z.size() << " zone centers reachable from spawn\n";
+    // Last resort at the same step sample_connectivity uses (220): force AABB
+    // bridges for any zone center still off the spawn component.
+    {
+        constexpr float step = 220.f;
+        constexpr float rad = 40.f;
+        uint32_t gw = (uint32_t)std::ceil((float)ARENA_WIDTH / step) + 1;
+        uint32_t gh = (uint32_t)std::ceil((float)ARENA_HEIGHT / step) + 1;
+        uint32_t n = gw * gh;
+        std::vector<uint8_t> walk(n, 0), seen(n, 0);
+        for (uint32_t i = 0; i < n; ++i) {
+            float x = (float)(i % gw) * step, y = (float)(i / gw) * step;
+            if (x < rad || y < rad || x > ARENA_WIDTH - rad || y > ARENA_HEIGHT - rad) continue;
+            walk[i] = !Map::circle_hits_impassable(map_id, x, y, rad);
+        }
+        uint32_t spawn = (uint32_t)(MAP_SPAWN_Y / step) * gw + (uint32_t)(MAP_SPAWN_X / step);
+        if (spawn >= n || !walk[spawn]) {
+            float bd = 1e30f;
+            for (uint32_t i = 0; i < n; ++i) {
+                if (!walk[i]) continue;
+                float x = (float)(i % gw) * step, y = (float)(i / gw) * step;
+                float d = (x - MAP_SPAWN_X) * (x - MAP_SPAWN_X)
+                        + (y - MAP_SPAWN_Y) * (y - MAP_SPAWN_Y);
+                if (d < bd) { bd = d; spawn = i; }
+            }
+        }
+        std::vector<uint32_t> q;
+        if (spawn < n && walk[spawn]) {
+            q.push_back(spawn);
+            seen[spawn] = 1;
+            for (size_t qi = 0; qi < q.size(); ++qi) {
+                uint32_t i = q[qi], x = i % gw, y = i / gw;
+                auto visit = [&](uint32_t j) {
+                    if (seen[j] || !walk[j]) return;
+                    seen[j] = 1;
+                    q.push_back(j);
+                };
+                if (x) visit(i - 1);
+                if (x + 1 < gw) visit(i + 1);
+                if (y) visit(i - gw);
+                if (y + 1 < gh) visit(i + gw);
+            }
+        }
+        for (uint32_t z = 1; z < g_zones[map_id].size()
+             && g_terrain[map_id].size() + 8 < MAX_TERRAIN_PER_MAP; ++z) {
+            ZoneDefinition const &zone = g_zones[map_id][z];
+            float zx = 0.5f * (zone.left + zone.right);
+            float zy = 0.5f * (zone.top + zone.bottom);
+            uint32_t ix = (uint32_t)(zx / step), iy = (uint32_t)(zy / step);
+            if (ix >= gw) ix = gw - 1;
+            if (iy >= gh) iy = gh - 1;
+            bool ok = false;
+            for (int r = 0; r < 10 && !ok; ++r)
+                for (int dy = -r; dy <= r && !ok; ++dy)
+                    for (int dx = -r; dx <= r && !ok; ++dx) {
+                        int tx = (int)ix + dx, ty = (int)iy + dy;
+                        if (tx < 0 || ty < 0 || (uint32_t)tx >= gw || (uint32_t)ty >= gh) continue;
+                        if (seen[(uint32_t)ty * gw + (uint32_t)tx]) ok = true;
+                    }
+            if (ok) continue;
+            float best = 1e30f, sx = MAP_SPAWN_X, sy = MAP_SPAWN_Y;
+            for (uint32_t i : q) {
+                float x = (float)(i % gw) * step, y = (float)(i / gw) * step;
+                float d = (x - zx) * (x - zx) + (y - zy) * (y - zy);
+                if (d < best) { best = d; sx = x; sy = y; }
+            }
+            float dx = zx - sx, dy = zy - sy;
+            float len = std::sqrt(dx * dx + dy * dy);
+            if (len < 1.f) continue;
+            float ux = dx / len, uy = dy / len;
+            float pad = 480.f;
+            uint8_t seed0 = (uint8_t)(170 + z * 3 + map_id);
+            for (float t = 0.f; t <= len + 1.f && g_terrain[map_id].size() < MAX_TERRAIN_PER_MAP; t += 280.f) {
+                float cx = sx + ux * std::min(t, len);
+                float cy = sy + uy * std::min(t, len);
+                push_feat(g_terrain[map_id], TerrainKind::kChannel, TerrainShape::kAABB, 0,
+                          cx - pad, cy - pad, cx + pad, cy + pad,
+                          kThemes[map_id].channel, seed0++, 0.f);
+            }
+            ++opened;
+        }
     }
+#ifdef SERVERSIDE
+    uint32_t reached = Map::sample_connectivity(map_id, 220.f);
+    MapZones const &z = g_zones[map_id];
+    std::cout << "[map] " << (uint32_t)map_id << " connectivity: "
+              << reached << "/" << z.size() << " zone centers reachable from spawn; terrain "
+              << g_terrain[map_id].size() << "/" << MAX_TERRAIN_PER_MAP
+              << ", opened " << opened << " local gates\n";
 #endif
 }
 MapZones const &MapGen::zones(uint8_t map_id) { ensure(map_id); return g_zones[map_id]; }

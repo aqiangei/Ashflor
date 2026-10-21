@@ -11,7 +11,8 @@ extern const uint32_t SERVER_PORT = 9001;
 extern const uint32_t MAX_NAME_LENGTH = 16;
 extern const uint32_t MAX_USERNAME_LENGTH = 16;
 extern const uint32_t MAX_PASSWORD_LENGTH = 32;
-extern const uint32_t MAX_CHAT_LENGTH = 64;
+// Room for /w Name message and Chinese guild commands on mobile
+extern const uint32_t MAX_CHAT_LENGTH = 96;
 
 #ifndef WS_URL
 // Fallback when page cannot derive host (file:// / odd embeds). Prefer location.host at runtime.

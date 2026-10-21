@@ -39,7 +39,6 @@ static char const *category_title(uint8_t category) {
         case kLbMessages: return I18n::tr(I18n::kLbMessagesTitle);
         case kLbKills: return I18n::tr(I18n::kLbKillsTitle);
         case kLbCrafts: return I18n::tr(I18n::kLbCraftsTitle);
-        case kLbScore: return I18n::tr(I18n::kLbScoreTitle);
         default: return "";
     }
 }
@@ -48,17 +47,16 @@ static std::string format_stat_value(uint8_t category, uint64_t value) {
     if (category == kLbPlayTime) {
         uint64_t hours = value / 3600;
         uint64_t minutes = (value % 3600) / 60;
+        // Compact forms so multi-hour values fit the column (avoid "1小时45…").
         if (I18n::use_chinese)
             return hours > 0
-                ? std::format("{}小时{}分钟", hours, minutes)
+                ? std::format("{}时{}分", hours, minutes)
                 : std::format("{}分钟", minutes);
         return hours > 0
-            ? std::format("{}h {}m", hours, minutes)
+            ? std::format("{}h{}m", hours, minutes)
             : std::format("{}m", minutes);
     }
-    if (value >= 10000)
-        return std::format("{:.2f}万", value / 10000.0);
-    return std::to_string(value);
+    return format_score((float) value);
 }
 
 // Trim a name until it fits the given width (canvas text is centre aligned,
@@ -184,10 +182,10 @@ void LeaderboardBoard::on_render(Renderer &ctx) {
             if (row.name.empty()) continue;
             float y = rows_y + (float) i * ROW_HEIGHT;
             std::string label = "#" + std::to_string(i + 1) + " ";
-            label += fit_text(ctx, row.name, col_w * 0.62f, ROW_SIZE);
+            label += fit_text(ctx, row.name, col_w * 0.55f, ROW_SIZE);
             std::string value = format_stat_value(category, row.value);
             draw_left(ctx, label, col_left + 4, y, ROW_SIZE, Chrome::kBody, Chrome::kRimDark);
-            draw_right(ctx, fit_text(ctx, value, col_w * 0.34f, ROW_SIZE), col_right - 4, y,
+            draw_right(ctx, fit_text(ctx, value, col_w * 0.42f, ROW_SIZE), col_right - 4, y,
                        ROW_SIZE, Chrome::kBody, Chrome::kRimDark);
         }
 
@@ -202,12 +200,12 @@ void LeaderboardBoard::on_render(Renderer &ctx) {
         std::string label;
         if (board.has_self[category])
             label = "#" + std::to_string(board.self_rank[category]) + " ";
-        label += fit_text(ctx, self_name, col_w * 0.62f, ROW_SIZE);
+        label += fit_text(ctx, self_name, col_w * 0.55f, ROW_SIZE);
         std::string value = board.has_self[category]
             ? format_stat_value(category, board.self_value[category])
             : "-";
         draw_left(ctx, label, col_left + 6, self_y, ROW_SIZE, Chrome::kRimDark, Chrome::kGold);
-        draw_right(ctx, fit_text(ctx, value, col_w * 0.34f, ROW_SIZE), col_right - 6, self_y,
+        draw_right(ctx, fit_text(ctx, value, col_w * 0.42f, ROW_SIZE), col_right - 6, self_y,
                    ROW_SIZE, Chrome::kRimDark, Chrome::kGold);
     }
 }

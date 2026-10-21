@@ -22,19 +22,60 @@ namespace Craft {
         0.004f   // Super → Ultra
     };
 
+    // Expected seconds to meaningfully progress a rarity via kill→drop→craft.
     static float const FARM_SEC[RarityID::kNumRarities] = {
         8.f, 28.f, 140.f, 700.f, 2800.f, 9000.f, 28000.f, 70000.f, 160000.f
     };
 
+    // Coin per kill (before zone_coin_mult). Tuned so ~3–6 min hard-zone grind
+    // buys a mid special; Unique chase petals stay long sinks.
     static uint32_t const COIN_BASE[RarityID::kNumRarities] = {
-        1, 4, 12, 35, 90, 220, 550, 1400, 3500
+        2, 6, 18, 48, 120, 280, 700, 1800, 4500
     };
     static uint32_t const COIN_SPREAD[RarityID::kNumRarities] = {
-        2, 4, 10, 25, 60, 140, 350, 800, 2000
+        3, 6, 14, 32, 80, 160, 400, 900, 2200
     };
 
+    // Random-rarity packs: intentionally worse EV than focused farming (~1.6–2×).
     static uint32_t const BUY_RARITY[RarityID::kNumRarities] = {
-        8, 25, 90, 320, 1200, 4800, 18000, 60000, 200000
+        40, 140, 480, 1600, 5200, 16000, 55000, 180000, 500000
+    };
+
+    // Material shop by petal rarity (convenience > farm EV for that mat).
+    static uint32_t const MAT_COST[RarityID::kNumRarities] = {
+        28, 65, 160, 420, 1100, 2800, 999999, 999999, 999999
+    };
+
+    static PetalID::T const kSpecials[] = {
+        PetalID::kAccelerator,
+        PetalID::kMagnet,
+        PetalID::kFaster,
+        PetalID::kBubble,
+        PetalID::kWeb,
+        PetalID::kYinYang,
+        PetalID::kCutter,
+        PetalID::kBone,
+        PetalID::kSalt,
+        PetalID::kObserver,
+        PetalID::kMonstera,
+        PetalID::kAntennae,
+        PetalID::kHeaviest,
+        PetalID::kMoon,
+        PetalID::kGoldenLeaf,
+        PetalID::kLotus,
+        PetalID::kThirdEye,
+        PetalID::kYggdrasil,
+    };
+
+    static PetalID::T const kCombos[] = {
+        PetalID::kLeafBlade, PetalID::kBeeSting, PetalID::kHealingBloom,
+        PetalID::kSandSpike, PetalID::kCraftCactus, PetalID::kQuicksandOrb,
+        PetalID::kWaterBubble, PetalID::kStarfish, PetalID::kTidePearl,
+        PetalID::kIceSpike, PetalID::kSnowball, PetalID::kIceShield,
+        PetalID::kThornVine, PetalID::kPoisonSpore, PetalID::kRotwood,
+        PetalID::kAntFang, PetalID::kAcidFlask, PetalID::kSoldierEgg,
+        PetalID::kFireball, PetalID::kMagmaCore, PetalID::kObsidianBlade,
+        PetalID::kSteelSword, PetalID::kHolyOrb, PetalID::kMechGear,
     };
 
     float success_chance(uint8_t from_rarity) {
@@ -59,6 +100,8 @@ namespace Craft {
         if (!inited) {
             for (uint32_t id = 1; id < (uint32_t) PetalID::kNumPetals; ++id) {
                 if (Recipe::is_bag_only((PetalID::T) id)) continue;
+                // Random packs: combat petals only — mats/combos have their own tabs.
+                if (is_shop_material((PetalID::T) id)) continue;
                 uint8_t r = PETAL_DATA[id].rarity;
                 if (r < RarityID::kNumRarities)
                     pools[r].push_back((PetalID::T) id);
@@ -93,9 +136,6 @@ namespace Craft {
         if (from == PetalID::kNone || from >= PetalID::kNumPetals) return PetalID::kNone;
         char const *name = PETAL_DATA[from].name;
         if (name == nullptr) return PetalID::kNone;
-        // Several legacy petals share an English name with the rarity ladder
-        // (Dahlia/RoseRare, Tringer/StingerLegendary, …). Prefer the highest
-        // id — append-only ladder fills come last and are the craft target.
         PetalID::T best = PetalID::kNone;
         for (uint32_t id = 1; id < (uint32_t) PetalID::kNumPetals; ++id) {
             if (PETAL_DATA[id].rarity != rarity) continue;
@@ -116,7 +156,6 @@ namespace Craft {
     PetalID::T craft_result(PetalID::T from) {
         if (!can_upgrade_petal(from)) return PetalID::kNone;
         uint8_t next_r = (uint8_t) (PETAL_DATA[from].rarity + 1);
-        // Same English name only — never random into another petal family.
         return find_same_name_at_rarity(from, next_r);
     }
 
@@ -132,18 +171,136 @@ namespace Craft {
         return BUY_RARITY[rarity];
     }
 
+    uint8_t is_shop_material(PetalID::T id) {
+        return id >= PetalID::kMatLeaf && id <= PetalID::kMatRoyalSeal;
+    }
+
+    uint8_t is_shop_combo(PetalID::T id) {
+        for (PetalID::T c : kCombos)
+            if (c == id) return 1;
+        return 0;
+    }
+
     uint8_t is_craftable_special(PetalID::T id) {
-        return id == PetalID::kAntennae
-            || id == PetalID::kAccelerator
-            || id == PetalID::kMagnet;
+        for (PetalID::T s : kSpecials)
+            if (s == id) return 1;
+        return 0;
+    }
+
+    uint8_t is_shop_purchasable(PetalID::T id) {
+        return is_craftable_special(id) || is_shop_material(id) || is_shop_combo(id);
+    }
+
+    uint32_t buy_material_cost(PetalID::T id) {
+        if (!is_shop_material(id) || id >= PetalID::kNumPetals) return 999999;
+        uint8_t r = PETAL_DATA[id].rarity;
+        if (r >= RarityID::kNumRarities) return 999999;
+        return MAT_COST[r];
+    }
+
+    uint32_t buy_combo_cost(PetalID::T id) {
+        if (!is_shop_combo(id)) return 999999;
+        uint16_t idx = Recipe::find_by_result(id);
+        if (idx == (uint16_t) -1) return 900;
+        Recipe::Def const &rec = Recipe::recipe_at(idx);
+        uint32_t sum = 0;
+        for (uint8_t i = 0; i < rec.ingredient_count; ++i) {
+            PetalID::T mid = rec.ingredients[i].id;
+            uint32_t unit = is_shop_material(mid) ? buy_material_cost(mid)
+                : (is_shop_combo(mid) ? buy_combo_cost(mid) : 80);
+            if (unit >= 999999) unit = 200;
+            sum += unit * (uint32_t) rec.ingredients[i].count;
+        }
+        // Convenience premium vs farming mats + hammer (~35%).
+        return (uint32_t) std::lround((double) sum * 1.35) + 40;
     }
 
     uint32_t buy_special_cost(PetalID::T id) {
         switch (id) {
-            case PetalID::kAccelerator: return 120;
-            case PetalID::kMagnet: return 180;
-            case PetalID::kAntennae: return 900;
-            default: return 999999;
+            // Entry utility — affordable after a short soft-zone run
+            case PetalID::kAccelerator: return 150;
+            case PetalID::kMagnet: return 220;
+            case PetalID::kFaster: return 280;
+            case PetalID::kBubble: return 320;
+            case PetalID::kWeb: return 380;
+            case PetalID::kYinYang: return 520;
+            case PetalID::kCutter: return 600;
+            case PetalID::kBone: return 720;
+            case PetalID::kSalt: return 800;
+            case PetalID::kObserver: return 1100;
+            case PetalID::kMonstera: return 1400;
+            case PetalID::kAntennae: return 1800;
+            case PetalID::kHeaviest: return 2400;
+            case PetalID::kMoon: return 3200;
+            case PetalID::kGoldenLeaf: return 4000;
+            case PetalID::kLotus: return 4800;
+            case PetalID::kThirdEye: return 5600;
+            case PetalID::kYggdrasil: return 7200;
+            default: break;
         }
+        if (is_shop_material(id)) return buy_material_cost(id);
+        if (is_shop_combo(id)) return buy_combo_cost(id);
+        return 999999;
+    }
+
+    uint32_t shop_price(PetalID::T id) {
+        return buy_special_cost(id);
+    }
+
+    float drop_weight_mult(PetalID::T id) {
+        if (id == PetalID::kNone || id >= PetalID::kNumPetals) return 1.f;
+        if (is_shop_material(id)) return 1.65f; // mats are the assemble spine
+        if (is_craftable_special(id)) {
+            // Chase petals: rarer → rarer in the wild (shop is the clean sink)
+            uint8_t r = PETAL_DATA[id].rarity;
+            if (r >= RarityID::kLegendary) return 0.22f;
+            if (r >= RarityID::kEpic) return 0.35f;
+            if (r >= RarityID::kRare) return 0.50f;
+            return 0.70f;
+        }
+        // Filler combat petals that clog bags after long grinds
+        if (id == PetalID::kBasic || id == PetalID::kLight || id == PetalID::kHeavy)
+            return 0.55f;
+        return 1.f;
+    }
+
+    static std::vector<ShopOffer> g_offers;
+    static uint8_t g_offers_ready = 0;
+
+    static void build_offers() {
+        if (g_offers_ready) return;
+        g_offers.clear();
+        for (PetalID::T id : kSpecials)
+            g_offers.push_back({ id, kShopSpecials, 0, 0 });
+        for (uint32_t id = (uint32_t) PetalID::kMatLeaf;
+             id <= (uint32_t) PetalID::kMatRoyalSeal; ++id) {
+            uint8_t r = PETAL_DATA[id].rarity;
+            uint8_t tab = (r <= RarityID::kUnusual) ? kShopMaterials : kShopRareMats;
+            g_offers.push_back({ (PetalID::T) id, tab, 0, 0 });
+        }
+        for (PetalID::T id : kCombos)
+            g_offers.push_back({ id, kShopCombos, 0, 0 });
+        // Random packs: Common → Legendary (Mythic+ too swingy / Unique gated)
+        for (uint8_t r = RarityID::kCommon; r <= RarityID::kLegendary; ++r)
+            g_offers.push_back({ PetalID::kNone, kShopRandom, 1, r });
+        g_offers_ready = 1;
+    }
+
+    uint16_t shop_offer_count() {
+        build_offers();
+        return (uint16_t) g_offers.size();
+    }
+
+    ShopOffer const &shop_offer_at(uint16_t index) {
+        build_offers();
+        static ShopOffer const kNone = { PetalID::kNone, 0, 0, 0 };
+        if (index >= g_offers.size()) return kNone;
+        return g_offers[index];
+    }
+
+    uint32_t shop_offer_cost(ShopOffer const &offer) {
+        if (offer.random_rarity)
+            return buy_rarity_cost(offer.rarity);
+        return shop_price(offer.id);
     }
 }

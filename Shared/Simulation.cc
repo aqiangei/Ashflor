@@ -51,7 +51,10 @@ Entity &Simulation::get_ent(EntityID const &id) {
 void Simulation::force_alloc_ent(EntityID const &id) {
     assert(id.id < ENTITY_CAP);
     DEBUG_ONLY(std::cout << "ent_create " << id << "\n";)
-    assert(!BitMath::at_arr(entity_tracker.data(), id.id));
+    // Client may still hold a stale slot after map transfer; replace in place.
+    // Do not bump hash_tracker — the server owns the new generation.
+    if (BitMath::at_arr(entity_tracker.data(), id.id))
+        BitMath::unset_arr(entity_tracker.data(), id.id);
     entities[id.id].init();
     BitMath::set_arr(entity_tracker.data(), id.id);
     hash_tracker[id.id] = id.hash;

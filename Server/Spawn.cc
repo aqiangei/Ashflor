@@ -1,5 +1,6 @@
 #include <Server/Spawn.hh>
 
+#include <Server/Client.hh>
 #include <Server/EntityFunctions.hh>
 #include <Server/PetalTracker.hh>
 #include <Server/Server.hh>
@@ -8,6 +9,7 @@
 #include <Shared/Simulation.hh>
 #include <Shared/StaticData.hh>
 #include <Shared/StaticDefinitions.hh>
+#include <Shared/Talent.hh>
 
 #include <Helpers/Bits.hh>
 #include <Helpers/Math.hh>
@@ -34,12 +36,12 @@ Entity &alloc_drop(Simulation *sim, PetalID::T drop_id, EntityID const team, uin
     drop.set_drop_id(drop_id);
     drop.set_drop_count(count);
     entity_set_despawn_tick(drop, 10 * (2 + PETAL_DATA[drop_id].rarity) * TPS);
-    // Private loot: team-tagged drops stay claimable only by that solo/party
-    // until despawn. Unowned (manual discard) gets a short lock then FFA.
+    // Team-tagged drops stay private for their whole lifetime (owner + party only).
+    // Unowned (manual discard) gets a brief lock so the dropper doesn't re-grab, then FFA.
     if (team == NULL_ENTITY)
         drop.immunity_ticks = TPS / 3;
     else
-        drop.immunity_ticks = drop.despawn_tick > 0 ? drop.despawn_tick : (8 * TPS);
+        drop.immunity_ticks = 0; // team gate alone is enough; never opens to strangers
     return drop;
 }
 
@@ -84,6 +86,7 @@ static Entity &__alloc_mob(
 
     mob.add_component(kMob);
     mob.set_mob_id(mob_id);
+    mob.set_rarity(data.rarity);
 
     mob.add_component(kHealth);
     mob.health = mob.max_health = data.health.get_single(seed);
@@ -263,7 +266,12 @@ static void _finish_player_spawn(Simulation *sim, Entity &camera, Entity &player
     player.set_x(spawn_x);
     player.set_y(spawn_y);
     player.set_score(level_to_score(camera.get_respawn_level()));
-    player.set_loadout_count(loadout_slots_at_level(camera.get_respawn_level()));
+    {
+        uint32_t slots = loadout_slots_at_level(camera.get_respawn_level());
+        if (Client *owner = Server::client_by_camera(sim, camera.id))
+            slots = Talent::slot_count_from_ranks(owner->talent_ranks);
+        player.set_loadout_count(slots);
+    }
     player.health = player.max_health = hp_at_level(camera.get_respawn_level());
     player.damage = body_damage_at_level(camera.get_respawn_level());
     // Give the player time to regain control after the spawn packet arrives.
@@ -278,6 +286,9 @@ static void _finish_player_spawn(Simulation *sim, Entity &camera, Entity &player
 
     for (uint32_t i = player.get_loadout_count(); i < player.get_loadout_count() + MAX_SLOT_COUNT; ++i)
         player.set_loadout_ids(i, camera.get_inventory(i));
+    // Clear unused tail so a later slot unlock does not reveal stale IDs.
+    for (uint32_t i = player.get_loadout_count() + MAX_SLOT_COUNT; i < 2 * MAX_SLOT_COUNT; ++i)
+        player.set_loadout_ids(i, PetalID::kNone);
 
     //peaceful transfer, no petal tracking needed
     for (uint32_t i = 0; i < MAX_SLOT_COUNT * 2; ++i)

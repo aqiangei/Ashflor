@@ -2,6 +2,7 @@
 
 #include <Server/Client.hh>
 #include <Server/Game.hh>
+#include <Server/Guild.hh>
 #include <Server/LeaderboardStore.hh>
 #include <Server/NodeFs.hh>
 #include <Server/PetalTracker.hh>
@@ -37,6 +38,8 @@ static uint64_t wall_seconds() {
         std::chrono::system_clock::now().time_since_epoch()).count();
 }
 
+static void restore_primary_from_active_preset(Account &acc);
+
 static uint32_t beijing_day(uint64_t epoch) {
     return (uint32_t)((epoch + 8 * 3600) / 86400);
 }
@@ -54,10 +57,36 @@ static uint64_t issue_session_token(std::string const &username) {
     return t;
 }
 
+static Client *find_live_account_holder(std::string const &username) {
+    if (Server::games == nullptr || username.empty()) return nullptr;
+    for (uint8_t i = 0; i < MapID::kNumMaps; ++i) {
+        for (Client *c : Server::games[i].clients) {
+            if (c != nullptr && c->account_name == username)
+                return c;
+        }
+    }
+    return nullptr;
+}
+
+// New login/resume takes the account: persist + kick any other live holder,
+// and clear ghost ACTIVE_SESSIONS locks from crashed tabs.
+static void reclaim_account_lock(std::string const &username, Client *incoming) {
+    Client *holder = find_live_account_holder(username);
+    if (holder != nullptr && holder != incoming) {
+        AccountStore::capture(holder);
+        // Drop the old connection. Message is shown on that client; it must not
+        // auto-resume with the same token and steal the account back.
+        holder->disconnect(CloseReason::kProtocol, "Logged in elsewhere");
+    }
+    ACTIVE_SESSIONS.erase(username);
+}
+
 static uint8_t bind_session(Client *client, std::string const &username, Account *acc) {
-    if (ACTIVE_SESSIONS.contains(username) && client->account_name != username)
-        return AccountResultCode::kAccountAlreadyIn;
     bool continuing_session = client->account_name == username;
+    // Always displace any prior holder (or stale lock) unless this socket is
+    // already bound to the same account.
+    if (!continuing_session)
+        reclaim_account_lock(username, client);
     if (!client->account_name.empty())
         ACTIVE_SESSIONS.erase(client->account_name);
     uint64_t now = wall_seconds();
@@ -75,7 +104,7 @@ static uint8_t bind_session(Client *client, std::string const &username, Account
     // account snapshot. Keep any remainder in the old save fields until a
     // slot is freed, so migration never destroys owned petals.
     bool migrated = false;
-    uint32_t bag_start = loadout_slots_at_level(acc->level);
+    uint32_t bag_start = Talent::slot_count_from_ranks(acc->talent_ranks);
     for (uint32_t id = 1; id < PetalID::kNumPetals; ++id) {
         while (acc->craft_bank[id] > 0) {
             uint32_t slot = bag_start;
@@ -89,22 +118,28 @@ static uint8_t bind_session(Client *client, std::string const &username, Account
     }
     acc->last_seen_epoch = now;
     client->account_name = username;
+    // Empty primary after a bad drain → rebuild from last K/L scheme using bag.
+    client->active_loadout_preset = acc->active_loadout_preset;
+    client->loadout_presets = acc->loadout_presets;
+    restore_primary_from_active_preset(*acc);
     client->craft_bank = acc->craft_bank;
     client->coins = acc->coins;
     client->craft_attempts = acc->craft_attempts;
-    uint8_t max_r = Talent::max_rank(acc->level);
-    client->talent_hp = acc->talent_hp > max_r ? max_r : acc->talent_hp;
-    client->talent_rot = acc->talent_rot > max_r ? max_r : acc->talent_rot;
-    client->loadout_presets = acc->loadout_presets;
+    for (uint8_t i = 0; i < TalentID::kNum; ++i)
+        client->talent_ranks[i] = acc->talent_ranks[i];
+    Talent::clamp_ranks(client->talent_ranks, acc->level);
     client->bonus_day = acc->bonus_day;
     client->daily_bonus_seconds = acc->daily_bonus_seconds;
     client->offline_bonus_seconds = acc->offline_bonus_seconds;
     client->last_bonus_tick = now;
     client->last_bonus_sync = 0;
+    client->guild_name = acc->guild_name;
+    client->guild_leader = acc->guild_leader ? 1 : 0;
     ACTIVE_SESSIONS.insert(username);
     if (client->game != nullptr && client->game->simulation.ent_exists(client->camera) && !client->alive())
         AccountStore::apply_to_camera(&client->game->simulation, client->game->simulation.get_ent(client->camera), *acc);
     if (migrated) AccountStore::save();
+    Guild::on_login(client);
     return AccountResultCode::kAccountOk;
 }
 
@@ -228,8 +263,8 @@ void AccountStore::load() {
         acc.craft_bank.fill(0);
         acc.coins = 0;
         acc.craft_attempts = 0;
-        acc.talent_hp = 0;
-        acc.talent_rot = 0;
+        for (uint8_t i = 0; i < TalentID::kNum; ++i)
+            acc.talent_ranks[i] = 0;
         // Read remaining numbers first, then split petals vs craft_bank.
         // MAX_SLOT_COUNT grew 8→10 (petals 16→20, presets width 9→11).
         std::vector<uint64_t> fields;
@@ -243,33 +278,58 @@ void AccountStore::load() {
             constexpr uint32_t kPresetNew = 1 + MAX_SLOT_COUNT;
             constexpr uint32_t kPresetLegacy8 = 1 + 8;
             uint32_t const n = (uint32_t) PetalID::kNumPetals;
+            // Subtract append-only waves newest→oldest so old craft_bank lengths still match.
+            constexpr uint32_t kMonsteraLadderAdded = 6;
+            constexpr uint32_t kAntHellAdded = 12;
+            constexpr uint32_t kSuperUltraAdded = 42;
+            constexpr uint32_t kCrossLegendAdded = 40;
+            constexpr uint32_t kBaseCraftAdded = 22;
+            constexpr uint32_t kMatsAdded = 48;
+            constexpr uint32_t kMonsteraAdded = 1;
+            constexpr uint32_t kCoinAdded = 1;
             constexpr uint32_t kCommonLadderAdded = 14;
             constexpr uint32_t kStingerLegAdded = 1;
             constexpr uint32_t kJungleAdded = 12;
             constexpr uint32_t kLadderAdded = 43;
             constexpr uint32_t kRoyalAdded = 12;
-            constexpr uint32_t kCoinAdded = 1;
-            uint32_t const prev_coin = n > kCoinAdded ? n - kCoinAdded : n;
-            uint32_t const prev_common = n > kCommonLadderAdded ? n - kCommonLadderAdded : n;
-            uint32_t const prev_stinger = prev_common > kStingerLegAdded ? prev_common - kStingerLegAdded : prev_common;
-            uint32_t const prev_jungle = prev_stinger > kJungleAdded ? prev_stinger - kJungleAdded : prev_stinger;
-            uint32_t const prev_ladder = prev_jungle > kLadderAdded ? prev_jungle - kLadderAdded : prev_jungle;
-            uint32_t const prev_royal = prev_ladder > kRoyalAdded ? prev_ladder - kRoyalAdded : prev_ladder;
+            auto sub = [](uint32_t cur, uint32_t amt) -> uint32_t {
+                return cur > amt ? cur - amt : cur;
+            };
+            uint32_t const prev_monstera_ladder = sub(n, kMonsteraLadderAdded);
+            uint32_t const prev_anthell = sub(prev_monstera_ladder, kAntHellAdded);
+            uint32_t const prev_super = sub(prev_anthell, kSuperUltraAdded);
+            uint32_t const prev_cross = sub(prev_super, kCrossLegendAdded);
+            uint32_t const prev_basecraft = sub(prev_cross, kBaseCraftAdded);
+            uint32_t const prev_mats = sub(prev_basecraft, kMatsAdded);
+            uint32_t const prev_monstera = sub(prev_mats, kMonsteraAdded);
+            uint32_t const prev_coin = sub(prev_monstera, kCoinAdded);
+            uint32_t const prev_common = sub(prev_coin, kCommonLadderAdded);
+            uint32_t const prev_stinger = sub(prev_common, kStingerLegAdded);
+            uint32_t const prev_jungle = sub(prev_stinger, kJungleAdded);
+            uint32_t const prev_ladder = sub(prev_jungle, kLadderAdded);
+            uint32_t const prev_royal = sub(prev_ladder, kRoyalAdded);
             uint32_t const bank_candidates[] = {
-                n, prev_coin, prev_common, prev_stinger, prev_jungle, prev_ladder, prev_royal
+                n, prev_monstera_ladder, prev_anthell, prev_super, prev_cross,
+                prev_basecraft, prev_mats, prev_monstera, prev_coin, prev_common,
+                prev_stinger, prev_jungle, prev_ladder, prev_royal
             };
 
             auto layout_ok = [&](uint32_t petal_n, uint32_t preset_w) -> bool {
                 if (fields.size() < petal_n) return false;
                 size_t rem = fields.size() - petal_n;
+                // Mid block: coins + craft_attempts + talents + session.
+                // Old saves: 2 talents → mid 5. New saves: 7 talents → mid 10.
                 for (uint32_t bank_n : bank_candidates) {
-                    size_t const full = bank_n + 5 + LOADOUT_PRESET_COUNT * preset_w + 4;
-                    size_t const presets = bank_n + 5 + LOADOUT_PRESET_COUNT * preset_w;
-                    if (rem == full || rem == presets) return true;
-                    if (rem >= bank_n && rem <= bank_n + 5) return true;
+                    for (uint32_t mid : {5u, 10u}) {
+                        size_t const presets = bank_n + mid + LOADOUT_PRESET_COUNT * preset_w;
+                        size_t const full = presets + 4;      // + bonus block
+                        size_t const full_ap = full + 1;       // + active_preset
+                        if (rem == full || rem == full_ap || rem == presets) return true;
+                        if (rem >= bank_n && rem <= bank_n + mid) return true;
+                    }
                 }
-                // Legacy rarity-bucket saves were frozen at 7 tiers (pre-Super/Ultra).
-                if (petal_n == kPetalsLegacy8 && rem >= 7 && rem < n)
+                // True pre-per-petal banks: exactly 7 rarity buckets (+ optional coins).
+                if (petal_n == kPetalsLegacy8 && (rem == 7 || rem == 8))
                     return true;
                 return false;
             };
@@ -297,36 +357,51 @@ void AccountStore::load() {
                 fields.begin() + (std::ptrdiff_t) petal_n, fields.end());
 
             uint32_t bank_n = PetalID::kNumPetals;
-            constexpr uint32_t kAccountTail = 5 + LOADOUT_PRESET_COUNT * (1 + MAX_SLOT_COUNT) + 4;
-            if (rest.size() == prev_coin + kAccountTail
-                || rest.size() == prev_coin + 5 + LOADOUT_PRESET_COUNT * preset_w + 4)
-                bank_n = prev_coin;
-            if (rest.size() < bank_n && rest.size() >= prev_common)
-                bank_n = prev_common;
-            else if (rest.size() < bank_n && rest.size() >= prev_stinger)
-                bank_n = prev_stinger;
-            else if (rest.size() < bank_n && rest.size() >= prev_jungle)
-                bank_n = prev_jungle;
-            else if (rest.size() < bank_n && rest.size() >= prev_ladder)
-                bank_n = prev_ladder;
-            else if (rest.size() < bank_n && rest.size() >= prev_royal)
-                bank_n = prev_royal;
-            if (rest.size() >= bank_n) {
+            // Pick the largest known historical bank length that still fits.
+            for (uint32_t cand : bank_candidates) {
+                if (rest.size() >= cand) {
+                    bank_n = cand;
+                    break;
+                }
+            }
+            if (rest.size() >= bank_n && !(rest.size() == 7 || rest.size() == 8)) {
                 for (uint32_t i = 0; i < bank_n; ++i)
                     acc.craft_bank[i] = (uint32_t) rest[i];
                 if (rest.size() > bank_n)
                     acc.coins = (uint32_t) rest[bank_n];
                 if (rest.size() > bank_n + 1)
                     acc.craft_attempts = (uint32_t) rest[bank_n + 1];
-                if (rest.size() > bank_n + 2)
-                    acc.talent_hp = (uint8_t) std::min<uint64_t>(rest[bank_n + 2], 99);
-                if (rest.size() > bank_n + 3)
-                    acc.talent_rot = (uint8_t) std::min<uint64_t>(rest[bank_n + 3], 99);
-                if (rest.size() > bank_n + 4)
-                    acc.session_hash = rest[bank_n + 4];
+                // Talents before session_hash: legacy 2 (hp, rot) or new 7 ranks.
+                uint8_t talent_n = 2;
+                if (rest.size() > bank_n + 2) {
+                    size_t const after = rest.size() - (bank_n + 2);
+                    size_t const preset_block = (size_t) LOADOUT_PRESET_COUNT * preset_w;
+                    auto fits_talent = [&](uint8_t tn) -> bool {
+                        if (after == tn) return true;
+                        if (after == tn + 1) return true; // + session
+                        if (after == tn + 1 + preset_block) return true;
+                        if (after == tn + 1 + preset_block + 4) return true; // + bonus
+                        if (after == tn + 1 + preset_block + 5) return true; // + active_preset
+                        return false;
+                    };
+                    if (fits_talent(TalentID::kNum))
+                        talent_n = TalentID::kNum;
+                    else if (fits_talent(2))
+                        talent_n = 2;
+                    else if (after >= TalentID::kNum)
+                        talent_n = TalentID::kNum;
+                }
+                for (uint8_t i = 0; i < talent_n; ++i) {
+                    if (rest.size() <= bank_n + 2 + i) break;
+                    acc.talent_ranks[i] = (uint8_t) std::min<uint64_t>(rest[bank_n + 2 + i], 99);
+                }
+                uint32_t const after_talents = bank_n + 2 + talent_n;
+                if (rest.size() > after_talents)
+                    acc.session_hash = rest[after_talents];
                 uint32_t const preset_petal_n = preset_w > 0 ? preset_w - 1 : 0;
-                if (rest.size() >= bank_n + 5 + LOADOUT_PRESET_COUNT * preset_w) {
-                    uint32_t at = bank_n + 5;
+                uint32_t const preset_at0 = after_talents + 1;
+                if (rest.size() >= preset_at0 + LOADOUT_PRESET_COUNT * preset_w) {
+                    uint32_t at = preset_at0;
                     for (LoadoutPreset &preset : acc.loadout_presets) {
                         uint64_t slots = rest[at++];
                         preset.slot_count = slots <= MAX_SLOT_COUNT ? (uint8_t) slots : 0;
@@ -343,9 +418,16 @@ void AccountStore::load() {
                         acc.offline_bonus_seconds = (uint32_t)std::min<uint64_t>(rest[at++], 10800);
                         acc.last_seen_epoch = rest[at++];
                     }
+                    // Optional active K/L preset index (absent on older saves).
+                    if (rest.size() > at) {
+                        uint64_t ap = rest[at++];
+                        acc.active_loadout_preset = ap < LOADOUT_PRESET_COUNT
+                            ? (uint8_t) ap : LOADOUT_PRESET_COUNT;
+                    }
                 }
-            } else if (rest.size() >= 7) {
-                // Legacy rarity buckets (7 tiers) → park counts on first petal of that rarity
+            } else if (rest.size() == 7 || rest.size() == 8) {
+                // Legacy rarity buckets only — never treat a truncated modern bank
+                // as buckets (that parked huge counts on Basic + Stinger).
                 for (uint8_t r = 0; r < 7; ++r) {
                     PetalID::T id = Craft::first_petal_of_rarity(r);
                     if (id != PetalID::kNone)
@@ -361,6 +443,17 @@ void AccountStore::load() {
             acc.craft_bank[PetalID::kCoin] = (uint32_t) sum;
             acc.coins = 0;
         }
+        // Trailing "g:<name> <leader>" after last_seen (optional for old saves).
+        {
+            ls.clear();
+            std::string gtok;
+            uint32_t glead = 0;
+            if (ls >> gtok && gtok.size() >= 2 && gtok[0] == 'g' && gtok[1] == ':') {
+                std::string gname = gtok.substr(2);
+                if (gname != "-") acc.guild_name = gname;
+                if (ls >> glead) acc.guild_leader = glead ? 1 : 0;
+            }
+        }
         ACCOUNTS[acc.username] = acc;
     }
     std::cout << "[accounts] loaded " << ACCOUNTS.size() << " accounts" << std::endl;
@@ -370,7 +463,7 @@ void AccountStore::load() {
 
 void AccountStore::save() {
     std::ostringstream out;
-    out << "# ashflor accounts  fields: user hash level petals[20] craft_bank[N] coins craft_attempts talent_hp talent_rot session_hash presets[20][slots+10 petals] bonus_day daily_bonus offline_bonus last_seen\n";
+    out << "# ashflor accounts  fields: user hash level petals[20] craft_bank[N] coins craft_attempts talent_ranks[7] session_hash presets[20][slots+10 petals] bonus_day daily_bonus offline_bonus last_seen active_preset guild_name guild_leader\n";
     for (auto const &kv : ACCOUNTS) {
         Account const &acc = kv.second;
         out << acc.username << ' ' << acc.pass_hash << ' ' << (uint32_t) acc.level;
@@ -378,16 +471,20 @@ void AccountStore::save() {
             out << ' ' << (uint32_t) acc.petals[i];
         for (uint32_t i = 0; i < PetalID::kNumPetals; ++i)
             out << ' ' << acc.craft_bank[i];
-        out << ' ' << acc.coins << ' ' << acc.craft_attempts
-            << ' ' << (uint32_t) acc.talent_hp << ' ' << (uint32_t) acc.talent_rot
-            << ' ' << acc.session_hash;
+        out << ' ' << acc.coins << ' ' << acc.craft_attempts;
+        for (uint8_t i = 0; i < TalentID::kNum; ++i)
+            out << ' ' << (uint32_t) acc.talent_ranks[i];
+        out << ' ' << acc.session_hash;
         for (LoadoutPreset const &preset : acc.loadout_presets) {
             out << ' ' << (uint32_t) preset.slot_count;
             for (PetalID::T id : preset.petals)
                 out << ' ' << (uint32_t) id;
         }
         out << ' ' << acc.bonus_day << ' ' << acc.daily_bonus_seconds
-            << ' ' << acc.offline_bonus_seconds << ' ' << acc.last_seen_epoch;
+            << ' ' << acc.offline_bonus_seconds << ' ' << acc.last_seen_epoch
+            << ' ' << (uint32_t) acc.active_loadout_preset;
+        out << " g:" << (acc.guild_name.empty() ? "-" : acc.guild_name)
+            << ' ' << (uint32_t) (acc.guild_leader ? 1 : 0);
         out << '\n';
     }
     write_file_atomic(ACCOUNT_FILE, out.str());
@@ -412,41 +509,129 @@ static void normalize_petals(Account &acc) {
     }
 }
 
+static uint8_t petal_is_filler(PetalID::T id) {
+    return id == PetalID::kNone || id == PetalID::kBasic || id == PetalID::kUniqueBasic;
+}
+
+static uint32_t count_valuable_petals(std::array<PetalID::T, 2 * MAX_SLOT_COUNT> const &p) {
+    uint32_t n = 0;
+    for (uint32_t i = 0; i < 2 * MAX_SLOT_COUNT; ++i)
+        if (!petal_is_filler(p[i])) ++n;
+    return n;
+}
+
+// Primary bar only — bag/secondary is a separate authority.
+static uint8_t primary_is_trivial(
+    std::array<PetalID::T, 2 * MAX_SLOT_COUNT> const &p, uint32_t primary_n
+) {
+    if (primary_n > MAX_SLOT_COUNT) primary_n = MAX_SLOT_COUNT;
+    for (uint32_t i = 0; i < primary_n; ++i)
+        if (!petal_is_filler(p[i])) return 0;
+    return 1;
+}
+
+static uint32_t account_primary_slots(Account const &acc, Client *client) {
+    uint32_t n = client != nullptr
+        ? Talent::slot_count_from_ranks(client->talent_ranks)
+        : Talent::slot_count_from_ranks(acc.talent_ranks);
+    if (n < 5) n = 5;
+    if (n > MAX_SLOT_COUNT) n = MAX_SLOT_COUNT;
+    return n;
+}
+
+// If primary was wiped but an active K/L preset still names the gear, rebuild
+// the bar from owned petals (bag + leftover primary). Never deletes bag items.
+static void restore_primary_from_active_preset(Account &acc) {
+    uint8_t idx = acc.active_loadout_preset;
+    if (idx >= LOADOUT_PRESET_COUNT) return;
+    LoadoutPreset const &preset = acc.loadout_presets[idx];
+    if (preset.slot_count == 0) return;
+    uint32_t primary_n = account_primary_slots(acc, nullptr);
+    if (!primary_is_trivial(acc.petals, primary_n)) return;
+    std::array<uint32_t, PetalID::kNumPetals> overflow = {};
+    uint8_t fallback = 0;
+    if (!arrange_loadout_preset(acc.petals, (uint8_t) primary_n, preset, overflow, fallback))
+        return;
+    for (uint32_t id = 0; id < PetalID::kNumPetals; ++id) {
+        if (overflow[id] == 0) continue;
+        uint64_t sum = (uint64_t) acc.craft_bank[id] + overflow[id];
+        if (sum > 1000000ull) sum = 1000000ull;
+        acc.craft_bank[id] = (uint32_t) sum;
+    }
+}
+
 static void copy_progress(Account &acc, Client *client) {
     if (client == nullptr || client->game == nullptr) return;
     Simulation *sim = &client->game->simulation;
     if (!sim->ent_exists(client->camera)) return;
     Entity &camera = sim->get_ent(client->camera);
-    acc.petals.fill(PetalID::kNone);
+    std::array<PetalID::T, 2 * MAX_SLOT_COUNT> next = {};
+    next.fill(PetalID::kNone);
     // Level is a high-water mark — never write a lower value back to the account.
     uint32_t level = 1;
-    if (sim->ent_alive(camera.get_player())) {
-        Entity &player = sim->get_ent(camera.get_player());
+    // Prefer flower loadout whenever the entity still exists — even if
+    // pending_delete. While alive, camera inventory is cleared to None at spawn;
+    // reading it after request_delete but before entity_on_death wipes accounts.
+    EntityID pid = camera.get_player();
+    if (sim->ent_exists(pid) && sim->get_ent(pid).has_component(kFlower)) {
+        Entity &player = sim->get_ent(pid);
         uint32_t lv = score_to_level(player.get_score());
         if (lv < 1) lv = 1;
         if (lv < camera.get_respawn_level()) lv = camera.get_respawn_level();
         level = lv;
         for (uint32_t i = 0; i < 2 * MAX_SLOT_COUNT; ++i)
-            acc.petals[i] = player.get_loadout_ids(i);
+            next[i] = player.get_loadout_ids(i);
     } else {
         level = camera.get_respawn_level();
         if (level < 1) level = 1;
         for (uint32_t i = 0; i < 2 * MAX_SLOT_COUNT; ++i)
-            acc.petals[i] = camera.get_inventory(i);
+            next[i] = camera.get_inventory(i);
     }
     if (level > acc.level) acc.level = level;
+
+    uint32_t const primary_n = account_primary_slots(acc, client);
+    uint32_t const next_v = count_valuable_petals(next);
+    uint32_t const acc_v = count_valuable_petals(acc.petals);
+    // Primary and bag are separate authorities. A mid-drain snap with an empty
+    // primary bar but intact bag used to overwrite and DELETE equipped petals.
+    // Refuse that: keep previous primary when valuables were lost.
+    if (primary_is_trivial(next, primary_n)
+        && !primary_is_trivial(acc.petals, primary_n)
+        && next_v < acc_v) {
+        for (uint32_t i = primary_n; i < primary_n + MAX_SLOT_COUNT
+            && i < 2 * MAX_SLOT_COUNT; ++i)
+            acc.petals[i] = next[i];
+    } else {
+        acc.petals = next;
+    }
     normalize_petals(acc);
+
+    // Refresh the active K/L preset from the live primary so redeploy restores it.
+    // Never used a scheme yet → park current bar on K1.
+    if (!primary_is_trivial(acc.petals, primary_n)) {
+        if (client->active_loadout_preset >= LOADOUT_PRESET_COUNT)
+            client->active_loadout_preset = 0;
+        LoadoutPreset &p = client->loadout_presets[client->active_loadout_preset];
+        p.slot_count = (uint8_t) primary_n;
+        p.petals.fill(PetalID::kNone);
+        for (uint32_t i = 0; i < primary_n; ++i)
+            p.petals[i] = acc.petals[i];
+    }
+
     acc.craft_bank = client->craft_bank;
     acc.coins = client->coins;
     acc.craft_attempts = client->craft_attempts;
-    uint8_t max_r = Talent::max_rank(acc.level);
-    acc.talent_hp = client->talent_hp > max_r ? max_r : client->talent_hp;
-    acc.talent_rot = client->talent_rot > max_r ? max_r : client->talent_rot;
+    for (uint8_t i = 0; i < TalentID::kNum; ++i)
+        acc.talent_ranks[i] = client->talent_ranks[i];
+    Talent::clamp_ranks(acc.talent_ranks, acc.level);
     acc.loadout_presets = client->loadout_presets;
+    acc.active_loadout_preset = client->active_loadout_preset;
     acc.bonus_day = client->bonus_day;
     acc.daily_bonus_seconds = client->daily_bonus_seconds;
     acc.offline_bonus_seconds = client->offline_bonus_seconds;
     acc.last_seen_epoch = wall_seconds();
+    acc.guild_name = client->guild_name;
+    acc.guild_leader = client->guild_leader ? 1 : 0;
 }
 
 uint8_t AccountStore::register_account(Client *client, std::string const &username, std::string const &password) {
@@ -458,7 +643,7 @@ uint8_t AccountStore::register_account(Client *client, std::string const &userna
     acc.pass_hash = hash_password(username, password);
     acc.level = 1;
     acc.petals.fill(PetalID::kNone);
-    for (uint32_t i = 0; i < loadout_slots_at_level(acc.level); ++i)
+    for (uint32_t i = 0; i < Talent::slot_count_from_ranks(acc.talent_ranks); ++i)
         acc.petals[i] = PetalID::kBasic;
     acc.craft_bank.fill(0);
     acc.coins = 0;
@@ -504,8 +689,10 @@ uint8_t AccountStore::resume(Client *client, std::string const &username, uint64
         acc->session_hash != hash_password(username, "session:" + std::to_string(session_token)))
         return AccountResultCode::kAccountWrongPass;
     uint8_t result = bind_session(client, username, acc);
+    // Rotate even on resume so a kicked tab cannot reconnect with the old
+    // token and bounce the new session (single active login).
     if (result == AccountResultCode::kAccountOk)
-        SESSION_TOKENS[username] = session_token;
+        issue_session_token(username);
     return result;
 }
 
@@ -529,11 +716,29 @@ void AccountStore::logout(Client *client, uint8_t revoke_session) {
     }
 }
 
+void AccountStore::prune_stale_sessions() {
+    if (ACTIVE_SESSIONS.empty()) return;
+    std::vector<std::string> stale;
+    stale.reserve(ACTIVE_SESSIONS.size());
+    for (std::string const &name : ACTIVE_SESSIONS) {
+        if (find_live_account_holder(name) == nullptr)
+            stale.push_back(name);
+    }
+    for (std::string const &name : stale) {
+        ACTIVE_SESSIONS.erase(name);
+        std::cout << "[accounts] cleared stale session lock: " << name << std::endl;
+    }
+}
+
 void AccountStore::capture_nosave(Client *client) {
-    if (client == nullptr || client->account_name.empty() || client->game == nullptr) return;
+    if (client == nullptr || client->account_name.empty()) return;
     Account *acc = find(client->account_name);
     if (acc == nullptr) return;
-    copy_progress(*acc, client);
+    // Always keep guild fields even if the camera is gone mid-teardown.
+    acc->guild_name = client->guild_name;
+    acc->guild_leader = client->guild_leader ? 1 : 0;
+    if (client->game != nullptr)
+        copy_progress(*acc, client);
 }
 
 void AccountStore::capture(Client *client) {

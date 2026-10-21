@@ -1,11 +1,14 @@
 #include <Client/MapChunkCache.hh>
 #include <Client/ThemeMaterial.hh>
+#include <Client/TerrainPattern.hh>
 
 #include <Client/Render/Renderer.hh>
 #include <Client/Input.hh>
 
 #include <Shared/Map.hh>
+#include <Shared/RarityScale.hh>
 #include <Shared/StaticData.hh>
+#include <Shared/StaticDefinitions.hh>
 
 #include <algorithm>
 #include <cmath>
@@ -69,349 +72,127 @@ void feature_center(TerrainFeature const &f, float &cx, float &cy) {
     }
 }
 
-// Approximate interior sample for cluster decoration (AABB / circle / ellipse).
-uint8_t sample_in_feature(TerrainFeature const &f, float &ox, float &oy, uint32_t seed, uint32_t i) {
-    float u = Map::terrain_hash(seed, i);
-    float v = Map::terrain_hash(seed, i + 17);
-    if (f.shape == TerrainShape::kAABB) {
-        float mx = 0.5f * (f.left + f.right), my = 0.5f * (f.top + f.bottom);
-        float hw = (f.right - f.left) * 0.38f, hh = (f.bottom - f.top) * 0.38f;
-        ox = mx + u * hw;
-        oy = my + v * hh;
-        return 1;
-    }
-    if (f.shape == TerrainShape::kCircle) {
-        float r = f.right > 0.f ? f.right : 400.f;
-        float ang = u * (float)(2.0 * M_PI);
-        float rad = (0.15f + 0.55f * std::fabs(v)) * r;
-        ox = f.left + std::cos(ang) * rad;
-        oy = f.top + std::sin(ang) * rad;
-        return 1;
-    }
-    if (f.shape == TerrainShape::kEllipse) {
-        float ang = u * (float)(2.0 * M_PI);
-        float rx = f.right * (0.15f + 0.55f * std::fabs(v));
-        float ry = f.bottom * (0.15f + 0.55f * std::fabs(Map::terrain_hash(seed, i + 31)));
-        ox = f.left + std::cos(ang) * rx;
-        oy = f.top + std::sin(ang) * ry;
-        return 1;
-    }
-    return 0;
-}
-
-void paint_ground_detail(Renderer &r, uint8_t mid, TerrainArt::ThemeMaterial const &tm,
-                         float leftX, float topY, float rightX, float bottomY) {
-    float step = tm.ground_step;
-    int x0 = (int)std::floor(leftX / step) - 1;
-    int y0 = (int)std::floor(topY / step) - 1;
-    int x1 = (int)std::ceil(rightX / step) + 1;
-    int y1 = (int)std::ceil(bottomY / step) + 1;
-    uint32_t seed0 = 0xC0FFEEu ^ ((uint32_t)mid * 0x9E3779B9u);
-
-    r.round_line_cap();
-    r.round_line_join();
-
-    for (int gy = y0; gy <= y1; ++gy) {
-        for (int gx = x0; gx <= x1; ++gx) {
-            float bx = (float)gx * step;
-            float by = (float)gy * step;
-            uint32_t cell = seed0 + (uint32_t)gx * 73856093u + (uint32_t)gy * 19349663u;
-            float jx = Map::terrain_hash(cell, 1) * step * 0.35f;
-            float jy = Map::terrain_hash(cell, 2) * step * 0.35f;
-            float px = bx + jx, py = by + jy;
-            if (px < leftX - 40.f || px > rightX + 40.f || py < topY - 40.f || py > bottomY + 40.f)
-                continue;
-            if (Map::circle_hits_impassable(mid, px, py, 28.f)) continue;
-
-            // Low-freq shade blob
-            if ((cell & 3u) != 0u) {
-                float br = 28.f + std::fabs(Map::terrain_hash(cell, 3)) * 40.f;
-                r.set_fill(tm.ground_shade);
-                r.begin_path();
-                r.ellipse(px, py, br, br * 0.72f);
-                r.fill();
-            }
-
-            // Style-specific micro detail (per biome art spec)
-            switch (tm.style) {
-            case TerrainArt::Style::kHedge:
-            case TerrainArt::Style::kJungle: {
-                uint8_t dense = (tm.style == TerrainArt::Style::kJungle) ? 1 : 0;
-                if ((cell & 7u) < (dense ? 6u : 5u)) {
-                    r.set_stroke(dense ? tm.wall_dark : tm.wall_mid);
-                    r.set_line_width(dense ? 2.8f : 2.4f);
-                    r.begin_path();
-                    for (uint32_t k = 0; k < 3; ++k) {
-                        float ox = Map::terrain_hash(cell, 10 + k) * 10.f;
-                        float h = 9.f + std::fabs(Map::terrain_hash(cell, 20 + k)) * 8.f;
-                        r.move_to(px + ox, py + 4.f);
-                        r.qcurve_to(px + ox + 3.f, py - h * 0.4f, px + ox - 2.f, py - h);
-                    }
-                    r.stroke();
-                }
-                if (!dense && (cell % 11u) == 0u) {
-                    r.set_fill(tm.ground_light);
-                    r.begin_path();
-                    for (uint32_t k = 0; k < 4; ++k) {
-                        float ang = (float)k * (float)M_PI * 0.5f;
-                        r.ellipse(px + std::cos(ang) * 5.f, py + std::sin(ang) * 5.f, 3.2f, 3.2f);
-                    }
-                    r.fill();
-                    r.set_fill(0xffF0C040);
-                    r.begin_path();
-                    r.arc(px, py, 2.2f);
-                    r.fill();
-                } else if ((cell % 5u) == 0u) {
-                    r.set_fill(tm.ground_light);
-                    r.begin_path();
-                    r.arc(px, py, dense ? 2.4f : 1.6f);
-                    r.fill();
-                }
-                break;
-            }
-            case TerrainArt::Style::kRock: {
-                // Dune ripples + sand grains
-                if ((cell & 1u) == 0u) {
-                    r.set_stroke(tm.wall_dark);
-                    r.set_line_width(1.8f);
-                    r.set_global_alpha(0.35f);
-                    r.begin_path();
-                    float w = 22.f + std::fabs(Map::terrain_hash(cell, 4)) * 18.f;
-                    r.move_to(px - w, py);
-                    r.qcurve_to(px, py + 6.f * Map::terrain_hash(cell, 5), px + w, py);
-                    r.stroke();
-                    r.set_global_alpha(1.f);
-                }
-                if ((cell & 3u) == 0u) {
-                    r.set_fill(tm.ground_light);
-                    r.begin_path();
-                    r.ellipse(px, py, 4.f + std::fabs(Map::terrain_hash(cell, 6)) * 6.f,
-                              3.f + std::fabs(Map::terrain_hash(cell, 7)) * 4.f);
-                    r.fill();
-                }
-                break;
-            }
-            case TerrainArt::Style::kReef: {
-                // Soft caustics + coral speckles
-                if ((cell & 3u) != 0u) {
-                    r.set_stroke(tm.water_hi);
-                    r.set_line_width(1.4f);
-                    r.begin_path();
-                    r.ellipse(px, py, 18.f, 8.f);
-                    r.stroke();
-                }
-                if ((cell % 9u) == 0u) {
-                    r.set_fill(tm.channel);
-                    r.begin_path();
-                    r.arc(px, py, 3.5f);
-                    r.fill();
-                }
-                break;
-            }
-            case TerrainArt::Style::kIce: {
-                // Soft snow drifts + sparkle
-                if ((cell & 3u) == 0u) {
-                    r.set_fill(tm.ground_light);
-                    r.begin_path();
-                    r.ellipse(px, py, 16.f + std::fabs(Map::terrain_hash(cell, 4)) * 14.f,
-                              10.f + std::fabs(Map::terrain_hash(cell, 5)) * 8.f);
-                    r.fill();
-                }
-                if ((cell % 6u) == 0u) {
-                    r.set_fill(0xffffffff);
-                    r.begin_path();
-                    r.ellipse(px, py, 2.2f, 7.f);
-                    r.fill();
-                }
-                break;
-            }
-            case TerrainArt::Style::kDirt: {
-                // Packed nest floor: soft soil blobs + grit
-                if ((cell & 3u) == 0u) {
-                    r.set_fill(tm.ground_shade);
-                    r.begin_path();
-                    r.ellipse(px, py,
-                              14.f + std::fabs(Map::terrain_hash(cell, 2)) * 18.f,
-                              9.f + std::fabs(Map::terrain_hash(cell, 3)) * 10.f);
-                    r.fill();
-                }
-                if ((cell & 7u) == 0u) {
-                    r.set_fill(tm.wall_dark);
-                    r.begin_path();
-                    r.ellipse(px + 4.f, py - 2.f, 5.f, 3.5f);
-                    r.fill();
-                }
-                // Dry root curls
-                if ((cell % 11u) == 0u) {
-                    r.set_stroke(tm.channel_speck);
-                    r.set_line_width(2.2f);
-                    r.begin_path();
-                    float rr = 10.f + std::fabs(Map::terrain_hash(cell, 4)) * 8.f;
-                    r.move_to(px - rr * 0.4f, py);
-                    r.qcurve_to(px, py - rr * 0.6f, px + rr * 0.5f, py + rr * 0.2f);
-                    r.stroke();
-                }
-                // Occasional egg / seed fleck
-                if ((cell % 17u) == 0u) {
-                    r.set_fill(0xffF2DDB5);
-                    r.begin_path();
-                    r.ellipse(px, py, 3.2f, 2.4f);
-                    r.fill();
-                }
-                break;
-            }
-            case TerrainArt::Style::kLava: {
-                // Ash grit + ember sparks
-                if ((cell & 3u) == 0u) {
-                    r.set_fill(tm.wall_dark);
-                    r.begin_path();
-                    r.ellipse(px, py, 6.f, 4.f);
-                    r.fill();
-                }
-                if ((cell % 10u) == 0u) {
-                    r.set_fill(tm.ground_light);
-                    r.begin_path();
-                    r.arc(px, py, 2.8f);
-                    r.fill();
-                }
-                break;
-            }
-            case TerrainArt::Style::kMasonry: {
-                // Warm stone tile seams (readable plaza)
-                float tile = 48.f;
-                float tx = std::floor(px / tile) * tile;
-                float ty = std::floor(py / tile) * tile;
-                if ((cell & 7u) == 0u) {
-                    r.set_stroke(tm.ground_shade | 0xff000000);
-                    r.set_line_width(2.2f);
-                    r.set_global_alpha(0.45f);
-                    r.begin_path();
-                    r.rect(tx, ty, tile, tile);
-                    r.stroke();
-                    r.set_global_alpha(1.f);
-                }
-                if ((cell % 13u) == 0u) {
-                    r.set_fill(tm.channel_speck); // gold fleck
-                    r.begin_path();
-                    r.arc(px, py, 2.4f);
-                    r.fill();
-                }
-                break;
-            }
-            default:
-                break;
-            }
-        }
-    }
-}
-
-void paint_wall_clusters(Renderer &r, TerrainFeature const &f, TerrainArt::ThemeMaterial const &tm) {
+// G04-style channel / dirt-road detail (clipped by caller). Wide arteries need
+// dense soft blobs + grit so they don't read as flat solid fills.
+void paint_channel_detail(Renderer &r, TerrainFeature const &f,
+                          TerrainArt::ThemeMaterial const &tm,
+                          float leftX, float topY, float rightX, float bottomY) {
+    float hw = Map::feature_half_width(f);
+    if (hw < 8.f) hw = 48.f;
+    float step = std::clamp(hw * 0.22f, 28.f, 56.f);
     uint32_t seed = f.seed ? f.seed : 1u;
-    uint32_t n = 10;
-    if (f.shape == TerrainShape::kAABB) {
-        float area = std::max(1.f, (f.right - f.left) * (f.bottom - f.top));
-        n = (uint32_t)std::clamp(area / 180000.f, 8.f, 28.f);
-    } else if (f.shape == TerrainShape::kCircle || f.shape == TerrainShape::kEllipse) {
-        n = 12;
-    } else {
-        return; // rivers / spirals: outline only
+
+    auto sample_spine = [&](float t, float &cx, float &cy) {
+        if (f.shape == TerrainShape::kSpiral)
+            Map::spiral_center_at(f, t, cx, cy);
+        else if (f.shape == TerrainShape::kRiver)
+            Map::river_center_at(f, t, cx, cy);
+        else if (f.shape == TerrainShape::kAABB) {
+            cx = f.left + (f.right - f.left) * t;
+            cy = f.top + (f.bottom - f.top) * 0.5f;
+        } else {
+            cx = f.left;
+            cy = f.top;
+        }
+    };
+
+    // Opaque mixes — alpha comes only from globalAlpha (channel_speck is translucent).
+    uint32_t soil_dark = (tm.channel_speck & 0x00ffffffu) | 0xff000000u;
+    uint32_t soil_light = Renderer::MIX(tm.channel, 0xffffffff, 0.22f) | 0xff000000u;
+    uint32_t soil_mid = Renderer::MIX(tm.channel, soil_dark, 0.35f) | 0xff000000u;
+
+    // Soft shade / light soil patches along the road bed (G04)
+    uint32_t n_blob = (uint32_t)std::clamp(hw * 0.08f, 18.f, 48.f);
+    for (uint32_t i = 0; i < n_blob; ++i) {
+        float t = (float)i / (float)(n_blob - 1u);
+        float cx, cy;
+        sample_spine(t, cx, cy);
+        float jx = Map::terrain_hash(seed, i + 101) * hw * 0.72f;
+        float jy = Map::terrain_hash(seed, i + 131) * hw * 0.55f;
+        float px = cx + jx, py = cy + jy;
+        if (px < leftX - 60.f || px > rightX + 60.f || py < topY - 60.f || py > bottomY + 60.f)
+            continue;
+        if (!Map::point_in_feature(f, px, py)) continue;
+        float br = 22.f + std::fabs(Map::terrain_hash(seed, i + 151)) * 42.f;
+        r.set_fill(((i & 1u) == 0u) ? soil_dark : soil_light);
+        r.set_global_alpha(((i & 1u) == 0u) ? 0.28f : 0.2f);
+        r.begin_path();
+        r.ellipse(px, py, br, br * 0.68f);
+        r.fill();
+        r.set_global_alpha(1.f);
     }
 
-    r.round_line_cap();
-    for (uint32_t i = 0; i < n; ++i) {
-        float sx, sy;
-        if (!sample_in_feature(f, sx, sy, seed, i)) continue;
-        float rr = tm.cluster_r_lo + std::fabs(Map::terrain_hash(seed, i + 50)) * (tm.cluster_r_hi - tm.cluster_r_lo);
-
-        if (tm.style == TerrainArt::Style::kMasonry) {
-            // Squared masonry blocks + mortar
-            float bw = rr * 1.6f, bh = rr * 1.1f;
-            r.set_fill(tm.wall_mid);
-            if ((i & 1u) == 0u) r.set_fill(Renderer::MIX(tm.wall_mid, tm.wall_hi, 0.2f));
-            r.begin_path();
-            r.round_rect(sx - bw * 0.5f, sy - bh * 0.5f, bw, bh, 3.f);
-            r.fill();
-            r.set_stroke(tm.wall_dark);
-            r.set_line_width(2.4f);
-            r.begin_path();
-            r.round_rect(sx - bw * 0.5f, sy - bh * 0.5f, bw, bh, 3.f);
-            r.stroke();
-            if ((i % 4u) == 0u) {
-                r.set_fill(tm.channel_speck); // royal gold trim
-                r.begin_path();
-                r.ellipse(sx, sy - bh * 0.25f, bw * 0.2f, 2.5f);
-                r.fill();
-            }
+    // Round grit / soil grains (art spec: 4–11px)
+    uint32_t n_grit = (uint32_t)std::clamp(hw * 0.22f, 48.f, 140.f);
+    for (uint32_t i = 0; i < n_grit; ++i) {
+        float t = Map::terrain_hash(seed, i + 201) * 0.5f + 0.5f;
+        float cx, cy;
+        sample_spine(t, cx, cy);
+        float jx = Map::terrain_hash(seed, i + 221) * hw * 0.85f;
+        float jy = Map::terrain_hash(seed, i + 241) * hw * 0.7f;
+        float px = cx + jx, py = cy + jy;
+        if (px < leftX - 20.f || px > rightX + 20.f || py < topY - 20.f || py > bottomY + 20.f)
             continue;
-        }
-
-        if (tm.style == TerrainArt::Style::kRock || tm.style == TerrainArt::Style::kLava) {
-            // Slightly angular rock blobs
-            r.set_fill(tm.wall_mid);
-            if ((i & 1u) == 0u) r.set_fill(Renderer::MIX(tm.wall_mid, tm.wall_hi, 0.2f));
-            r.begin_path();
-            r.ellipse(sx, sy, rr * 1.15f, rr * 0.75f);
-            r.fill();
-            r.set_stroke(tm.wall_dark);
-            r.set_line_width(2.8f);
-            r.begin_path();
-            r.move_to(sx - rr, sy);
-            r.line_to(sx - rr * 0.2f, sy + rr * 0.55f);
-            r.line_to(sx + rr * 0.9f, sy + rr * 0.2f);
-            r.stroke();
-            if (tm.style == TerrainArt::Style::kLava && (i % 3u) == 0u) {
-                r.set_fill(tm.wall_hi);
-                r.begin_path();
-                r.arc(sx + rr * 0.2f, sy - rr * 0.15f, 3.5f);
-                r.fill();
-            }
-            continue;
-        }
-
-        if (tm.style == TerrainArt::Style::kIce) {
-            // Faceted ice: deep base + bright cap
-            r.set_fill(tm.wall_deep);
-            r.begin_path();
-            r.ellipse(sx, sy, rr, rr * 0.9f);
-            r.fill();
-            r.set_fill(tm.wall_mid);
-            r.begin_path();
-            r.ellipse(sx, sy - rr * 0.15f, rr * 0.7f, rr * 0.55f);
-            r.fill();
-            r.set_fill(tm.wall_hi);
-            r.begin_path();
-            r.ellipse(sx - rr * 0.15f, sy - rr * 0.35f, rr * 0.35f, rr * 0.22f);
-            r.fill();
-            continue;
-        }
-
-        // Hedge / jungle / dirt / reef — soft clusters
-        r.set_fill(tm.wall_mid);
-        if ((i & 1u) == 0u) r.set_fill(Renderer::MIX(tm.wall_mid, tm.wall_hi, 0.25f));
+        if (!Map::point_in_feature(f, px, py)) continue;
+        float gr = 2.4f + std::fabs(Map::terrain_hash(seed, i + 261)) * 6.5f;
+        r.set_fill(((i % 3u) == 0u) ? soil_dark : soil_mid);
         r.begin_path();
-        r.ellipse(sx, sy, rr, rr * 0.88f);
+        r.ellipse(px, py, gr, gr * 0.75f);
         r.fill();
-        r.set_stroke(tm.wall_dark);
-        r.set_line_width(3.2f);
-        r.begin_path();
-        r.partial_arc(sx, sy + rr * 0.15f, rr * 0.7f, 0.3f, (float)M_PI - 0.3f, 0);
-        r.stroke();
-        r.set_stroke(tm.wall_hi);
-        r.set_line_width(3.8f);
-        r.begin_path();
-        r.partial_arc(sx, sy - rr * 0.2f, rr * 0.55f, (float)M_PI + 0.4f, (float)(2.0 * M_PI) - 0.4f, 0);
-        r.stroke();
+    }
 
-        if ((tm.style == TerrainArt::Style::kHedge || tm.style == TerrainArt::Style::kJungle)
-            && (i % 3u) == 0u) {
-            r.set_stroke(tm.wall_hi);
+    // Short scrapes
+    uint32_t n_scratch = (uint32_t)std::clamp(hw * 0.06f, 12.f, 32.f);
+    r.round_line_cap();
+    for (uint32_t i = 0; i < n_scratch; ++i) {
+        float t = (float)i / (float)(n_scratch + 1u);
+        float cx, cy;
+        sample_spine(t, cx, cy);
+        float jx = Map::terrain_hash(seed, i + 301) * hw * 0.5f;
+        float jy = Map::terrain_hash(seed, i + 321) * hw * 0.4f;
+        float px = cx + jx, py = cy + jy;
+        if (!Map::point_in_feature(f, px, py)) continue;
+        float ang = Map::terrain_hash(seed, i + 341) * (float)M_PI;
+        float len = 14.f + std::fabs(Map::terrain_hash(seed, i + 361)) * 22.f;
+        float dx = std::cos(ang) * len * 0.5f;
+        float dy = std::sin(ang) * len * 0.5f;
+        r.set_stroke(soil_light);
+        r.set_line_width(2.0f + std::fabs(Map::terrain_hash(seed, i + 381)) * 2.2f);
+        r.set_global_alpha(0.45f);
+        r.begin_path();
+        r.move_to(px - dx, py - dy);
+        r.line_to(px + dx, py + dy);
+        r.stroke();
+        r.set_global_alpha(1.f);
+    }
+
+    // Theme accent (fallen leaf / spark / fleck)
+    uint32_t n_accent = (uint32_t)std::clamp(hw / step, 4.f, 14.f);
+    for (uint32_t i = 0; i < n_accent; ++i) {
+        float t = 0.08f + 0.84f * (float)i / (float)(n_accent - 1u);
+        float cx, cy;
+        sample_spine(t, cx, cy);
+        float jx = Map::terrain_hash(seed, i + 401) * hw * 0.6f;
+        float jy = Map::terrain_hash(seed, i + 421) * hw * 0.5f;
+        float px = cx + jx, py = cy + jy;
+        if (!Map::point_in_feature(f, px, py)) continue;
+        if (tm.style == TerrainArt::Style::kHedge || tm.style == TerrainArt::Style::kJungle) {
+            r.set_stroke(0xff6B8F3C);
             r.set_line_width(2.2f);
             r.begin_path();
-            float ang = Map::terrain_hash(seed, i + 80) * (float)M_PI;
-            r.move_to(sx, sy);
-            r.qcurve_to(sx + std::cos(ang) * rr, sy + std::sin(ang) * rr * 0.2f,
-                        sx + std::cos(ang) * rr * 1.2f, sy + std::sin(ang) * rr * 0.9f);
+            r.move_to(px - 5.f, py);
+            r.qcurve_to(px, py - 7.f, px + 6.f, py - 2.f);
             r.stroke();
+        } else if (tm.style == TerrainArt::Style::kMasonry) {
+            r.set_fill(soil_light);
+            r.begin_path();
+            r.arc(px, py, 2.6f);
+            r.fill();
+        } else {
+            r.set_fill(soil_light);
+            r.begin_path();
+            r.ellipse(px, py, 3.5f, 2.2f);
+            r.fill();
         }
     }
 }
@@ -423,16 +204,22 @@ void paint_static(Renderer &renderer, uint8_t mid, uint32_t difficulty,
     // --- Pass 1: ground fills (zone rings tinted toward theme ground) ---
     // Specialty eco-pockets drive spawns but must not paint flat rectangles.
     MapZones const &zones = map_zones(mid);
-    uint32_t ring_n = zones.size() < 4 ? zones.size() : 4;
+    // First MAX_DIFFICULTY+1 entries are concentric rarity rings (outer→hub).
+    uint32_t ring_n = zones.size() < (MAX_DIFFICULTY + 1) ? zones.size() : (MAX_DIFFICULTY + 1);
     for (uint32_t i = 0; i < ring_n; ++i) {
         ZoneDefinition const &def = zones[i];
         if (def.right <= leftX || def.left >= rightX || def.bottom <= topY || def.top >= bottomY)
             continue;
-        // Outer rings slightly darker for depth cue
+        // Tint ground toward rarity colour (subtle); hub stays light.
+        float tint = 0.04f + 0.03f * (float)def.difficulty / (float)MAX_DIFFICULTY;
+        if (def.difficulty == 0) tint = 0.f;
         uint32_t col = tm.ground;
-        if (def.difficulty >= 3) col = Renderer::MIX(tm.ground, tm.wall_dark, 0.18f);
-        else if (def.difficulty == 2) col = Renderer::MIX(tm.ground, tm.wall_mid, 0.10f);
-        else if (def.difficulty == 0) col = Renderer::MIX(tm.ground, tm.ground_light, 0.35f);
+        if (def.difficulty == 0)
+            col = Renderer::MIX(tm.ground, tm.ground_light, 0.35f);
+        else if (def.difficulty >= RarityID::kLegendary)
+            col = Renderer::MIX(tm.ground, tm.wall_dark, 0.12f + tint);
+        else if (def.difficulty >= RarityID::kRare)
+            col = Renderer::MIX(tm.ground, tm.wall_mid, 0.08f + tint * 0.5f);
         renderer.set_fill(col);
         renderer.fill_rect(def.left, def.top, def.right - def.left, def.bottom - def.top);
         if (difficulty > def.difficulty) {
@@ -441,21 +228,7 @@ void paint_static(Renderer &renderer, uint8_t mid, uint32_t difficulty,
         }
     }
 
-    // Soft weave accent (secondary; contrast now comes from wall outlines)
-    constexpr float weave = 72.f;
-    renderer.set_stroke(MapTheme::WEAVE_DARK);
-    renderer.set_line_width(1.0f);
-    renderer.begin_path();
-    int diagonal_first = (int)std::floor((leftX - bottomY) / weave) - 1;
-    int diagonal_last = (int)std::ceil((rightX - topY) / weave) + 1;
-    for (int i = diagonal_first; i <= diagonal_last; i += 2) {
-        float k = i * weave;
-        renderer.move_to(k + topY, topY);
-        renderer.line_to(k + bottomY, bottomY);
-    }
-    renderer.stroke();
-
-    paint_ground_detail(renderer, mid, tm, leftX, topY, rightX, bottomY);
+    TerrainPattern::draw(renderer, mid, leftX, topY, rightX, bottomY);
 
     MapTerrain const &terrain = map_terrain(mid);
     float oxs[TERRAIN_OUTLINE_MAX];
@@ -501,31 +274,40 @@ void paint_static(Renderer &renderer, uint8_t mid, uint32_t difficulty,
             renderer.set_fill(tm.wall_deep);
             if (!path_outline(f, 0)) continue;
             renderer.fill();
-            paint_wall_clusters(renderer, f, tm);
+            RenderContext wall_clip(&renderer);
+            renderer.clip();
+            TerrainPattern::draw_wall(renderer, f, mid);
         } else {
             renderer.set_fill(tm.water);
             if (!path_outline(f, smooth)) continue;
             renderer.fill();
-            // Ripples
+            // Short open currents keep the surface directional without rings.
             renderer.set_stroke(tm.water_hi);
-            renderer.set_line_width(1.6f);
+            renderer.set_line_width(2.2f);
+            renderer.round_line_cap();
             if (f.shape == TerrainShape::kRiver || f.shape == TerrainShape::kSpiral) {
-                for (uint32_t i = 1; i < 8; ++i) {
-                    float t = (float)i / 9.f;
+                for (uint32_t i = 1; i < 11; ++i) {
+                    float t = (float)i / 12.f;
                     float cx, cy;
                     if (f.shape == TerrainShape::kSpiral)
                         Map::spiral_center_at(f, t, cx, cy);
                     else
                         Map::river_center_at(f, t, cx, cy);
                     renderer.begin_path();
-                    renderer.ellipse(cx, cy, 30.f, 13.f);
+                    renderer.move_to(cx - 38.f, cy + 4.f);
+                    renderer.bcurve_to(cx - 13.f, cy - 9.f,
+                                       cx + 16.f, cy + 10.f, cx + 42.f, cy - 2.f);
                     renderer.stroke();
                 }
             } else {
                 float cx, cy; feature_center(f, cx, cy);
                 for (uint32_t i = 0; i < 3; ++i) {
+                    float x = cx - 64.f + i * 32.f;
+                    float y = cy - 24.f + i * 26.f;
                     renderer.begin_path();
-                    renderer.ellipse(cx, cy, 44.f + i * 30.f, 24.f + i * 16.f);
+                    renderer.move_to(x, y);
+                    renderer.bcurve_to(x + 26.f, y - 12.f,
+                                       x + 50.f, y + 8.f, x + 77.f, y - 5.f);
                     renderer.stroke();
                 }
             }
@@ -540,8 +322,9 @@ void paint_static(Renderer &renderer, uint8_t mid, uint32_t difficulty,
             continue;
         if (feature_center_on_channel(f)) continue;
         uint8_t smooth = (f.kind == TerrainKind::kWater || f.shape == TerrainShape::kRiver) ? 1 : 0;
-        renderer.set_stroke(f.kind == TerrainKind::kHill ? tm.wall_outline : Renderer::MIX(tm.water, 0xff000000, 0.45f));
-        renderer.set_line_width(f.kind == TerrainKind::kHill ? tm.outline_w : tm.outline_w * 0.65f);
+        if (f.kind != TerrainKind::kHill) continue;
+        renderer.set_stroke(tm.wall_outline);
+        renderer.set_line_width(tm.outline_w);
         if (!path_outline(f, smooth)) continue;
         renderer.stroke();
         if (f.kind == TerrainKind::kHill) {
@@ -556,29 +339,14 @@ void paint_static(Renderer &renderer, uint8_t mid, uint32_t difficulty,
     for (TerrainFeature const &f : terrain) {
         if (f.kind != TerrainKind::kChannel || !feature_intersects(f, leftX, topY, rightX, bottomY))
             continue;
+        if (!path_outline(f, 1)) continue;
         renderer.set_fill(tm.channel);
-        path_outline(f, 1);
         renderer.fill();
-        renderer.set_fill(tm.channel_speck);
-        for (uint32_t i = 0; i < 22; ++i) {
-            float t = (float)i / 21.f;
-            float cx, cy;
-            if (f.shape == TerrainShape::kRiver || f.shape == TerrainShape::kSpiral) {
-                if (f.shape == TerrainShape::kSpiral)
-                    Map::spiral_center_at(f, t, cx, cy);
-                else
-                    Map::river_center_at(f, t, cx, cy);
-            } else if (f.shape == TerrainShape::kAABB) {
-                cx = f.left + (f.right - f.left) * t;
-                cy = f.top + (f.bottom - f.top) * 0.5f;
-            } else {
-                cx = f.left; cy = f.top;
-            }
-            float jx = Map::terrain_hash(f.seed, i) * 42.f;
-            float jy = Map::terrain_hash(f.seed, i + 9) * 32.f;
-            renderer.begin_path();
-            renderer.ellipse(cx + jx, cy + jy, 7.f, 4.f);
-            renderer.fill();
+        // Clip detail to the road silhouette so grit doesn't spill onto grass
+        RenderContext clip_guard(&renderer);
+        if (path_outline(f, 1)) {
+            renderer.clip();
+            paint_channel_detail(renderer, f, tm, leftX, topY, rightX, bottomY);
         }
     }
 }
@@ -611,24 +379,32 @@ void MapChunkCache::draw(Renderer &target, uint8_t map_id, uint32_t difficulty,
     }
     ++frame;
 
+    // Only chunks whose origin lies inside the arena (edge chunks may pad past).
+    int const max_cx = std::max(0, ((int)ARENA_WIDTH - 1) / kChunkSize);
+    int const max_cy = std::max(0, ((int)ARENA_HEIGHT - 1) / kChunkSize);
     int x0 = std::max(0, (int)std::floor(left / kChunkSize));
     int y0 = std::max(0, (int)std::floor(top / kChunkSize));
-    int x1 = std::min((int)std::floor((float)ARENA_WIDTH / kChunkSize),
-                      (int)std::floor(right / kChunkSize));
-    int y1 = std::min((int)std::floor((float)ARENA_HEIGHT / kChunkSize),
-                      (int)std::floor(bottom / kChunkSize));
+    int x1 = std::min(max_cx, (int)std::floor(right / kChunkSize));
+    int y1 = std::min(max_cy, (int)std::floor(bottom / kChunkSize));
     if (x1 < x0 || y1 < y0) return;
 
-    size_t limit = mobile ? 32u : 48u;
+    // Clamp live paint to arena so the void outside the map stays the solid
+    // backdrop color (avoids edge-chunk pad flashing ground past the border).
+    float const paint_l = std::max(left, 0.f);
+    float const paint_t = std::max(top, 0.f);
+    float const paint_r = std::min(right, (float)ARENA_WIDTH);
+    float const paint_b = std::min(bottom, (float)ARENA_HEIGHT);
+    if (paint_r <= paint_l || paint_b <= paint_t) return;
+
+    size_t limit = mobile ? 40u : 64u;
     size_t needed = (size_t)(x1 - x0 + 1) * (size_t)(y1 - y0 + 1);
     if (needed > limit) {
-        paint_static(target, map_id, difficulty, left, top, right, bottom);
+        paint_static(target, map_id, difficulty, paint_l, paint_t, paint_r, paint_b);
         return;
     }
 
-    size_t const bake_budget = mobile ? 1u : 2u;
+    size_t const bake_budget = mobile ? 3u : 6u;
     size_t baked = 0;
-    uint8_t missing = 0;
 
     for (int y = y0; y <= y1; ++y) {
         for (int x = x0; x <= x1; ++x) {
@@ -639,7 +415,6 @@ void MapChunkCache::draw(Renderer &target, uint8_t map_id, uint32_t difficulty,
                 it->used = frame;
                 continue;
             }
-            missing = 1;
             if (baked >= bake_budget) continue;
             if (chunks.size() == limit) {
                 it = std::min_element(chunks.begin(), chunks.end(), [](Chunk const &a, Chunk const &b) {
@@ -657,20 +432,29 @@ void MapChunkCache::draw(Renderer &target, uint8_t map_id, uint32_t difficulty,
         }
     }
 
-    if (missing) {
-        paint_static(target, map_id, difficulty, left, top, right, bottom);
-        return;
-    }
-
+    // Composite: draw ready chunks; fill holes with a per-tile paint so we never
+    // alternate full-viewport paint_static ↔ chunk blit (that was the flicker).
     for (int y = y0; y <= y1; ++y) {
         for (int x = x0; x <= x1; ++x) {
             auto it = std::find_if(chunks.begin(), chunks.end(), [=](Chunk const &c) {
                 return c.x == x && c.y == y;
             });
-            if (it == chunks.end()) continue;
-            target.draw_image_at(*it->canvas,
-                                 (float)(x * kChunkSize - kChunkPad),
-                                 (float)(y * kChunkSize - kChunkPad));
+            float const cx0 = (float)(x * kChunkSize);
+            float const cy0 = (float)(y * kChunkSize);
+            float const cx1 = cx0 + (float)kChunkSize;
+            float const cy1 = cy0 + (float)kChunkSize;
+            if (it != chunks.end()) {
+                target.draw_image_at(*it->canvas,
+                                     cx0 - (float)kChunkPad,
+                                     cy0 - (float)kChunkPad);
+            } else {
+                float hl = std::max(cx0, paint_l);
+                float ht = std::max(cy0, paint_t);
+                float hr = std::min(cx1, paint_r);
+                float hb = std::min(cy1, paint_b);
+                if (hr > hl && hb > ht)
+                    paint_static(target, map_id, difficulty, hl, ht, hr, hb);
+            }
         }
     }
 }

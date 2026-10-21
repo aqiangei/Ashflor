@@ -24,6 +24,7 @@ set(SRCS
     I18n.cc
     Input.cc
     MapChunkCache.cc
+    TerrainPattern.cc
     Main.cc
     Network.cc
     Particle.cc
@@ -37,12 +38,13 @@ set(SRCS
     Ui/InGame/Leaderboard.cc
     Ui/InGame/LevelBar.cc
     Ui/InGame/BossHealthBar.cc
+    Ui/InGame/ServerAnnounce.cc
     Ui/InGame/LoadoutPetal.cc
     Ui/InGame/LoadoutSlot.cc
     Ui/InGame/Map.cc
     Ui/InGame/Mobile.cc
-    Ui/InGame/OverlevelTimer.cc
     Ui/InGame/PauseMenu.cc
+    Ui/InGame/HudIcons.cc
     Ui/InGame/Chat.cc
     Ui/InGame/Social.cc
     Ui/InGame/GamePanels.cc

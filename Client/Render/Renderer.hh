@@ -39,6 +39,8 @@ public:
     uint32_t id = 0;
     float width = 0;
     float height = 0;
+    // Lazy canvas setTransform: matrix ops only mark dirty; flush on draw.
+    bool transform_dirty = false;
     Renderer();
     ~Renderer();
 

@@ -19,6 +19,10 @@ namespace Ui {
         void focus();
         void blur();
         void sync_from_dom();
+        // Clear ref + DOM overlay (call before blur after send so DOM cannot restore the text).
+        void clear();
+        // Replace draft + DOM value (Tab complete)
+        void set_text(std::string const &);
         void set_password_masked(uint8_t masked);
         uint8_t password_is_masked() const { return password_masked; }
         uint8_t is_editing() const { return editing; }

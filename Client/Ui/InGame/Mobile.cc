@@ -24,8 +24,22 @@ static constexpr float kJoyDead = 0.12f;
 static constexpr float kAttackR = 72.f;
 static constexpr float kDefendR = 56.f;
 
+static uint32_t g_mobile_joy_touch = (uint32_t) -1;
+static uint32_t g_mobile_atk_touch = (uint32_t) -1;
+static uint32_t g_mobile_def_touch = (uint32_t) -1;
+static uint32_t g_mobile_swap_touch = (uint32_t) -1;
+
 static uint8_t mobile_hud() {
-    return Input::mobile_controls() && Game::alive();
+    // Soft keyboard / chat typing: stand still, hide stick + A/B
+    return Input::mobile_controls() && Game::alive() && !Game::chat_open;
+}
+
+uint8_t Ui::mobile_touch_is_control(uint32_t touch_id) {
+    if (touch_id == (uint32_t) -1) return 0;
+    return touch_id == g_mobile_joy_touch
+        || touch_id == g_mobile_atk_touch
+        || touch_id == g_mobile_def_touch
+        || touch_id == g_mobile_swap_touch;
 }
 
 MobileJoyStick::MobileJoyStick(float w, float h, float r)
@@ -55,6 +69,8 @@ void MobileJoyStick::on_render(Renderer &ctx) {
 
     if (!held) {
         is_pressed = 0;
+        if (persistent_touch_id == g_mobile_joy_touch)
+            g_mobile_joy_touch = (uint32_t) -1;
         persistent_touch_id = (uint32_t)-1;
         knob_x = 0;
         knob_y = 0;
@@ -63,6 +79,7 @@ void MobileJoyStick::on_render(Renderer &ctx) {
         return; // hide stick when idle (not a fixed pad)
     }
     is_pressed = 1;
+    g_mobile_joy_touch = persistent_touch_id;
 
     float dx = (px - base_x) / Ui::scale;
     float dy = (py - base_y) / Ui::scale;
@@ -129,12 +146,16 @@ void MobileJoyStick::on_event(uint8_t event) {
         }
     } else if (event == UiEvent::kClick) {
         is_pressed = 0;
+        if (persistent_touch_id == g_mobile_joy_touch)
+            g_mobile_joy_touch = (uint32_t) -1;
         persistent_touch_id = (uint32_t)-1;
     } else if (event == UiEvent::kFocusLost) {
         if (Input::is_mobile && persistent_touch_id != (uint32_t)-1
             && Input::touches.contains(persistent_touch_id))
             return;
         is_pressed = 0;
+        if (persistent_touch_id == g_mobile_joy_touch)
+            g_mobile_joy_touch = (uint32_t) -1;
         persistent_touch_id = (uint32_t)-1;
     }
 }
@@ -204,6 +225,10 @@ public:
             }
         }
         if (!down && Game::timestamp >= pulse_until) {
+            if (flag_bit == InputFlags::kAttacking && hold_id == g_mobile_atk_touch)
+                g_mobile_atk_touch = (uint32_t) -1;
+            if (flag_bit == InputFlags::kDefending && hold_id == g_mobile_def_touch)
+                g_mobile_def_touch = (uint32_t) -1;
             held = 0;
             hold_id = (uint32_t)-1;
             BitMath::unset(Input::game_inputs.flags, flag_bit);
@@ -212,6 +237,8 @@ public:
             // Sliding while aiming must not release it or transfer it to a
             // second finger passing over this button.
             BitMath::set(Input::game_inputs.flags, flag_bit);
+            if (flag_bit == InputFlags::kAttacking) g_mobile_atk_touch = hold_id;
+            if (flag_bit == InputFlags::kDefending) g_mobile_def_touch = hold_id;
         }
 
         ctx.set_fill(down || Game::timestamp < pulse_until ? 0x77ffffff : style.fill);
@@ -232,8 +259,14 @@ public:
         if (event == UiEvent::kMouseDown) {
             held = 1;
             hold_id = Input::is_mobile ? touch_id : 0;
+            if (flag_bit == InputFlags::kAttacking) g_mobile_atk_touch = hold_id;
+            if (flag_bit == InputFlags::kDefending) g_mobile_def_touch = hold_id;
             BitMath::set(Input::game_inputs.flags, flag_bit);
         } else if (event == UiEvent::kClick) {
+            if (flag_bit == InputFlags::kAttacking && hold_id == g_mobile_atk_touch)
+                g_mobile_atk_touch = (uint32_t) -1;
+            if (flag_bit == InputFlags::kDefending && hold_id == g_mobile_def_touch)
+                g_mobile_def_touch = (uint32_t) -1;
             held = 0;
             hold_id = (uint32_t)-1;
             BitMath::unset(Input::game_inputs.flags, flag_bit);
@@ -241,6 +274,10 @@ public:
             if (Input::is_mobile && hold_id != (uint32_t)-1
                 && Input::touches.contains(hold_id))
                 return;
+            if (flag_bit == InputFlags::kAttacking && hold_id == g_mobile_atk_touch)
+                g_mobile_atk_touch = (uint32_t) -1;
+            if (flag_bit == InputFlags::kDefending && hold_id == g_mobile_def_touch)
+                g_mobile_def_touch = (uint32_t) -1;
             held = 0;
             hold_id = (uint32_t)-1;
             BitMath::unset(Input::game_inputs.flags, flag_bit);
@@ -263,6 +300,8 @@ public:
                 && dx * dx + dy * dy <= hit * hit) {
                 held = 1;
                 hold_id = event.id;
+                if (flag_bit == InputFlags::kAttacking) g_mobile_atk_touch = hold_id;
+                if (flag_bit == InputFlags::kDefending) g_mobile_def_touch = hold_id;
                 touch->second.saturated = 1;
                 BitMath::set(Input::game_inputs.flags, flag_bit);
             }
@@ -329,6 +368,8 @@ public:
     void finish_press() {
         if (!held) return;
         if (!long_fired) short_tap();
+        if (hold_id == g_mobile_swap_touch)
+            g_mobile_swap_touch = (uint32_t) -1;
         held = 0;
         hold_id = (uint32_t)-1;
         long_fired = 0;
@@ -411,6 +452,7 @@ public:
             long_fired = 0;
             press_at = Game::timestamp;
             hold_id = Input::is_mobile ? touch_id : 0;
+            g_mobile_swap_touch = hold_id;
         } else if (event == UiEvent::kClick || event == UiEvent::kFocusLost) {
             if (event == UiEvent::kFocusLost && Input::is_mobile
                 && hold_id != (uint32_t)-1
@@ -435,6 +477,7 @@ public:
                 long_fired = 0;
                 press_at = Game::timestamp;
                 hold_id = event.id;
+                g_mobile_swap_touch = hold_id;
                 touch->second.saturated = 1;
             }
             return;

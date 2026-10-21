@@ -30,9 +30,10 @@ void tick_petal_behavior(Simulation *sim, Entity &petal) {
     if (BitMath::at(petal.flags, EntityFlags::kIsDespawning) ||
         BitMath::at(petal.flags, EntityFlags::kIsDetached)) {
         PetalID::T pid = petal.get_petal_id();
-        if (petal_name_is(pid, "Missile")) {
+        if (petal_name_is(pid, "Missile") || pid == PetalID::kSandLeafDart) {
             petal.acceleration.unit_normal(petal.get_angle()).set_magnitude(2.0 * PLAYER_ACCELERATION);
-        } else if (pid == PetalID::kPoisonPeas || pid == PetalID::kPeas) {
+        } else if (pid == PetalID::kPoisonPeas || pid == PetalID::kPeas
+                   || pid == PetalID::kGlassStorm) {
             petal.acceleration.unit_normal(petal.heading_angle).set_magnitude(2.0 * PLAYER_ACCELERATION);
         } else if (pid == PetalID::kMoon) {
             float wanting_angle = petal.get_angle() * 2.5;
@@ -78,7 +79,7 @@ void tick_petal_behavior(Simulation *sim, Entity &petal) {
         petal.acceleration = delta;
     }
     PetalID::T pid = petal.get_petal_id();
-    if (petal_name_is(pid, "Missile")) {
+    if (petal_name_is(pid, "Missile") || pid == PetalID::kSandLeafDart) {
             if (BitMath::at(player.input, InputFlags::kAttacking)) {
                 petal.velocity.unit_normal(petal.get_angle()).set_magnitude(15 * PLAYER_ACCELERATION);
                 petal.friction = DEFAULT_FRICTION;
@@ -110,6 +111,7 @@ void tick_petal_behavior(Simulation *sim, Entity &petal) {
             break;
         case PetalID::kPeas:
         case PetalID::kPoisonPeas:
+        case PetalID::kGlassStorm:
             if (BitMath::at(player.input, InputFlags::kAttacking)) {
                 float spray_angle = frand() * 2 * M_PI;
                 petal.friction = DEFAULT_FRICTION;
@@ -143,6 +145,14 @@ void tick_petal_behavior(Simulation *sim, Entity &petal) {
             break;
         }
         case PetalID::kMonstera:
+        case PetalID::kMonsteraEpic:
+        case PetalID::kMonsteraLegendary:
+        case PetalID::kMonsteraMythic:
+        case PetalID::kMonsteraUnique:
+        case PetalID::kMonsteraSuper:
+        case PetalID::kMonsteraUltra:
+        case PetalID::kPollenSandstorm:
+        case PetalID::kWorldTreeSeed:
             if (BitMath::at(player.input, InputFlags::kAttacking)
                 || BitMath::at(player.input, InputFlags::kDefending)) {
                 Vector delta(petal.get_x() - player.get_x(), petal.get_y() - player.get_y());

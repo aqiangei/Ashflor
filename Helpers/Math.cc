@@ -118,13 +118,25 @@ std::string format_pct(float pct) {
 }
 
 std::string format_score(float score) {
-    if (score <= 1000) return std::format("{:.0f}", score);
-    if (score < 1000000) return std::format("{:.1f}k", score / 1000);
-    return std::format("{:.1f}m", score / 1000000);
+    if (score < 1000.f) return std::format("{:.0f}", score);
+    if (score < 1000000.f) {
+        float k = score / 1000.f;
+        if (std::fabs(k - std::round(k)) < 0.05f)
+            return std::format("{:.0f}k", std::round(k));
+        return std::format("{:.1f}k", k);
+    }
+    float m = score / 1000000.f;
+    if (std::fabs(m - std::round(m)) < 0.05f)
+        return std::format("{:.0f}m", std::round(m));
+    return std::format("{:.1f}m", m);
 }
 
 std::string format_number(float num) {
     if (num < 0.1) return std::format("{:.2f}", num);
     if (num < 10 && num != std::floorf(num)) return std::format("{:.1f}", num);
     return format_score(num);
+}
+
+std::string format_stack(uint32_t n) {
+    return "x" + format_score((float) n);
 }

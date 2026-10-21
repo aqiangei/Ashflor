@@ -23,6 +23,38 @@
 #define M_PI 3.14159265358979323846
 #endif
 
+static void draw_animated_water(Renderer &r, uint8_t map_id,
+                                float left, float top, float right, float bottom,
+                                double timestamp) {
+    if (map_id != MapID::kOcean && map_id != MapID::kPolar
+        && map_id != MapID::kVolcano) return;
+    uint32_t color = map_id == MapID::kVolcano ? 0xffffaa45
+                   : map_id == MapID::kPolar ? 0xffe9f8fc : 0xffb9f3f0;
+    float period = map_id == MapID::kVolcano ? 11000.f : 8000.f;
+    float phase = std::fmod((float)timestamp, period) / period;
+    r.set_stroke(color);
+    r.set_line_width(map_id == MapID::kVolcano ? 7.f : 3.f);
+    r.set_global_alpha(map_id == MapID::kVolcano ? .27f : .36f);
+    r.round_line_cap();
+    for (TerrainFeature const &f : map_terrain(map_id)) {
+        if (f.kind != TerrainKind::kWater) continue;
+        if (f.shape != TerrainShape::kRiver && f.shape != TerrainShape::kSpiral) continue;
+        for (int i = 0; i < 13; ++i) {
+            float t = std::fmod((float)i/13.f + phase, 1.f);
+            float x, y;
+            if (f.shape == TerrainShape::kSpiral) Map::spiral_center_at(f, t, x, y);
+            else Map::river_center_at(f, t, x, y);
+            if (x < left-80.f || x > right+80.f || y < top-80.f || y > bottom+80.f)
+                continue;
+            r.begin_path();
+            r.move_to(x-32.f, y+2.f);
+            r.bcurve_to(x-12.f, y-6.f, x+12.f, y+8.f, x+36.f, y);
+            r.stroke();
+        }
+    }
+    r.set_global_alpha(1.f);
+}
+
 void _apply_damage_filter(Renderer &ctx, Entity const &ent) {
     ctx.set_global_alpha(1 - ent.deletion_animation);
     ctx.scale(1 + 0.5 * ent.deletion_animation);
@@ -57,10 +89,9 @@ void Game::render_game() {
     {
         RenderContext context(&renderer);
         renderer.reset_transform();
-        renderer.set_fill(0xff987d72);
-        renderer.fill_rect(0,0,renderer.width,renderer.height);
-        renderer.set_fill(alpha);
-        renderer.fill_rect(0,0,renderer.width,renderer.height);
+        // Stable void color outside the arena (no FOV-tinted wash — that pulsed).
+        renderer.set_fill(0xff2a2624);
+        renderer.fill_rect(0, 0, renderer.width, renderer.height);
     }
     {
         RenderContext context(&renderer);
@@ -71,25 +102,42 @@ void Game::render_game() {
         float rightX = camera.get_camera_x() + renderer.width * scale;
         float topY = camera.get_camera_y() - renderer.height * scale;
         float bottomY = camera.get_camera_y() + renderer.height * scale;
-        MapChunkCache::draw(renderer, mid,
-                            Map::difficulty_at_level(score_to_level(Game::score)),
-                            leftX, topY, rightX, bottomY, Input::is_mobile);
 
-        // The camera-dependent guide grid stays crisp at every zoom level.
-        renderer.set_stroke(alpha);
-        renderer.set_line_width(0.5f);
-        float newLeftX = ceilf(leftX / 50.f) * 50.f;
-        float newTopY = ceilf(topY / 50.f) * 50.f;
-        renderer.begin_path();
-        for (; newLeftX < rightX; newLeftX += 50.f) {
-            renderer.move_to(newLeftX, topY);
-            renderer.line_to(newLeftX, bottomY);
+        // Clip all ground / water / grid to the arena so edge-chunk padding and
+        // bake hole-fills cannot paint (or flash) into the void.
+        {
+            RenderContext arena_clip(&renderer);
+            renderer.begin_path();
+            renderer.rect(0.f, 0.f, (float)ARENA_WIDTH, (float)ARENA_HEIGHT);
+            renderer.clip();
+
+            MapChunkCache::draw(renderer, mid,
+                                Map::difficulty_at_level(score_to_level(Game::score)),
+                                leftX, topY, rightX, bottomY, Input::is_mobile);
+            draw_animated_water(renderer, mid, leftX, topY, rightX, bottomY,
+                                Game::timestamp);
+
+            float grid_l = leftX < 0.f ? 0.f : leftX;
+            float grid_t = topY < 0.f ? 0.f : topY;
+            float grid_r = rightX > (float)ARENA_WIDTH ? (float)ARENA_WIDTH : rightX;
+            float grid_b = bottomY > (float)ARENA_HEIGHT ? (float)ARENA_HEIGHT : bottomY;
+            if (grid_r > grid_l && grid_b > grid_t) {
+                renderer.set_stroke(alpha);
+                renderer.set_line_width(0.5f);
+                float newLeftX = ceilf(grid_l / 50.f) * 50.f;
+                float newTopY = ceilf(grid_t / 50.f) * 50.f;
+                renderer.begin_path();
+                for (; newLeftX < grid_r; newLeftX += 50.f) {
+                    renderer.move_to(newLeftX, grid_t);
+                    renderer.line_to(newLeftX, grid_b);
+                }
+                for (; newTopY < grid_b; newTopY += 50.f) {
+                    renderer.move_to(grid_l, newTopY);
+                    renderer.line_to(grid_r, newTopY);
+                }
+                renderer.stroke();
+            }
         }
-        for (; newTopY < bottomY; newTopY += 50.f) {
-            renderer.move_to(leftX, newTopY);
-            renderer.line_to(rightX, newTopY);
-        }
-        renderer.stroke();
     }
     // Spin-rate hint ring around self while adjusting (Q/E hold or drag wheel)
     if (alive() && Game::rot_hint_opacity > 0.02f) {
@@ -246,7 +294,8 @@ void Game::render_title_screen() {
     renderer.fill_rect(0, 0, renderer.width, renderer.height);
 
     // Slow pan over spawn plaza so the backdrop reads as that map's ThemeMaterial.
-    float const fov = 0.62f;
+    // Half the in-game-ish FOV (0.62 → 0.31) so title preview shows ~2× the world.
+    float const fov = 0.31f;
     float const t = (float)(Game::timestamp * 0.00018);
     float const cam_x = MAP_SPAWN_X + std::sin(t) * 480.f;
     float const cam_y = MAP_SPAWN_Y + std::cos(t * 0.81f) * 360.f;

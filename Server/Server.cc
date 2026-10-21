@@ -3,14 +3,20 @@
 #include <Server/AccountStore.hh>
 #include <Server/Client.hh>
 #include <Server/Game.hh>
+#include <Server/Guild.hh>
 #include <Server/LeaderboardStore.hh>
 #include <Server/RateLimit.hh>
 
 #include <Shared/Binary.hh>
+#include <Shared/Entity.hh>
+#include <Shared/StaticData.hh>
+#include <Shared/StaticDefinitions.hh>
 
 #include <chrono>
 #include <iostream>
 #include <new>
+#include <string>
+#include <vector>
 
 static bool was_draining = false;
 
@@ -58,6 +64,49 @@ void Server::tick() {
         online += (uint32_t) Server::games[i].clients.size();
     }
     Server::player_count = online;
+    // Online roster under minimap (~2s): name, map, guild, level
+    if ((tick_n % 50) == 0 && online > 0) {
+        struct Row {
+            std::string name;
+            uint8_t map_id;
+            std::string guild;
+            uint32_t level;
+        };
+        std::vector<Row> rows;
+        rows.reserve(online);
+        for (uint8_t mi = 0; mi < MapID::kNumMaps; ++mi) {
+            for (Client *c : Server::games[mi].clients) {
+                if (c == nullptr || c->play_name.empty()) continue;
+                uint32_t level = 1;
+                if (c->game != nullptr && c->game->simulation.ent_exists(c->camera)) {
+                    Entity &cam = c->game->simulation.get_ent(c->camera);
+                    if (c->game->simulation.ent_alive(cam.get_player()))
+                        level = score_to_level(c->game->simulation.get_ent(cam.get_player()).get_score());
+                    else
+                        level = cam.get_respawn_level();
+                }
+                if (level < 1) level = 1;
+                rows.push_back({ c->play_name, mi, c->guild_name, level });
+            }
+        }
+        if (rows.size() > 64) rows.resize(64);
+        Writer writer(Server::OUTGOING_PACKET);
+        writer.write<uint8_t>(Clientbound::kOnlineRoster);
+        writer.write<uint8_t>((uint8_t) rows.size());
+        for (Row const &r : rows) {
+            writer.write<std::string>(r.name);
+            writer.write<uint8_t>(r.map_id);
+            writer.write<std::string>(r.guild);
+            writer.write<uint32_t>(r.level);
+        }
+        size_t plen = (size_t) (writer.at - writer.packet);
+        for (uint8_t mi = 0; mi < MapID::kNumMaps; ++mi) {
+            for (Client *c : Server::games[mi].clients) {
+                if (c == nullptr) continue;
+                c->send_packet(writer.packet, plen);
+            }
+        }
+    }
     static uint32_t lb_flush_ticks = 0;
     if (++lb_flush_ticks >= 25) { // ~1s at 25 TPS
         lb_flush_ticks = 0;
@@ -89,6 +138,7 @@ void Server::tick() {
     static uint32_t acc_flush_ticks = 0;
     if (++acc_flush_ticks >= 125) {
         acc_flush_ticks = 0;
+        AccountStore::prune_stale_sessions();
         uint8_t any = 0;
         for (uint8_t i = 0; i < MapID::kNumMaps; ++i) {
             for (Client *c : Server::games[i].clients) {
@@ -108,6 +158,7 @@ void Server::tick() {
         was_draining = true;
         std::cout << "draining...\n";
         AccountStore::save();
+        Guild::save();
         LeaderboardStore::flush();
     }
     if (Server::is_draining && !Server::is_stopping && Server::player_count == 0)
@@ -116,6 +167,7 @@ void Server::tick() {
 
 void Server::init() {
     AccountStore::load();
+    Guild::load();
     LeaderboardStore::load();
     // Seed the ranked "level" column from the saved accounts
     AccountStore::seed_leaderboard_levels();

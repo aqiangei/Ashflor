@@ -11,6 +11,10 @@ void inflict_heal(Simulation *, Entity &, float);
 
 void entity_on_death(Simulation *, Entity const &);
 
+// Copy flower loadout → parent camera inventory (respawn layout). Call before
+// request_delete when capture / respawn must not see an empty camera.
+void flush_flower_loadout_to_camera(Simulation *, Entity &camera, Entity const &flower);
+
 // True for real players / CPU bots, their petals, and flower-owned summons.
 // False for wild mobs and digger (kFlower without camera parent).
 bool is_player_faction(Simulation *, Entity const &);

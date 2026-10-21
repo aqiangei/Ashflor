@@ -29,4 +29,6 @@ namespace Guild {
     void on_login(Client *); // rejoin by account guild_name
     void tick(GameInstance *);
     void broadcast_chat(Client *from, std::string const &sender, std::string const &text);
+    void load();
+    void save();
 }

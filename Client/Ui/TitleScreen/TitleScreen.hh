@@ -26,7 +26,9 @@ namespace Ui {
     class GalleryPetal final : public Element {
     public:
         PetalID::T id;
-        GalleryPetal(PetalID::T, float);
+        // 1 = always paint icon (mob-drop lists); 0 = locked plate until seen
+        uint8_t always_show;
+        GalleryPetal(PetalID::T, float, uint8_t always_show = 0);
 
         virtual void on_render(Renderer &) override;
         virtual void on_event(uint8_t) override;
@@ -42,6 +44,7 @@ namespace Ui {
     class GalleryMob final : public Element {
     public:
         MobID::T id;
+        uint32_t tip_touch = (uint32_t) -1;
         GalleryMob(MobID::T, float);
 
         virtual void on_render(Renderer &) override;

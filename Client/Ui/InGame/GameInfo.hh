@@ -1,6 +1,7 @@
 #pragma once
 
 #include <Client/Ui/Element.hh>
+#include <Shared/StaticDefinitions.hh>
 
 namespace Ui {
     class LevelBar final : public Element {
@@ -9,6 +10,7 @@ namespace Ui {
         uint32_t level;
         LevelBar();
         virtual void on_render(Renderer &) override;
+        virtual void on_event(uint8_t) override;
     };
 
     class HealthBar final : public Element {
@@ -41,12 +43,6 @@ namespace Ui {
         virtual void refactor() override;
     };
 
-    class OverlevelTimer final : public Element {
-    public:
-        OverlevelTimer(float);
-        virtual void on_render(Renderer &) override;
-    };
-
     class MobileJoyStick final : public Element {
         float joystick_radius;
         float base_x;
@@ -66,12 +62,15 @@ namespace Ui {
     Element *make_level_bar();
     Element *make_health_bar();
     Element *make_boss_health_bar();
+    Element *make_server_announce_banner();
+    Element *make_loot_toast();
     Element *make_minimap();
-    Element *make_overlevel_indicator();
     Element *make_mobile_attack_button();
     Element *make_mobile_defend_button();
     Element *make_mobile_swap_button(); // R: tap swap-all, long-press arm L1..Ln pick
     Element *make_mobile_joystick();
+    // True while this touch drives joystick / A / B / R — pinch must skip it.
+    uint8_t mobile_touch_is_control(uint32_t touch_id);
     Element *make_pause_menu();
     Element *make_game_topbar();
     Element *make_leave_confirm();
@@ -86,7 +85,11 @@ namespace Ui {
     Element *make_talents_panel();
     Element *make_craft_panel();
     Element *make_special_craft_panel();
+    Element *make_shop_panel();
     Element *make_boost_panel();
+    // Overlay: place / take-back flies + craft win/miss bursts
+    Element *make_craft_fx_layer();
+    void craft_play_result(uint8_t result, PetalID::T petal);
     class TextInput;
     TextInput *chat_text_input();
 }

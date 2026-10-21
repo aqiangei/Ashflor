@@ -8,6 +8,8 @@
 #include <Client/I18n.hh>
 #include <Client/Ui/Extern.hh>
 #include <Shared/StaticData.hh>
+#include <Shared/StaticDefinitions.hh>
+#include <Shared/Talent.hh>
 
 #include <Helpers/Math.hh>
 
@@ -16,12 +18,22 @@
 
 using namespace Ui;
 
-// Height includes name (top) + XP bar (bottom) so layout does not paint outside bounds
-LevelBar::LevelBar() : Element(280, 56) {
+namespace {
+std::string xp_progress_label() {
+    if (!Game::alive()) return {};
+    uint32_t const total = (uint32_t) Game::score;
+    uint32_t const lv = score_to_level(total);
+    uint32_t const into = total - level_to_score(lv);
+    uint32_t const need = score_to_pass_level(lv);
+    return std::format("{}/{}", into, need);
+}
+} // namespace
+
+// Thin XP strip only — name + HP sit above this in make_level_bar()
+LevelBar::LevelBar() : Element(280, 18) {
     progress = 0;
     style.animate = [&](Element *elt, Renderer &ctx) {
         if (Game::alive()) {
-            Entity &player = Game::simulation.get_ent(Game::player_id);
             float xp = Game::score;
             level = score_to_level(xp);
             xp -= level_to_score(level);
@@ -30,20 +42,28 @@ LevelBar::LevelBar() : Element(280, 56) {
         }
         progress.step(Ui::lerp_amount);
     };
+    tooltip = new Ui::VContainer({
+        new Ui::DynamicText(13, [](){
+            if (!Game::alive()) return std::string{};
+            return I18n::use_chinese
+                ? std::format("经验 {}", xp_progress_label())
+                : std::format("XP {}", xp_progress_label());
+        }, { .fill = 0xffffffff })
+    }, 8, 0);
+    tooltip->style.fill = 0xb01c2418;
+    tooltip->style.round_radius = 8;
+}
+
+void LevelBar::on_event(uint8_t event) {
+    if (event != kFocusLost && Game::alive())
+        rendering_tooltip = 1;
+    else
+        rendering_tooltip = 0;
 }
 
 void LevelBar::on_render(Renderer &ctx) {
-    float const bar_h = 32.f;
-    float const bar_y = height / 2 - bar_h / 2; // bar sits in lower half
+    float const bar_h = 12.f;
 
-    char const *display = Game::account_logged_in && !Game::username.empty()
-        ? Game::username.c_str()
-        : Game::guest_play_name().c_str();
-    ctx.translate(0, -height / 2 + 14);
-    ctx.draw_text(display, { .size = 20 });
-    ctx.translate(0, height / 2 - 14);
-
-    ctx.translate(0, bar_y);
     ctx.set_stroke(0xc0222222);
     ctx.round_line_cap();
     ctx.set_line_width(bar_h);
@@ -52,17 +72,19 @@ void LevelBar::on_render(Renderer &ctx) {
     ctx.line_to(width / 2, 0);
     ctx.stroke();
     ctx.set_stroke(0xfff9e496);
-    ctx.set_line_width(bar_h * 0.8f);
+    ctx.set_line_width(bar_h * 0.78f);
     ctx.begin_path();
     ctx.move_to(-width / 2, 0);
     ctx.line_to(-width / 2 + width * ((float) progress), 0);
     ctx.stroke();
-    std::string text = I18n::format_lvl_flower(level);
-    ctx.draw_text(text.c_str(), { .size = 15 });
-    ctx.translate(0, -bar_y);
+    // Hover: show current/target XP into this level; idle: level label.
+    std::string text = (focus_state == kMouseHover || focus_state == kMouseDown)
+        ? xp_progress_label()
+        : I18n::format_lvl_flower(level);
+    ctx.draw_text(text.c_str(), { .size = 11 });
 }
 
-HealthBar::HealthBar() : Element(280, 16) {
+HealthBar::HealthBar() : Element(280, 28) {
     ratio.set(1);
     lag.set(1);
     style.animate = [&](Element *elt, Renderer &) {
@@ -79,12 +101,12 @@ HealthBar::HealthBar() : Element(280, 16) {
             }
         }
         // Room under the bar for guild name (bottom-right)
-        elt->height = Game::guild_name.empty() ? 16.f : 30.f;
+        elt->height = Game::guild_name.empty() ? 28.f : 42.f;
     };
 }
 
 void HealthBar::on_render(Renderer &ctx) {
-    float const bar_h = 16.f;
+    float const bar_h = 26.f;
     float const bar_y = Game::guild_name.empty() ? 0.f : -7.f;
     float r = fclamp((float) ratio, 0, 1);
     float l = fclamp((float) lag, 0, 1);
@@ -112,7 +134,7 @@ void HealthBar::on_render(Renderer &ctx) {
     ctx.line_to(-width / 2 + width * r, 0);
     ctx.stroke();
     std::string text = std::format("{:.0f}%", r * 100);
-    ctx.draw_text(text.c_str(), { .size = bar_h * 0.7f });
+    ctx.draw_text(text.c_str(), { .size = bar_h * 0.55f });
     ctx.translate(0, -bar_y);
 
     if (!Game::guild_name.empty()) {
@@ -201,23 +223,26 @@ void PartyHud::on_render(Renderer &ctx) {
     }
 }
 
-// Full player status: name / XP / HP — top-left (under gear/exit)
+// Full player status: name → HP (thick) → XP (thin) — top-left (under gear/exit)
 Element *Ui::make_level_bar() {
     Element *status = new Ui::VContainer({
+        new Ui::DynamicText(20, [](){
+            if (Game::account_logged_in && !Game::username.empty())
+                return Game::username;
+            return std::string{Game::guest_play_name()};
+        }, { .fill = 0xffffffff, .h_justify = Style::Left }),
+        new Ui::HealthBar(),
         new Ui::LevelBar(),
         new Ui::DynamicText(12, [](){
-            std::string format_string;
-            if (Game::alive()) {
-                uint32_t level = score_to_level(Game::score);
-                if (loadout_slots_at_level(level) < MAX_SLOT_COUNT)
-                    format_string = I18n::format_extra_slot(
-                        div_round_up(level + 1, LEVELS_PER_EXTRA_SLOT) * LEVELS_PER_EXTRA_SLOT);
-            }
-            return format_string;
+            if (!Game::alive()) return std::string{};
+            uint8_t slots = Talent::slot_count_from_ranks(Game::talent_ranks);
+            if (slots >= MAX_SLOT_COUNT) return std::string{};
+            return I18n::use_chinese
+                ? std::format("槽位 {}/{}（天赋加点解锁）", (int) slots, (int) MAX_SLOT_COUNT)
+                : std::format("Slots {}/{} (talent)", (int) slots, (int) MAX_SLOT_COUNT);
         }, { .fill = 0xffdddddd, .h_justify = Style::Left }),
-        new Ui::HealthBar(),
         new Ui::PartyHud()
-    }, 0, 6, {
+    }, 0, 4, {
         .should_render = []() {
             return Game::alive() && Game::should_render_game_ui();
         },

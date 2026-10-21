@@ -25,7 +25,7 @@ struct MobRenderAttributes {
     FlowerRenderAttributes flower_attrs;
 };
 
-void draw_loadout_background(Renderer &, PetalID::T, float=1);
+void draw_loadout_background(Renderer &, PetalID::T, float=1, uint8_t draw_name=1);
 
 void draw_static_flower(Renderer &, FlowerRenderAttributes);
 

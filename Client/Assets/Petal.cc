@@ -5152,6 +5152,397 @@ void draw_static_petal_single(PetalID::T id, Renderer &ctx) {
             break;
         }
 
+        // ---- Ant Hell craft exclusives (anthell.txt G01–G12) ----
+        case PetalID::kChitinNeedle: {
+            // Long straight chitin spike — thinner than Ant Fang
+            ctx.scale(r / 15.f);
+            ctx.set_fill(0xffD9BC8C);
+            ctx.set_stroke(0xff80634C);
+            ctx.set_line_width(2.2f);
+            ctx.round_line_join();
+            ctx.begin_path();
+            ctx.move_to(0, -13);
+            ctx.bcurve_to(3.2f, -4, 2.6f, 6, 1.4f, 12);
+            ctx.line_to(-1.4f, 12);
+            ctx.bcurve_to(-2.6f, 6, -3.2f, -4, 0, -13);
+            ctx.close_path();
+            ctx.fill();
+            ctx.stroke();
+            ctx.set_fill(0xffF3DDB0);
+            ctx.begin_path();
+            ctx.move_to(0, -10);
+            ctx.line_to(1.1f, 2);
+            ctx.line_to(0, 8);
+            ctx.line_to(-1.1f, 2);
+            ctx.close_path();
+            ctx.fill();
+            break;
+        }
+        case PetalID::kShellPlate: {
+            // Hex shell plate with segment lines
+            ctx.scale(r / 15.f);
+            ctx.set_fill(0xff9B7857);
+            ctx.set_stroke(0xff574B3E);
+            ctx.set_line_width(2.4f);
+            ctx.round_line_join();
+            ctx.begin_path();
+            for (int i = 0; i < 6; ++i) {
+                float a = i * (float)M_PI / 3.f - (float)M_PI / 6.f;
+                float px = std::cos(a) * 11.f, py = std::sin(a) * 12.5f;
+                if (i == 0) ctx.move_to(px, py); else ctx.line_to(px, py);
+            }
+            ctx.close_path();
+            ctx.fill();
+            ctx.stroke();
+            ctx.set_fill(0xffD4B18A);
+            ctx.begin_path();
+            for (int i = 0; i < 6; ++i) {
+                float a = i * (float)M_PI / 3.f - (float)M_PI / 6.f;
+                float px = std::cos(a) * 6.5f, py = std::sin(a) * 7.5f;
+                if (i == 0) ctx.move_to(px, py); else ctx.line_to(px, py);
+            }
+            ctx.close_path();
+            ctx.fill();
+            ctx.set_stroke(0xff574B3E);
+            ctx.set_line_width(1.5f);
+            ctx.begin_path();
+            ctx.move_to(0, -7);
+            ctx.line_to(0, 7);
+            ctx.move_to(-5.5f, -2.5f);
+            ctx.line_to(5.5f, -2.5f);
+            ctx.move_to(-5.5f, 2.5f);
+            ctx.line_to(5.5f, 2.5f);
+            ctx.stroke();
+            break;
+        }
+        case PetalID::kAcidDroplet: {
+            // Single venom drop (not a flask)
+            ctx.scale(r / 15.f);
+            ctx.set_fill(0xff8AB45E);
+            ctx.set_stroke(0xff4E7846);
+            ctx.set_line_width(2.2f);
+            ctx.begin_path();
+            ctx.move_to(0, -12);
+            ctx.bcurve_to(7, -4, 8, 6, 0, 11);
+            ctx.bcurve_to(-8, 6, -7, -4, 0, -12);
+            ctx.close_path();
+            ctx.fill();
+            ctx.stroke();
+            ctx.set_fill(0xffCDE58B);
+            ctx.begin_path();
+            ctx.ellipse(0, 2, 4.5f, 5.5f);
+            ctx.fill();
+            ctx.set_fill(0xaaffffff);
+            ctx.begin_path();
+            ctx.ellipse(-2, -3, 1.8f, 2.6f);
+            ctx.fill();
+            break;
+        }
+        case PetalID::kBroodPearl: {
+            // Smooth brood egg pearl
+            ctx.scale(r / 15.f);
+            ctx.set_fill(0xffE7D6B1);
+            ctx.set_stroke(0xff99866A);
+            ctx.set_line_width(2.4f);
+            ctx.begin_path();
+            ctx.ellipse(0, 0, 8.f, 11.f);
+            ctx.fill();
+            ctx.stroke();
+            ctx.set_stroke(0xffC5B08D);
+            ctx.set_line_width(1.6f);
+            ctx.begin_path();
+            ctx.move_to(-5, -2);
+            ctx.qcurve_to(0, -5, 5, -1);
+            ctx.move_to(-4.5f, 3);
+            ctx.qcurve_to(0, 1, 4.5f, 4);
+            ctx.stroke();
+            ctx.set_fill(0xffffffff);
+            ctx.begin_path();
+            ctx.arc(-2.5f, -4, 2.2f);
+            ctx.fill();
+            break;
+        }
+        case PetalID::kPheromoneStar: {
+            // Regular 5-point star + dual core
+            ctx.scale(r / 15.f);
+            ctx.set_fill(0xffC58C5C);
+            ctx.set_stroke(0xff75513C);
+            ctx.set_line_width(2.2f);
+            ctx.round_line_join();
+            ctx.begin_path();
+            for (int i = 0; i < 10; ++i) {
+                float a = i * (float)M_PI / 5.f - (float)M_PI / 2.f;
+                float rr = (i & 1) ? 5.2f : 11.5f;
+                float px = std::cos(a) * rr, py = std::sin(a) * rr;
+                if (i == 0) ctx.move_to(px, py); else ctx.line_to(px, py);
+            }
+            ctx.close_path();
+            ctx.fill();
+            ctx.stroke();
+            ctx.set_fill(0xffE9BE7C);
+            ctx.begin_path();
+            ctx.arc(0, 0, 4.2f);
+            ctx.fill();
+            ctx.set_fill(0xffFFF0C8);
+            ctx.begin_path();
+            ctx.arc(0, 0, 2.0f);
+            ctx.fill();
+            break;
+        }
+        case PetalID::kTunnelStone: {
+            // Rounded underground rock (no lava cracks)
+            ctx.scale(r / 15.f);
+            ctx.set_fill(0xff8A674C);
+            ctx.set_stroke(0xff493E35);
+            ctx.set_line_width(2.4f);
+            ctx.round_line_join();
+            ctx.begin_path();
+            ctx.move_to(-3, -11);
+            ctx.bcurve_to(6, -12, 11, -4, 10, 3);
+            ctx.bcurve_to(10, 10, 3, 12, -4, 11);
+            ctx.bcurve_to(-11, 9, -12, 1, -10, -5);
+            ctx.bcurve_to(-8, -10, -6, -11, -3, -11);
+            ctx.close_path();
+            ctx.fill();
+            ctx.stroke();
+            ctx.set_fill(0xffC6A077);
+            ctx.begin_path();
+            ctx.move_to(-2, -7);
+            ctx.bcurve_to(4, -8, 6, -2, 5, 2);
+            ctx.bcurve_to(3, 5, -1, 4, -3, 1);
+            ctx.bcurve_to(-5, -2, -4, -5, -2, -7);
+            ctx.close_path();
+            ctx.fill();
+            ctx.set_stroke(0xaaffffff);
+            ctx.set_line_width(1.8f);
+            ctx.begin_path();
+            ctx.move_to(-4, -5);
+            ctx.qcurve_to(0, -8, 4, -3);
+            ctx.stroke();
+            break;
+        }
+        case PetalID::kIronMandible: {
+            // Hardened mandible plate with Y ridge
+            ctx.scale(r / 15.f);
+            ctx.set_fill(0xff7A6A5B);
+            ctx.set_stroke(0xff403F3A);
+            ctx.set_line_width(2.4f);
+            ctx.round_line_join();
+            ctx.begin_path();
+            for (int i = 0; i < 8; ++i) {
+                float a = i * (float)M_PI / 4.f - (float)M_PI / 8.f;
+                float px = std::cos(a) * 10.f, py = std::sin(a) * 12.f;
+                if (i == 0) ctx.move_to(px, py); else ctx.line_to(px, py);
+            }
+            ctx.close_path();
+            ctx.fill();
+            ctx.stroke();
+            ctx.set_fill(0xffB5A085);
+            ctx.begin_path();
+            for (int i = 0; i < 8; ++i) {
+                float a = i * (float)M_PI / 4.f - (float)M_PI / 8.f;
+                float px = std::cos(a) * 6.2f, py = std::sin(a) * 7.5f;
+                if (i == 0) ctx.move_to(px, py); else ctx.line_to(px, py);
+            }
+            ctx.close_path();
+            ctx.fill();
+            ctx.set_stroke(0xff403F3A);
+            ctx.set_line_width(2.0f);
+            ctx.begin_path();
+            ctx.move_to(0, -6);
+            ctx.line_to(0, 2);
+            ctx.line_to(-4, 7);
+            ctx.move_to(0, 2);
+            ctx.line_to(4, 7);
+            ctx.stroke();
+            break;
+        }
+        case PetalID::kHiveDisc: {
+            // Thick disc with 6 spokes (not a gear)
+            ctx.scale(r / 15.f);
+            ctx.set_fill(0xffA17B59);
+            ctx.set_stroke(0xff614938);
+            ctx.set_line_width(2.4f);
+            ctx.begin_path();
+            ctx.arc(0, 0, 11.f);
+            ctx.fill();
+            ctx.stroke();
+            ctx.set_fill(0xffE2C18D);
+            ctx.begin_path();
+            ctx.arc(0, 0, 7.5f);
+            ctx.fill();
+            ctx.set_stroke(0xff614938);
+            ctx.set_line_width(2.0f);
+            ctx.begin_path();
+            for (int i = 0; i < 6; ++i) {
+                float a = i * (float)M_PI / 3.f;
+                ctx.move_to(0, 0);
+                ctx.line_to(std::cos(a) * 10.f, std::sin(a) * 10.f);
+            }
+            ctx.stroke();
+            ctx.set_fill(0xff614938);
+            ctx.begin_path();
+            ctx.arc(0, 0, 3.2f);
+            ctx.fill();
+            ctx.set_fill(0xffE2C18D);
+            ctx.begin_path();
+            ctx.arc(0, 0, 1.6f);
+            ctx.fill();
+            break;
+        }
+        case PetalID::kVenomCocoon: {
+            // Closed cocoon with toxic core
+            ctx.scale(r / 15.f);
+            ctx.set_fill(0xff785F85);
+            ctx.set_stroke(0xff453E59);
+            ctx.set_line_width(2.4f);
+            ctx.begin_path();
+            ctx.ellipse(0, 0, 9.f, 12.f);
+            ctx.fill();
+            ctx.stroke();
+            ctx.set_fill(0xffB59BC4);
+            ctx.begin_path();
+            ctx.ellipse(0, 0, 6.5f, 9.f);
+            ctx.fill();
+            ctx.set_fill(0xffD6E19A);
+            ctx.begin_path();
+            ctx.arc(0, 1, 3.5f);
+            ctx.fill();
+            ctx.set_fill(0x88ffffff);
+            ctx.begin_path();
+            ctx.ellipse(-2.5f, -4, 2.0f, 3.2f);
+            ctx.fill();
+            break;
+        }
+        case PetalID::kRoyalCarapace: {
+            // Oct royal plate + gold inner + cross ridge
+            ctx.scale(r / 15.f);
+            ctx.set_fill(0xffA8794F);
+            ctx.set_stroke(0xff604635);
+            ctx.set_line_width(2.4f);
+            ctx.round_line_join();
+            ctx.begin_path();
+            for (int i = 0; i < 8; ++i) {
+                float a = i * (float)M_PI / 4.f - (float)M_PI / 8.f;
+                float px = std::cos(a) * 11.f, py = std::sin(a) * 12.5f;
+                if (i == 0) ctx.move_to(px, py); else ctx.line_to(px, py);
+            }
+            ctx.close_path();
+            ctx.fill();
+            ctx.stroke();
+            ctx.set_fill(0xffE2BA78);
+            ctx.begin_path();
+            for (int i = 0; i < 8; ++i) {
+                float a = i * (float)M_PI / 4.f - (float)M_PI / 8.f;
+                float px = std::cos(a) * 7.f, py = std::sin(a) * 8.f;
+                if (i == 0) ctx.move_to(px, py); else ctx.line_to(px, py);
+            }
+            ctx.close_path();
+            ctx.fill();
+            ctx.set_stroke(0xff604635);
+            ctx.set_line_width(2.0f);
+            ctx.begin_path();
+            ctx.move_to(0, -7);
+            ctx.line_to(0, 7);
+            ctx.move_to(-6, 0);
+            ctx.line_to(6, 0);
+            ctx.stroke();
+            ctx.set_fill(0xffFFF0C0);
+            ctx.begin_path();
+            ctx.arc(0, 0, 2.2f);
+            ctx.fill();
+            break;
+        }
+        case PetalID::kQueensEmblem: {
+            // Dual oct badge + crown lines + amber core
+            ctx.scale(r / 15.f);
+            ctx.set_fill(0xffC49A5F);
+            ctx.set_stroke(0xff75543A);
+            ctx.set_line_width(2.4f);
+            ctx.round_line_join();
+            ctx.begin_path();
+            for (int i = 0; i < 8; ++i) {
+                float a = i * (float)M_PI / 4.f - (float)M_PI / 8.f;
+                float px = std::cos(a) * 11.f, py = std::sin(a) * 12.f;
+                if (i == 0) ctx.move_to(px, py); else ctx.line_to(px, py);
+            }
+            ctx.close_path();
+            ctx.fill();
+            ctx.stroke();
+            ctx.set_fill(0xffF0D28C);
+            ctx.begin_path();
+            for (int i = 0; i < 8; ++i) {
+                float a = i * (float)M_PI / 4.f - (float)M_PI / 8.f;
+                float px = std::cos(a) * 7.5f, py = std::sin(a) * 8.2f;
+                if (i == 0) ctx.move_to(px, py); else ctx.line_to(px, py);
+            }
+            ctx.close_path();
+            ctx.fill();
+            ctx.set_stroke(0xff75543A);
+            ctx.set_line_width(1.8f);
+            ctx.begin_path();
+            ctx.move_to(-4, -1);
+            ctx.line_to(-2.5f, -5);
+            ctx.line_to(0, -2);
+            ctx.line_to(2.5f, -5);
+            ctx.line_to(4, -1);
+            ctx.stroke();
+            ctx.set_fill(0xffE8A84A);
+            ctx.begin_path();
+            ctx.arc(0, 3, 2.8f);
+            ctx.fill();
+            break;
+        }
+        case PetalID::kColonyHeart: {
+            // Amber colony core (not purple Colony Core)
+            ctx.scale(r / 15.f);
+            ctx.set_fill(0xff76583F);
+            ctx.set_stroke(0xff3F382E);
+            ctx.set_line_width(2.4f);
+            ctx.round_line_join();
+            ctx.begin_path();
+            for (int i = 0; i < 8; ++i) {
+                float a = i * (float)M_PI / 4.f - (float)M_PI / 8.f;
+                float px = std::cos(a) * 12.f, py = std::sin(a) * 12.f;
+                if (i == 0) ctx.move_to(px, py); else ctx.line_to(px, py);
+            }
+            ctx.close_path();
+            ctx.fill();
+            ctx.stroke();
+            ctx.set_fill(0xffB78C57);
+            ctx.begin_path();
+            for (int i = 0; i < 8; ++i) {
+                float a = i * (float)M_PI / 4.f - (float)M_PI / 8.f;
+                float px = std::cos(a) * 8.5f, py = std::sin(a) * 8.5f;
+                if (i == 0) ctx.move_to(px, py); else ctx.line_to(px, py);
+            }
+            ctx.close_path();
+            ctx.fill();
+            ctx.set_fill(0xffE9C77F);
+            ctx.begin_path();
+            for (int i = 0; i < 6; ++i) {
+                float a = i * (float)M_PI / 3.f;
+                float px = std::cos(a) * 4.5f, py = std::sin(a) * 4.5f;
+                if (i == 0) ctx.move_to(px, py); else ctx.line_to(px, py);
+            }
+            ctx.close_path();
+            ctx.fill();
+            ctx.set_stroke(0xff3F382E);
+            ctx.set_line_width(1.6f);
+            ctx.begin_path();
+            for (int i = 0; i < 4; ++i) {
+                float a = i * (float)M_PI / 2.f + (float)M_PI / 4.f;
+                ctx.move_to(std::cos(a) * 5.5f, std::sin(a) * 5.5f);
+                ctx.line_to(std::cos(a) * 9.5f, std::sin(a) * 9.5f);
+            }
+            ctx.stroke();
+            ctx.set_fill(0xffffffff);
+            ctx.begin_path();
+            ctx.arc(0, 0, 1.6f);
+            ctx.fill();
+            break;
+        }
+
         default: {
             // Normal petal shape tinted by rarity (materials / new craft results).
             assert(id < PetalID::kNumPetals);
@@ -5195,7 +5586,7 @@ void draw_static_petal(PetalID::T id, Renderer &ctx) {
     }
 }
 
-void draw_loadout_background(Renderer &ctx, PetalID::T id, float reload) {
+void draw_loadout_background(Renderer &ctx, PetalID::T id, float reload, uint8_t draw_name) {
     RenderContext c(&ctx);
     ctx.set_fill(Renderer::HSV(RARITY_COLORS[PETAL_DATA[id].rarity], 0.8));
     ctx.round_line_join();
@@ -5227,6 +5618,7 @@ void draw_loadout_background(Renderer &ctx, PetalID::T id, float reload) {
         if (PETAL_DATA[id].radius > 20) ctx.scale(20 / PETAL_DATA[id].radius);
         draw_static_petal(id, ctx);
     }
+    if (!draw_name) return;
     char const *pname = I18n::petal_name(id);
     float text_width = 12 * Renderer::get_ascii_text_size(pname);
     if (text_width < 50) text_width = 12;

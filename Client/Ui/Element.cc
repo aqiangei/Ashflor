@@ -6,6 +6,8 @@
 #include <Client/Game.hh>
 #include <Client/Input.hh>
 
+#include <Helpers/Math.hh>
+
 #include <cmath>
 #include <iostream>
 
@@ -138,13 +140,30 @@ void Element::on_render_tooltip(Renderer &ctx) {
     if (tooltip != nullptr) {
         tooltip->refactor();
         ctx.reset_transform();
-        if (screen_x < (tooltip->width / 2 + 10) * Ui::scale)
-            ctx.translate((tooltip->width / 2 + 10) * Ui::scale, screen_y);
-        else if (screen_x > Ui::window_width - (tooltip->width / 2 + 10) * Ui::scale)
-            ctx.translate(Ui::window_width - (tooltip->width / 2 + 10) * Ui::scale, screen_y);
-        else ctx.translate(screen_x, screen_y);
-        ctx.scale(Ui::scale);
-        ctx.translate(0, -(height + tooltip->height) / 2 - 5);
+        float const s = (float) Ui::scale;
+        float const tip_w = tooltip->width * s;
+        float const tip_h = tooltip->height * s;
+        float const half_h = height * s * 0.5f;
+        float const gap = 5.f * s;
+        float const margin = 8.f;
+        // Keep horizontally on-screen (galleries sit in the left column).
+        float cx = screen_x;
+        if (cx < tip_w * 0.5f + margin) cx = tip_w * 0.5f + margin;
+        if (cx > (float) Ui::window_width - tip_w * 0.5f - margin)
+            cx = (float) Ui::window_width - tip_w * 0.5f - margin;
+        // Prefer above the cell; tall mob tooltips near the top panel would
+        // otherwise render entirely off-screen on mobile.
+        float cy_above = screen_y - half_h - gap - tip_h * 0.5f;
+        float cy_below = screen_y + half_h + gap + tip_h * 0.5f;
+        float cy = cy_above;
+        if (cy_above - tip_h * 0.5f < margin) {
+            cy = cy_below;
+            if (cy + tip_h * 0.5f > (float) Ui::window_height - margin)
+                cy = fclamp(cy, tip_h * 0.5f + margin,
+                    (float) Ui::window_height - tip_h * 0.5f - margin);
+        }
+        ctx.translate(cx, cy);
+        ctx.scale(s);
         ctx.set_global_alpha((float) tooltip_animation);
         tooltip->on_render(ctx);
     }

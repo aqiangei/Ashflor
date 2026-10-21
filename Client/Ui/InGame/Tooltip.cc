@@ -149,6 +149,21 @@ static Ui::Element *make_petal_stat_container(PetalID::T id) {
             new Ui::StaticText(12, "+" + format_number(attrs.extra_range))
         }, 0, 5, { .h_justify = Style::Left }));
     }
+    if (attrs.slow_inflict_seconds > 0) {
+        stats.push_back(new Ui::HContainer({
+            new Ui::DynamicText(12, [](){
+                return I18n::use_chinese ? "减速：" : "Slow:";
+            }, { .fill = 0xff7ec8e3 }),
+            new Ui::StaticText(12, format_number(attrs.slow_inflict_seconds) + "s")
+        }, 0, 5, { .h_justify = Style::Left }));
+    }
+    if (attrs.defend_only) {
+        stats.push_back(new Ui::HContainer({
+            new Ui::DynamicText(12, [](){
+                return I18n::use_chinese ? "仅防御态生效" : "Defend only";
+            }, { .fill = 0xffaaaaaa })
+        }, 0, 5, { .h_justify = Style::Left }));
+    }
     if (attrs.extra_damage_factor > 1) {
         stats.push_back(new Ui::HContainer({
             new Ui::DynamicText(12, [](){ return I18n::tr(I18n::kExtraDamage); }, { .fill = 0xffff7777 }),
@@ -166,25 +181,23 @@ static Ui::Element *make_petal_stat_container(PetalID::T id) {
 
 static void make_petal_tooltip(PetalID::T id) {
     Element *tooltip = new Ui::VContainer({
-        #ifdef DEBUG
         new Ui::HFlexContainer(
             new Ui::DynamicText(20, [id](){ return I18n::petal_name(id); }, { .fill = 0xffffffff, .h_justify = Style::Left }),
             new Ui::DynamicText(16, [=](){
                 float reload = PETAL_DATA[id].reload * get_reload_factor();
-                std::string rld_str = reload == 0 ? "" :
-                    PETAL_DATA[id].attributes.secondary_reload == 0 ? std::format("{:.1f}s ⟳", reload) : 
-                    std::format("{:.1f} + {:.1f}s ⟳", reload, PETAL_DATA[id].attributes.secondary_reload);
-                return rld_str;
+                if (reload <= 0.f) return std::string{};
+                if (PETAL_DATA[id].attributes.secondary_reload == 0)
+                    return std::format("{:.1f}s ⟳", reload);
+                return std::format("{:.1f} + {:.1f}s ⟳", reload,
+                    PETAL_DATA[id].attributes.secondary_reload);
             }, { .fill = 0xffffffff, .v_justify = Style::Top }),
             5, 10, {}
         ),
-        #else
-        new Ui::DynamicText(20, [id](){ return I18n::petal_name(id); }, { .fill = 0xffffffff, .h_justify = Style::Left }),
-        #endif
         new Ui::DynamicText(14, [id](){ return I18n::rarity_name(PETAL_DATA[id].rarity); }, { .fill = RARITY_COLORS[PETAL_DATA[id].rarity], .h_justify = Style::Left }),
-        new Ui::Element(0,8),
+        new Ui::Element(0, 6),
         new Ui::DynamicText(12, [id](){ return I18n::petal_desc(id); }, { .fill = 0xffffffff, .h_justify = Style::Left }),
-        DEBUG_ONLY(make_petal_stat_container(id))
+        new Ui::Element(0, 6),
+        make_petal_stat_container(id)
     }, 5, 2);
     tooltip->style.fill = 0xb01c2418;
     tooltip->style.round_radius = 12;

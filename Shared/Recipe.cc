@@ -122,15 +122,15 @@ namespace Recipe {
         { PetalID::kMechGear, 0, 2, {
             { PetalID::kMatGear, 8 }, { PetalID::kMatSteel, 3 }, {}, {}
         }},
-        // ---- Special shop (coin petals) ----
+        // ---- Special shop (coin petals; costs mirror Craft::buy_special_cost) ----
         { PetalID::kAccelerator, 3, 1, {
-            { PetalID::kCoin, 120 }, {}, {}, {}
+            { PetalID::kCoin, 150 }, {}, {}, {}
         }},
         { PetalID::kMagnet, 3, 1, {
-            { PetalID::kCoin, 180 }, {}, {}, {}
+            { PetalID::kCoin, 220 }, {}, {}, {}
         }},
         { PetalID::kAntennae, 3, 1, {
-            { PetalID::kCoin, 900 }, {}, {}, {}
+            { PetalID::kCoin, 1800 }, {}, {}, {}
         }},
         // ---- Cross-map (tier 1) + Legendary (tier 2) ----
         { PetalID::kThornPalm, 1, 3, {
@@ -271,9 +271,7 @@ namespace Recipe {
 
     uint8_t is_bag_only(PetalID::T id) {
         if (id == PetalID::kNone || id >= PetalID::kNumPetals) return 1;
-        // Currency + craft mats stay in the backpack (never primary combat slots).
-        if (id == PetalID::kCoin) return 1;
-        if (id >= PetalID::kMatLeaf && id <= PetalID::kMatRoyalSeal) return 1;
-        return 0;
+        // Coins only — craft materials are normal petals and can equip.
+        return id == PetalID::kCoin;
     }
 }

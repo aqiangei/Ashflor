@@ -12,6 +12,8 @@
 
 #include <Shared/StaticData.hh>
 
+#include <Helpers/Math.hh>
+
 #include <cmath>
 #include <format>
 #include <string>
@@ -132,14 +134,18 @@ namespace {
                 }
 
                 if (e.count > 1) {
-                    std::string badge = std::format("x{}", e.count);
-                    ctx.translate(kCell / 2 - 14, -kCell / 2 + 10);
+                    std::string badge = format_stack(e.count);
+                    float const sz = 12.f;
+                    ctx.set_text_size(sz);
+                    float tw = (float) ctx.get_text_size(badge.c_str());
+                    float bw = std::max(22.f, tw + 8.f);
+                    ctx.translate(kCell / 2 - bw * 0.5f, -kCell / 2 + 10);
                     ctx.set_fill(0xe0000000);
                     ctx.begin_path();
-                    ctx.round_rect(-11, -8, 22, 16, 6);
+                    ctx.round_rect(-bw * 0.5f, -8, bw, 16, 6);
                     ctx.fill();
                     ctx.draw_text(badge.c_str(), {
-                        .fill = Chrome::kGold, .size = 12, .stroke_scale = 0.1f
+                        .fill = Chrome::kGold, .size = sz, .stroke_scale = 0.1f
                     });
                 }
             }

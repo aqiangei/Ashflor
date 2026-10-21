@@ -38,25 +38,22 @@ static void default_tick_idle_moving(Simulation *sim, Entity &ent) {
 
 static void default_tick_returning(Simulation *sim, Entity &ent, float speed = 1.0) {
     if (!sim->ent_alive(ent.get_parent())) {
-        // Zone-spawned wilds: walk back toward zone center (leash / deaggro)
+        // Zone-spawned wilds: walk back toward spawn home (not zone AABB center —
+        // outer difficulty rings cover the whole arena, so AABB center == hub).
         if (BitMath::at(ent.flags, EntityFlags::kSpawnedFromZone)) {
-            MapZones const &zones = map_zones(sim->map_id);
-            if (ent.zone < zones.size()) {
-                ZoneDefinition const &z = zones[ent.zone];
-                float cx = 0.5f * (z.left + z.right);
-                float cy = 0.5f * (z.top + z.bottom);
-                Vector delta(cx - ent.get_x(), cy - ent.get_y());
-                float dist = delta.magnitude();
-                if (dist < 160.f || ent.ai_tick > 5 * TPS) {
-                    ent.ai_tick = 0;
-                    ent.ai_state = AIState::kIdle;
-                    return;
-                }
-                delta.set_magnitude(PLAYER_ACCELERATION * speed);
-                ent.acceleration = delta;
-                ent.set_angle(delta.angle());
+            float cx = ent.home_x;
+            float cy = ent.home_y;
+            Vector delta(cx - ent.get_x(), cy - ent.get_y());
+            float dist = delta.magnitude();
+            if (dist < 160.f || ent.ai_tick > 5 * TPS) {
+                ent.ai_tick = 0;
+                ent.ai_state = AIState::kIdle;
                 return;
             }
+            delta.set_magnitude(PLAYER_ACCELERATION * speed);
+            ent.acceleration = delta;
+            ent.set_angle(delta.angle());
+            return;
         }
         ent.ai_tick = 0;
         ent.ai_state = AIState::kIdle;
@@ -79,13 +76,10 @@ static void default_tick_returning(Simulation *sim, Entity &ent, float speed = 1
 static void _maybe_start_wild_leash(Simulation *sim, Entity &ent) {
     if (!BitMath::at(ent.flags, EntityFlags::kSpawnedFromZone)) return;
     if (sim->ent_alive(ent.get_parent())) return;
-    MapZones const &zones = map_zones(sim->map_id);
-    if (ent.zone >= zones.size()) return;
-    ZoneDefinition const &z = zones[ent.zone];
-    float cx = 0.5f * (z.left + z.right);
-    float cy = 0.5f * (z.top + z.bottom);
     float leash = WILD_LEASH_MULT * (ent.detection_radius > 1.f ? ent.detection_radius : 500.f);
-    if (Vector(ent.get_x() - cx, ent.get_y() - cy).magnitude() > leash) {
+    float dx = ent.get_x() - ent.home_x;
+    float dy = ent.get_y() - ent.home_y;
+    if (dx * dx + dy * dy > leash * leash) {
         ent.target = NULL_ENTITY;
         ent.ai_state = AIState::kReturning;
         ent.ai_tick = 0;
@@ -384,9 +378,9 @@ static float const kKingArenaX = ARENA_WIDTH * 0.5f + 4200.f;
 static float const kKingArenaY = ARENA_HEIGHT * 0.5f - 1800.f;
 static float const kKingArenaR = 1900.f;
 
-// Jungle Heart boss — phased chase / root slam (missile fan) / sapling summons
-static float const kTreantArenaX = ARENA_WIDTH * 0.5f;
-static float const kTreantArenaY = ARENA_HEIGHT * 0.5f - 4200.f;
+// Jungle Heart boss — must match MapGen::gen_jungle boss anchor (tree-heart valley)
+static float const kTreantArenaX = ARENA_WIDTH * 0.80f;
+static float const kTreantArenaY = ARENA_HEIGHT * 0.22f;
 static float const kTreantArenaR = 1600.f;
 
 static void tick_ancient_treant(Simulation *sim, Entity &ent) {
@@ -1255,11 +1249,17 @@ void tick_ai_behavior(Simulation *sim, Entity &ent) {
     if (sim->ent_alive(ent.seg_head)) return;
     ent.acceleration.set(0,0);
     if (!sim->ent_alive(ent.target) && sim->ent_alive(ent.last_damaged_by)) {
-        // Plaza sanctuary: being hit by a player inside spawn does not start a chase.
+        // Hub sanctuary only: hits from a player inside the respawn pad do not start a chase.
         Entity &attacker = sim->get_ent(ent.last_damaged_by);
         if (!(is_player_faction(sim, attacker)
-              && Map::in_spawn_plaza(attacker.get_x(), attacker.get_y())))
+              && Map::in_spawn_sanctuary(attacker.get_x(), attacker.get_y()))) {
             ent.target = ent.last_damaged_by;
+            // Break leash-return so hits in the deep ring actually start a chase.
+            if (ent.ai_state == AIState::kReturning) {
+                ent.ai_state = AIState::kIdle;
+                ent.ai_tick = 0;
+            }
+        }
     }
     if (!(ent.get_parent() == NULL_ENTITY)) {
         if (!sim->ent_alive(ent.get_parent())) {
@@ -1286,12 +1286,12 @@ void tick_ai_behavior(Simulation *sim, Entity &ent) {
         ent.ai_tick = 0;
         return;
     }
-    // Spawn plaza = no-aggro zone: drop chase if the prey (player faction) is inside.
-    // Player attacks are unrestricted (not a NoAttack channel).
+    // Hub respawn pad = sole no-aggro zone: drop chase if prey is inside.
+    // Player attacks are unrestricted everywhere (including this pad).
     if (sim->ent_alive(ent.target) && !is_player_faction(sim, ent)) {
         Entity &prey = sim->get_ent(ent.target);
         if (is_player_faction(sim, prey)
-            && Map::in_spawn_plaza(prey.get_x(), prey.get_y()))
+            && Map::in_spawn_sanctuary(prey.get_x(), prey.get_y()))
             ent.target = NULL_ENTITY;
     }
     switch(ent.get_mob_id()) {
@@ -1357,6 +1357,10 @@ void tick_ai_behavior(Simulation *sim, Entity &ent) {
         case MobID::kRock:
         case MobID::kCactus:
         case MobID::kSquare:
+        case MobID::kPushCrate:
+        case MobID::kYahahaPad:
+        case MobID::kTreasureNpc:
+        case MobID::kLootChest:
             break;
         case MobID::kSandstorm:
             tick_sandstorm(sim, ent);

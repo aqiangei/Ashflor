@@ -3,6 +3,7 @@
 #include <Server/Spawn.hh>
 #include <Shared/Entity.hh>
 #include <Shared/Simulation.hh>
+#include <Shared/SpawnRules.hh>
 #include <Shared/StaticData.hh>
 
 #include <cmath>
@@ -55,6 +56,15 @@ void inflict_damage(Simulation *sim, EntityID const atk_id, EntityID const def_i
         }
     }
     if (amt <= 0) return;
+    // Petal vs mob contact: hits = ceil(petal_hp / hit_damage).
+    if (type == DamageType::kContact
+        && defender.has_component(kPetal)
+        && defender.max_health > 0.f
+        && amt > 0.f) {
+        float hits = ceilf(defender.max_health / amt);
+        if (hits < 1.f) hits = 1.f;
+        amt = defender.max_health / hits;
+    }
     //if (amt <= defender.armor) return;
     float old_health = defender.health;
     defender.set_damaged(1);
@@ -120,8 +130,8 @@ void inflict_damage(Simulation *sim, EntityID const atk_id, EntityID const def_i
     }
     defender.last_damaged_by = attacker.base_entity;
 
-    // Private loot: record each damaging player/party (team id) as a claim unit.
-    if (defender.has_component(kMob) && type != DamageType::kReflect) {
+    // Private loot: accumulate damage per team (survives player respawn; filtered at death).
+    if (defender.has_component(kMob) && type != DamageType::kReflect && damage_dealt > 0.f) {
         EntityID flower_id = NULL_ENTITY;
         if (attacker.has_component(kFlower))
             flower_id = atk_id;
@@ -134,10 +144,17 @@ void inflict_damage(Simulation *sim, EntityID const atk_id, EntityID const def_i
                 if (!team.null()) {
                     uint8_t found = 0;
                     for (uint8_t i = 0; i < defender.loot_claim_n; ++i) {
-                        if (defender.loot_claim_teams[i] == team) { found = 1; break; }
+                        if (defender.loot_claim_teams[i] == team) {
+                            defender.loot_claim_damage[i] += damage_dealt;
+                            found = 1;
+                            break;
+                        }
                     }
-                    if (!found && defender.loot_claim_n < 16)
-                        defender.loot_claim_teams[defender.loot_claim_n++] = team;
+                    if (!found && defender.loot_claim_n < 16) {
+                        uint8_t i = defender.loot_claim_n++;
+                        defender.loot_claim_teams[i] = team;
+                        defender.loot_claim_damage[i] = damage_dealt;
+                    }
                 }
             }
         }

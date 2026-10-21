@@ -1,26 +1,56 @@
 #include <Client/Particle.hh>
 
 #include <Client/Game.hh>
+#include <Client/Ui/Extern.hh>
 
 #include <Client/Assets/Assets.hh>
 
 #include <Shared/StaticData.hh>
 #include <Shared/StaticDefinitions.hh>
 
+#include <Helpers/Math.hh>
+#include <Helpers/Vector.hh>
+
 #include <array>
 #include <cmath>
+#include <format>
+#include <string>
+#include <unordered_map>
 #include <vector>
 
 using namespace Particle;
 
-static std::vector<TitleParticleEntity> title_particles;
-static std::vector<GameParticleEntity> game_particles;
+namespace {
+
+struct FloatingText {
+    float x;
+    float y;
+    float vy;
+    float life; // seconds remaining
+    float size;
+    uint32_t fill;
+    std::string text;
+};
+
+std::vector<TitleParticleEntity> title_particles;
+std::vector<GameParticleEntity> game_particles;
+std::vector<FloatingText> floating_texts;
+
+// Throttle / accumulate damage pops per mob (ms).
+constexpr double kDmgCooldownMs = 90.0;
+struct DmgBucket {
+    float amount = 0;
+    float x = 0;
+    float y = 0;
+    double last_show_ms = -1e9;
+};
+std::unordered_map<uint32_t, DmgBucket> dmg_buckets;
 
 // Petals that drop from mobs spawning on each map (biome-flavored title flybys).
-static std::array<std::vector<PetalID::T>, MapID::kNumMaps> map_title_petals;
-static uint8_t map_title_petals_ready = 0;
+std::array<std::vector<PetalID::T>, MapID::kNumMaps> map_title_petals;
+uint8_t map_title_petals_ready = 0;
 
-static void ensure_map_title_petals() {
+void ensure_map_title_petals() {
     if (map_title_petals_ready) return;
     for (uint8_t mid = 0; mid < MapID::kNumMaps; ++mid) {
         std::array<uint8_t, PetalID::kNumPetals> seen{};
@@ -47,12 +77,38 @@ static void ensure_map_title_petals() {
     map_title_petals_ready = 1;
 }
 
-static std::vector<PetalID::T> const &title_petal_pool_for_selected_map() {
+std::vector<PetalID::T> const &title_petal_pool_for_selected_map() {
     ensure_map_title_petals();
     uint8_t mid = Game::selected_map;
     if (mid >= MapID::kNumMaps) mid = MapID::kGarden;
     return map_title_petals[mid];
 }
+
+void spawn_floating(float x, float y, std::string text, uint32_t fill, float size) {
+    FloatingText t;
+    t.x = x + (float)(frand() * 18.0 - 9.0);
+    t.y = y;
+    t.vy = -55.f - (float)frand() * 25.f;
+    t.life = 0.85f;
+    t.size = size;
+    t.fill = fill;
+    t.text = std::move(text);
+    floating_texts.push_back(std::move(t));
+}
+
+void flush_damage(uint32_t key, DmgBucket &b) {
+    if (b.amount < 0.5f) {
+        b.amount = 0;
+        return;
+    }
+    int shown = (int)std::lround(b.amount);
+    if (shown < 1) shown = 1;
+    spawn_floating(b.x, b.y, std::format("{}", shown), 0xffff4a4a, 18.f);
+    b.amount = 0;
+    b.last_show_ms = Game::timestamp;
+}
+
+} // namespace
 
 void Particle::tick_title(Renderer &ctx, double dt) {
     RenderContext c(&ctx);
@@ -79,8 +135,6 @@ void Particle::tick_title(Renderer &ctx, double dt) {
     }
 
     std::vector<PetalID::T> const &pool = title_petal_pool_for_selected_map();
-    // Prefer collected petals from this biome; fall back to full biome pool so
-    // the flyby still matches the selected map on a fresh account.
     std::vector<PetalID::T> ids;
     float freq_sum = 0;
     for (PetalID::T id : pool) {
@@ -120,7 +174,6 @@ void Particle::tick_title(Renderer &ctx, double dt) {
     }
 }
 
-
 void Particle::tick_game(Renderer &ctx, double dt) {
     size_t len = game_particles.size();
     for (size_t i = len; i > 0; --i) {
@@ -137,8 +190,42 @@ void Particle::tick_game(Renderer &ctx, double dt) {
         ctx.set_global_alpha(part.opacity);
         ctx.set_fill(0x80ffffff);
         ctx.begin_path();
-        ctx.arc(part.x,part.y,part.radius);
+        ctx.arc(part.x, part.y, part.radius);
         ctx.fill();
+    }
+
+    float const sec = (float)(dt / 1000.0);
+    for (size_t i = floating_texts.size(); i > 0; --i) {
+        FloatingText &t = floating_texts[i - 1];
+        t.life -= sec;
+        if (t.life <= 0.f) {
+            t = floating_texts.back();
+            floating_texts.pop_back();
+            continue;
+        }
+        t.y += t.vy * sec;
+        t.vy *= (1.f - 2.2f * sec); // ease up
+        float alpha = t.life > 0.35f ? 1.f : fclamp(t.life / 0.35f, 0.f, 1.f);
+        RenderContext c(&ctx);
+        ctx.set_global_alpha(alpha);
+        ctx.translate(t.x, t.y);
+        ctx.draw_text(t.text.c_str(), {
+            .fill = t.fill,
+            .stroke = 0xff000000,
+            .size = t.size,
+            .stroke_scale = 0.18f
+        });
+    }
+
+    // Flush damage buckets whose cooldown has elapsed (last hit after window).
+    for (auto it = dmg_buckets.begin(); it != dmg_buckets.end(); ) {
+        DmgBucket &b = it->second;
+        if (b.amount >= 0.5f && Game::timestamp - b.last_show_ms >= kDmgCooldownMs)
+            flush_damage(it->first, b);
+        if (b.amount < 0.5f && Game::timestamp - b.last_show_ms > 2000.0)
+            it = dmg_buckets.erase(it);
+        else
+            ++it;
     }
 }
 
@@ -152,4 +239,32 @@ void Particle::add_unique_particle(float x, float y) {
     part.x_velocity = rand.x;
     part.y_velocity = rand.y;
     game_particles.push_back(std::move(part));
+}
+
+void Particle::add_damage_number(EntityID const &id, float x, float y, float amount) {
+    if (amount < 0.5f || id.null()) return;
+    uint32_t key = EntityID::make_hash(id);
+    DmgBucket &b = dmg_buckets[key];
+    b.amount += amount;
+    b.x = x;
+    b.y = y;
+    if (Game::timestamp - b.last_show_ms >= kDmgCooldownMs)
+        flush_damage(key, b);
+}
+
+void Particle::add_heal_number(float x, float y, float amount) {
+    if (amount < 0.5f) return;
+    int shown = (int)std::lround(amount);
+    if (shown < 1) shown = 1;
+    spawn_floating(x, y - 8.f, std::format("+{}", shown), 0xffff96cb, 17.f);
+}
+
+void Particle::clear_combat_accum(EntityID const &id) {
+    if (id.null()) return;
+    uint32_t key = EntityID::make_hash(id);
+    auto it = dmg_buckets.find(key);
+    if (it == dmg_buckets.end()) return;
+    if (it->second.amount >= 0.5f)
+        flush_damage(key, it->second);
+    dmg_buckets.erase(it);
 }

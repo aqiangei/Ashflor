@@ -1,8 +1,10 @@
 #include <Server/Guild.hh>
 
+#include <Server/AccountStore.hh>
 #include <Server/Chat.hh>
 #include <Server/Client.hh>
 #include <Server/Game.hh>
+#include <Server/NodeFs.hh>
 #include <Server/Server.hh>
 
 #include <Shared/Binary.hh>
@@ -14,6 +16,11 @@
 #include <Helpers/UTF8.hh>
 
 #include <algorithm>
+#include <cstdio>
+#include <cstdlib>
+#include <fstream>
+#include <iostream>
+#include <sstream>
 #include <unordered_map>
 #include <vector>
 
@@ -33,6 +40,41 @@ struct GuildInfo {
 };
 
 static std::unordered_map<std::string, GuildInfo> GUILDS;
+static char const *GUILD_FILE = "guilds.dat";
+
+static std::string read_guild_file(char const *path) {
+#ifdef WASM_SERVER
+    char *ptr = node_fs_read_alloc(path);
+    if (ptr == nullptr) return {};
+    std::string out(ptr);
+    free(ptr);
+    return out;
+#else
+    std::ifstream in(path, std::ios::binary);
+    if (!in) return {};
+    return std::string((std::istreambuf_iterator<char>(in)),
+        std::istreambuf_iterator<char>());
+#endif
+}
+
+static void write_guild_file(char const *path, std::string const &data) {
+#ifdef WASM_SERVER
+    node_fs_write_atomic(path, data.data(), (int) data.size());
+#else
+    std::string tmp = std::string(path) + ".tmp";
+    {
+        std::ofstream out(tmp, std::ios::binary | std::ios::trunc);
+        out.write(data.data(), (std::streamsize) data.size());
+    }
+    std::remove(path);
+    std::rename(tmp.c_str(), path);
+#endif
+}
+
+static void persist_client_guild(Client *client) {
+    if (client == nullptr || client->account_name.empty()) return;
+    AccountStore::capture(client);
+}
 
 static std::string player_name(Client *client) {
     if (client == nullptr || client->game == nullptr) return "Unnamed";
@@ -194,6 +236,7 @@ void Guild::send_update(Client *client) {
 
     writer.write<std::string>(anno);
     writer.write<uint8_t>((uint8_t) roster.size());
+    Simulation *sim = &client->game->simulation;
     for (GuildMemberRec const &m : roster) {
         writer.write<std::string>(m.name);
         uint8_t flags = 0;
@@ -208,6 +251,19 @@ void Guild::send_update(Client *client) {
             flags |= Guild::kFlagSelf;
         writer.write<uint8_t>(flags);
         writer.write<uint32_t>(m.level);
+        // Same-room live pos for minimap (blue dots); offline / other map → -1
+        float x = -1.f;
+        float y = -1.f;
+        if (live != nullptr && sim->ent_exists(live->camera)) {
+            Entity &camera = sim->get_ent(live->camera);
+            if (sim->ent_alive(camera.get_player())) {
+                Entity &player = sim->get_ent(camera.get_player());
+                x = player.get_x();
+                y = player.get_y();
+            }
+        }
+        writer.write<float>(x);
+        writer.write<float>(y);
     }
     client->send_packet(writer.packet, writer.at - writer.packet);
 }
@@ -237,11 +293,15 @@ void Guild::leave(Client *client) {
     sync_nametag(client);
     client->pending_guild_from.clear();
     client->pending_guild_ttl = 0;
+    persist_client_guild(client);
     send_update(client);
     notify(client, "[公会] 你已离开公会。");
 
     GameInstance *game = client->game;
-    if (game == nullptr) return;
+    if (game == nullptr) {
+        Guild::save();
+        return;
+    }
     std::vector<Client *> rest;
     for (Client *c : game->clients) {
         if (c != nullptr && c->guild_name == gname)
@@ -250,6 +310,7 @@ void Guild::leave(Client *client) {
     git = GUILDS.find(gname);
     if (rest.empty() && (git == GUILDS.end() || git->second.members.empty())) {
         GUILDS.erase(gname);
+        Guild::save();
         return;
     }
     if (was_leader) {
@@ -258,6 +319,7 @@ void Guild::leave(Client *client) {
             next->guild_leader = 1;
             if (git != GUILDS.end())
                 roster_set_leader(git->second, next);
+            persist_client_guild(next);
             for (Client *c : rest)
                 notify(c, "[公会] " + player_name(next) + " 成为会长。");
         } else if (git != GUILDS.end() && !git->second.members.empty()) {
@@ -268,12 +330,100 @@ void Guild::leave(Client *client) {
             git->second.leader_play = git->second.members[0].name;
         }
     }
+    Guild::save();
     for (Client *c : rest)
         send_update(c);
 }
 
+void Guild::save() {
+    std::ostringstream out;
+    out << "# ashflor guilds\n";
+    for (auto const &kv : GUILDS) {
+        GuildInfo const &g = kv.second;
+        // G name leader_account leader_play
+        // A announcement (- if empty; spaces → _)
+        // M count
+        //   name account leader level
+        out << "G " << g.name << ' '
+            << (g.leader_account.empty() ? "-" : g.leader_account) << ' '
+            << (g.leader_play.empty() ? "-" : g.leader_play) << '\n';
+        std::string anno = g.announcement;
+        for (char &c : anno) {
+            if (c == ' ' || c == '\t') c = '_';
+            if (c == '\n' || c == '\r') c = ' ';
+        }
+        while (!anno.empty() && anno.back() == ' ') anno.pop_back();
+        out << "A " << (anno.empty() ? "-" : anno) << '\n';
+        out << "M " << g.members.size() << '\n';
+        for (GuildMemberRec const &m : g.members) {
+            out << "  " << (m.name.empty() ? "-" : m.name) << ' '
+                << (m.account.empty() ? "-" : m.account) << ' '
+                << (uint32_t) (m.leader ? 1 : 0) << ' '
+                << m.level << '\n';
+        }
+    }
+    write_guild_file(GUILD_FILE, out.str());
+}
+
+void Guild::load() {
+    GUILDS.clear();
+    std::string raw = read_guild_file(GUILD_FILE);
+    if (raw.empty()) {
+        std::cout << "[guilds] no guilds.dat\n";
+        return;
+    }
+    std::istringstream in(raw);
+    std::string line;
+    GuildInfo *cur = nullptr;
+    uint32_t members_left = 0;
+    while (std::getline(in, line)) {
+        if (line.empty() || line[0] == '#') continue;
+        std::istringstream ls(line);
+        std::string tag;
+        if (!(ls >> tag)) continue;
+        if (tag == "G") {
+            GuildInfo info;
+            std::string lac, lplay;
+            if (!(ls >> info.name >> lac >> lplay)) continue;
+            if (lac != "-") info.leader_account = lac;
+            if (lplay != "-") info.leader_play = lplay;
+            GUILDS[info.name] = info;
+            cur = &GUILDS[info.name];
+            members_left = 0;
+        } else if (tag == "A" && cur != nullptr) {
+            std::string anno;
+            if (!(ls >> anno)) continue;
+            if (anno != "-") {
+                for (char &c : anno) if (c == '_') c = ' ';
+                cur->announcement = anno;
+            }
+        } else if (tag == "M" && cur != nullptr) {
+            ls >> members_left;
+        } else if (members_left > 0 && cur != nullptr) {
+            // Member lines may start with tag=name when leading spaces stripped by >>
+            GuildMemberRec m;
+            m.name = tag;
+            std::string acc;
+            uint32_t lead = 0;
+            uint32_t level = 1;
+            if (!(ls >> acc >> lead >> level)) continue;
+            if (m.name == "-") m.name.clear();
+            if (acc != "-") m.account = acc;
+            m.leader = lead ? 1 : 0;
+            m.level = level < 1 ? 1 : level;
+            cur->members.push_back(m);
+            --members_left;
+        }
+    }
+    std::cout << "[guilds] loaded " << GUILDS.size() << " guilds\n";
+}
+
 uint8_t Guild::create(Client *client, std::string const &raw_name) {
     if (client == nullptr || !client->alive()) return 0;
+    if (client->account_name.empty()) {
+        notify(client, "[公会] 请先登录账号再创建公会。");
+        return 0;
+    }
     if (!client->guild_name.empty()) {
         notify(client, "[公会] 你已在公会中，请先离开。");
         return 0;
@@ -300,6 +450,8 @@ uint8_t Guild::create(Client *client, std::string const &raw_name) {
     client->guild_name = name;
     client->guild_leader = 1;
     sync_nametag(client);
+    Guild::save();
+    persist_client_guild(client);
     notify(client, "[公会] 已创建公会「" + name + "」。");
     send_update(client);
     return 1;
@@ -366,6 +518,10 @@ uint8_t Guild::respond(Client *target, std::string const &from_name, uint8_t acc
         notify(target, "[公会] 你已在公会中。");
         return 0;
     }
+    if (target->account_name.empty()) {
+        notify(target, "[公会] 请先登录账号再加入公会。");
+        return 0;
+    }
     Client *from = find_by_name(target->game, from_name);
     if (from == nullptr || from->guild_name.empty()) {
         notify(target, "[公会] 邀请方已离线或不在公会。");
@@ -384,6 +540,8 @@ uint8_t Guild::respond(Client *target, std::string const &from_name, uint8_t acc
     target->guild_leader = 0;
     roster_upsert(it->second, target, 0);
     sync_nametag(target);
+    Guild::save();
+    persist_client_guild(target);
     std::string msg = "[公会] " + player_name(target) + " 加入了公会。";
     for (Client *c : from->game->clients) {
         if (c != nullptr && c->guild_name == from->guild_name) {
@@ -410,6 +568,7 @@ uint8_t Guild::set_announcement(Client *client, std::string const &raw) {
         return 0;
     }
     it->second.announcement = text;
+    Guild::save();
     notify(client, "[公会] 公告已更新。");
     broadcast_guild(client);
     return 1;
@@ -422,6 +581,18 @@ uint8_t Guild::same_guild(Client *a, Client *b) {
 
 void Guild::on_login(Client *client) {
     if (client == nullptr) return;
+    // Prefer roster match by account (survives empty client guild_name).
+    if (!client->account_name.empty()) {
+        for (auto &kv : GUILDS) {
+            for (GuildMemberRec const &m : kv.second.members) {
+                if (m.account.empty() || m.account != client->account_name) continue;
+                client->guild_name = kv.first;
+                client->guild_leader = m.leader ? 1 : 0;
+                break;
+            }
+            if (!client->guild_name.empty()) break;
+        }
+    }
     if (!client->guild_name.empty()) {
         auto it = GUILDS.find(client->guild_name);
         if (it == GUILDS.end()) {
@@ -429,20 +600,26 @@ void Guild::on_login(Client *client) {
             info.name = client->guild_name;
             info.leader_account = client->account_name;
             info.leader_play = player_name(client);
-            roster_upsert(info, client, 1);
+            roster_upsert(info, client, client->guild_leader ? 1 : 0);
+            if (client->guild_leader) {
+                info.leader_account = client->account_name;
+                info.leader_play = player_name(client);
+            }
             GUILDS[client->guild_name] = info;
-            client->guild_leader = 1;
+            Guild::save();
         } else {
-            // Restore leader flag from roster
             int idx = roster_index(it->second, client);
             if (idx >= 0 && it->second.members[(size_t) idx].leader)
                 client->guild_leader = 1;
             roster_upsert(it->second, client, client->guild_leader);
         }
+        persist_client_guild(client);
     }
     send_update(client);
-    if (!client->guild_name.empty())
+    if (!client->guild_name.empty()) {
+        sync_nametag(client);
         broadcast_guild(client);
+    }
 }
 
 void Guild::tick(GameInstance *game) {
@@ -455,6 +632,15 @@ void Guild::tick(GameInstance *game) {
                 notify(c, "[公会] 邀请已过期。");
                 c->pending_guild_from.clear();
             }
+        }
+    }
+    // Refresh guild-mate positions for minimap (~4 Hz, same cadence as party)
+    static uint8_t guild_hud_cd = 0;
+    if (++guild_hud_cd >= 5) {
+        guild_hud_cd = 0;
+        for (Client *c : game->clients) {
+            if (c != nullptr && !c->guild_name.empty())
+                send_update(c);
         }
     }
 }

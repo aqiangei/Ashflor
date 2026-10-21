@@ -3,8 +3,10 @@
 #include <Server/AccountStore.hh>
 #include <Server/LeaderboardStore.hh>
 #include <Server/Client.hh>
+#include <Server/EntityFunctions.hh>
 #include <Server/Guild.hh>
 #include <Server/Party.hh>
+#include <Server/Treasure.hh>
 #include <Server/PetalTracker.hh>
 #include <Server/Server.hh>
 #include <Server/Spawn.hh>
@@ -52,11 +54,24 @@ static void _update_client(Simulation *sim, Client *client) {
     Writer writer(Server::OUTGOING_PACKET);
     writer.write<uint8_t>(Clientbound::kClientUpdate);
     writer.write<EntityID>(client->camera);
-    sim->spatial_hash.query(camera.get_camera_x(), camera.get_camera_y(), 
-    960 / camera.get_fov() + 50, 540 / camera.get_fov() + 50, 
-    [&](Simulation *, Entity &ent){
-        in_view.insert(ent.id);
-    });
+    // Match client viewport including max zoom-out (camera_zoom floor 0.55) so
+    // Antenna/Observer wide FOV never leaves empty gaps where mobs should show.
+    constexpr float kMinClientZoom = 0.55f;
+    float net_fov = fclamp(camera.get_fov(), BASE_FOV * 0.08f, BASE_FOV);
+    float half_w = 960.f / (net_fov * kMinClientZoom) + 280.f;
+    float half_h = 540.f / (net_fov * kMinClientZoom) + 280.f;
+    sim->spatial_hash.query(camera.get_camera_x(), camera.get_camera_y(),
+        half_w, half_h,
+        [&](Simulation *, Entity &ent){
+            // Hide other players' private drops unless same party.
+            if (ent.has_component(kDrop) && ent.get_team() != NULL_ENTITY) {
+                EntityID my_team = camera.get_team();
+                if (!(ent.get_team() == my_team)
+                    && !Party::can_take_drop(client, sim, ent.get_team()))
+                    return;
+            }
+            in_view.insert(ent.id);
+        });
 
     for (EntityID const &i: client->in_view) {
         if (!in_view.contains(i)) {
@@ -108,7 +123,7 @@ void GameInstance::init(uint8_t id) {
     // Density-capped fill (was ENTITY_CAP/2 = 4096 attempts × 8 maps → boot+CPU hog).
     // Zone caps inside spawn_zone_mob still apply; this only limits attempts.
     // Keep init lean: occupied-map tick must stay well under 50ms for input feel.
-    constexpr uint32_t kInitSpawnAttempts = 360;
+    constexpr uint32_t kInitSpawnAttempts = 840;
     for (uint32_t i = 0; i < kInitSpawnAttempts; ++i)
         Map::spawn_zone_mob(&simulation);
     // Startup diagnostics: which mob species actually spawned in this biome.
@@ -146,6 +161,7 @@ void GameInstance::init(uint8_t id) {
     team_manager.add_team(ColorID::kBlue);
     team_manager.add_team(ColorID::kRed);
     #endif
+    Treasure::spawn_for_map(this);
 }
 
 static void process_map_portals(GameInstance *game) {
@@ -196,6 +212,7 @@ void GameInstance::tick() {
     process_map_portals(this);
     Party::tick(this);
     Guild::tick(this);
+    Treasure::tick(this);
     for (Client *client : clients)
         _update_client(&simulation, client);
     simulation.post_tick();
@@ -289,22 +306,36 @@ void GameInstance::remove_client(Client *client) {
 void GameInstance::transfer_client(Client *client, GameInstance *dest) {
     if (client == nullptr || dest == nullptr || client->game == dest) return;
     DEBUG_ONLY(assert(client->game == this);)
-    AccountStore::capture(client);
-    Account *acc = client->account_name.empty()
-        ? nullptr
-        : AccountStore::find(client->account_name);
 
-    // Snapshot camera progress so guests keep loadout across map switches
-    uint8_t snap_level = 1;
+    // Snapshot from the live flower (camera inventory is empty while alive).
+    uint32_t snap_level = 1;
     std::array<PetalID::T, 2 * MAX_SLOT_COUNT> snap_petals{};
     snap_petals.fill(PetalID::kNone);
     if (simulation.ent_exists(client->camera)) {
         Entity &cam = simulation.get_ent(client->camera);
-        snap_level = cam.get_respawn_level();
-        if (snap_level < 1) snap_level = 1;
-        for (uint32_t i = 0; i < 2 * MAX_SLOT_COUNT; ++i)
-            snap_petals[i] = cam.get_inventory(i);
+        EntityID pid = cam.get_player();
+        if (simulation.ent_exists(pid) && simulation.get_ent(pid).has_component(kFlower)) {
+            Entity &player = simulation.get_ent(pid);
+            flush_flower_loadout_to_camera(&simulation, cam, player);
+            uint32_t lv = score_to_level(player.get_score());
+            if (lv < 1) lv = 1;
+            if (lv < cam.get_respawn_level()) lv = cam.get_respawn_level();
+            snap_level = lv;
+            for (uint32_t i = 0; i < 2 * MAX_SLOT_COUNT; ++i)
+                snap_petals[i] = player.get_loadout_ids(i);
+        } else {
+            snap_level = cam.get_respawn_level();
+            if (snap_level < 1) snap_level = 1;
+            for (uint32_t i = 0; i < 2 * MAX_SLOT_COUNT; ++i)
+                snap_petals[i] = cam.get_inventory(i);
+        }
     }
+
+    // Persist after flush so accounts.dat gets the real loadout.
+    AccountStore::capture(client);
+    Account *acc = client->account_name.empty()
+        ? nullptr
+        : AccountStore::find(client->account_name);
 
     Party::leave(client);
     clients.erase(client);
@@ -321,7 +352,7 @@ void GameInstance::transfer_client(Client *client, GameInstance *dest) {
     } else {
         for (uint32_t i = 0; i < 2 * MAX_SLOT_COUNT; ++i)
             PetalTracker::remove_petal(&dest->simulation, new_cam.get_inventory(i));
-        new_cam.set_respawn_level(snap_level);
+        new_cam.set_respawn_level(snap_level < 1 ? 1 : snap_level);
         for (uint32_t i = 0; i < 2 * MAX_SLOT_COUNT; ++i) {
             PetalID::T id = snap_petals[i];
             if (id >= PetalID::kNumPetals) id = PetalID::kNone;

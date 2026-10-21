@@ -185,6 +185,27 @@ uint8_t Party::same_party(Client *a, Client *b) {
     return a != nullptr && b != nullptr && a->party_id != 0 && a->party_id == b->party_id;
 }
 
+uint8_t Party::can_take_drop(Client *picker, Simulation *sim, EntityID drop_team) {
+    if (picker == nullptr || sim == nullptr || drop_team.null()) return 0;
+    if (!sim->ent_exists(picker->camera)) return 0;
+    if (sim->get_ent(picker->camera).get_team() == drop_team) return 1;
+    // Team id is usually the leader camera; match any party mate on that claim.
+    Client *owner = Server::client_by_camera(sim, drop_team);
+    if (owner == nullptr) {
+        GameInstance *game = picker->game;
+        if (game == nullptr) return 0;
+        for (Client *c : game->clients) {
+            if (c == nullptr || c->game != game) continue;
+            if (!sim->ent_exists(c->camera)) continue;
+            if (sim->get_ent(c->camera).get_team() == drop_team) {
+                owner = c;
+                break;
+            }
+        }
+    }
+    return same_party(picker, owner);
+}
+
 static Client *find_by_name(GameInstance *game, std::string const &name) {
     if (game == nullptr || name.empty()) return nullptr;
     for (Client *c : game->clients) {
@@ -338,7 +359,11 @@ uint8_t Party::respond(Client *target, std::string const &from_name, uint8_t acc
     }
     target->party_id = from->party_id;
     target->party_leader = 0;
-    apply_team(target);
+    // Re-sync every member so drop claim teams stay shared after join.
+    for (Client *c : from->game->clients) {
+        if (c != nullptr && c->party_id == from->party_id)
+            apply_team(c);
+    }
     std::string msg = "[队伍] " + player_name(target) + " 加入了队伍。";
     for (Client *c : from->game->clients) {
         if (c != nullptr && c->party_id == from->party_id) {

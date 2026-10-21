@@ -114,7 +114,9 @@ static Element *make_auth_page() {
                 [](Element *, uint8_t e){
                     if (e == Ui::kClick) {
                         Game::auth_panel = 1;
-                        Game::account_status.clear();
+                        // Keep "signed in elsewhere" tip in the wrong-password slot.
+                        if (!Game::pending_kick_notice)
+                            Game::account_status.clear();
                     }
                 },
                 [](){ return Game::auth_panel != 1; },
@@ -125,6 +127,7 @@ static Element *make_auth_page() {
                 [](Element *, uint8_t e){
                     if (e == Ui::kClick) {
                         Game::auth_panel = 2;
+                        Game::pending_kick_notice = 0;
                         Game::account_status.clear();
                     }
                 },
@@ -301,6 +304,7 @@ Element *Ui::make_title_input_box() {
                                     [](Element *, uint8_t e){
                                         if (e == Ui::kClick) {
                                             Game::auth_panel = 1;
+                                            Game::pending_kick_notice = 0;
                                             Game::account_status.clear();
                                         }
                                     },
@@ -312,6 +316,7 @@ Element *Ui::make_title_input_box() {
                                     [](Element *, uint8_t e){
                                         if (e == Ui::kClick) {
                                             Game::auth_panel = 2;
+                                            Game::pending_kick_notice = 0;
                                             Game::account_status.clear();
                                         }
                                     },
@@ -596,11 +601,11 @@ Element *Ui::make_debug_stats() {
         .animate = [](Element *, Renderer &){},
         .should_render = [](){ return Game::show_debug; },
         .h_justify = Style::Right,
-        .v_justify = Style::Top,
+        .v_justify = Style::Bottom,
         .no_animation = 1
     });
     elt->x = -10;
-    elt->y = 8;
+    elt->y = -10;
     return elt;
 }
 

@@ -10,9 +10,11 @@
 #include <Client/Assets/Assets.hh>
 #include <Client/Game.hh>
 #include <Client/I18n.hh>
+#include <Client/Input.hh>
 #include <Client/StaticData.hh>
 
 #include <algorithm>
+#include <array>
 #include <cstring>
 #include <string>
 #include <vector>
@@ -24,12 +26,25 @@ Element *Ui::mob_tooltips[MobID::kNumMobs] = {nullptr};
 GalleryMob::GalleryMob(MobID::T id, float w) : 
     Element(w,w,{ .fill=RARITY_COLORS[MOB_DATA[id].rarity], .stroke_hsv=1, .line_width=3, .round_radius=6, .v_justify=Style::Top }), id(id) {}
 
+static GalleryMob *s_mobile_mob_tip = nullptr;
+
 void GalleryMob::on_render(Renderer &ctx) {
-    Element::on_render(ctx);
+    // Hold-to-inspect: clear sticky tip once the finger lifts (FocusLost may
+    // have fired earlier from scroll jitter while the touch was still down).
+    if (Input::is_mobile && tip_touch != (uint32_t) -1
+        && !Input::touches.contains(tip_touch)) {
+        tip_touch = (uint32_t) -1;
+        rendering_tooltip = 0;
+        if (s_mobile_mob_tip == this) s_mobile_mob_tip = nullptr;
+    }
     bool seen = Game::seen_mobs[id] != 0;
+    style.fill = seen ? RARITY_COLORS[MOB_DATA[id].rarity] : 0xffaeaa3d;
+    style.stroke_hsv = seen ? 1.f : 0.f;
+    style.line_width = seen ? 3.f : 0.f;
+    Element::on_render(ctx);
+    if (!seen) return;
     {
     RenderContext icon(&ctx);
-    if (!seen) ctx.set_global_alpha(0.25f);
     ctx.begin_path();
     ctx.round_rect(-width / 2, -height / 2, width, height, style.round_radius);
     ctx.clip();
@@ -47,12 +62,43 @@ void GalleryMob::on_render(Renderer &ctx) {
         draw_static_mob(id, ctx, { .radius = radius, .flags = 1<<1, .flower_attrs = { .color = ColorID::kGray } });
     }
     }
-    if (!seen)
-        ctx.draw_text("?", { .fill = 0xffffffff, .size = width * 0.46f, .stroke_scale = 0.12f });
 }
 
 void GalleryMob::on_event(uint8_t event) {
-    if (event != kFocusLost && Game::seen_mobs[id]) {
+    if (!Game::seen_mobs[id]) {
+        rendering_tooltip = 0;
+        tip_touch = (uint32_t) -1;
+        if (s_mobile_mob_tip == this) s_mobile_mob_tip = nullptr;
+        return;
+    }
+    // Mobile: keep the tip up while the finger is still down. Scroll jitter
+    // clears Element::touch_id before kFocusLost, so track tip_touch separately.
+    if (Input::is_mobile) {
+        if (event == kMouseDown || event == kMouseHover) {
+            if (s_mobile_mob_tip != nullptr && s_mobile_mob_tip != this) {
+                s_mobile_mob_tip->rendering_tooltip = 0;
+                s_mobile_mob_tip->tip_touch = (uint32_t) -1;
+            }
+            s_mobile_mob_tip = this;
+            tip_touch = touch_id;
+            rendering_tooltip = 1;
+            tooltip = Ui::mob_tooltips[id];
+            return;
+        }
+        if (event == kFocusLost || event == kClick) {
+            if (event == kFocusLost && tip_touch != (uint32_t) -1
+                && Input::touches.contains(tip_touch)) {
+                rendering_tooltip = 1;
+                tooltip = Ui::mob_tooltips[id];
+                return;
+            }
+            tip_touch = (uint32_t) -1;
+            rendering_tooltip = 0;
+            if (s_mobile_mob_tip == this) s_mobile_mob_tip = nullptr;
+            return;
+        }
+    }
+    if (event != kFocusLost) {
         rendering_tooltip = 1;
         tooltip = Ui::mob_tooltips[id];
     } else
@@ -73,9 +119,13 @@ static Element *make_mob_drops(MobID::T id, float petal_size = 40) {
 
     for (uint32_t i = 0; i < data.drops.size(); ++i) {
         uint32_t j = order[i];
+        PetalID::T drop = data.drops[j];
+        if (drop == PetalID::kNone || drop >= PetalID::kNumPetals) continue;
+        float chance = j < drop_chances.size() ? drop_chances[j] : 0.f;
         elt->add_child(new Ui::VContainer({
-            new GalleryPetal(data.drops[j], petal_size),
-            new StaticText(12, format_pct(drop_chances[j] * 100))
+            // always_show: bestiary should list drops even before the petal is owned
+            new GalleryPetal(drop, petal_size, 1),
+            new StaticText(12, format_pct(chance * 100))
         }, 0, 5, { .h_justify = Style::Left }));
     }
     return elt;
@@ -112,11 +162,6 @@ static void make_mob_tooltip(MobID::T id) {
         new Ui::DynamicText(14, [id](){ return I18n::rarity_name(MOB_DATA[id].rarity); }, { .fill = RARITY_COLORS[MOB_DATA[id].rarity], .h_justify = Style::Left }),
         new Ui::Element(0, 6),
         new Ui::DynamicText(12, [id](){ return I18n::mob_desc(id); }, { .fill = 0xffffffff, .h_justify = Style::Left }),
-        new Ui::DynamicText(11, [](){
-            return I18n::use_chinese
-                ? std::string("属性随地图难度缩放")
-                : std::string("Stats scale with map zone difficulty");
-        }, { .fill = 0xffaaaaaa, .h_justify = Style::Left }),
         new Ui::Element(0, 6),
         make_mob_stat_container(id),
     };
@@ -147,12 +192,7 @@ static Element *make_mob_card(MobID::T id) {
                 new Ui::DynamicText(18, [id](){ return I18n::mob_name(id); }, { .fill = 0xffffffff, .h_justify = Style::Left }),
                 new Ui::DynamicText(14, [id](){ return I18n::rarity_name(MOB_DATA[id].rarity); }, { .fill = RARITY_COLORS[MOB_DATA[id].rarity], .h_justify = Style::Left }),
                 new Ui::Element(0,2),
-                new Ui::DynamicText(14, [id](){ return I18n::mob_desc(id); }, { .fill = 0xffffffff, .h_justify = Style::Left }),
-                new Ui::DynamicText(12, [](){
-                    return I18n::use_chinese
-                        ? std::string("属性随地图难度缩放")
-                        : std::string("Stats scale with map zone difficulty");
-                }, { .fill = 0xffaaaaaa, .h_justify = Style::Left })
+                new Ui::DynamicText(14, [id](){ return I18n::mob_desc(id); }, { .fill = 0xffffffff, .h_justify = Style::Left })
             }, 0, 5),
             new GalleryMob(id, 60),
             10, 10
@@ -177,27 +217,46 @@ static Element *make_mob_card(MobID::T id) {
 }
 
 static Element *make_scroll() {
-    std::vector<Element *> rows;
-    MobID::T id_list[MobID::kNumMobs];
-    for (MobID::T i = 0; i < MobID::kNumMobs; ++i)
-        id_list[i] = i;
-    std::sort(id_list, id_list + MobID::kNumMobs, [](MobID::T a, MobID::T b) {
-        if (MOB_DATA[a].rarity < MOB_DATA[b].rarity) return true;
-        if (MOB_DATA[b].rarity < MOB_DATA[a].rarity) return false;
-        return strcmp(MOB_DATA[a].name, MOB_DATA[b].name) <= 0;
-    });
-
-    for (MobID::T i = 0; i < MobID::kNumMobs;) {
-        std::vector<Element *> cards;
-        for (uint8_t col = 0; col < 10 && i < MobID::kNumMobs; ++col, ++i) {
-            MobID::T id = id_list[i];
-            cards.push_back(new GalleryMob(id, 70));
+    // Desktop was 110×1050 — oversized on 1080p; keep mobile compact.
+    float const kCell = Input::is_mobile ? 46.f : 72.f;
+    constexpr uint16_t kEmpty = 0xffffu;
+    struct Family {
+        char const *name;
+        std::array<uint16_t, RarityID::kNumRarities> ids;
+    };
+    std::vector<Family> families;
+    for (uint16_t id = 0; id < MobID::kNumMobs; ++id) {
+        char const *name = MOB_DATA[id].name;
+        uint8_t rarity = MOB_DATA[id].rarity;
+        if (rarity >= RarityID::kNumRarities) continue;
+        Family *target = nullptr;
+        for (Family &family : families)
+            if (std::strcmp(family.name, name) == 0 && family.ids[rarity] == kEmpty) {
+                target = &family;
+                break;
+            }
+        if (!target) {
+            Family family{name, {}};
+            family.ids.fill(kEmpty);
+            families.push_back(family);
+            target = &families.back();
         }
-        rows.push_back(new Ui::HContainer(cards, 0, 6,
+        target->ids[rarity] = id;
+    }
+    std::vector<Element *> rows;
+    for (Family const &family : families) {
+        std::vector<Element *> cards;
+        for (uint16_t id : family.ids)
+            cards.push_back(id == kEmpty
+                ? static_cast<Element *>(new Element(kCell, kCell,
+                    { .fill = 0xffaeaa3d, .round_radius = 5.f }))
+                : static_cast<Element *>(new GalleryMob((MobID::T)id, kCell)));
+        rows.push_back(new Ui::HContainer(cards, 0, 5,
             { .h_justify = Style::Left, .no_animation = 1 }));
     }
-    return new Ui::ScrollContainer(new Ui::VContainer(rows, 0, 6,
-        { .h_justify = Style::Left, .no_animation = 1 }), 470);
+    return new Ui::ScrollContainer(new Ui::VContainer(rows, 0, 5,
+        { .h_justify = Style::Left, .no_animation = 1 }),
+        Input::is_mobile ? 360.f : 400.f);
 }
 
 class MobGalleryHeader final : public Ui::Container {
@@ -209,10 +268,10 @@ public:
             new Ui::DynamicText(22, [](){ return std::string{"×"}; }),
             [](Element *, uint8_t e){ if (e == Ui::kClick) Ui::panel_open = Panel::kNone; },
             nullptr, { .fill = Chrome::kBtnDanger, .round_radius = 6 })
-    }, 754, 38, { .no_animation = 1 }) {}
+    }, Input::is_mobile ? 474.f : 720.f, 38, { .no_animation = 1 }) {}
     void refactor() override {
         for (Element *child : children) child->refactor();
-        width = 754;
+        width = Input::is_mobile ? 474.f : 720.f;
         height = 38;
         children[0]->x = 0;
         children[1]->x = (width - children[1]->width) / 2 - 2;

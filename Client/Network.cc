@@ -2,6 +2,7 @@
 
 #include <Client/I18n.hh>
 #include <Client/Input.hh>
+#include <Client/Storage.hh>
 #include <Client/Ui/InGame/GameInfo.hh>
 #include <Client/Ui/InGame/Loadout.hh>
 #include <Client/Ui/TextInput.hh>
@@ -17,6 +18,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstring>
 #include <format>
 #include <string>
 
@@ -51,6 +53,7 @@ void Game::on_message(uint8_t *ptr, uint32_t len) {
                 nickname = username;
                 // Keep guest_id untouched so logout still has a fixed id
                 Game::respawn_level = level < 1 ? 1 : level;
+                pending_kick_notice = 0;
                 auth_panel = 0;
                 for (uint32_t i = 0; i < 2 * MAX_SLOT_COUNT; ++i) {
                     PetalID::T id = reader.read<PetalID::T>();
@@ -77,13 +80,14 @@ void Game::on_message(uint8_t *ptr, uint32_t len) {
                 account_logged_in = 0;
                 daily_bonus_seconds = 0;
                 offline_bonus_seconds = 0;
+                bonus_enabled = 0;
                 auth_panel = 0;
                 password.clear();
                 session_token = 0;
                 craft_tray_clear();
                 ensure_guest_id();
-                talent_hp = guest_talent_hp;
-                talent_rot = guest_talent_rot;
+                for (uint8_t i = 0; i < TalentID::kNum; ++i)
+                    talent_ranks[i] = guest_talent_ranks[i];
                 talent_pending = 0;
                 talent_status.clear();
                 if (guest_save_valid) {
@@ -99,14 +103,16 @@ void Game::on_message(uint8_t *ptr, uint32_t len) {
                 send_guest_progress();
             } else if (was_auto && !account_logged_in) {
                 // Resume/login failed → guest this connection; open form if credentials rejected
+                // or stuck "already online" so the player can password-login / retry.
                 ensure_guest_id();
-                talent_hp = guest_talent_hp;
-                talent_rot = guest_talent_rot;
+                for (uint8_t i = 0; i < TalentID::kNum; ++i)
+                    talent_ranks[i] = guest_talent_ranks[i];
                 send_guest_progress();
                 if (result == AccountResultCode::kAccountWrongPass ||
                     result == AccountResultCode::kAccountNotFound ||
                     result == AccountResultCode::kAccountInvalidUser ||
-                    result == AccountResultCode::kAccountInvalidPass)
+                    result == AccountResultCode::kAccountInvalidPass ||
+                    result == AccountResultCode::kAccountAlreadyIn)
                     auth_panel = 1;
             }
             if (spawn_after_auth) {
@@ -127,13 +133,7 @@ void Game::on_message(uint8_t *ptr, uint32_t len) {
             for (uint32_t i = 0; i < PetalID::kNumPetals; ++i)
                 craft_bank[i] = reader.read<uint32_t>();
             coins = reader.read<uint32_t>();
-            // Tray stages owned petals (bag + bank) — clamp after sync
-            if (result == CraftResultCode::kCraftWin || result == CraftResultCode::kCraftMiss) {
-                if (craft_tray_id != PetalID::kNone) {
-                    if (craft_tray_count <= Craft::kCraftBatch) craft_tray_clear();
-                    else craft_tray_count -= Craft::kCraftBatch;
-                }
-            }
+            // Tray is updated optimistically on craft click; only clamp to owned
             if (craft_tray_id != PetalID::kNone) {
                 uint32_t owned = craft_owned(craft_tray_id);
                 if (owned == 0) craft_tray_clear();
@@ -164,6 +164,11 @@ void Game::on_message(uint8_t *ptr, uint32_t len) {
                     : "Backpack full — free a slot first";
             if (petal < PetalID::kNumPetals && petal != PetalID::kNone)
                 seen_petals[petal] = 1;
+            if (result == CraftResultCode::kCraftWin
+                || result == CraftResultCode::kCraftMiss
+                || result == CraftResultCode::kCraftExchanged
+                || result == CraftResultCode::kCraftBought)
+                Ui::craft_play_result(result, petal);
             break;
         }
         case Clientbound::kBoostUpdate: {
@@ -173,21 +178,46 @@ void Game::on_message(uint8_t *ptr, uint32_t len) {
             bonus_synced_at = timestamp;
             break;
         }
+        case Clientbound::kOnlineRoster: {
+            uint8_t n = reader.read<uint8_t>();
+            online_roster.clear();
+            online_roster.reserve(n);
+            for (uint8_t i = 0; i < n; ++i) {
+                OnlineRosterEntry e;
+                e.name = reader.read<std::string>();
+                e.map_id = reader.read<uint8_t>();
+                e.guild = reader.read<std::string>();
+                e.level = reader.read<uint32_t>();
+                if (e.map_id >= MapID::kNumMaps) e.map_id = 0;
+                if (e.level < 1) e.level = 1;
+                online_roster.push_back(std::move(e));
+            }
+            break;
+        }
         case Clientbound::kTalentUpdate: {
-            uint8_t hp = reader.read<uint8_t>();
-            uint8_t rot = reader.read<uint8_t>();
+            uint8_t got_ranks[TalentID::kNum] = {};
+            for (uint8_t i = 0; i < TalentID::kNum; ++i)
+                got_ranks[i] = reader.read<uint8_t>();
             if (talent_pending) {
-                uint8_t got = talent_pending_id == TalentID::kHealth ? hp : rot;
-                talent_status = got > talent_pending_rank
-                    ? (I18n::use_chinese ? "加点成功，属性已生效" : "Talent upgraded and active")
-                    : (I18n::use_chinese ? "加点未成功，请查看等级或点数" : "Upgrade unavailable; check level and points");
+                uint8_t ok = 0;
+                if (talent_pending_id == 0xFF) {
+                    ok = 1;
+                    for (uint8_t i = 0; i < TalentID::kNum; ++i)
+                        if (got_ranks[i] != 0) { ok = 0; break; }
+                } else if (talent_pending_id < TalentID::kNum) {
+                    // talent_pending_rank holds the expected absolute target
+                    ok = got_ranks[talent_pending_id] == talent_pending_rank;
+                }
+                talent_status = ok
+                    ? (I18n::use_chinese ? "天赋已更新" : "Talents updated")
+                    : (I18n::use_chinese ? "操作未生效，请查看等级或点数" : "No change; check level and points");
                 talent_pending = 0;
             }
-            talent_hp = hp;
-            talent_rot = rot;
+            for (uint8_t i = 0; i < TalentID::kNum; ++i)
+                talent_ranks[i] = got_ranks[i];
             if (!account_logged_in) {
-                guest_talent_hp = hp;
-                guest_talent_rot = rot;
+                for (uint8_t i = 0; i < TalentID::kNum; ++i)
+                    guest_talent_ranks[i] = got_ranks[i];
             }
             break;
         }
@@ -244,7 +274,13 @@ void Game::on_message(uint8_t *ptr, uint32_t len) {
         }
         case Clientbound::kClientUpdate: {
             simulation_ready = 1;
-            camera_id = reader.read<EntityID>();
+            EntityID new_camera = reader.read<EntityID>();
+            // Soft-leave keeps the old camera + world. Map transfer / new
+            // instance gives a different camera and all-creates; wipe stale
+            // ents or force_alloc_ent collides with occupied ID slots.
+            if (!(new_camera == camera_id) || !simulation.ent_exists(new_camera))
+                simulation.reset();
+            camera_id = new_camera;
             EntityID curr_id = reader.read<EntityID>();
             while(!(curr_id == NULL_ENTITY)) {
                 // The id may already be gone locally (deleted on a pending
@@ -274,9 +310,11 @@ void Game::on_message(uint8_t *ptr, uint32_t len) {
             uint8_t channel = reader.read<uint8_t>();
             std::string sender;
             std::string text;
+            std::string whisper_to;
             reader.read<std::string>(sender);
             reader.read<std::string>(text);
-            push_chat_line(channel, sender, text);
+            reader.read<std::string>(whisper_to);
+            push_chat_line(channel, sender, text, whisper_to);
             break;
         }
         case Clientbound::kPartyUpdate: {
@@ -336,6 +374,17 @@ void Game::on_message(uint8_t *ptr, uint32_t len) {
             leaderboard_board_at = Game::timestamp;
             break;
         }
+        case Clientbound::kLootToast: {
+            PetalID::T id = reader.read<PetalID::T>();
+            uint16_t amount = reader.read<uint16_t>();
+            std::string title;
+            reader.read<std::string>(title);
+            loot_toast.petal_id = id;
+            loot_toast.amount = amount;
+            loot_toast.title = title;
+            loot_toast.expires_at = timestamp + LOOT_TOAST_MS;
+            break;
+        }
         case Clientbound::kLifeSummary: {
             life_mob_kills.clear();
             life_petal_picks.clear();
@@ -389,6 +438,8 @@ void Game::on_message(uint8_t *ptr, uint32_t len) {
                 reader.read<std::string>(m.name);
                 m.flags = reader.read<uint8_t>();
                 m.level = reader.read<uint32_t>();
+                m.x = reader.read<float>();
+                m.y = reader.read<float>();
                 guild_members.push_back(m);
                 if (!guild_status.empty()) guild_status += ", ";
                 if (m.flags & 1) guild_status += "*";
@@ -412,11 +463,13 @@ void Game::request_leaderboard_board() {
 }
 
 void Game::send_inputs() {
-    // Chat box stays open while moving. Any clicked popup stops the flower.
+    // Desktop: chat stays open while moving (mouse aim). Mobile chat freezes.
+    // Any clicked popup stops the flower.
     uint8_t blocked = Input::freeze_input || Game::pause_menu_open
         || Game::leave_confirm_open || Game::game_panel_blocking()
         || Game::guild_panel_open || Game::invite_open || Game::chat_menu_open
-        || Ui::panel_open != Ui::Panel::kNone;
+        || Ui::panel_open != Ui::Panel::kNone
+        || (Game::chat_open && Input::mobile_controls());
     float x = blocked ? 0.f : Input::game_inputs.x;
     float y = blocked ? 0.f : Input::game_inputs.y;
     uint8_t flags = blocked ? 0 : Input::game_inputs.flags;
@@ -445,6 +498,36 @@ void Game::send_inputs() {
 }
 
 void Game::talent_spend(uint8_t talent_id) {
+    if (talent_id >= TalentID::kNum) return;
+    talent_set_rank(talent_id, (uint8_t) (talent_ranks[talent_id] + 1));
+}
+
+void Game::talent_refund(uint8_t talent_id) {
+    if (talent_pending) return;
+    if (talent_id == 0xFF) {
+        if (!socket.ready || !simulation_ready || !simulation.ent_exists(camera_id)) {
+            talent_status = I18n::use_chinese ? "未连接，暂不能回退" : "Connect before refunding";
+            return;
+        }
+        talent_pending = 1;
+        talent_pending_id = 0xFF;
+        talent_pending_rank = 0;
+        talent_status = I18n::use_chinese ? "回退中…" : "Refunding…";
+        Writer writer(static_cast<uint8_t *>(OUTGOING_PACKET));
+        writer.write<uint8_t>(Serverbound::kTalentRefund);
+        writer.write<uint8_t>(talent_id);
+        socket.send(writer.packet, writer.at - writer.packet);
+        return;
+    }
+    if (talent_id >= TalentID::kNum) return;
+    if (talent_ranks[talent_id] == 0) {
+        talent_status = I18n::use_chinese ? "该天赋尚无点数" : "Nothing to refund";
+        return;
+    }
+    talent_set_rank(talent_id, (uint8_t) (talent_ranks[talent_id] - 1));
+}
+
+void Game::talent_set_rank(uint8_t talent_id, uint8_t target_rank) {
     if (talent_id >= TalentID::kNum || talent_pending) return;
     if (!socket.ready || !simulation_ready || !simulation.ent_exists(camera_id)) {
         talent_status = I18n::use_chinese ? "未连接，暂不能加点" : "Connect before upgrading";
@@ -452,22 +535,28 @@ void Game::talent_spend(uint8_t talent_id) {
     }
     uint32_t level = alive() ? score_to_level(score)
         : simulation.get_ent(camera_id).get_respawn_level();
-    uint8_t rank = talent_id == TalentID::kHealth ? talent_hp : talent_rot;
-    if (rank >= Talent::max_rank(level)) {
+    uint8_t cur = talent_ranks[talent_id];
+    if (target_rank == cur) return;
+    if (target_rank > Talent::max_rank_for(talent_id, level)) {
         talent_status = I18n::use_chinese ? "当前等级的天赋阶数已满" : "Rank limit reached for this level";
         return;
     }
-    if (Talent::points_free(level, talent_hp, talent_rot) < Talent::rank_cost(rank + 1)) {
+    if (target_rank > cur
+        && Talent::points_free(level, talent_ranks)
+            < Talent::cost_to_reach(cur, target_rank)) {
         talent_status = I18n::use_chinese ? "天赋点不足" : "Not enough talent points";
         return;
     }
     talent_pending = 1;
     talent_pending_id = talent_id;
-    talent_pending_rank = rank;
-    talent_status = I18n::use_chinese ? "加点中…" : "Upgrading…";
+    talent_pending_rank = target_rank;
+    talent_status = target_rank > cur
+        ? (I18n::use_chinese ? "加点中…" : "Upgrading…")
+        : (I18n::use_chinese ? "回退中…" : "Refunding…");
     Writer writer(static_cast<uint8_t *>(OUTGOING_PACKET));
-    writer.write<uint8_t>(Serverbound::kTalentSpend);
+    writer.write<uint8_t>(Serverbound::kTalentSetRank);
     writer.write<uint8_t>(talent_id);
+    writer.write<uint8_t>(target_rank);
     socket.send(writer.packet, writer.at - writer.packet);
 }
 
@@ -590,6 +679,10 @@ void Game::account_logout() {
         return;
     }
     if (!account_logged_in) return;
+    // Account progress stays on the server; guest localStorage is frozen while
+    // logged in, so seed it now or logout falls back to an empty guest (lv 1).
+    seed_guest_from_session();
+    Storage::set();
     Writer writer(static_cast<uint8_t *>(OUTGOING_PACKET));
     writer.write<uint8_t>(Serverbound::kAccountLogout);
     socket.send(writer.packet, writer.at - writer.packet);
@@ -640,28 +733,34 @@ void Game::apply_loadout_preset(uint8_t index) {
     socket.send(writer.packet, writer.at - writer.packet);
 }
 
-void Game::withdraw_bank_petal(PetalID::T id) {
+void Game::withdraw_bank_petal(PetalID::T id, uint8_t dest) {
     if (!socket.ready || id == PetalID::kNone || id >= PetalID::kNumPetals
         || craft_bank[id] == 0) return;
     if (Recipe::is_bag_only(id)) return;
     uint8_t n = loadout_count;
     if (n == 0 || n > MAX_SLOT_COUNT) return;
-    // Optimistic auto-equip — same priority as server.
-    uint8_t dest = (uint8_t) -1;
-    for (uint8_t i = 0; i < n; ++i)
-        if (cached_loadout[i] == PetalID::kNone) { dest = i; break; }
-    if (dest == (uint8_t) -1)
+    uint8_t lim = (uint8_t) (n + MAX_SLOT_COUNT);
+    if (lim > 2 * MAX_SLOT_COUNT) lim = 2 * MAX_SLOT_COUNT;
+    // Explicit slot from a bag drag, else same auto priority as the server.
+    if (dest >= lim) {
+        dest = (uint8_t) -1;
         for (uint8_t i = 0; i < n; ++i)
-            if (cached_loadout[i] == PetalID::kBasic) { dest = i; break; }
-    if (dest == (uint8_t) -1)
-        for (uint8_t i = 0; i < n; ++i) {
-            uint8_t s = (uint8_t) (n + i);
-            if (cached_loadout[s] == PetalID::kNone) { dest = s; break; }
-        }
-    if (dest == (uint8_t) -1)
-        for (uint8_t i = 0; i < n; ++i)
-            if (cached_loadout[i] != id) { dest = i; break; }
-    if (dest == (uint8_t) -1) return;
+            if (cached_loadout[i] == PetalID::kNone) { dest = i; break; }
+        if (dest == (uint8_t) -1)
+            for (uint8_t i = 0; i < n; ++i)
+                if (cached_loadout[i] == PetalID::kBasic) { dest = i; break; }
+        if (dest == (uint8_t) -1)
+            for (uint8_t i = 0; i < n; ++i) {
+                uint8_t s = (uint8_t) (n + i);
+                if (cached_loadout[s] == PetalID::kNone) { dest = s; break; }
+            }
+        if (dest == (uint8_t) -1)
+            for (uint8_t i = 0; i < n; ++i)
+                if (cached_loadout[i] != id) { dest = i; break; }
+    }
+    if (dest == (uint8_t) -1 || dest >= lim) return;
+    // Coins cannot sit on primary.
+    if (dest < n && Recipe::is_bag_only(id)) return;
     PetalID::T old = cached_loadout[dest];
     if (old != PetalID::kNone && old != PetalID::kBasic) {
         if (craft_bank[old] >= 1000000) return;
@@ -669,9 +768,19 @@ void Game::withdraw_bank_petal(PetalID::T id) {
     }
     --craft_bank[id];
     cached_loadout[dest] = id;
+    // Hold optimistic equip until the server snapshot matches (same as swaps).
+    if (dest < 2 * MAX_SLOT_COUNT) {
+        Ui::UiLoadoutPetal *slot = Ui::UiLoadout::petal_slots[dest];
+        if (slot != nullptr) {
+            slot->petal_id = id;
+            slot->last_id = id;
+            slot->no_change_ticks = 100;
+        }
+    }
     Writer writer(static_cast<uint8_t *>(OUTGOING_PACKET));
     writer.write<uint8_t>(Serverbound::kBankWithdraw);
     writer.write<PetalID::T>(id);
+    writer.write<uint8_t>(dest);
     socket.send(writer.packet, writer.at - writer.packet);
 }
 
@@ -726,41 +835,27 @@ uint8_t Game::try_mobile_l_preset_slot(uint8_t primary_index) {
 }
 
 void Game::swap_all_petals() {
-    // One-key swap every primary ↔ paired secondary (1:1). Update local cache
-    // first so UI stays consistent; do not remap petal_slots pointers mid-loop.
+    // One-key / mobile R: every primary ↔ paired secondary with cross-fly.
     if (!Game::alive()) return;
     for (uint32_t i = 0; i < Game::loadout_count; ++i) {
         uint8_t p = (uint8_t) i;
         uint8_t s = (uint8_t) (i + Game::loadout_count);
         if (s >= 2 * MAX_SLOT_COUNT) break;
-        PetalID::T a = Game::cached_loadout[p];
-        PetalID::T b = Game::cached_loadout[s];
-        if (a == b) continue;
-        Game::cached_loadout[p] = b;
-        Game::cached_loadout[s] = a;
-        Ui::UiLoadoutPetal *slot_p = Ui::UiLoadout::petal_slots[p];
-        Ui::UiLoadoutPetal *slot_s = Ui::UiLoadout::petal_slots[s];
-        if (slot_p != nullptr) {
-            slot_p->petal_id = b;
-            if (b != PetalID::kNone) slot_p->last_id = b;
-            slot_p->no_change_ticks = 100;
-        }
-        if (slot_s != nullptr) {
-            slot_s->petal_id = a;
-            if (a != PetalID::kNone) slot_s->last_id = a;
-            slot_s->no_change_ticks = 100;
-        }
-        Game::swap_petals(p, s);
+        Ui::ui_swap_paired_slots(p, s);
     }
 }
 
-void Game::craft_petals(uint8_t mode, PetalID::T petal_id) {
+void Game::craft_petals(uint8_t mode, PetalID::T petal_id, uint16_t max_batches) {
     if (!socket.ready || !(alive() || on_game_screen)) return;
     if (petal_id == PetalID::kNone || petal_id >= PetalID::kNumPetals) return;
+    if (max_batches == 0) max_batches = 1;
+    if (max_batches > 200) max_batches = 200;
     Writer writer(static_cast<uint8_t *>(OUTGOING_PACKET));
     writer.write<uint8_t>(Serverbound::kPetalCraft);
     writer.write<uint8_t>(mode);
     writer.write<PetalID::T>(petal_id);
+    if (mode == CraftMode::kCraftGamble || mode == CraftMode::kCraftGambleAll)
+        writer.write<uint16_t>(max_batches);
     socket.send(writer.packet, writer.at - writer.packet);
 }
 
@@ -795,6 +890,16 @@ uint32_t Game::craft_available(PetalID::T id) {
 void Game::craft_tray_clear() {
     craft_tray_id = PetalID::kNone;
     craft_tray_count = 0;
+}
+
+void Game::craft_tray_remove(uint32_t amount) {
+    if (amount == 0 || craft_tray_id == PetalID::kNone || craft_tray_count == 0)
+        return;
+    if (amount >= craft_tray_count) {
+        craft_tray_clear();
+        return;
+    }
+    craft_tray_count -= amount;
 }
 
 void Game::craft_tray_add(PetalID::T id, uint32_t amount) {

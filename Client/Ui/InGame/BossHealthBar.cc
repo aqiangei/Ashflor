@@ -92,6 +92,10 @@ namespace {
                 float target_w = fminf(720.f, (float) (Ui::window_width / Ui::scale) * 0.72f);
                 if (target_w < 280.f) target_w = 280.f;
                 width = target_w;
+                // Drop below aqa 全服 banner when that overlay is up.
+                uint8_t announce_up = Game::screen_announce.expires_at > Game::timestamp
+                    && !Game::screen_announce.text.empty();
+                elt->y = announce_up ? 130.f : 68.f;
                 ctx.set_global_alpha((float) show * (float) elt->animation);
                 ctx.translate(0, -(1.f - (float) show) * 36.f);
             };

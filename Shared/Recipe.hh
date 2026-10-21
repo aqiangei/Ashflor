@@ -25,6 +25,6 @@ namespace Recipe {
     // Returns recipe index or (uint16_t)-1
     uint16_t find_by_result(PetalID::T result);
 
-    // Coin / craft materials: stack in bag, never equip to primary.
+    // Currency (coins): stack in bag, never equip to primary.
     uint8_t is_bag_only(PetalID::T id);
 }

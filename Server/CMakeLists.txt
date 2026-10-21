@@ -15,6 +15,7 @@ set(SOURCES
     Process/Collision.cc
     Process/Culling.cc
     Process/Curse.cc
+    Process/Drop.cc
     Process/Flower.cc
     Process/FlowerAi.cc
     Process/Health.cc
@@ -36,6 +37,7 @@ set(SOURCES
     Simulation.cc
     Spawn.cc
     TeamManager.cc
+    Treasure.cc
     ../Helpers/Math.cc
     ../Helpers/UTF8.cc
     ../Helpers/Vector.cc

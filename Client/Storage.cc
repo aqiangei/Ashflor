@@ -164,8 +164,7 @@ public:
     X(13, Input::invert_defend) \
     X(19, Input::request_mobile) \
     X(20, Game::password) \
-    X(15, Game::guest_talent_hp) \
-    X(16, Game::guest_talent_rot) \
+    X(15, Game::guest_talent_ranks) \
     X(17, Game::rot_speed_setting) \
     X(21, Game::show_debug)
 
@@ -228,6 +227,17 @@ void Storage::retrieve() {
                 Game::show_debug = reader.read<uint8_t>() ? 1 : 0;
         } else {
             Input::request_mobile = Input::is_mobile;
+        }
+    }
+    {
+        // florr_clone-style remembered FOV multiplier (centi-units, 55..220)
+        uint32_t len = StorageProtocol::retrieve("cam_zoom", 4);
+        if (len >= 2) {
+            Decoder reader(&StorageProtocol::buffer[0]);
+            uint16_t z = reader.read<uint16_t>();
+            float zoom = z / 100.f;
+            if (zoom >= 0.55f && zoom <= 2.2f)
+                Game::camera_zoom = zoom;
         }
     }
     {
@@ -300,54 +310,70 @@ void Storage::retrieve() {
                 if (reader.at < StorageProtocol::buffer + len)
                     remain = (uint32_t) ((StorageProtocol::buffer + len - reader.at) / 4);
                 uint32_t bank_n = PetalID::kNumPetals;
-                // Fast5+Heavy5+Twin4 appended after Stinger Legendary
+                // Newest→oldest append waves (must match AccountStore::load).
+                constexpr uint32_t kMonsteraLadderAdded = 6;
+                constexpr uint32_t kAntHellAdded = 12;
+                constexpr uint32_t kSuperUltraAdded = 42;
+                constexpr uint32_t kCrossLegendAdded = 40;
+                constexpr uint32_t kBaseCraftAdded = 22;
+                constexpr uint32_t kMatsAdded = 48;
+                constexpr uint32_t kMonsteraAdded = 1;
+                constexpr uint32_t kCoinAdded = 1;
                 constexpr uint32_t kCommonLadderAdded = 14;
                 constexpr uint32_t kStingerLegAdded = 1;
                 constexpr uint32_t kJungleAdded = 12;
                 constexpr uint32_t kLadderAdded = 43;
                 constexpr uint32_t kRoyalAdded = 12;
-                uint32_t const n = (uint32_t)PetalID::kNumPetals;
-                constexpr uint32_t kMonsteraAdded = 1;
-                constexpr uint32_t kCoinAdded = 1;
-                uint32_t const prev_monstera = n > kMonsteraAdded ? n - kMonsteraAdded : n;
-                uint32_t const prev_coin = prev_monstera > kCoinAdded ? prev_monstera - kCoinAdded : prev_monstera;
-                uint32_t const prev_common = n > kCommonLadderAdded ? n - kCommonLadderAdded : n;
-                uint32_t const prev_stinger = prev_common > kStingerLegAdded ? prev_common - kStingerLegAdded : prev_common;
-                uint32_t const prev_jungle = prev_stinger > kJungleAdded ? prev_stinger - kJungleAdded : prev_stinger;
-                uint32_t const prev_ladder = prev_jungle > kLadderAdded ? prev_jungle - kLadderAdded : prev_ladder;
-                uint32_t const prev_royal = prev_ladder > kRoyalAdded ? prev_ladder - kRoyalAdded : prev_ladder;
-                if (remain < bank_n && remain >= prev_monstera)
-                    bank_n = prev_monstera;
-                else if (remain < bank_n && remain >= prev_coin)
-                    bank_n = prev_coin;
-                else if (remain < bank_n && remain >= prev_common)
-                    bank_n = prev_common;
-                else if (remain < bank_n && remain >= prev_stinger)
-                    bank_n = prev_stinger;
-                else if (remain < bank_n && remain >= prev_jungle)
-                    bank_n = prev_jungle;
-                else if (remain < bank_n && remain >= prev_ladder)
-                    bank_n = prev_ladder;
-                else if (remain < bank_n && remain >= prev_royal)
-                    bank_n = prev_royal;
-                if (remain >= bank_n) {
+                uint32_t const n = (uint32_t) PetalID::kNumPetals;
+                auto sub = [](uint32_t cur, uint32_t amt) -> uint32_t {
+                    return cur > amt ? cur - amt : cur;
+                };
+                uint32_t const prev_monstera_ladder = sub(n, kMonsteraLadderAdded);
+                uint32_t const prev_anthell = sub(prev_monstera_ladder, kAntHellAdded);
+                uint32_t const prev_super = sub(prev_anthell, kSuperUltraAdded);
+                uint32_t const prev_cross = sub(prev_super, kCrossLegendAdded);
+                uint32_t const prev_basecraft = sub(prev_cross, kBaseCraftAdded);
+                uint32_t const prev_mats = sub(prev_basecraft, kMatsAdded);
+                uint32_t const prev_monstera = sub(prev_mats, kMonsteraAdded);
+                uint32_t const prev_coin = sub(prev_monstera, kCoinAdded);
+                uint32_t const prev_common = sub(prev_coin, kCommonLadderAdded);
+                uint32_t const prev_stinger = sub(prev_common, kStingerLegAdded);
+                uint32_t const prev_jungle = sub(prev_stinger, kJungleAdded);
+                uint32_t const prev_ladder = sub(prev_jungle, kLadderAdded);
+                uint32_t const prev_royal = sub(prev_ladder, kRoyalAdded);
+                uint32_t const bank_candidates[] = {
+                    n, prev_monstera_ladder, prev_anthell, prev_super, prev_cross,
+                    prev_basecraft, prev_mats, prev_monstera, prev_coin, prev_common,
+                    prev_stinger, prev_jungle, prev_ladder, prev_royal
+                };
+                for (uint32_t cand : bank_candidates) {
+                    if (remain >= cand) {
+                        bank_n = cand;
+                        break;
+                    }
+                }
+                if (remain >= bank_n && !(remain == 7 || remain == 8)) {
                     for (uint32_t i = 0; i < bank_n; ++i)
                         Game::guest_craft_bank[i] = reader.read<uint32_t>();
                     if (reader.at + 4 <= StorageProtocol::buffer + len)
                         Game::guest_coins = reader.read<uint32_t>();
-                } else if (remain >= 7) {
-                    // Legacy rarity-bucket saves were frozen at 7 tiers.
+                } else if (remain == 7 || remain == 8) {
+                    // Exact legacy rarity buckets only (not truncated modern banks).
                     for (uint8_t r = 0; r < 7; ++r) {
-                        uint32_t n = reader.read<uint32_t>();
+                        uint32_t count = reader.read<uint32_t>();
                         PetalID::T id = Craft::first_petal_of_rarity(r);
-                        if (id != PetalID::kNone) Game::guest_craft_bank[id] = n;
+                        if (id != PetalID::kNone) Game::guest_craft_bank[id] = count;
                     }
                     if (reader.at + 4 <= StorageProtocol::buffer + len)
                         Game::guest_coins = reader.read<uint32_t>();
                 }
-                if (reader.at + 2 <= StorageProtocol::buffer + len) {
-                    Game::guest_talent_hp = reader.read<uint8_t>();
-                    Game::guest_talent_rot = reader.read<uint8_t>();
+                if (reader.at + TalentID::kNum <= StorageProtocol::buffer + len) {
+                    for (uint8_t i = 0; i < TalentID::kNum; ++i)
+                        Game::guest_talent_ranks[i] = reader.read<uint8_t>();
+                    guest_talents_loaded = true;
+                } else if (reader.at + 2 <= StorageProtocol::buffer + len) {
+                    Game::guest_talent_ranks[0] = reader.read<uint8_t>();
+                    Game::guest_talent_ranks[1] = reader.read<uint8_t>();
                     guest_talents_loaded = true;
                 }
                 if (Game::guest_coins > 0) {
@@ -364,26 +390,38 @@ void Storage::retrieve() {
         }
     }
     {
-        uint32_t len = StorageProtocol::retrieve("talents", 8);
+        uint32_t len = StorageProtocol::retrieve("talents", 16);
         if (len >= 3) {
             Decoder reader(&StorageProtocol::buffer[0]);
-            uint8_t legacy_hp = reader.read<uint8_t>();
-            uint8_t legacy_rot = reader.read<uint8_t>();
-            if (!guest_talents_loaded && Game::session_token == 0) {
-                Game::guest_talent_hp = legacy_hp;
-                Game::guest_talent_rot = legacy_rot;
+            if (len >= TalentID::kNum + 1) {
+                uint8_t ranks[TalentID::kNum];
+                for (uint8_t i = 0; i < TalentID::kNum; ++i)
+                    ranks[i] = reader.read<uint8_t>();
+                if (!guest_talents_loaded && Game::session_token == 0) {
+                    for (uint8_t i = 0; i < TalentID::kNum; ++i)
+                        Game::guest_talent_ranks[i] = ranks[i];
+                }
+                uint8_t rs = reader.read<uint8_t>();
+                if (rs > 10) rs = 7;
+                Game::rot_speed_setting = rs;
+                Game::rot_speed_f = (float) rs;
+            } else {
+                uint8_t legacy_hp = reader.read<uint8_t>();
+                uint8_t legacy_rot = reader.read<uint8_t>();
+                if (!guest_talents_loaded && Game::session_token == 0) {
+                    Game::guest_talent_ranks[0] = legacy_hp;
+                    Game::guest_talent_ranks[1] = legacy_rot;
+                }
+                uint8_t rs = reader.read<uint8_t>();
+                if (rs > 10) rs = 7;
+                Game::rot_speed_setting = rs;
+                Game::rot_speed_f = (float) rs;
             }
-            uint8_t rs = reader.read<uint8_t>();
-            if (rs > 10) rs = 7;
-            Game::rot_speed_setting = rs;
-            Game::rot_speed_f = (float) rs;
         }
     }
-    uint8_t max_rank = Talent::max_rank(Game::guest_level);
-    if (Game::guest_talent_hp > max_rank) Game::guest_talent_hp = max_rank;
-    if (Game::guest_talent_rot > max_rank) Game::guest_talent_rot = max_rank;
-    Game::talent_hp = Game::guest_talent_hp;
-    Game::talent_rot = Game::guest_talent_rot;
+    Talent::clamp_ranks(Game::guest_talent_ranks, Game::guest_level);
+    for (uint8_t i = 0; i < TalentID::kNum; ++i)
+        Game::talent_ranks[i] = Game::guest_talent_ranks[i];
     #ifdef DEBUG
     for (MobID::T i = 0; i < MobID::kNumMobs; ++i) Game::seen_mobs[i] = 1;
     for (PetalID::T i = PetalID::kBasic; i < PetalID::kNumPetals; ++i) Game::seen_petals[i] = 1;
@@ -454,14 +492,14 @@ void Storage::set() {
         for (uint32_t i = 0; i < PetalID::kNumPetals; ++i)
             writer.write<uint32_t>(Game::guest_craft_bank[i]);
         writer.write<uint32_t>(Game::guest_coins);
-        writer.write<uint8_t>(Game::guest_talent_hp);
-        writer.write<uint8_t>(Game::guest_talent_rot);
+        for (uint8_t i = 0; i < TalentID::kNum; ++i)
+            writer.write<uint8_t>(Game::guest_talent_ranks[i]);
         StorageProtocol::store("guest", writer.at - writer.base);
     }
     {
         Encoder writer(&StorageProtocol::buffer[0]);
-        writer.write<uint8_t>(Game::guest_talent_hp);
-        writer.write<uint8_t>(Game::guest_talent_rot);
+        for (uint8_t i = 0; i < TalentID::kNum; ++i)
+            writer.write<uint8_t>(Game::guest_talent_ranks[i]);
         writer.write<uint8_t>(Game::rot_speed_setting);
         StorageProtocol::store("talents", writer.at - writer.base);
     }

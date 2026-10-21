@@ -1,10 +1,13 @@
 #pragma once
 
+#include <Shared/EntityDef.hh>
+
 #include <cstdint>
 #include <string>
 
 class Client;
 class GameInstance;
+class Simulation;
 
 namespace Party {
     constexpr uint32_t MAX_SIZE = 4;
@@ -29,4 +32,6 @@ namespace Party {
     void send_update(Client *);
     void notify(Client *, std::string const &);
     uint8_t same_party(Client *, Client *);
+    // Drop claim window: same team, or same party (team desync fallback).
+    uint8_t can_take_drop(Client *picker, Simulation *, EntityID drop_team);
 };

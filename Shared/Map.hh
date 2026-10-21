@@ -27,10 +27,19 @@ namespace Map {
     // 迷宫格口硬下限（总纲 §1.2 / R7）
     inline constexpr float kMinMazeGate = 800.f;
 
-    // Ellipse around the fixed center spawn. Aggressive zones must not fill it.
+    // Ellipse around the fixed center spawn. Aggressive zones must not fill it
+    // (spawn density / terrain carve). Not the combat sanctuary — see below.
     inline bool in_spawn_plaza(float x, float y) {
         float dx = (x - MAP_SPAWN_X) / 5200.f;
         float dy = (y - MAP_SPAWN_Y) / 4000.f;
+        return dx * dx + dy * dy < 1.f;
+    }
+
+    // Only no-aggro pad: tight ellipse on the hub respawn point (MAP_SPAWN ± jitter).
+    // Wild mobs do not acquire / keep chase here; players may still attack.
+    inline bool in_spawn_sanctuary(float x, float y) {
+        float dx = (x - MAP_SPAWN_X) / 1000.f;
+        float dy = (y - MAP_SPAWN_Y) / 800.f;
         return dx * dx + dy * dy < 1.f;
     }
 
@@ -41,11 +50,13 @@ namespace Map {
     // Terrain queries (Shared — used by server motion and client render helpers)
     extern uint8_t point_in_feature(TerrainFeature const &, float x, float y);
     extern uint8_t circle_hits_impassable(uint8_t map_id, float x, float y, float radius);
-    extern uint8_t in_no_attack_zone(uint8_t map_id, float x, float y);
     /* Push circle out of impassable terrain; returns whether a correction was applied */
     extern uint8_t resolve_circle_terrain(uint8_t map_id, float &x, float &y, float radius);
     /* Continuous move: subdivide ox,oy → x,y so fast entities cannot tunnel hills */
     extern void ccd_move_circle(uint8_t map_id, float &x, float &y, float ox, float oy, float radius);
+    /* After arena clamp: if still inside edge berms, slide toward map center until free.
+       Collision box blocks crossing — never zero the player's movement intent. */
+    extern void eject_from_impassable(uint8_t map_id, float &x, float &y, float radius);
 
     // Procedural outline / centerline (client fill + minimap). Returns point count.
     extern float terrain_hash(uint32_t seed, uint32_t i);
@@ -53,6 +64,8 @@ namespace Map {
     extern void spiral_center_at(TerrainFeature const &, float t, float &x, float &y);
     extern float feature_half_width(TerrainFeature const &);
     extern uint32_t terrain_outline(TerrainFeature const &, float *xs, float *ys, uint32_t cap);
+    // Shared: MapGen rim exits + spawn rules (no mobs on painted roads).
+    extern uint8_t in_safe_channel(uint8_t map_id, float x, float y);
 
     #ifdef SERVERSIDE
     extern void remove_mob(Simulation *, uint32_t);
@@ -66,7 +79,6 @@ namespace Map {
     // Zone 权重 = density × 独占面积；返回被抽中的 Zone 索引。
     extern uint32_t pick_spawn_zone(uint8_t map_id);
     // 落点相关查询
-    extern uint8_t in_safe_channel(uint8_t map_id, float x, float y);
     extern float open_clearance(uint8_t map_id, float x, float y, float radius, float max_dist);
     extern float corridor_reach(uint8_t map_id, float x, float y, float dx, float dy, float radius, float max_dist);
     // Boss 锚点（每图至多一个）；无 Boss 时返回 0

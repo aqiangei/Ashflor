@@ -1,11 +1,11 @@
 #include <Client/Ui/InGame/GameInfo.hh>
+#include <Client/Ui/InGame/HudIcons.hh>
 
 #include <Client/Ui/Button.hh>
 #include <Client/Ui/Chrome.hh>
 #include <Client/Ui/Container.hh>
 #include <Client/Ui/DynamicText.hh>
 #include <Client/Ui/Extern.hh>
-#include <Client/Ui/StaticIcon.hh>
 
 #include <Client/DOM.hh>
 #include <Client/Game.hh>
@@ -132,27 +132,7 @@ Element *Ui::make_pause_menu() {
 
 Element *Ui::make_game_topbar() {
     Element *gear = new Ui::Button(40, 40,
-        new Ui::StaticIcon([](Element *elt, Renderer &ctx){
-            float r = elt->width * 0.38f;
-            ctx.set_fill(0xffffffff);
-            ctx.begin_path();
-            ctx.arc(0, 0, r);
-            ctx.fill();
-            ctx.set_fill(0xff5a5a5a);
-            ctx.begin_path();
-            ctx.arc(0, 0, r * 0.42f);
-            ctx.fill();
-            ctx.set_stroke(0xffffffff);
-            ctx.set_line_width(elt->width * 0.18f);
-            ctx.round_line_cap();
-            for (int i = 0; i < 6; ++i) {
-                float a = i * (2 * M_PI / 6);
-                ctx.begin_path();
-                ctx.move_to(cosf(a) * r * 0.55f, sinf(a) * r * 0.55f);
-                ctx.line_to(cosf(a) * r * 0.95f, sinf(a) * r * 0.95f);
-                ctx.stroke();
-            }
-        }, 22, 22),
+        make_hud_icon(hud_icon_settings, 26.f),
         [](Element *, uint8_t e){
             if (e == Ui::kClick) Game::toggle_pause();
         },
@@ -160,40 +140,8 @@ Element *Ui::make_game_topbar() {
         { .fill = Chrome::kBtnIron, .line_width = 0, .round_radius = Chrome::kRadius }
     );
 
-    Element *mob_icon = new Ui::StaticIcon([](Element *elt, Renderer &ctx){
-        float s = elt->width * 0.22f;
-        ctx.set_fill(0xffffffff);
-        ctx.begin_path();
-        ctx.arc(0, s * 0.55f, s * 1.15f);
-        ctx.fill();
-        ctx.begin_path();
-        ctx.arc(-s * 1.1f, -s * 0.35f, s * 0.55f);
-        ctx.arc(s * 1.1f, -s * 0.35f, s * 0.55f);
-        ctx.arc(-s * 0.4f, -s * 1.05f, s * 0.5f);
-        ctx.arc(s * 0.4f, -s * 1.05f, s * 0.5f);
-        ctx.fill();
-    }, 22, 22);
-
-    Element *trophy_icon = new Ui::StaticIcon([](Element *elt, Renderer &ctx){
-        float s = elt->width * 0.32f;
-        ctx.set_fill(0xffffffff);
-        ctx.begin_path();
-        ctx.move_to(-s * 0.7f, -s * 0.85f);
-        ctx.line_to(s * 0.7f, -s * 0.85f);
-        ctx.line_to(s * 0.5f, s * 0.05f);
-        ctx.line_to(0, s * 0.35f);
-        ctx.line_to(-s * 0.5f, s * 0.05f);
-        ctx.close_path();
-        ctx.fill();
-        ctx.begin_path();
-        ctx.round_rect(-s * 0.18f, s * 0.2f, s * 0.36f, s * 0.4f, 1);
-        ctx.fill();
-        ctx.begin_path();
-        ctx.round_rect(-s * 0.55f, s * 0.55f, s * 1.1f, s * 0.28f, 2);
-        ctx.fill();
-    }, 22, 22);
-
-    Element *mob_btn = new Ui::Button(40, 40, mob_icon,
+    Element *mob_btn = new Ui::Button(40, 40,
+        make_hud_icon(hud_icon_mob_gallery, 26.f),
         [](Element *, uint8_t e){
             if (e == Ui::kClick) {
                 Game::pause_menu_open = 0;
@@ -204,7 +152,20 @@ Element *Ui::make_game_topbar() {
         { .fill = Chrome::kBtnMoss, .line_width = 0, .round_radius = Chrome::kRadius }
     );
 
-    Element *trophy_btn = new Ui::Button(40, 40, trophy_icon,
+    Element *petal_btn = new Ui::Button(40, 40,
+        make_hud_icon(hud_icon_petal_gallery, 26.f),
+        [](Element *, uint8_t e){
+            if (e == Ui::kClick) {
+                Game::pause_menu_open = 0;
+                Ui::toggle_panel(Panel::kPetals);
+            }
+        },
+        [](){ return Ui::panel_open == Panel::kPetals; },
+        { .fill = Chrome::kBtnBronze, .line_width = 0, .round_radius = Chrome::kRadius }
+    );
+
+    Element *trophy_btn = new Ui::Button(40, 40,
+        make_hud_icon(hud_icon_leaderboard, 26.f),
         [](Element *, uint8_t e){
             if (e == Ui::kClick) {
                 Game::pause_menu_open = 0;
@@ -215,56 +176,8 @@ Element *Ui::make_game_topbar() {
         { .fill = Chrome::kBtnClay, .line_width = 0, .round_radius = Chrome::kRadius }
     );
 
-    Element *changelog_icon = new Ui::StaticIcon([](Element *elt, Renderer &ctx){
-        float w = elt->width * 0.55f;
-        float h = elt->height * 0.65f;
-        ctx.set_fill(0xffffffff);
-        ctx.begin_path();
-        ctx.round_rect(-w / 2, -h / 2, w, h, 2);
-        ctx.fill();
-        ctx.set_stroke(0xff5a8a3a);
-        ctx.set_line_width(2);
-        ctx.begin_path();
-        ctx.move_to(0, -h / 2 + 2);
-        ctx.line_to(0, h / 2 - 2);
-        ctx.stroke();
-        ctx.set_stroke(0xffa8d878);
-        ctx.set_line_width(1.5f);
-        for (int i = 0; i < 3; ++i) {
-            float y = -h * 0.2f + i * h * 0.22f;
-            ctx.begin_path();
-            ctx.move_to(-w * 0.32f, y);
-            ctx.line_to(-w * 0.08f, y);
-            ctx.move_to(w * 0.08f, y);
-            ctx.line_to(w * 0.32f, y);
-            ctx.stroke();
-        }
-    }, 22, 22);
-
-    Element *changelog_btn = new Ui::Button(40, 40, changelog_icon,
-        [](Element *, uint8_t e){
-            if (e == Ui::kClick) {
-                Game::pause_menu_open = 0;
-                Ui::toggle_panel(Panel::kChangelog);
-            }
-        },
-        [](){ return Ui::panel_open == Panel::kChangelog; },
-        { .fill = Chrome::kBtnBronze, .line_width = 0, .round_radius = Chrome::kRadius }
-    );
-
     Element *exit_btn = new Ui::Button(40, 40,
-        new Ui::StaticIcon([](Element *elt, Renderer &ctx){
-            float s = elt->width * 0.32f;
-            ctx.set_stroke(0xffffffff);
-            ctx.set_line_width(elt->width * 0.18f);
-            ctx.round_line_cap();
-            ctx.begin_path();
-            ctx.move_to(-s, -s);
-            ctx.line_to(s, s);
-            ctx.move_to(s, -s);
-            ctx.line_to(-s, s);
-            ctx.stroke();
-        }, 22, 22),
+        make_hud_icon(hud_icon_exit, 26.f),
         [](Element *, uint8_t e){
             if (e != Ui::kClick) return;
             Game::close_chat();
@@ -284,19 +197,7 @@ Element *Ui::make_game_topbar() {
     Element *guild_btn = Ui::make_guild_top_button();
 
     Element *boost_btn = new Ui::Button(40, 40,
-        new Ui::StaticIcon([](Element *, Renderer &ctx){
-            ctx.set_fill(0xffffffff);
-            ctx.begin_path();
-            for (int i = 0; i < 10; ++i) {
-                float a = -M_PI / 2 + i * M_PI / 5;
-                float r = (i & 1) ? 8.f : 18.f;
-                float x = cosf(a) * r, y = sinf(a) * r;
-                if (i == 0) ctx.move_to(x, y);
-                else ctx.line_to(x, y);
-            }
-            ctx.close_path();
-            ctx.fill();
-        }, 25, 25),
+        make_hud_icon(hud_icon_boost, 26.f),
         [](Element *, uint8_t e){
             if (e == Ui::kClick) Game::toggle_game_panel(Game::kPanelBoost);
         },
@@ -304,13 +205,14 @@ Element *Ui::make_game_topbar() {
         { .fill = 0xffd5ad24, .line_width = 0, .round_radius = Chrome::kRadius }
     );
 
+    // Boost sits at the right end of the top-left cluster (just before leave).
     Element *elt = new Ui::HContainer({
         gear,
-        boost_btn,
         guild_btn,
         mob_btn,
+        petal_btn,
         trophy_btn,
-        changelog_btn,
+        boost_btn,
         exit_btn
     }, 10, 8, {
         .should_render = [](){

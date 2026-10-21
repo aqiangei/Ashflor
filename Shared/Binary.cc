@@ -226,6 +226,15 @@ void Reader::Decoder<std::string>::read(Reader &r, std::string &ref) {
 }
 
 template<>
+std::string Reader::Decoder<std::string>::read(Reader &r) {
+    std::string ret;
+    uint32_t len = r.read<uint32_t>();
+    ret.reserve(len);
+    for (uint32_t i = 0; i < len; ++i) ret.push_back(r.read<uint8_t>());
+    return ret;
+}
+
+template<>
 void Reader::Decoder<PersistentFlag>::read(Reader &r, PersistentFlag &ref) {
     ref.set(r.read<uint8_t>());
 }

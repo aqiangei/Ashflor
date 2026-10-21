@@ -113,6 +113,7 @@ void Simulation::on_tick() {
     for_each<kDrop>([](Simulation *, Entity &drop) {
         drop.acceleration.set(0, 0);
     });
+    for_each<kDrop>(tick_drop_behavior);
     for_each<kFlower>(tick_player_behavior);
     for_each<kMob>(tick_ai_behavior);
     for_each<kCamera>(tick_player_ai_behavior);
@@ -138,7 +139,12 @@ void Simulation::post_tick() {
             if (ent.despawn_tick == 0) sim->request_delete(ent.id);
             else --ent.despawn_tick;
         }
-        if (ent.immunity_ticks > 0) --ent.immunity_ticks;
+        if (ent.immunity_ticks > 0) {
+            --ent.immunity_ticks;
+        } else if (ent.has_component(kDrop) && ent.get_team() != NULL_ENTITY) {
+            // Private claim window ended → free-for-all
+            ent.set_team(NULL_ENTITY);
+        }
     });
     for_each_entity([](Simulation *sim, Entity &ent) {
         if (!ent.pending_delete) return;

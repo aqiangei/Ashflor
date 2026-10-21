@@ -65,7 +65,13 @@ void tick_entity_motion(Simulation *sim, Entity &ent) {
             x = r = BASE_FLOWER_RADIUS;
             y = BASE_FLOWER_RADIUS;
         }
+        // Terrain CCD slides along walls (never freezes input). Arena bounds are
+        // hard walls via clamp; if clamp pins us inside an edge berm, eject inward.
         Map::ccd_move_circle(sim->map_id, x, y, ox, oy, r);
+        x = fclamp(x, r, ARENA_WIDTH - r);
+        y = fclamp(y, r, ARENA_HEIGHT - r);
+        if (Map::circle_hits_impassable(sim->map_id, x, y, r))
+            Map::eject_from_impassable(sim->map_id, x, y, r);
         x = fclamp(x, r, ARENA_WIDTH - r);
         y = fclamp(y, r, ARENA_HEIGHT - r);
         ent.set_x(x);

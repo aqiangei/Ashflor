@@ -197,35 +197,60 @@ static float dist2_point_seg(float px, float py, float ax, float ay, float bx, f
     return dx * dx + dy * dy;
 }
 
-// Nearest sample index along path (same sample count as dist_to_path).
-static uint32_t nearest_path_sample(TerrainFeature const &f, float x, float y, float &cx, float &cy) {
+// Closest point on the river/spiral centerline polyline (matches drawn ribbon).
+// Old circle-around-nearest-sample blew past meander bends as invisible air walls.
+static void closest_on_path(TerrainFeature const &f, float x, float y,
+                            float &qx, float &qy, float &hw,
+                            float &nx, float &ny, float &dist) {
     uint32_t const samples = (f.shape == TerrainShape::kSpiral) ? 48u : 36u;
-    float best = 1e12f;
-    uint32_t best_i = 0;
-    cx = f.left; cy = f.top;
-    for (uint32_t i = 0; i <= samples; ++i) {
-        float t = (float)i / (float)samples;
-        float px, py;
-        if (f.shape == TerrainShape::kSpiral)
-            spiral_center_at(f, t, px, py);
-        else
-            river_center_at(f, t, px, py);
-        float dx = x - px, dy = y - py;
-        float d2 = dx * dx + dy * dy;
-        if (d2 < best) { best = d2; cx = px; cy = py; best_i = i; }
-    }
-    return best_i < samples ? best_i : samples - 1;
-}
-
-static float path_half_width_at(TerrainFeature const &f, float x, float y, float &cx, float &cy) {
     uint32_t seed = feature_seed(f);
-    uint32_t i = nearest_path_sample(f, x, y, cx, cy);
-    // Side: which bank is closer — use sign of cross vs path tangent approx via
-    // averaging both banks' max so collision hugs the wider drawn shore.
-    float s0 = path_width_scale(seed, i, 0);
-    float s1 = path_width_scale(seed, i, 1);
-    float s = s0 > s1 ? s0 : s1;
-    return feature_half_width(f) * s;
+    float base_hw = feature_half_width(f);
+    float best_d2 = 1e12f;
+    qx = f.left; qy = f.top;
+    hw = base_hw;
+    nx = 1.f; ny = 0.f;
+    dist = 0.f;
+
+    float ax, ay;
+    if (f.shape == TerrainShape::kSpiral)
+        spiral_center_at(f, 0.f, ax, ay);
+    else
+        river_center_at(f, 0.f, ax, ay);
+
+    for (uint32_t i = 1; i <= samples; ++i) {
+        float t = (float)i / (float)samples;
+        float bx, by;
+        if (f.shape == TerrainShape::kSpiral)
+            spiral_center_at(f, t, bx, by);
+        else
+            river_center_at(f, t, bx, by);
+
+        float pqx = 0.f, pqy = 0.f;
+        float d2 = dist2_point_seg(x, y, ax, ay, bx, by, pqx, pqy);
+        if (d2 < best_d2) {
+            best_d2 = d2;
+            qx = pqx; qy = pqy;
+            float tx = bx - ax, ty = by - ay;
+            float tlen = std::sqrt(tx * tx + ty * ty);
+            if (tlen < 1e-3f) { tx = 1.f; ty = 0.f; tlen = 1.f; }
+            else { tx /= tlen; ty /= tlen; }
+            // Bank scale matches terrain_outline (+n = side 0, -n = side 1)
+            float nnx = -ty, nny = tx;
+            float rx = x - pqx, ry = y - pqy;
+            float cross = tx * ry - ty * rx;
+            uint8_t side = cross >= 0.f ? 0 : 1;
+            uint32_t si = i > 0 ? i - 1 : 0;
+            if (si >= samples) si = samples - 1;
+            hw = base_hw * path_width_scale(seed, si, side);
+            // Push normal: from centerline toward the query (stable for eject).
+            float rlen = std::sqrt(rx * rx + ry * ry);
+            if (rlen > 1e-3f) { nx = rx / rlen; ny = ry / rlen; }
+            else if (side == 0) { nx = nnx; ny = nny; }
+            else { nx = -nnx; ny = -nny; }
+        }
+        ax = bx; ay = by;
+    }
+    dist = std::sqrt(best_d2);
 }
 
 static float aabb_jagged_amp(TerrainFeature const &f) {
@@ -271,10 +296,9 @@ static uint8_t circle_hits_jagged_box(TerrainFeature const &f, float x, float y,
 uint8_t Map::point_in_feature(TerrainFeature const &f, float x, float y) {
     if (!feature_near_circle(f, x, y, 0.f)) return 0;
     if (f.shape == TerrainShape::kRiver || f.shape == TerrainShape::kSpiral) {
-        float cx, cy;
-        float hw = path_half_width_at(f, x, y, cx, cy);
-        float dx = x - cx, dy = y - cy;
-        return (dx * dx + dy * dy) <= hw * hw ? 1 : 0;
+        float qx, qy, hw, nx, ny, dist;
+        closest_on_path(f, x, y, qx, qy, hw, nx, ny, dist);
+        return dist <= hw ? 1 : 0;
     }
     if (f.shape == TerrainShape::kCircle || f.shape == TerrainShape::kEllipse) {
         float cx = f.left, cy = f.top;
@@ -298,11 +322,9 @@ uint8_t Map::point_in_feature(TerrainFeature const &f, float x, float y) {
 static uint8_t circle_hits_feature(TerrainFeature const &f, float x, float y, float radius) {
     if (!feature_near_circle(f, x, y, radius)) return 0;
     if (f.shape == TerrainShape::kRiver || f.shape == TerrainShape::kSpiral) {
-        float cx, cy;
-        float hw = path_half_width_at(f, x, y, cx, cy);
-        float dx = x - cx, dy = y - cy;
-        float need = hw + radius;
-        return (dx * dx + dy * dy) <= need * need ? 1 : 0;
+        float qx, qy, hw, nx, ny, dist;
+        closest_on_path(f, x, y, qx, qy, hw, nx, ny, dist);
+        return dist <= hw + radius ? 1 : 0;
     }
     if (f.shape == TerrainShape::kCircle || f.shape == TerrainShape::kEllipse) {
         float cx = f.left, cy = f.top;
@@ -338,29 +360,23 @@ uint8_t Map::circle_hits_impassable(uint8_t map_id, float x, float y, float radi
     return 0;
 }
 
-uint8_t Map::in_no_attack_zone(uint8_t map_id, float x, float y) {
-    MapTerrain const &terrain = map_terrain(map_id);
-    for (TerrainFeature const &f : terrain) {
-        if (!(f.flags & TerrainFlags::kNoAttack)) continue;
-        if (point_in_feature(f, x, y)) return 1;
-    }
-    return 0;
+static uint8_t push_out_path(TerrainFeature const &f, float &x, float &y, float radius) {
+    float qx, qy, hw, nx, ny, dist;
+    closest_on_path(f, x, y, qx, qy, hw, nx, ny, dist);
+    float need = hw + radius;
+    if (dist >= need) return 0;
+    // Slide out along bank normal (ribbon collision), not a freeze clamp.
+    float nlen = std::sqrt(nx * nx + ny * ny);
+    if (nlen < 1e-3f) { nx = 1.f; ny = 0.f; nlen = 1.f; }
+    else { nx /= nlen; ny /= nlen; }
+    x = qx + nx * (need + 0.5f);
+    y = qy + ny * (need + 0.5f);
+    return 1;
 }
 
-static uint8_t push_out_path(TerrainFeature const &f, float &x, float &y, float radius) {
-    float cx, cy;
-    float hw = path_half_width_at(f, x, y, cx, cy);
-    float dx = x - cx, dy = y - cy;
-    float d = std::sqrt(dx * dx + dy * dy);
-    float need = hw + radius;
-    if (d >= need) return 0;
-    if (d < 1e-3f) {
-        dx = 1.f; dy = 0.f; d = 1.f;
-    }
-    float scale = (need + 0.5f) / d;
-    x = cx + dx * scale;
-    y = cy + dy * scale;
-    return 1;
+static uint8_t in_arena_band(float x, float y, float radius) {
+    return x >= radius && x <= (float)ARENA_WIDTH - radius
+        && y >= radius && y <= (float)ARENA_HEIGHT - radius;
 }
 
 static uint8_t push_out_smooth_aabb(TerrainFeature const &f, float &x, float &y, float radius) {
@@ -371,21 +387,71 @@ static uint8_t push_out_smooth_aabb(TerrainFeature const &f, float &x, float &y,
     float dist2 = dx * dx + dy * dy;
     if (dist2 > radius * radius) return 0;
     if (dist2 < 1e-6f) {
-        float dl = x - f.left, dr = f.right - x, dt = y - f.top, db = f.bottom - y;
-        float m = dl; uint8_t side = 0;
-        if (dr < m) { m = dr; side = 1; }
-        if (dt < m) { m = dt; side = 2; }
-        if (db < m) { m = db; side = 3; }
-        if (side == 0) x = f.left - radius;
-        else if (side == 1) x = f.right + radius;
-        else if (side == 2) y = f.top - radius;
-        else y = f.bottom + radius;
+        // Deep inside the box: try all four exits. Edge berms sit on the arena
+        // border — pushing "outward" lands past the map, then Motion's fclamp
+        // pins the flower back inside the berm (feels like movement freeze).
+        float const exits[4][2] = {
+            { f.left - radius - 0.5f, y },
+            { f.right + radius + 0.5f, y },
+            { x, f.top - radius - 0.5f },
+            { x, f.bottom + radius + 0.5f },
+        };
+        float const depths[4] = {
+            x - f.left, f.right - x, y - f.top, f.bottom - y
+        };
+        int best = -1;
+        float best_d = 1e12f;
+        for (int i = 0; i < 4; ++i) {
+            if (!in_arena_band(exits[i][0], exits[i][1], radius)) continue;
+            if (depths[i] < best_d) { best_d = depths[i]; best = i; }
+        }
+        if (best >= 0) {
+            x = exits[best][0];
+            y = exits[best][1];
+            return 1;
+        }
+        // No in-arena face (degenerate edge strip) — shove toward map center.
+        float cx = (float)ARENA_WIDTH * 0.5f;
+        float cy = (float)ARENA_HEIGHT * 0.5f;
+        float vx = cx - x, vy = cy - y;
+        float vl = std::sqrt(vx * vx + vy * vy);
+        if (vl < 1e-3f) { vx = 1.f; vy = 0.f; vl = 1.f; }
+        x += vx / vl * (radius + 8.f);
+        y += vy / vl * (radius + 8.f);
         return 1;
     }
     float dist = std::sqrt(dist2);
     float push = (radius - dist) / dist + 0.001f;
-    x += dx * push;
-    y += dy * push;
+    float nx = x + dx * push;
+    float ny = y + dy * push;
+    // Natural push left the arena (edge berm) — pick nearest in-arena face instead.
+    if (!in_arena_band(nx, ny, radius)) {
+        float const exits[4][2] = {
+            { f.left - radius - 0.5f, y },
+            { f.right + radius + 0.5f, y },
+            { x, f.top - radius - 0.5f },
+            { x, f.bottom + radius + 0.5f },
+        };
+        float const depths[4] = {
+            std::fabs(x - (f.left - radius)), std::fabs(x - (f.right + radius)),
+            std::fabs(y - (f.top - radius)), std::fabs(y - (f.bottom + radius))
+        };
+        int best = -1;
+        float best_d = 1e12f;
+        for (int i = 0; i < 4; ++i) {
+            if (!in_arena_band(exits[i][0], exits[i][1], radius)) continue;
+            if (depths[i] < best_d) { best_d = depths[i]; best = i; }
+        }
+        if (best >= 0) { nx = exits[best][0]; ny = exits[best][1]; }
+        else {
+            float cx = (float)ARENA_WIDTH * 0.5f, cy = (float)ARENA_HEIGHT * 0.5f;
+            float vx = cx - x, vy = cy - y;
+            float vl = std::sqrt(vx * vx + vy * vy);
+            if (vl > 1e-3f) { nx = x + vx / vl * (radius + 8.f); ny = y + vy / vl * (radius + 8.f); }
+        }
+    }
+    x = nx;
+    y = ny;
     return 1;
 }
 
@@ -607,45 +673,145 @@ uint8_t Map::resolve_circle_terrain(uint8_t map_id, float &x, float &y, float ra
     return moved;
 }
 
+void Map::eject_from_impassable(uint8_t map_id, float &x, float &y, float radius) {
+    if (!circle_hits_impassable(map_id, x, y, radius)) return;
+    // First try normal multi-pass resolve (now prefers in-arena exits).
+    resolve_circle_terrain(map_id, x, y, radius);
+    x = fclamp(x, radius, (float)ARENA_WIDTH - radius);
+    y = fclamp(y, radius, (float)ARENA_HEIGHT - radius);
+    if (!circle_hits_impassable(map_id, x, y, radius)) return;
+
+    // Still trapped in an edge berm / corner: walk toward map center.
+    float cx = (float)ARENA_WIDTH * 0.5f;
+    float cy = (float)ARENA_HEIGHT * 0.5f;
+    float vx = cx - x, vy = cy - y;
+    float vl = std::sqrt(vx * vx + vy * vy);
+    if (vl < 1e-3f) return;
+    vx /= vl; vy /= vl;
+    float step = radius > 10.f ? radius * 0.5f : 10.f;
+    for (float d = step; d <= 900.f; d += step) {
+        float nx = fclamp(x + vx * d, radius, (float)ARENA_WIDTH - radius);
+        float ny = fclamp(y + vy * d, radius, (float)ARENA_HEIGHT - radius);
+        if (!circle_hits_impassable(map_id, nx, ny, radius)) {
+            x = nx;
+            y = ny;
+            return;
+        }
+    }
+}
+
+// Binary-search the farthest free point on the segment [from → to].
+static void ccd_approach(uint8_t map_id, float &x, float &y,
+                         float from_x, float from_y, float to_x, float to_y, float radius) {
+    float ax = from_x, ay = from_y, bx = to_x, by = to_y;
+    for (int k = 0; k < 7; ++k) {
+        float mx = (ax + bx) * 0.5f;
+        float my = (ay + by) * 0.5f;
+        if (Map::circle_hits_impassable(map_id, mx, my, radius)) {
+            bx = mx; by = my;
+        } else {
+            ax = mx; ay = my;
+        }
+    }
+    x = ax;
+    y = ay;
+}
+
 void Map::ccd_move_circle(uint8_t map_id, float &x, float &y, float ox, float oy, float radius) {
-    float dx = x - ox;
-    float dy = y - oy;
-    float dist = std::sqrt(dx * dx + dy * dy);
-    if (!(dist > 0.f) || dist != dist) { // NaN / zero
+    float cur_x = ox, cur_y = oy;
+    // Already inside a wall (berm clamp / dual-river corner): eject first so the
+    // rest of the move can slide instead of freezing at the penetration point.
+    if (circle_hits_impassable(map_id, cur_x, cur_y, radius))
+        eject_from_impassable(map_id, cur_x, cur_y, radius);
+
+    float goal_x = x, goal_y = y;
+    float dx0 = goal_x - cur_x, dy0 = goal_y - cur_y;
+    float dist0 = std::sqrt(dx0 * dx0 + dy0 * dy0);
+    if (!(dist0 > 0.f) || dist0 != dist0) {
+        x = cur_x; y = cur_y;
         resolve_circle_terrain(map_id, x, y, radius);
         return;
     }
-    // Step by ~half radius so thin walls cannot be skipped in one tick
+
     float step = radius > 8.f ? radius * 0.5f : 8.f;
-    int steps = (int) std::ceil(dist / step);
-    if (steps < 1) steps = 1;
-    if (steps > 24) steps = 24;
-    float px = ox, py = oy;
-    for (int i = 1; i <= steps; ++i) {
-        float tx = ox + dx * ((float) i / (float) steps);
-        float ty = oy + dy * ((float) i / (float) steps);
-        if (circle_hits_impassable(map_id, tx, ty, radius)) {
-            float ax = px, ay = py, bx = tx, by = ty;
-            for (int k = 0; k < 7; ++k) {
-                float mx = (ax + bx) * 0.5f;
-                float my = (ay + by) * 0.5f;
-                if (circle_hits_impassable(map_id, mx, my, radius)) {
-                    bx = mx; by = my;
-                } else {
-                    ax = mx; ay = my;
-                }
-            }
-            x = ax;
-            y = ay;
-            resolve_circle_terrain(map_id, x, y, radius);
-            return;
+    auto slide_toward = [&](float &sx, float &sy) {
+        if (!circle_hits_impassable(map_id, goal_x, sy, radius)) {
+            sx = goal_x;
+        } else if (std::fabs(goal_x - sx) > 0.5f) {
+            ccd_approach(map_id, sx, sy, sx, sy, goal_x, sy, radius);
         }
-        px = tx;
-        py = ty;
+        if (!circle_hits_impassable(map_id, sx, goal_y, radius)) {
+            sy = goal_y;
+        } else if (std::fabs(goal_y - sy) > 0.5f) {
+            float tmp_x = sx;
+            ccd_approach(map_id, tmp_x, sy, sx, sy, sx, goal_y, radius);
+            sx = tmp_x;
+        }
+        float rem_x = goal_x - sx;
+        float rem_y = goal_y - sy;
+        float rem = std::sqrt(rem_x * rem_x + rem_y * rem_y);
+        if (rem <= 0.75f) return;
+        float best = 0.f;
+        float bx = sx, by = sy;
+        float slide = rem < step * 2.5f ? rem : step * 2.5f;
+        for (int k = 0; k < 24; ++k) {
+            float a = (float)k * (float)(2.0 * M_PI / 24.0);
+            float cx = sx + std::cos(a) * slide;
+            float cy = sy + std::sin(a) * slide;
+            if (circle_hits_impassable(map_id, cx, cy, radius)) continue;
+            float prog = (cx - sx) * rem_x + (cy - sy) * rem_y;
+            if (prog > best) { best = prog; bx = cx; by = cy; }
+        }
+        if (best > 0.f) { sx = bx; sy = by; }
+    };
+
+    // Up to a few wall contacts per tick — keep sliding along, never hard-stop.
+    for (int bounce = 0; bounce < 4; ++bounce) {
+        float dx = goal_x - cur_x;
+        float dy = goal_y - cur_y;
+        float dist = std::sqrt(dx * dx + dy * dy);
+        if (!(dist > 0.5f) || dist != dist) break;
+
+        int steps = (int) std::ceil(dist / step);
+        if (steps < 1) steps = 1;
+        if (steps > 24) steps = 24;
+        float px = cur_x, py = cur_y;
+        uint8_t hit = 0;
+        for (int i = 1; i <= steps; ++i) {
+            float tx = cur_x + dx * ((float) i / (float) steps);
+            float ty = cur_y + dy * ((float) i / (float) steps);
+            if (!circle_hits_impassable(map_id, tx, ty, radius)) {
+                px = tx; py = ty;
+                continue;
+            }
+            float sx = px, sy = py;
+            ccd_approach(map_id, sx, sy, px, py, tx, ty, radius);
+            resolve_circle_terrain(map_id, sx, sy, radius);
+            slide_toward(sx, sy);
+            resolve_circle_terrain(map_id, sx, sy, radius);
+            float moved = std::sqrt((sx - px) * (sx - px) + (sy - py) * (sy - py));
+            if (moved < 0.2f && circle_hits_impassable(map_id, sx, sy, radius))
+                eject_from_impassable(map_id, sx, sy, radius);
+            // No progress toward goal → stop bouncing (corner / sealed pocket).
+            float before = (goal_x - px) * (goal_x - px) + (goal_y - py) * (goal_y - py);
+            float after = (goal_x - sx) * (goal_x - sx) + (goal_y - sy) * (goal_y - sy);
+            cur_x = sx; cur_y = sy;
+            hit = 1;
+            if (after >= before - 0.5f) bounce = 4; // force exit
+            break;
+        }
+        if (!hit) {
+            cur_x = px;
+            cur_y = py;
+            break;
+        }
     }
-    x = px;
-    y = py;
+
+    x = cur_x;
+    y = cur_y;
     resolve_circle_terrain(map_id, x, y, radius);
+    if (circle_hits_impassable(map_id, x, y, radius))
+        eject_from_impassable(map_id, x, y, radius);
 }
 
 uint32_t Map::sample_connectivity(uint8_t map_id, float step) {
@@ -717,7 +883,9 @@ uint32_t Map::sample_connectivity(uint8_t map_id, float step) {
         uint32_t iy = (uint32_t)(zy / step);
         if (ix >= gw) ix = gw - 1;
         if (iy >= gh) iy = gh - 1;
-        // nearest walkable around zone center
+        // Prefer the center, but a center may itself be a hill or water feature.
+        // A zone is accessible when any walkable point inside its bounds is
+        // connected to spawn.
         bool ok = false;
         for (int r = 0; r < 10 && !ok; ++r) {
             for (int dy = -r; dy <= r && !ok; ++dy) {
@@ -729,9 +897,34 @@ uint32_t Map::sample_connectivity(uint8_t map_id, float step) {
                 }
             }
         }
+        if (!ok) {
+            uint32_t lx = (uint32_t)std::max(0.f, zones[z].left / step);
+            uint32_t rx = std::min(gw - 1, (uint32_t)(zones[z].right / step));
+            uint32_t ty = (uint32_t)std::max(0.f, zones[z].top / step);
+            uint32_t by = std::min(gh - 1, (uint32_t)(zones[z].bottom / step));
+            for (uint32_t y = ty; y <= by && !ok; ++y)
+                for (uint32_t x = lx; x <= rx && !ok; ++x)
+                    if (seen[idx(x, y)]) ok = true;
+        }
         if (ok) ++reachable;
+#ifdef SERVERSIDE
+        else std::cout << "[map] unreachable zone " << (uint32_t)map_id << ": "
+                       << zones[z].name << " (" << z << ") ["
+                       << zones[z].left << "," << zones[z].top << " .. "
+                       << zones[z].right << "," << zones[z].bottom << "]\n";
+#endif
     }
     return reachable;
+}
+
+// 是否位于道路通道内 —— 这类区域不刷怪（可攻击）。Shared with MapGen.
+uint8_t Map::in_safe_channel(uint8_t map_id, float x, float y) {
+    MapTerrain const &terrain = map_terrain(map_id);
+    for (TerrainFeature const &f : terrain) {
+        if (f.kind != TerrainKind::kChannel) continue;
+        if (point_in_feature(f, x, y)) return 1;
+    }
+    return 0;
 }
 
 #ifdef SERVERSIDE
@@ -774,9 +967,11 @@ void Map::spawn_random_mob(Simulation *sim, float x, float y) {
     // Respawn plaza: only the difficulty-0 hub table, and only a handful.
     if (in_spawn_plaza(x, y)) {
         if (zone.difficulty != 0) return;
-        if (sim->plaza_mob_count >= 2) return;
+        if (sim->plaza_mob_count >= 8) return;
     }
-    if (zone.density * zone_exclusive_area(sim->map_id, zone_id) / (500 * 500) < sim->zone_mob_counts[zone_id]) return;
+    // Combat zones spawn denser; hub (diff 0) stays sparse.
+    float dens = zone.density * (zone.difficulty == 0 ? 1.f : 1.65f);
+    if (dens * zone_exclusive_area(sim->map_id, zone_id) / (500 * 500) < sim->zone_mob_counts[zone_id]) return;
     float sum = 0;
     for (SpawnChance const &s : zone.spawns)
         sum += s.chance;
@@ -795,17 +990,30 @@ void Map::_spawn_mob_at(Simulation *sim, uint32_t zone_id, MobID::T mob_id, floa
     struct ZoneDefinition const &zone = map_zones(sim->map_id)[zone_id];
     alloc_mob(sim, mob_id, x, y, NULL_ENTITY, [&](Entity &mob){
         mob.zone = zone_id;
+        mob.home_x = x;
+        mob.home_y = y;
         mob.immunity_ticks = TPS;
         BitMath::set(mob.flags, EntityFlags::kSpawnedFromZone);
         BitMath::set(mob.flags, EntityFlags::kHasCulling);
         sim->zone_mob_counts[zone_id]++;
         if (in_spawn_plaza(x, y)) sim->plaza_mob_count++;
         uint32_t diff = zone.difficulty;
-        float th = zone_threat_mult(diff);
+        uint8_t base_r = MOB_DATA[mob_id].rarity;
+        // Boss / Unique+ keep baked floor; everyone else rolls zone tier ± adjacent.
+        uint8_t spawn_r = base_r;
+        if (base_r < RarityID::kUnique) {
+            spawn_r = pick_zone_spawn_rarity(diff);
+            if (spawn_r < base_r) spawn_r = base_r; // never weaker than species floor
+        }
+        mob.set_rarity(spawn_r);
+        float th = mob_spawn_threat_mult(base_r, spawn_r);
         mob.max_health *= th;
         mob.health = mob.max_health;
-        mob.damage *= zone_damage_mult(diff);
-        mob.score_reward = (uint32_t) (MOB_DATA[mob.get_mob_id()].xp * zone_xp_mult(diff) + 0.5f);
+        mob.damage *= mob_spawn_damage_mult(base_r, spawn_r);
+        mob.score_reward = (uint32_t) (
+            MOB_DATA[mob_id].xp * zone_xp_mult(diff)
+            * mob_spawn_threat_mult(base_r, spawn_r) + 0.5f
+        );
     });
 }
 
@@ -838,17 +1046,6 @@ float Map::open_clearance(uint8_t map_id, float x, float y, float radius, float 
         if (reach < best) best = reach;
     }
     return best;
-}
-
-// 是否位于"安全动脉"（不可攻击通道）内 —— 这类区域不刷怪。
-uint8_t Map::in_safe_channel(uint8_t map_id, float x, float y) {
-    MapTerrain const &terrain = map_terrain(map_id);
-    for (TerrainFeature const &f : terrain) {
-        if (f.kind != TerrainKind::kChannel) continue;
-        if (!(f.flags & TerrainFlags::kNoAttack)) continue;
-        if (point_in_feature(f, x, y)) return 1;
-    }
-    return 0;
 }
 
 uint8_t Map::boss_anchor(uint8_t map_id, float &x, float &y, uint8_t &mob_id) {
@@ -1001,7 +1198,8 @@ uint8_t Map::_spawn_zone_mob_once(Simulation *sim) {
     MapZones const &zones = map_zones(sim->map_id);
     if (zone_id >= zones.size()) return 0;
     ZoneDefinition const &zone = zones[zone_id];
-    if (zone.density * zone_exclusive_area(sim->map_id, zone_id) / (500 * 500) < sim->zone_mob_counts[zone_id]) return 0;
+    float dens = zone.density * (zone.difficulty == 0 ? 1.f : 1.65f);
+    if (dens * zone_exclusive_area(sim->map_id, zone_id) / (500 * 500) < sim->zone_mob_counts[zone_id]) return 0;
 
     float total = 0.f;
     for (SpawnChance const &s : zone.spawns) total += s.chance;
@@ -1033,7 +1231,7 @@ uint8_t Map::_spawn_zone_mob_once(Simulation *sim) {
     }
     if (in_spawn_plaza(x, y)) {
         if (zone.difficulty != 0) return 0;
-        if (sim->plaza_mob_count >= 2) return 0;
+        if (sim->plaza_mob_count >= 8) return 0;
     }
     _spawn_mob_at(sim, zone_id, mob_id, x, y);
     return 1;

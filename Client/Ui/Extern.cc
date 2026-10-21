@@ -13,6 +13,7 @@ namespace Ui {
     namespace Panel {
         Element *settings = nullptr;
         Element *petal_gallery = nullptr;
+        Element *petal_gallery_alt = nullptr;
         Element *mob_gallery = nullptr;
         Element *mob_gallery_alt = nullptr;
         Element *leaderboard = nullptr;
@@ -33,7 +34,8 @@ namespace Ui {
     Element *game_topbar_root = nullptr;
     Element *panel_buttons_root = nullptr;
     Element *game_side_buttons_root = nullptr;
-    Element *game_panel_roots[7] = {};
+    Element *chat_panel_root = nullptr;
+    Element *game_panel_roots[8] = {};
 
     void toggle_panel(uint8_t panel) {
         if (panel_open == panel) {
@@ -44,7 +46,10 @@ namespace Ui {
         Element *pg = nullptr;
         switch (panel) {
             case Panel::kSettings: pg = Panel::settings; break;
-            case Panel::kPetals: pg = Panel::petal_gallery; break;
+            case Panel::kPetals:
+                pg = (Game::alive() && Panel::petal_gallery_alt)
+                    ? Panel::petal_gallery_alt : Panel::petal_gallery;
+                break;
             case Panel::kMobs:
                 pg = (Game::alive() && Panel::mob_gallery_alt)
                     ? Panel::mob_gallery_alt : Panel::mob_gallery;
@@ -99,6 +104,7 @@ namespace Ui {
 
     static Element *open_info_panel_alt() {
         switch (panel_open) {
+            case Panel::kPetals: return Panel::petal_gallery_alt;
             case Panel::kMobs: return Panel::mob_gallery_alt;
             case Panel::kLeaderboard: return Panel::leaderboard_alt;
             default: return nullptr;
@@ -124,6 +130,13 @@ namespace Ui {
                 Game::pause_menu_open = 0;
         }
 
+        // Chat panel: tap/click outside collapses (same as Esc). Keep open when
+        // pressing send / history / channel label inside the panel.
+        if (Game::chat_open) {
+            if (!hit_element(chat_panel_root, x, y))
+                Game::close_chat();
+        }
+
         // Settings / galleries / leaderboard / changelog
         if (panel_open != Panel::kNone) {
             if (!hit_element(open_info_panel_primary(), x, y)
@@ -133,13 +146,14 @@ namespace Ui {
                 panel_open = Panel::kNone;
         }
 
-        // B / Z / C / V drawers. Mobile: touching the loadout bar to throw a
+        // X / Z / C / V drawers. Mobile: touching the loadout bar to throw a
         // petal into the open bag must NOT close the panel mid-gesture.
         if (Game::game_panel != Game::kPanelNone) {
             if (Ui::bag_gesture_busy() || Ui::UiLoadout::num_petals_selected != 0)
                 return;
             Element *panel = nullptr;
-            if (Game::game_panel < 7) panel = game_panel_roots[Game::game_panel];
+            if (Game::game_panel < Game::kPanelCount)
+                panel = game_panel_roots[Game::game_panel];
             if (!hit_element(panel, x, y)
                 && !hit_element(game_side_buttons_root, x, y)
                 && !hit_element(game_topbar_root, x, y)

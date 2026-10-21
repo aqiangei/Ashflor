@@ -43,9 +43,10 @@ EntityID find_nearest_enemy(Simulation *simulation, Entity const &entity, float 
         if (!ent.has_component(kMob) && !ent.has_component(kFlower)) return;
         // Players / bots / their summons never aggro other player-faction flowers
         if (seeker_player && is_player_faction(sim, ent)) return;
-        // Spawn plaza: wild mobs never acquire aggro on players inside (players may still attack).
+        // Hub respawn pad only: wild mobs never acquire aggro on players inside
+        // (players may still attack). Larger plaza / roads are not sanctuaries.
         if (!seeker_player && is_player_faction(sim, ent)
-            && Map::in_spawn_plaza(ent.get_x(), ent.get_y()))
+            && Map::in_spawn_sanctuary(ent.get_x(), ent.get_y()))
             return;
         if (sim->ent_alive(entity.get_parent())) {
             Entity &parent = sim->get_ent(entity.get_parent());
