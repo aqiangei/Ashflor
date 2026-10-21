@@ -269,6 +269,8 @@ namespace Game {
     void seed_guest_from_session();
     uint8_t alive();
     uint8_t in_game();
+    // Alive, or death screen still in-map (bag/chat stay usable before Continue).
+    uint8_t can_chat();
     uint8_t should_render_title_ui();
     uint8_t should_render_game_ui();
     void tick(double);

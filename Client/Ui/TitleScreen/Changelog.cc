@@ -45,6 +45,8 @@ static Element *make_changelog_contents() {
     Element *elt = new Ui::VContainer({
         make_date("2026年10月21日", "October 21st 2026"),
         make_entries({
+            {"死亡界面可正常聊天发消息（附近按镜头坐标；回车仍为继续重生，点输入框打开聊天）",
+             "Chat works on death screen (nearby uses camera pos; Enter still Continues, click input to chat)"},
             {"升级加速：击杀经验 ×50；本级所需经验曲线放缓（约 2.5× 更易升级）；图鉴 XP 同步显示实发经验",
              "Faster leveling: kill XP ×50; softer per-level curve; gallery XP shows granted amount"},
             {"修复：刷新丢经验——打怪即时写入账号 score 高水位，每 tick 同步 pending；断线/重登恢复本级进度",

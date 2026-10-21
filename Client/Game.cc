@@ -623,7 +623,7 @@ void Game::submit_shop_announce() {
 }
 
 void Game::open_chat() {
-    if (!alive() || pause_menu_open || leave_confirm_open) return;
+    if (!can_chat() || pause_menu_open || leave_confirm_open) return;
     if (shop_announce_prompt_open) close_shop_announce_prompt();
     close_game_panel();
     chat_open = 1;
@@ -1036,6 +1036,13 @@ uint8_t Game::in_game() {
     && simulation.ent_exists(camera_id);
 }
 
+uint8_t Game::can_chat() {
+    if (!socket.ready || !simulation_ready || !simulation.ent_exists(camera_id))
+        return 0;
+    if (alive()) return 1;
+    return on_game_screen && !leaving_to_title;
+}
+
 uint8_t Game::should_render_title_ui() {
     return transition_circle < MAX_TRANSITION_CIRCLE;
 }
@@ -1155,8 +1162,9 @@ void Game::tick(double time) {
         if (leaving_to_title) {
             on_game_screen = 0;
             leaving_to_title = 0; // flower gone — title UI; death Continue stays hidden via on_game_screen
+            if (chat_open) close_chat();
         }
-        if (chat_open) close_chat();
+        // Stay in chat on death so typing / reading mid-fight messages continues.
     }
 
     // chat_lines kept for focused history; collapsed UI fades via created_at
@@ -1393,12 +1401,15 @@ void Game::tick(double time) {
     if (enter) {
         if (shop_announce_prompt_open) {
             submit_shop_announce();
+        } else if (chat_open) {
+            send_chat();
         } else if (Game::alive()) {
-            if (chat_open) send_chat();
-            else if (!pause_menu_open && !leave_confirm_open
+            if (!pause_menu_open && !leave_confirm_open
                 && Ui::active_text_input() == nullptr)
                 open_chat();
-        } else if (!leaving_to_title) {
+        } else if (!leaving_to_title && can_chat()
+            && Ui::active_text_input() == nullptr) {
+            // Death screen: Enter still = Continue (chat opens via click / Send).
             Game::spawn_in();
         }
     }

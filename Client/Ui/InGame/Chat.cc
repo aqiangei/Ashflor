@@ -348,7 +348,7 @@ Element *Ui::make_chat_panel() {
     float const open_h = mobile ? 320.f : 260.f;
     auto *scroll = new ChatScroll(history, open_h);
     scroll->style.should_render = [](){
-        if (!(Game::alive() && Game::should_render_game_ui())) return false;
+        if (!(Game::can_chat() && Game::should_render_game_ui())) return false;
         if (Game::chat_open) return true;
         for (uint32_t i = 0; i < Game::chat_lines.size(); ++i)
             if (line_visible_now(i)) return true;
@@ -362,7 +362,7 @@ Element *Ui::make_chat_panel() {
         .line_width = 0,
         .round_radius = 10.f,
         .should_render = [](){
-            return Game::alive() && Game::should_render_game_ui();
+            return Game::can_chat() && Game::should_render_game_ui();
         }
     });
 
@@ -382,7 +382,7 @@ Element *Ui::make_chat_panel() {
             .line_width = 0,
             .round_radius = Chrome::kRadius,
             .should_render = [](){
-                return Game::alive() && Game::should_render_game_ui()
+                return Game::can_chat() && Game::should_render_game_ui()
                     && Game::chat_open;
             }
         }
@@ -394,7 +394,7 @@ Element *Ui::make_chat_panel() {
             .animate = [](Element *elt, Renderer &) {
                 elt->style.fill = channel_color(Game::chat_channel);
             },
-            .should_render = [](){ return Game::alive(); }
+            .should_render = [](){ return Game::can_chat(); }
         }),
         chat_input,
         send_btn
@@ -428,7 +428,7 @@ Element *Ui::make_chat_panel() {
             }
         },
         .should_render = [](){
-            return Game::should_render_game_ui() && Game::alive();
+            return Game::should_render_game_ui() && Game::can_chat();
         },
         .h_justify = Style::Left,
         .v_justify = Style::Bottom
@@ -493,7 +493,7 @@ Element *Ui::make_chat_context_menu() {
     }, 8, 6, {
         .fill = Chrome::kPanelDeep, .line_width = 0, .round_radius = Chrome::kRadius,
         .should_render = [](){
-            return Game::chat_menu_open && Game::alive() && Game::should_render_game_ui();
+            return Game::chat_menu_open && Game::can_chat() && Game::should_render_game_ui();
         },
         .h_justify = Style::Left,
         .v_justify = Style::Top,

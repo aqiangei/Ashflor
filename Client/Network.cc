@@ -574,7 +574,7 @@ void Game::talent_set_rank(uint8_t talent_id, uint8_t target_rank) {
 }
 
 void Game::send_chat() {
-    if (!alive() || !chat_open) return;
+    if (!can_chat() || !chat_open) return;
     if (Ui::TextInput *input = Ui::chat_text_input())
         input->sync_from_dom();
     std::string text = chat_draft;

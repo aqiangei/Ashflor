@@ -1281,7 +1281,9 @@ void Client::on_message(WebSocket *ws, std::string_view message, uint64_t code) 
             break;
         }
         case Serverbound::kChat: {
-            if (!client->alive()) break;
+            // Death screen may still chat (camera stays in map); soft-leave has no game.
+            if (client->game == nullptr || !client->game->simulation.ent_exists(client->camera))
+                break;
             if (client->check_invalid(
                 validator.validate_uint8() &&
                 validator.validate_string(MAX_NAME_LENGTH) &&

@@ -40,23 +40,39 @@ static std::string display_name(Client *client) {
     return "Unnamed";
 }
 
-static Client *find_alive_by_name(GameInstance *game, std::string const &name) {
+static Client *find_in_game_by_name(GameInstance *game, std::string const &name) {
     if (game == nullptr || name.empty()) return nullptr;
     for (Client *c : game->clients) {
-        if (c == nullptr || !c->alive()) continue;
+        if (c == nullptr) continue;
         if (display_name(c) == name) return c;
     }
     return nullptr;
 }
 
-// Whisper / guild-invite targets: search every map room (florr-style).
+// Whisper targets: any player still in a map room (alive or death screen).
 static Client *find_online_by_name(std::string const &name) {
     if (name.empty() || Server::games == nullptr) return nullptr;
     for (uint8_t mi = 0; mi < MapID::kNumMaps; ++mi) {
-        Client *c = find_alive_by_name(&Server::games[mi], name);
+        Client *c = find_in_game_by_name(&Server::games[mi], name);
         if (c != nullptr) return c;
     }
     return nullptr;
+}
+
+static uint8_t chat_xy(Client *client, float &x, float &y) {
+    if (client == nullptr || client->game == nullptr) return 0;
+    Simulation *sim = &client->game->simulation;
+    if (!sim->ent_exists(client->camera)) return 0;
+    Entity &camera = sim->get_ent(client->camera);
+    if (sim->ent_alive(camera.get_player())) {
+        Entity &p = sim->get_ent(camera.get_player());
+        x = p.get_x();
+        y = p.get_y();
+        return 1;
+    }
+    x = camera.get_camera_x();
+    y = camera.get_camera_y();
+    return 1;
 }
 
 static void trim_inplace(std::string &s) {
@@ -151,13 +167,14 @@ void Chat::recent_broadcasts(std::vector<Chat::LiveBroadcast> &out) {
 }
 
 static void send_nearby(Client *client, std::string const &name, std::string const &text) {
-    Simulation *sim = &client->game->simulation;
-    Entity &me = sim->get_ent(sim->get_ent(client->camera).get_player());
+    float mx = 0.f, my = 0.f;
+    if (!chat_xy(client, mx, my)) return;
     for (Client *c : client->game->clients) {
-        if (c == nullptr || !c->alive()) continue;
-        Entity &other = sim->get_ent(sim->get_ent(c->camera).get_player());
-        float dx = other.get_x() - me.get_x();
-        float dy = other.get_y() - me.get_y();
+        if (c == nullptr) continue;
+        float ox = 0.f, oy = 0.f;
+        if (!chat_xy(c, ox, oy)) continue;
+        float dx = ox - mx;
+        float dy = oy - my;
         if (dx * dx + dy * dy > Chat::NEARBY_RADIUS * Chat::NEARBY_RADIUS) continue;
         Chat::send_to(c, ChatChannel::kChatNearby, name, text);
     }
@@ -420,7 +437,8 @@ static uint8_t handle_slash(Client *client, std::string const &text, uint64_t no
 }
 
 void Chat::handle(Client *client, uint8_t channel, std::string const &target, std::string const &raw) {
-    if (client == nullptr || !client->alive() || client->game == nullptr) return;
+    if (client == nullptr || client->game == nullptr) return;
+    if (!client->game->simulation.ent_exists(client->camera)) return;
     std::string text = raw;
     trim_inplace(text);
     if (text.empty()) return;
