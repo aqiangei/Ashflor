@@ -38,8 +38,8 @@ public:
     // Leaderboard board counters, flushed into LeaderboardStore periodically
     uint32_t stat_playtime = 0; // seconds online
     uint32_t stat_messages = 0; // chat messages sent
-    uint32_t stat_kills = 0;    // legacy PvP field (unused; no player kills)
-    uint32_t stat_crafts = 0;   // craft attempts
+    uint32_t stat_kills = 0;    // boss MVP kills (most damage; whole party credited)
+    uint32_t stat_crafts = 0;   // Unique+ craft successes (matches 全服合成播报)
     // This-life tallies — reset on spawn, sent on death for the summary panels.
     std::array<uint16_t, MobID::kNumMobs> life_mob_kills = {};
     std::array<uint16_t, PetalID::kNumPetals> life_petal_picks = {};

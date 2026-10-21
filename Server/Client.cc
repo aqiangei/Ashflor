@@ -139,6 +139,45 @@ static uint32_t client_stats_level(Client *client) {
     return 0;
 }
 
+// Unique+ craft successes: 全服播报 + 排行榜「高级合成」计数（与播报同一门槛）
+static constexpr uint8_t kHighCraftRarity = RarityID::kUnique;
+
+static char const *rarity_zh(uint8_t rarity) {
+    static char const *const names[RarityID::kNumRarities] = {
+        "普通", "罕见", "稀有", "史诗", "传奇", "神话", "独特", "超凡", "究极"
+    };
+    if (rarity >= RarityID::kNumRarities) return "?";
+    return names[rarity];
+}
+
+static std::string craft_announce_name(Client *client) {
+    if (client == nullptr) return "无名";
+    if (client->game != nullptr) {
+        Simulation *sim = &client->game->simulation;
+        if (sim->ent_exists(client->camera)) {
+            Entity &camera = sim->get_ent(client->camera);
+            if (sim->ent_alive(camera.get_player())) {
+                std::string n = sim->get_ent(camera.get_player()).get_name();
+                if (!n.empty()) return n;
+            }
+        }
+    }
+    if (!client->account_name.empty()) return client->account_name;
+    if (!client->play_name.empty()) return client->play_name;
+    return "无名";
+}
+
+static void credit_high_craft(Client *client, PetalID::T got) {
+    if (client == nullptr || got == PetalID::kNone || got >= PetalID::kNumPetals) return;
+    uint8_t r = PETAL_DATA[got].rarity;
+    if (r < kHighCraftRarity) return;
+    if (client->stat_crafts < 4000000000u) ++client->stat_crafts;
+    char const *pname = PETAL_DATA[got].name;
+    if (pname == nullptr || pname[0] == 0) pname = "花瓣";
+    Chat::broadcast_server("系统",
+        craft_announce_name(client) + " 合成了【" + rarity_zh(r) + "】" + pname + "！");
+}
+
 void client_flush_stats(Client *client) {
     if (client == nullptr || client->play_name.empty()) return;
     uint32_t level = client_stats_level(client);
@@ -871,7 +910,7 @@ void Client::on_message(WebSocket *ws, std::string_view message, uint64_t code) 
                     persist_account(client);
                     send_craft_update(client, CraftResultCode::kCraftInvFull, rec.result);
                 } else {
-                    if (client->stat_crafts < 4000000000u) ++client->stat_crafts;
+                    credit_high_craft(client, rec.result);
                     persist_account(client);
                     send_craft_update(client, CraftResultCode::kCraftBought, rec.result);
                 }
@@ -898,8 +937,7 @@ void Client::on_message(WebSocket *ws, std::string_view message, uint64_t code) 
                     break;
                 }
                 uint8_t placed = try_give_petal(client, got);
-                if (client->stat_crafts < 4000000000u)
-                    ++client->stat_crafts;
+                credit_high_craft(client, got);
                 persist_account(client);
                 send_craft_update(client,
                     placed ? CraftResultCode::kCraftExchanged : CraftResultCode::kCraftInvFull,
@@ -927,11 +965,10 @@ void Client::on_message(WebSocket *ws, std::string_view message, uint64_t code) 
                     if (last_got == PetalID::kNone) continue;
                     last_placed = try_give_petal(client, last_got);
                     ++wins;
+                    credit_high_craft(client, last_got);
                 }
             }
             persist_account(client);
-            if (done > 0 && client->stat_crafts < 4000000000u)
-                client->stat_crafts += done;
             if (done == 0)
                 send_craft_update(client, CraftResultCode::kCraftNoMats, PetalID::kNone);
             else if (wins > 0)

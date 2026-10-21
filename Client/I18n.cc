@@ -180,8 +180,8 @@ static char const *const EN[I18n::kCount] = {
     "Play time",
     "Level",
     "Messages sent",
-    "Kill messages",
-    "Craft messages",
+    "Boss kills",
+    "High crafts",
     "Best score",
     "Too many attempts, try again shortly",
 };
@@ -337,8 +337,8 @@ static char const *const ZH[I18n::kCount] = {
     "游戏时长",
     "等级",
     "发送消息数",
-    "击杀消息",
-    "合成消息",
+    "Boss 击杀",
+    "高级合成",
     "最高分",
     "尝试过于频繁，请稍后再试",
 };

@@ -45,6 +45,10 @@ static Element *make_changelog_contents() {
     Element *elt = new Ui::VContainer({
         make_date("2026年10月21日", "October 21st 2026"),
         make_entries({
+            {"Boss 击杀全服播报：造成最高伤害的小队/个人；排行榜「Boss 击杀」同步计入（队内成员均计）",
+             "Boss kill server broadcast for most-damage party/solo; LB Boss kills match (whole party credited)"},
+            {"独特及以上花瓣合成全服播报；排行榜「高级合成」只计 Unique+ 成功（不再计普通尝试）",
+             "Unique+ craft server broadcast; LB High crafts count Unique+ successes only (not attempts)"},
             {"设置页作者旁正式声明 Fork 自 trigonal-bacon/gardn（AGPL-3.0）；首页右上角增加上游与本仓库两个 GitHub 入口",
              "Settings credits Fork of trigonal-bacon/gardn (AGPL-3.0); title top-right: upstream + ashflor GitHub"},
             {"地图难度环对齐花瓣九档稀有度：G 键小地图同色；刷怪本环为主、相邻为次并缩放强度",

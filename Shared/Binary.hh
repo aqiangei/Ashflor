@@ -73,8 +73,8 @@ enum LeaderboardCategory : uint8_t {
     kLbPlayTime = 0, // seconds online
     kLbLevel,        // account level
     kLbMessages,     // chat messages sent
-    kLbKills,        // players killed
-    kLbCrafts,       // craft attempts
+    kLbKills,        // boss kills (most-damage party/solo)
+    kLbCrafts,       // high-tier craft successes (Unique+)
     kLbCategoryCount
 };
 

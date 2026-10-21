@@ -1,6 +1,7 @@
 #include <Server/EntityFunctions.hh>
 
 #include <Server/AccountStore.hh>
+#include <Server/Chat.hh>
 #include <Server/Client.hh>
 #include <Server/Game.hh>
 #include <Server/Party.hh>
@@ -23,6 +24,47 @@
 #include <array>
 #include <cmath>
 #include <iostream>
+#include <string>
+
+static std::string announce_player_name(Client *client) {
+    if (client == nullptr || client->game == nullptr) return "无名";
+    Simulation *sim = &client->game->simulation;
+    if (!sim->ent_exists(client->camera)) return "无名";
+    Entity &camera = sim->get_ent(client->camera);
+    if (sim->ent_alive(camera.get_player())) {
+        std::string n = sim->get_ent(camera.get_player()).get_name();
+        if (!n.empty()) return n;
+    }
+    if (!client->account_name.empty()) return client->account_name;
+    if (!client->play_name.empty()) return client->play_name;
+    return "无名";
+}
+
+static std::string announce_party_names(GameInstance *game, Client *mvp) {
+    if (mvp == nullptr) return "无名";
+    if (game == nullptr || mvp->party_id == 0)
+        return announce_player_name(mvp);
+    std::string out;
+    for (Client *c : game->clients) {
+        if (c == nullptr || c->party_id != mvp->party_id) continue;
+        if (!out.empty()) out += "、";
+        out += announce_player_name(c);
+    }
+    if (out.empty()) return announce_player_name(mvp);
+    return out;
+}
+
+static void credit_boss_kill_stats(GameInstance *game, Client *mvp) {
+    if (mvp == nullptr) return;
+    if (game == nullptr || mvp->party_id == 0) {
+        if (mvp->stat_kills < 4000000000u) ++mvp->stat_kills;
+        return;
+    }
+    for (Client *c : game->clients) {
+        if (c == nullptr || c->party_id != mvp->party_id) continue;
+        if (c->stat_kills < 4000000000u) ++c->stat_kills;
+    }
+}
 
 void flush_flower_loadout_to_camera(Simulation *sim, Entity &camera, Entity const &flower) {
     if (sim == nullptr || !flower.has_component(kFlower)) return;
@@ -180,6 +222,7 @@ void entity_on_death(Simulation *sim, Entity const &ent) {
             else camera.set_killed_by("");
             // No PvP kill counter — players cannot kill each other.
         } else if (ent.poison_ticks > 0) camera.set_killed_by("Poison");
+        else if (ent.burn_ticks > 0) camera.set_killed_by("Burn");
         else camera.set_killed_by("");
     }
     if (ent.has_component(kMob)) {
@@ -232,33 +275,63 @@ void entity_on_death(Simulation *sim, Entity const &ent) {
                 }
             }
             // Merge claim slots that belong to the same party (stale team ids after invite).
-            {
-                GameInstance *game = Server::game_for(sim);
-                auto client_for_team = [&](EntityID team) -> Client * {
-                    if (game == nullptr || team.null()) return nullptr;
-                    Client *c = Server::client_by_camera(sim, team);
-                    if (c != nullptr) return c;
-                    for (Client *x : game->clients) {
-                        if (x == nullptr || x->game == nullptr) continue;
-                        if (&x->game->simulation != sim) continue;
-                        if (!sim->ent_exists(x->camera)) continue;
-                        if (sim->get_ent(x->camera).get_team() == team) return x;
+            GameInstance *game = Server::game_for(sim);
+            auto client_for_team = [&](EntityID team) -> Client * {
+                if (game == nullptr || team.null()) return nullptr;
+                Client *c = Server::client_by_camera(sim, team);
+                if (c != nullptr) return c;
+                for (Client *x : game->clients) {
+                    if (x == nullptr || x->game == nullptr) continue;
+                    if (&x->game->simulation != sim) continue;
+                    if (!sim->ent_exists(x->camera)) continue;
+                    if (sim->get_ent(x->camera).get_team() == team) return x;
+                }
+                return nullptr;
+            };
+            for (uint8_t i = 0; i < claim_n; ++i) {
+                Client *a = client_for_team(claim_teams[i]);
+                for (uint8_t j = i + 1; j < claim_n; ) {
+                    Client *b = client_for_team(claim_teams[j]);
+                    if (Party::same_party(a, b)) {
+                        claim_dmg[i] += claim_dmg[j];
+                        claim_teams[j] = claim_teams[claim_n - 1];
+                        claim_dmg[j] = claim_dmg[claim_n - 1];
+                        --claim_n;
+                    } else {
+                        ++j;
                     }
-                    return nullptr;
-                };
-                for (uint8_t i = 0; i < claim_n; ++i) {
-                    Client *a = client_for_team(claim_teams[i]);
-                    for (uint8_t j = i + 1; j < claim_n; ) {
-                        Client *b = client_for_team(claim_teams[j]);
-                        if (Party::same_party(a, b)) {
-                            claim_dmg[i] += claim_dmg[j];
-                            claim_teams[j] = claim_teams[claim_n - 1];
-                            claim_dmg[j] = claim_dmg[claim_n - 1];
-                            --claim_n;
-                        } else {
-                            ++j;
-                        }
+                }
+            }
+
+            // Boss：全服播报造成最高伤害的小队/个人，排行榜击杀同步计入
+            if (spawn_class(ent.get_mob_id()) == SpawnClass::kBoss
+                && !ent.has_component(kSegmented)) {
+                Client *mvp = nullptr;
+                if (claim_n > 0) {
+                    uint8_t bi = 0;
+                    for (uint8_t i = 1; i < claim_n; ++i) {
+                        if (claim_dmg[i] > claim_dmg[bi]) bi = i;
                     }
+                    mvp = client_for_team(claim_teams[bi]);
+                }
+                if (mvp == nullptr && sim->ent_exists(ent.last_damaged_by)) {
+                    EntityID kid = sim->get_ent(ent.last_damaged_by).base_entity;
+                    if (sim->ent_alive(kid)) {
+                        Entity &killer = sim->get_ent(kid);
+                        if (killer.has_component(kFlower) && sim->ent_alive(killer.get_parent()))
+                            mvp = Server::client_by_camera(sim, killer.get_parent());
+                    }
+                }
+                if (mvp != nullptr) {
+                    credit_boss_kill_stats(game, mvp);
+                    char const *mob_nm = MOB_DATA[ent.get_mob_id()].name;
+                    if (mob_nm == nullptr || mob_nm[0] == 0) mob_nm = "Boss";
+                    std::string who = announce_party_names(game, mvp);
+                    uint8_t is_party = mvp->party_id != 0;
+                    std::string text = is_party
+                        ? ("小队「" + who + "」合力击败了 " + mob_nm + "！")
+                        : (who + " 击败了 " + mob_nm + "！");
+                    Chat::broadcast_server("系统", text);
                 }
             }
 

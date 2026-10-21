@@ -97,6 +97,16 @@ void Chat::send_to(Client *client, uint8_t channel, std::string const &sender, s
     client->send_packet(writer.packet, writer.at - writer.packet);
 }
 
+void Chat::broadcast_server(std::string const &sender, std::string const &text) {
+    if (Server::games == nullptr) return;
+    for (uint8_t mi = 0; mi < MapID::kNumMaps; ++mi) {
+        for (Client *c : Server::games[mi].clients) {
+            if (c != nullptr)
+                Chat::send_to(c, ChatChannel::kChatServer, sender, text);
+        }
+    }
+}
+
 static void send_nearby(Client *client, std::string const &name, std::string const &text) {
     Simulation *sim = &client->game->simulation;
     Entity &me = sim->get_ent(sim->get_ent(client->camera).get_player());
