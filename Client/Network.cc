@@ -834,6 +834,22 @@ uint8_t Game::try_mobile_l_preset_slot(uint8_t primary_index) {
     return 1;
 }
 
+PetalID::T Game::preset_ghost_petal(uint8_t primary_index) {
+    if (preset_ghost_bank == 0 || primary_index >= MAX_SLOT_COUNT) return PetalID::kNone;
+    uint8_t idx = (uint8_t) ((preset_ghost_bank == 1 ? 0 : 10) + primary_index);
+    if (idx >= LOADOUT_PRESET_COUNT) return PetalID::kNone;
+    LoadoutPreset const &p = loadout_presets[idx];
+    if (p.slot_count == 0) return PetalID::kNone;
+    // Identifier = first saved primary petal in that preset (slot 0, else first non-empty).
+    if (p.petals[0] != PetalID::kNone && p.petals[0] < PetalID::kNumPetals)
+        return p.petals[0];
+    for (uint8_t i = 1; i < p.slot_count && i < MAX_SLOT_COUNT; ++i) {
+        if (p.petals[i] != PetalID::kNone && p.petals[i] < PetalID::kNumPetals)
+            return p.petals[i];
+    }
+    return PetalID::kNone;
+}
+
 void Game::swap_all_petals() {
     // One-key / mobile R: every primary ↔ paired secondary with cross-fly.
     if (!Game::alive()) return;

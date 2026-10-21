@@ -228,6 +228,10 @@ namespace Game {
     extern std::string loadout_preset_status;
     // Mobile: sticky after long-press R — tap primary slot i → apply L(i+1)
     extern uint8_t mobile_l_preset_pick;
+    // Desktop: hold K=1 / L=2 → ghost first petal of that bank's presets on primary slots
+    extern uint8_t preset_ghost_bank;
+    // First petal of the preset shown as ghost on primary slot i (kNone = none)
+    PetalID::T preset_ghost_petal(uint8_t primary_index);
     extern uint8_t rot_speed_setting; // quantized 0..10 (network)
     extern float rot_speed_f;         // smooth 0..10 (hold Q/E / touch)
     extern float rot_hint_opacity;    // world/UI hint ring while adjusting

@@ -998,7 +998,8 @@ void Client::on_message(WebSocket *ws, std::string_view message, uint64_t code) 
                 PetalID::T tmp = player.get_loadout_ids(pos1);
                 player.set_loadout_ids(pos1, player.get_loadout_ids(pos2));
                 player.set_loadout_ids(pos2, tmp);
-                flush_craft_bank_to_bag(client);
+                // Do not flush craft_bank into empty secondary/bag here — that
+                // silently auto-fills other empty secondary slots on every swap.
             } else {
                 uint32_t primary = client_slot_count(client);
                 uint32_t lim = primary + MAX_SLOT_COUNT;

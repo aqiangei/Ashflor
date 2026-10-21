@@ -146,6 +146,7 @@ namespace Game {
     uint8_t active_loadout_preset = LOADOUT_PRESET_COUNT;
     std::string loadout_preset_status;
     uint8_t mobile_l_preset_pick = 0;
+    uint8_t preset_ghost_bank = 0;
     uint8_t rot_speed_setting = 7;
     float rot_speed_f = 7.f;
     float rot_hint_opacity = 0.f;
@@ -465,6 +466,7 @@ void Game::reset() {
     active_loadout_preset = LOADOUT_PRESET_COUNT;
     loadout_preset_status.clear();
     mobile_l_preset_pick = 0;
+    preset_ghost_bank = 0;
     craft_tray_id = PetalID::kNone;
     craft_tray_count = 0;
     simulation.reset();
@@ -1103,8 +1105,8 @@ void Game::tick(double time) {
         renderer.set_global_alpha(0.85);
         renderer.translate(renderer.width/2,renderer.height/2);
         renderer.draw_image(game_ui_renderer);
-    // K+1..0 selects presets 1..10; L+1..0 selects 11..20.
-    // Plain number keys still swap primary[i] with secondary[i].
+    // Hold K/L: ghost first petal of presets 1..10 / 11..20 on primary slots (visual only).
+    // Plain number keys swap primary[i] ↔ secondary[i]. Apply presets via panel / mobile L-pick.
     // Q/E = hold for continuous linear spin rate (not discrete taps).
     if (!Game::pause_menu_open && !Game::chat_open && !Game::leave_confirm_open
             && !Game::game_panel_blocking()) {
@@ -1117,16 +1119,12 @@ void Game::tick(double time) {
                 Game::nudge_rot_speed(+rot_rate * dt_s);
             if (Input::keys_held_this_tick.contains('R'))
                 Game::swap_all_petals();
+            // Hold K / L: ghost-mark primary slots with that bank's preset first petal.
+            // Digits do NOT apply presets (apply only via panel / mobile L-pick).
             bool const k_held = Input::keys_held.contains('K');
             bool const l_held = Input::keys_held.contains('L');
-            if (k_held || l_held) {
-                for (uint8_t i = 0; i < 10; ++i) {
-                    char digit = i == 9 ? '0' : (char)('1' + i);
-                    if (!Input::keys_held_this_tick.contains(digit)) continue;
-                    Game::apply_loadout_preset((uint8_t) ((k_held ? 0 : 10) + i));
-                    break;
-                }
-            } else {
+            Game::preset_ghost_bank = k_held ? 1 : (l_held ? 2 : 0);
+            if (!k_held && !l_held) {
                 for (uint8_t i = 0; i < Game::loadout_count; ++i) {
                     if (!Input::keys_held_this_tick.contains(SLOT_KEYBINDS[i])) continue;
                     uint8_t sec = (uint8_t) (Game::loadout_count + i);
@@ -1152,14 +1150,19 @@ void Game::tick(double time) {
         }
     } else {
         Ui::UiLoadout::selected_with_keys = MAX_SLOT_COUNT;
+        Game::preset_ghost_bank = 0;
         game_ui_window.on_render_skip(game_ui_renderer);
     }
         
     if (Game::timestamp - Ui::UiLoadout::last_key_select > 5000)
         Ui::UiLoadout::selected_with_keys = MAX_SLOT_COUNT;
-    if (!alive()) mobile_l_preset_pick = 0;
+    if (!alive()) {
+        mobile_l_preset_pick = 0;
+        preset_ghost_bank = 0;
+    }
     slot_indicator_opacity = lerp(slot_indicator_opacity,
-        Ui::UiLoadout::selected_with_keys != MAX_SLOT_COUNT || mobile_l_preset_pick,
+        Ui::UiLoadout::selected_with_keys != MAX_SLOT_COUNT
+            || mobile_l_preset_pick || preset_ghost_bank,
         Ui::lerp_amount);
     // Fade hint ring after last adjust (wheel drag or Q/E)
     if (rot_hint_opacity > 0.f && timestamp - rot_hint_stamp > 120) {

@@ -1,12 +1,15 @@
 #include <Client/Ui/InGame/Loadout.hh>
 
+#include <Client/Assets/Assets.hh>
 #include <Client/Game.hh>
 #include <Client/I18n.hh>
 #include <Client/Input.hh>
+#include <Client/Render/Renderer.hh>
 #include <Client/StaticData.hh>
 #include <Client/Ui/Container.hh>
 #include <Client/Ui/Extern.hh>
 #include <Shared/Entity.hh>
+#include <Shared/LoadoutPreset.hh>
 #include <Shared/StaticData.hh>
 #include <Shared/Talent.hh>
 
@@ -190,6 +193,29 @@ void UiLoadoutSlot::on_render(Renderer &ctx) {
     }
     Element::on_render(ctx);
     style.fill = saved_fill;
+    // Hold K/L: translucent first petal of that bank's preset on each primary slot
+    // (identifier only — does not change equipped petals).
+    if (Game::preset_ghost_bank != 0 && position < Game::loadout_count) {
+        PetalID::T ghost = Game::preset_ghost_petal(position);
+        if (ghost != PetalID::kNone && ghost < PetalID::kNumPetals) {
+            ctx.set_global_alpha(0.38f);
+            {
+                RenderContext rc(&ctx);
+                float s = width / 60.f;
+                if (s < 0.35f) s = 0.35f;
+                ctx.scale(s);
+                draw_static_petal(ghost, ctx);
+            }
+            ctx.set_global_alpha(1.f);
+            // Soft ring so empty slots still read as "preview"
+            ctx.set_stroke(Game::preset_ghost_bank == 1 ? 0xa0a8d8ff : 0xa0ffe08a);
+            ctx.set_line_width(2.f);
+            ctx.begin_path();
+            ctx.round_rect(-width / 2 - 1, -height / 2 - 1, width + 2, height + 2,
+                style.round_radius + 1);
+            ctx.stroke();
+        }
+    }
     // Hover highlight while dragging a petal over this slot
     if (Ui::UiLoadout::num_petals_selected != 0) {
         float dist = std::max(fabsf(Input::mouse_x - screen_x), fabsf(Input::mouse_y - screen_y));
