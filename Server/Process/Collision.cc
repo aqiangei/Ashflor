@@ -26,15 +26,15 @@ static bool _should_interact(Entity const &ent1, Entity const &ent2) {
         return true;
     // Planted meteors may overlap each other (AFK stacking).
     if (ent1.has_component(kPetal) && ent2.has_component(kPetal)
-        && petal_name_is(ent1.get_petal_id(), "Meteor")
-        && petal_name_is(ent2.get_petal_id(), "Meteor"))
+        && petal_is_meteor(ent1.get_petal_id())
+        && petal_is_meteor(ent2.get_petal_id()))
         return false;
     // Players never collide with Meteor (own or enemy) — mobs still blocked.
     if (ent1.has_component(kFlower) && ent2.has_component(kPetal)
-        && petal_name_is(ent2.get_petal_id(), "Meteor"))
+        && petal_is_meteor(ent2.get_petal_id()))
         return false;
     if (ent2.has_component(kFlower) && ent1.has_component(kPetal)
-        && petal_name_is(ent1.get_petal_id(), "Meteor"))
+        && petal_is_meteor(ent1.get_petal_id()))
         return false;
     if (!(ent1.get_team() == ent2.get_team())) return true;
     if (BitMath::at((ent1.flags | ent2.flags), EntityFlags::kNoFriendlyCollision)) return false;

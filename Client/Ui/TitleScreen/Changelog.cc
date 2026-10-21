@@ -45,6 +45,8 @@ static Element *make_changelog_contents() {
     Element *elt = new Ui::VContainer({
         make_date("2026年10月21日", "October 21st 2026"),
         make_entries({
+            {"服务端碰撞/拾取优化：网格规范去重替代哈希集；磁铁与拾取只查附近格；陨石用 ID 热路径判断",
+             "Server collide/pickup: canonical-grid pair filter; magnet/pickup AOI query; meteor hot-path IDs"},
             {"死亡保留本级内经验：重生不再清到等级地板；经验通胀一次性账号迁移（不碰花瓣/金币）",
              "Death keeps mid-level XP on respawn; one-shot XP-inflation account migration (petals/coins untouched)"},
             {"Boss 掉落加强：压制素材/低稀有填充、抬高 Epic+、至少 3 堆瓣、金币加成；Unique+ 仍不保底",

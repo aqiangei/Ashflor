@@ -176,15 +176,19 @@ void tick_player_behavior(Simulation *sim, Entity &player) {
         (player.acceleration.x != 0.f || player.acceleration.y != 0.f))
         player.acceleration *= buffs.move_speed_factor;
     // Proximity pickup always (spatial-hash collide can miss edge cases).
-    // Magnet optionally pulls from farther away.
+    // Magnet optionally pulls from farther away. Query local cells only —
+    // same pull/pickup math as the former full-drop scan (gardn-style AOI).
     {
         float pickup_r = player.get_radius() + 30.f + 12.f;
         float pickup_r2 = pickup_r * pickup_r;
         float magnet_r = buffs.magnet_radius;
         float magnet_r2 = magnet_r > 0.f ? magnet_r * magnet_r : 0.f;
+        float query_r = magnet_r > pickup_r ? magnet_r : pickup_r;
         Client *owner = Server::client_by_camera(sim, player.get_parent());
-        sim->for_each<kDrop>([&](Simulation *, Entity &drop) {
-            if (drop.pending_delete) return;
+        sim->spatial_hash.query(
+            player.get_x(), player.get_y(), query_r, query_r,
+            [&](Simulation *, Entity &drop) {
+            if (!drop.has_component(kDrop) || drop.pending_delete) return;
             // Team piles: owner/party only. Unowned: brief immunity then FFA.
             if (drop.get_team() != NULL_ENTITY) {
                 if (!(drop.get_team() == player.get_team())
