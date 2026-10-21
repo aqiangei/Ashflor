@@ -3942,11 +3942,17 @@ std::array<StaticArray<float, MAX_DROPS_PER_MOB>, MobID::kNumMobs> const MOB_DRO
 }();
 
 uint32_t score_to_pass_level(uint32_t level) {
-    // Linear XP, uncapped. Softened so short sessions can climb levels;
-    // kill_xp_grant_mult() stacks on top without Ultra-common inflation.
-    // L1→2: 130 · L10→11: 400 · L50→51: 1600 · L100→101: 3100
+    // Soft early (short sessions can climb); steeper after L50 so late grind
+    // is not free under kill_xp_grant_mult(). Uncapped.
+    // L1→2: 130 · L50→51: 1600 · L100→101: 5600 · L150→151: 14600
     if (level < 1) level = 1;
-    return 100u + 30u * level;
+    uint32_t base = 100u + 30u * level;
+    if (level <= 50u) return base;
+    uint32_t over = level - 50u;
+    uint64_t extra = (uint64_t)over * (uint64_t)over;
+    uint64_t total = (uint64_t)base + extra;
+    if (total > UINT32_MAX) return UINT32_MAX;
+    return (uint32_t)total;
 }
 
 uint32_t score_to_level(uint32_t score) {
