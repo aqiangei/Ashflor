@@ -82,7 +82,7 @@
 - 断线 / 重部署等待页 + 接花瓣小游戏
 - 空服 AI Bot；装备槽稀有度底色
 - 手感：移速软曲线、花瓣轨道、野怪 leash、掉落多 roll、AOI / 插值
-- 碰撞网格规范去重；磁铁/拾取只扫附近格；陨石碰撞用 ID 热路径
+- **服务端卡顿优化（玩法不变）**：Canonical 碰撞规范格去重（去掉 `unordered_set`）；`query` 代际戳去重；磁铁/拾取只扫附近格；陨石/蜂蜜碰撞与 tick 用 ID 热路径；Boss `boss_ent` 缓存避免每 tick 扫全图；排行榜 `fill_top` 约 5Hz（小地图仍每 tick）；Boss 召唤子怪数 `tick_ai_prepare` 预聚合
 - `./deploy.sh` 零停机发版 + nginx `?v=` 路由；错版客户端自动硬刷
 
 ## 技术
