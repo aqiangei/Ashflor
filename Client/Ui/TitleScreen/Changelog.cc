@@ -45,6 +45,14 @@ static Element *make_changelog_contents() {
     Element *elt = new Ui::VContainer({
         make_date("2026年10月21日", "October 21st 2026"),
         make_entries({
+            {"天赋面板重做：更大节点与状态色；点击仅选中，下方「+ 升级 / − 退回」执行；重置需二次确认",
+             "Talent panel redesign: larger nodes/states; select then +Upgrade/−Refund; reset needs confirm"},
+            {"首页花园淡红横杠修复：出生点廊道不再刷 channel 路面；通道色改为橄榄绿泥土",
+             "Title Garden pink bar fix: no channel paint on spawn corridor; olive dirt channel color"},
+            {"蜂蜜 / 陨石补齐稀有度阶梯并可在特殊商店购买；存档 craft_bank 兼容旧长度",
+             "Honey/Meteor rarity ladders + special shop; craft_bank load accepts older lengths"},
+            {"运维 Live 看板：/live 看在线与 Boss；/api/live·catalog·admin（公告/发瓣/刷怪）；可选鉴权",
+             "Ops Live board: /live roster+Boss; /api/live·catalog·admin (announce/give/spawn); optional auth"},
             {"Boss 击杀全服播报：造成最高伤害的小队/个人；排行榜「Boss 击杀」同步计入（队内成员均计）",
              "Boss kill server broadcast for most-damage party/solo; LB Boss kills match (whole party credited)"},
             {"独特及以上花瓣合成全服播报；排行榜「高级合成」只计 Unique+ 成功（不再计普通尝试）",

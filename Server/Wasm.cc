@@ -6,6 +6,8 @@
 #include <Shared/Binary.hh>
 #include <Shared/Config.hh>
 
+#include <cstdlib>
+#include <cstring>
 #include <iostream>
 #include <string>
 #include <unordered_map>
@@ -18,6 +20,37 @@ size_t const MAX_BUFFER_LEN = 1024;
 static uint8_t INCOMING_BUFFER[MAX_BUFFER_LEN] = {0};
 
 extern "C" {
+    static char *heap_strdup_std(std::string const &s) {
+        char *out = (char *) std::malloc(s.size() + 1);
+        if (out == nullptr) return nullptr;
+        std::memcpy(out, s.c_str(), s.size() + 1);
+        return out;
+    }
+
+    // EMSCRIPTEN_KEEPALIVE: HTTP /api/live reads online roster JSON
+    EMSCRIPTEN_KEEPALIVE char *live_status_json() {
+        return heap_strdup_std(Server::live_status_json());
+    }
+
+    EMSCRIPTEN_KEEPALIVE char *live_catalog_json() {
+        return heap_strdup_std(Server::live_catalog_json());
+    }
+
+    EMSCRIPTEN_KEEPALIVE char *live_admin_announce(char const *text) {
+        return heap_strdup_std(Server::live_admin_announce(text ? text : ""));
+    }
+
+    EMSCRIPTEN_KEEPALIVE char *live_admin_give(char const *who, int petal_id, int count) {
+        return heap_strdup_std(Server::live_admin_give(
+            who ? who : "", (uint32_t) petal_id, (uint32_t) (count < 1 ? 1 : count)));
+    }
+
+    EMSCRIPTEN_KEEPALIVE char *live_admin_spawn(int map_id, int mob_id, float x, float y,
+                                                char const *near_who) {
+        return heap_strdup_std(Server::live_admin_spawn(
+            (uint8_t) map_id, (uint32_t) mob_id, x, y, near_who ? near_who : ""));
+    }
+
     void on_connect(int ws_id, char const *ip) {
         std::printf("client connect: [%d]\n", ws_id);
         WebSocket *ws = new WebSocket(ws_id);
@@ -73,8 +106,184 @@ WebSocketServer::WebSocketServer() {
             let file = "index.html";
             // Strip ?query so cache-busting URLs still resolve
             const path = (req.url || "/").split("?")[0];
+            const sendJson = (status, text) => {
+                const buf = Buffer.from(text, "utf8");
+                res.writeHead(status, {
+                    "Content-Type": "application/json; charset=utf-8",
+                    "Cache-Control": "no-store",
+                    "Access-Control-Allow-Origin": "*",
+                    "Content-Length": buf.length
+                });
+                res.end(buf);
+            };
+            const cstr = (str) => {
+                const s = String(str == null ? "" : str);
+                const len = lengthBytesUTF8(s) + 1;
+                const ptr = _malloc(len);
+                stringToUTF8(s, ptr, len);
+                return ptr;
+            };
+            const fromWasm = (ptr) => {
+                if (!ptr) return "{\"ok\":false,\"msg\":\"wasm null\"}";
+                const t = UTF8ToString(ptr);
+                _free(ptr);
+                return t;
+            };
+            if (path === "/api/live") {
+                const ptr = _live_status_json();
+                if (!ptr) {
+                    sendJson(500, "{\"ok\":false,\"msg\":\"live unavailable\"}");
+                    return;
+                }
+                // WASM system_clock can drift; stamp wall time from Node.
+                let body = UTF8ToString(ptr);
+                _free(ptr);
+                // Use [0-9] — EM_ASM eats \d escapes under Closure.
+                body = body.replace(/"ts":[0-9]+/, '"ts":' + Date.now());
+                try {
+                    const data = JSON.parse(body);
+                    data["auth_required"] = process.env["ASHFLOR_LIVE_AUTH"] === "1";
+                    let cacheV = "";
+                    try {
+                        const html = fs.readFileSync("index.html", "utf8");
+                        const m = html.match(/var cacheV = '(\d+)'/);
+                        if (m) cacheV = m[1];
+                    } catch (e) {}
+                    let deploy = {};
+                    try {
+                        deploy = JSON.parse(fs.readFileSync("deploy-info.json", "utf8"));
+                    } catch (e) {}
+                    data["deploy"] = Object.assign({
+                        "cache_v": cacheV,
+                        "port": process.env["PORT"] || 9001,
+                        "auth_required": data["auth_required"],
+                        "node": process.version
+                    }, deploy);
+                    body = JSON.stringify(data);
+                } catch (e) {}
+                sendJson(200, body);
+                return;
+            }
+            if (path === "/api/catalog") {
+                sendJson(200, fromWasm(_live_catalog_json()));
+                return;
+            }
+            if (path === "/api/admin") {
+                if (req.method === "OPTIONS") {
+                    res.writeHead(204, {
+                        "Access-Control-Allow-Origin": "*",
+                        "Access-Control-Allow-Methods": "POST, OPTIONS",
+                        "Access-Control-Allow-Headers": "Content-Type, Authorization"
+                    });
+                    res.end();
+                    return;
+                }
+                if (req.method !== "POST") {
+                    sendJson(405, "{\"ok\":false,\"msg\":\"POST only\"}");
+                    return;
+                }
+                const chunks = [];
+                let size = 0;
+                req.on("data", function(c) {
+                    size += c.length;
+                    if (size > 8192) {
+                        req.destroy();
+                        return;
+                    }
+                    chunks.push(c);
+                });
+                req.on("end", function() {
+                    let j = null;
+                    try { j = JSON.parse(Buffer.concat(chunks).toString("utf8") || "{}"); }
+                    catch (e) { sendJson(400, "{\"ok\":false,\"msg\":\"bad json\"}"); return; }
+                    // Bracket keys so Closure does not rename JSON field names.
+                    // Auth is OFF unless ASHFLOR_LIVE_AUTH=1 (plus USER/PASS).
+                    const authOn = process.env["ASHFLOR_LIVE_AUTH"] === "1";
+                    if (authOn) {
+                        const needUser = process.env["ASHFLOR_LIVE_USER"] || "";
+                        const needPass = process.env["ASHFLOR_LIVE_PASS"] || "";
+                        if (!needUser || !needPass) {
+                            sendJson(503, "{\"ok\":false,\"msg\":\"auth enabled but USER/PASS missing\"}");
+                            return;
+                        }
+                        let user = (j && j["user"]) || "";
+                        let pass = (j && j["pass"]) || "";
+                        const auth = req.headers["authorization"] || "";
+                        if ((!user || !pass) && auth.indexOf("Basic ") === 0) {
+                            try {
+                                const raw = Buffer.from(auth.slice(6), "base64").toString("utf8");
+                                const i = raw.indexOf(":");
+                                if (i >= 0) {
+                                    user = raw.slice(0, i);
+                                    pass = raw.slice(i + 1);
+                                }
+                            } catch (e) {}
+                        }
+                        // Bracket crypto API — Closure renames timingSafeEqual otherwise.
+                        const crypto = require("crypto");
+                        const same = (a, b) => {
+                            const ba = Buffer.from(String(a), "utf8");
+                            const bb = Buffer.from(String(b), "utf8");
+                            if (ba.length !== bb.length) return false;
+                            return crypto["timingSafeEqual"](ba, bb);
+                        };
+                        if (!same(user, needUser) || !same(pass, needPass)) {
+                            sendJson(401, "{\"ok\":false,\"msg\":\"账号或密码错误\"}");
+                            return;
+                        }
+                    }
+                    const action = (j && j["action"]) || "";
+                    try {
+                        if (action === "login") {
+                            sendJson(200, authOn
+                                ? "{\"ok\":true,\"msg\":\"登录成功\",\"auth\":true}"
+                                : "{\"ok\":true,\"msg\":\"鉴权未启用\",\"auth\":false}");
+                            return;
+                        }
+                        if (action === "announce") {
+                            const p = cstr(j["text"] || "");
+                            const out = fromWasm(_live_admin_announce(p));
+                            _free(p);
+                            sendJson(200, out);
+                            return;
+                        }
+                        if (action === "give") {
+                            const p = cstr(j["who"] || "");
+                            const out = fromWasm(_live_admin_give(
+                                p, Number(j["petal_id"]) | 0, Number(j["count"]) | 0));
+                            _free(p);
+                            sendJson(200, out);
+                            return;
+                        }
+                        if (action === "spawn") {
+                            const p = cstr(j["near"] || "");
+                            const out = fromWasm(_live_admin_spawn(
+                                Number(j["map_id"]) | 0,
+                                Number(j["mob_id"]) | 0,
+                                Number(j["x"]) || 0,
+                                Number(j["y"]) || 0,
+                                p));
+                            _free(p);
+                            sendJson(200, out);
+                            return;
+                        }
+                        sendJson(400, "{\"ok\":false,\"msg\":\"unknown action\"}");
+                    } catch (e) {
+                        sendJson(500, "{\"ok\":false,\"msg\":\"admin failed\"}");
+                    }
+                });
+                return;
+            }
             switch (path) {
                 case "/":
+                    break;
+                case "/live":
+                case "/live.html":
+                    file = "live.html";
+                    break;
+                case "/deploy-info.json":
+                    encodeType = "application/json; charset=utf-8";
+                    file = "deploy-info.json";
                     break;
                 case "/gardn-client.js":
                     encodeType = "application/javascript; charset=utf-8";
@@ -130,7 +339,7 @@ WebSocketServer::WebSocketServer() {
             }
             if (file && fs.existsSync(file)) {
                 // HTML/SW: revalidate. Icons + JS/WASM: long-cache
-                const cacheCtl = (file === "index.html" || file === "sw.js")
+                const cacheCtl = (file === "index.html" || file === "sw.js" || file === "live.html" || file === "deploy-info.json")
                     ? "no-cache"
                     : "public, max-age=31536000, immutable";
                 const headers = {

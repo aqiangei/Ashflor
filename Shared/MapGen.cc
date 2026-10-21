@@ -78,13 +78,15 @@ void hill_circle(MapTerrain &t, ThemePalette const &p, uint8_t s,
 }
 
 void corridor_h(MapTerrain &t, ThemePalette const &p, uint8_t s,
-                float x0, float x1, float y_mid, float gap, float wall_t, uint8_t water) {
+                float x0, float x1, float y_mid, float gap, float wall_t, uint8_t water,
+                uint8_t paint_lane = 1) {
     float half = gap * 0.5f;
     auto box = water ? water_box : hill_box;
     box(t, p, s, x0, y_mid - half - wall_t, x1, y_mid - half);
     box(t, p, (uint8_t)(s + 1), x0, y_mid + half, x1, y_mid + half + wall_t);
     // Paint the travel lane so walkable gaps aren't invisible against ground fill.
-    if (!water) {
+    // Callers may skip lane paint through spawn (title camera sits there).
+    if (!water && paint_lane) {
         float lane = std::min(half * 0.55f, 280.f);
         push_feat(t, TerrainKind::kChannel, TerrainShape::kAABB, 0,
                   std::min(x0, x1), y_mid - lane, std::max(x0, x1), y_mid + lane,
@@ -92,12 +94,13 @@ void corridor_h(MapTerrain &t, ThemePalette const &p, uint8_t s,
     }
 }
 void corridor_v(MapTerrain &t, ThemePalette const &p, uint8_t s,
-                float y0, float y1, float x_mid, float gap, float wall_t, uint8_t water) {
+                float y0, float y1, float x_mid, float gap, float wall_t, uint8_t water,
+                uint8_t paint_lane = 1) {
     float half = gap * 0.5f;
     auto box = water ? water_box : hill_box;
     box(t, p, s, x_mid - half - wall_t, y0, x_mid - half, y1);
     box(t, p, (uint8_t)(s + 1), x_mid + half, y0, x_mid + half + wall_t, y1);
-    if (!water) {
+    if (!water && paint_lane) {
         float lane = std::min(half * 0.55f, 280.f);
         push_feat(t, TerrainKind::kChannel, TerrainShape::kAABB, 0,
                   x_mid - lane, std::min(y0, y1), x_mid + lane, std::max(y0, y1),
@@ -787,8 +790,9 @@ void gen_garden(MapTerrain &t, ThemePalette const &p, uint32_t &rng, float W, fl
     maze_cell(t, p, rng, 30, W * 0.08f, H * 0.08f, W * 0.42f, H * 0.42f, wall, gap * 0.65f);
     maze_cell(t, p, rng, 50, W * 0.55f, H * 0.10f, W * 0.92f, H * 0.48f, wall * 0.9f, gap * 0.6f);
     maze_cell(t, p, rng, 70, W * 0.10f, H * 0.55f, W * 0.45f, H * 0.92f, wall, gap * 0.65f);
-    // 东西向大路廊道串联迷宫与螺旋农场
-    corridor_h(t, p, 40, W * 0.18f, W * 0.82f, cy - 200.f, gap * 0.95f, wall * 0.85f, 0);
+    // 东西向大路廊道串联迷宫与螺旋农场。
+    // 不刷 channel 路面：廊道穿过出生点，首页标题镜头正好扫这条暖色横带。
+    corridor_h(t, p, 40, W * 0.18f, W * 0.82f, cy - 200.f, gap * 0.95f, wall * 0.85f, 0, 0);
     // Spiral farm → flower-heart valley (Boss: Flower Guardian)
     float bx = 0.f, by = 0.f;
     spiral_farm(t, p, rng, cx + 2000.f, cy - 200.f, 0, +1, gap, wall,

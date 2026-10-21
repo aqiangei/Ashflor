@@ -311,6 +311,7 @@ void Storage::retrieve() {
                     remain = (uint32_t) ((StorageProtocol::buffer + len - reader.at) / 4);
                 uint32_t bank_n = PetalID::kNumPetals;
                 // Newest→oldest append waves (must match AccountStore::load).
+                constexpr uint32_t kHoneyMeteorLadderAdded = 16;
                 constexpr uint32_t kHoneyMeteorAdded = 2;
                 constexpr uint32_t kMonsteraLadderAdded = 6;
                 constexpr uint32_t kAntHellAdded = 12;
@@ -329,7 +330,8 @@ void Storage::retrieve() {
                 auto sub = [](uint32_t cur, uint32_t amt) -> uint32_t {
                     return cur > amt ? cur - amt : cur;
                 };
-                uint32_t const prev_honey_meteor = sub(n, kHoneyMeteorAdded);
+                uint32_t const prev_honey_meteor_ladder = sub(n, kHoneyMeteorLadderAdded);
+                uint32_t const prev_honey_meteor = sub(prev_honey_meteor_ladder, kHoneyMeteorAdded);
                 uint32_t const prev_monstera_ladder = sub(prev_honey_meteor, kMonsteraLadderAdded);
                 uint32_t const prev_anthell = sub(prev_monstera_ladder, kAntHellAdded);
                 uint32_t const prev_super = sub(prev_anthell, kSuperUltraAdded);
@@ -344,7 +346,7 @@ void Storage::retrieve() {
                 uint32_t const prev_ladder = sub(prev_jungle, kLadderAdded);
                 uint32_t const prev_royal = sub(prev_ladder, kRoyalAdded);
                 uint32_t const bank_candidates[] = {
-                    n, prev_honey_meteor, prev_monstera_ladder, prev_anthell, prev_super,
+                    n, prev_honey_meteor_ladder, prev_honey_meteor, prev_monstera_ladder, prev_anthell, prev_super,
                     prev_cross, prev_basecraft, prev_mats, prev_monstera, prev_coin,
                     prev_common, prev_stinger, prev_jungle, prev_ladder, prev_royal
                 };

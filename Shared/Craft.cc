@@ -65,6 +65,19 @@ namespace Craft {
         PetalID::kLotus,
         PetalID::kThirdEye,
         PetalID::kYggdrasil,
+        PetalID::kHoney,
+        PetalID::kMeteor,
+    };
+
+    static uint8_t is_honey_or_meteor_family(PetalID::T id) {
+        if (id == PetalID::kNone || id >= PetalID::kNumPetals) return 0;
+        char const *n = PETAL_DATA[id].name;
+        if (n == nullptr) return 0;
+        return std::strcmp(n, "Honey") == 0 || std::strcmp(n, "Meteor") == 0;
+    }
+
+    static uint32_t const HONEY_METEOR_COST[RarityID::kNumRarities] = {
+        90, 220, 560, 1400, 3600, 9000, 24000, 70000, 180000
     };
 
     static PetalID::T const kCombos[] = {
@@ -182,6 +195,7 @@ namespace Craft {
     }
 
     uint8_t is_craftable_special(PetalID::T id) {
+        if (is_honey_or_meteor_family(id)) return 1;
         for (PetalID::T s : kSpecials)
             if (s == id) return 1;
         return 0;
@@ -236,7 +250,13 @@ namespace Craft {
             case PetalID::kLotus: return 4800;
             case PetalID::kThirdEye: return 5600;
             case PetalID::kYggdrasil: return 7200;
+            case PetalID::kHoney: return HONEY_METEOR_COST[RarityID::kRare];
+            case PetalID::kMeteor: return HONEY_METEOR_COST[RarityID::kLegendary];
             default: break;
+        }
+        if (is_honey_or_meteor_family(id) && id < PetalID::kNumPetals) {
+            uint8_t r = PETAL_DATA[id].rarity;
+            if (r < RarityID::kNumRarities) return HONEY_METEOR_COST[r];
         }
         if (is_shop_material(id)) return buy_material_cost(id);
         if (is_shop_combo(id)) return buy_combo_cost(id);
@@ -272,6 +292,12 @@ namespace Craft {
         g_offers.clear();
         for (PetalID::T id : kSpecials)
             g_offers.push_back({ id, kShopSpecials, 0, 0 });
+        for (uint32_t id = 1; id < (uint32_t) PetalID::kNumPetals; ++id) {
+            if (!is_honey_or_meteor_family((PetalID::T) id)) continue;
+            if (id == (uint32_t) PetalID::kHoney || id == (uint32_t) PetalID::kMeteor)
+                continue;
+            g_offers.push_back({ (PetalID::T) id, kShopSpecials, 0, 0 });
+        }
         for (uint32_t id = (uint32_t) PetalID::kMatLeaf;
              id <= (uint32_t) PetalID::kMatRoyalSeal; ++id) {
             uint8_t r = PETAL_DATA[id].rarity;

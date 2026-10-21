@@ -1,0 +1,642 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Ashflor Live</title>
+<style>
+  :root {
+    --bg: #e8f2e4;
+    --ink: #1a2e1a;
+    --muted: #5a725a;
+    --line: #b8d0b0;
+    --card: #f6fbf4;
+    --accent: #2d8a4e;
+    --warn: #b45309;
+    --dead: #8a5a5a;
+    --boss: #9a3412;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    min-height: 100vh;
+    font-family: "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+    color: var(--ink);
+    background:
+      radial-gradient(ellipse at 20% 0%, #d4ebc8 0%, transparent 50%),
+      radial-gradient(ellipse at 90% 100%, #c5e0d8 0%, transparent 45%),
+      var(--bg);
+  }
+  main { max-width: 1100px; margin: 0 auto; padding: 24px 16px 56px; }
+  h1 { margin: 0 0 4px; font-size: 1.7rem; font-weight: 700; letter-spacing: -0.02em; }
+  h2 { margin: 0 0 10px; font-size: 1.05rem; font-weight: 700; }
+  .sub { color: var(--muted); font-size: 0.88rem; margin-bottom: 18px; }
+  .stats { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 18px; }
+  .stat {
+    background: var(--card); border: 1px solid var(--line);
+    border-radius: 10px; padding: 12px 16px; min-width: 110px;
+  }
+  .stat b { display: block; font-size: 1.45rem; line-height: 1.1; color: var(--accent); }
+  .stat span { font-size: 0.75rem; color: var(--muted); }
+  .maps, .bosses {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(108px, 1fr));
+    gap: 8px; margin-bottom: 18px;
+  }
+  .map, .boss {
+    background: var(--card); border: 1px solid var(--line);
+    border-radius: 8px; padding: 10px; text-align: center;
+  }
+  .map.empty, .boss.dead { opacity: 0.5; }
+  .map .n, .boss .n { font-size: 1.15rem; font-weight: 700; }
+  .map .l, .boss .l { font-size: 0.72rem; color: var(--muted); margin-top: 2px; }
+  .boss.alive .n { color: var(--boss); }
+  .boss .hp {
+    margin-top: 6px; height: 5px; background: #d5e6d0; border-radius: 3px; overflow: hidden;
+  }
+  .boss .hp > i { display: block; height: 100%; background: var(--boss); }
+  .panel {
+    background: var(--card); border: 1px solid var(--line);
+    border-radius: 10px; padding: 14px; margin-bottom: 16px;
+  }
+  table { width: 100%; border-collapse: collapse; }
+  th, td {
+    text-align: left; padding: 9px 10px;
+    border-bottom: 1px solid var(--line); font-size: 0.9rem;
+  }
+  th {
+    background: #dcecda; color: var(--muted); font-weight: 600;
+    font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.04em;
+  }
+  tr:last-child > td { border-bottom: none; }
+  tr.player { cursor: pointer; }
+  tr.player:hover { background: #eef7ea; }
+  tr.dead { color: var(--dead); }
+  tr.title { color: var(--muted); font-style: italic; }
+  tr.detail td { background: #eef6eb; padding: 12px 14px; }
+  .petals { display: flex; flex-wrap: wrap; gap: 6px; }
+  .petal {
+    border: 1px solid var(--line); border-radius: 6px;
+    padding: 4px 8px; font-size: 0.78rem; background: #fff;
+  }
+  .petal .rz { color: var(--muted); margin-left: 4px; }
+  .meta { color: var(--muted); font-size: 0.82rem; margin-bottom: 8px; }
+  .lb-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+    gap: 10px;
+  }
+  .lb-col h3 { margin: 0 0 6px; font-size: 0.85rem; color: var(--accent); }
+  .lb-col ol { margin: 0; padding-left: 18px; font-size: 0.82rem; }
+  .lb-col li { margin: 2px 0; }
+  .lb-col .v { color: var(--muted); float: right; }
+  .feed {
+    max-height: 280px; overflow-y: auto;
+    font-size: 0.86rem; line-height: 1.45;
+  }
+  .feed .row { padding: 6px 0; border-bottom: 1px dashed var(--line); }
+  .feed .who { color: var(--accent); font-weight: 600; margin-right: 6px; }
+  .err { color: var(--warn); margin-top: 10px; }
+  .ok { color: var(--accent); margin-top: 8px; font-size: 0.88rem; }
+  .empty-msg { color: var(--muted); padding: 18px; text-align: center; }
+  .hint { color: var(--muted); font-size: 0.78rem; margin: 0 0 8px; }
+  .admin-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+    gap: 12px;
+  }
+  .admin-box {
+    border: 1px solid var(--line); border-radius: 8px; padding: 12px; background: #fff;
+  }
+  .admin-box h3 { margin: 0 0 8px; font-size: 0.92rem; }
+  label { display: block; font-size: 0.75rem; color: var(--muted); margin: 6px 0 3px; }
+  input, select, textarea, button {
+    font: inherit; width: 100%;
+    border: 1px solid var(--line); border-radius: 6px;
+    padding: 7px 9px; background: #fbfef9; color: var(--ink);
+  }
+  textarea { min-height: 72px; resize: vertical; }
+  button {
+    margin-top: 10px; background: var(--accent); color: #fff;
+    border-color: var(--accent); cursor: pointer; font-weight: 600;
+  }
+  button:hover { filter: brightness(1.05); }
+  button:disabled { opacity: 0.55; cursor: wait; }
+  .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .token-row { display: grid; grid-template-columns: 1fr auto; gap: 8px; align-items: end; }
+  .token-row button { margin-top: 0; width: auto; padding: 7px 14px; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Ashflor Live</h1>
+  <p class="sub">游戏内实时数据 · 每秒刷新 · <span id="ago">—</span></p>
+
+  <div class="stats">
+    <div class="stat"><b id="online">—</b><span>在线</span></div>
+    <div class="stat"><b id="accounts">—</b><span>排行榜人数</span></div>
+    <div class="stat"><b id="drain">—</b><span>排水状态</span></div>
+    <div class="stat"><b id="bossAlive">—</b><span>Boss 存活</span></div>
+  </div>
+
+  <div class="panel">
+    <h2>当前部署</h2>
+    <div class="stats" style="margin-bottom:10px">
+      <div class="stat"><b id="verHash">—</b><span>VERSION_HASH</span></div>
+      <div class="stat"><b id="cacheV">—</b><span>cacheV</span></div>
+      <div class="stat"><b id="updatedAt">—</b><span>更新日期</span></div>
+      <div class="stat"><b id="authState">关</b><span>管理鉴权</span></div>
+    </div>
+    <p class="meta" id="deploySummary">加载中…</p>
+    <ul id="deployHighlights" style="margin:8px 0 0; padding-left:18px; font-size:0.88rem"></ul>
+    <p class="hint" id="deployNotes" style="margin-top:8px"></p>
+  </div>
+
+  <div class="panel">
+    <h2>管理操作</h2>
+    <p class="hint" id="authHint">鉴权当前关闭，可直接操作。公告发送者 aqa，会触发游戏内顶栏横幅。</p>
+    <div id="authBox" hidden>
+      <div class="row2" style="margin-bottom:10px; max-width:520px">
+        <div>
+          <label>账号</label>
+          <input id="adminUser" autocomplete="username" placeholder="管理员账号">
+        </div>
+        <div>
+          <label>密码</label>
+          <input id="adminPass" type="password" autocomplete="current-password" placeholder="管理员密码">
+        </div>
+      </div>
+      <div class="token-row" style="margin-bottom:12px; max-width:520px">
+        <button type="button" id="btnLogin">登录解锁</button>
+        <button type="button" id="btnLogout" style="background:#6b7280;border-color:#6b7280">退出</button>
+      </div>
+      <div id="adminLocked" class="hint">登录后才能发公告 / 发花瓣 / 刷怪。</div>
+    </div>
+    <div id="adminPanel">
+    <div class="admin-grid">
+      <div class="admin-box">
+        <h3>全服公告</h3>
+        <label>内容</label>
+        <textarea id="annText" placeholder="公告文字…"></textarea>
+        <button type="button" id="btnAnn">发送公告</button>
+      </div>
+      <div class="admin-box">
+        <h3>发放花瓣</h3>
+        <label>玩家（游戏名或账号）</label>
+        <input id="giveWho" list="playerList" placeholder="在线玩家名">
+        <datalist id="playerList"></datalist>
+        <label>花瓣</label>
+        <select id="givePetal"></select>
+        <div class="row2">
+          <div>
+            <label>数量</label>
+            <input id="giveCount" type="number" min="1" max="64" value="1">
+          </div>
+          <div>
+            <label>筛选</label>
+            <input id="petalFilter" placeholder="名称关键字">
+          </div>
+        </div>
+        <button type="button" id="btnGive">发放</button>
+      </div>
+      <div class="admin-box">
+        <h3>刷怪</h3>
+        <label>地图</label>
+        <select id="spawnMap">
+          <option value="0">花园</option>
+          <option value="1">沙漠</option>
+          <option value="2">海洋</option>
+          <option value="3">雪原</option>
+          <option value="4">丛林</option>
+          <option value="5">蚁穴</option>
+          <option value="6">火山</option>
+          <option value="7">王城</option>
+        </select>
+        <label>怪物</label>
+        <select id="spawnMob"></select>
+        <label>筛选</label>
+        <input id="mobFilter" placeholder="名称关键字 / boss">
+        <label>靠近玩家（可选，优先）</label>
+        <input id="spawnNear" list="playerList" placeholder="留空则出生点附近">
+        <div class="row2">
+          <div><label>X（可选）</label><input id="spawnX" type="number" placeholder="自动"></div>
+          <div><label>Y（可选）</label><input id="spawnY" type="number" placeholder="自动"></div>
+        </div>
+        <button type="button" id="btnSpawn">刷出</button>
+      </div>
+    </div>
+    </div>
+    <p class="ok" id="adminOk" hidden></p>
+    <p class="err" id="adminErr" hidden></p>
+  </div>
+
+  <div class="panel">
+    <h2>地图在线</h2>
+    <div class="maps" id="maps"></div>
+  </div>
+
+  <div class="panel">
+    <h2>Boss 存活</h2>
+    <div class="bosses" id="bosses"></div>
+  </div>
+
+  <div class="panel">
+    <h2>全服播报</h2>
+    <p class="hint">合成 / Boss 击杀 / 管理公告（重启后清空）</p>
+    <div class="feed" id="feed"><div class="empty-msg">暂无播报</div></div>
+  </div>
+
+  <div class="panel">
+    <h2>在线玩家</h2>
+    <p class="hint">点击行展开装备 / 背包 / 银行</p>
+    <table>
+      <thead>
+        <tr>
+          <th></th>
+          <th>玩家</th>
+          <th>等级</th>
+          <th>地图</th>
+          <th>公会</th>
+          <th>账号</th>
+          <th>状态</th>
+        </tr>
+      </thead>
+      <tbody id="rows">
+        <tr><td colspan="7" class="empty-msg">加载中…</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="panel">
+    <h2>排行榜</h2>
+    <div class="lb-grid" id="lb"></div>
+  </div>
+
+  <p class="err" id="err" hidden></p>
+</main>
+<script>
+const $ = (id) => document.getElementById(id);
+const expanded = new Set();
+let lastBcId = 0;
+let catalog = { petals: [], mobs: [] };
+let lastPlayers = [];
+
+let adminAuthed = false;
+let authRequired = false;
+if ($("adminUser")) $("adminUser").value = localStorage.getItem("ashflor_live_user") || "";
+
+function creds() {
+  return {
+    user: ($("adminUser") && $("adminUser").value.trim()) || "",
+    pass: ($("adminPass") && $("adminPass").value) || "",
+  };
+}
+
+function setAdminUnlocked(on) {
+  adminAuthed = !!on;
+  if (authRequired) {
+    $("adminPanel").hidden = !on;
+    if ($("adminLocked")) $("adminLocked").hidden = on;
+  } else {
+    $("adminPanel").hidden = false;
+    if ($("adminLocked")) $("adminLocked").hidden = true;
+  }
+}
+
+function applyAuthMode(required) {
+  authRequired = !!required;
+  $("authState").textContent = authRequired ? "开" : "关";
+  $("authBox").hidden = !authRequired;
+  $("authHint").textContent = authRequired
+    ? "鉴权已启用：先登录再改游戏。公告发送者 aqa。"
+    : "鉴权当前关闭，可直接操作。公告发送者 aqa，会触发游戏内顶栏横幅。";
+  setAdminUnlocked(!authRequired);
+}
+
+function flashOk(msg) {
+  $("adminErr").hidden = true;
+  $("adminOk").hidden = false;
+  $("adminOk").textContent = msg;
+}
+function flashErr(msg) {
+  $("adminOk").hidden = true;
+  $("adminErr").hidden = false;
+  $("adminErr").textContent = msg;
+}
+
+async function admin(body) {
+  const c = creds();
+  const r = await fetch("/api/admin", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ ...body, user: c.user, pass: c.pass }),
+  });
+  const j = await r.json().catch(() => ({ ok: false, msg: "bad response" }));
+  if (!r.ok || !j.ok) {
+    if (r.status === 401) setAdminUnlocked(false);
+    throw new Error(j.msg || ("HTTP " + r.status));
+  }
+  return j;
+}
+
+if ($("btnLogin")) $("btnLogin").onclick = async () => {
+  try {
+    $("btnLogin").disabled = true;
+    await admin({ action: "login" });
+    localStorage.setItem("ashflor_live_user", creds().user);
+    setAdminUnlocked(true);
+    flashOk("登录成功，管理功能已解锁");
+  } catch (e) {
+    setAdminUnlocked(false);
+    flashErr(e.message);
+  } finally {
+    $("btnLogin").disabled = false;
+  }
+};
+
+if ($("btnLogout")) $("btnLogout").onclick = () => {
+  if ($("adminPass")) $("adminPass").value = "";
+  setAdminUnlocked(false);
+  flashOk("已退出管理");
+};
+
+function fillSelect(sel, items, labelFn) {
+  const cur = sel.value;
+  sel.innerHTML = items.map((it) =>
+    `<option value="${it.id}">${esc(labelFn(it))}</option>`
+  ).join("");
+  if ([...sel.options].some((o) => o.value === cur)) sel.value = cur;
+}
+
+function refreshPetalSelect() {
+  const q = ($("petalFilter").value || "").trim().toLowerCase();
+  const items = catalog.petals.filter((p) =>
+    !q || p.name.toLowerCase().includes(q) || String(p.rarity_zh || "").includes(q)
+  );
+  fillSelect($("givePetal"), items, (p) => `${p.name} [${p.rarity_zh}] #${p.id}`);
+}
+
+function refreshMobSelect() {
+  const q = ($("mobFilter").value || "").trim().toLowerCase();
+  const items = catalog.mobs.filter((m) => {
+    if (!q) return true;
+    if (q === "boss") return !!m.boss;
+    return m.name.toLowerCase().includes(q) || (m.boss && "boss".includes(q));
+  });
+  fillSelect($("spawnMob"), items, (m) => `${m.boss ? "★ " : ""}${m.name} #${m.id}`);
+}
+
+async function loadCatalog() {
+  const r = await fetch("/api/catalog", { cache: "force-cache" });
+  if (!r.ok) throw new Error("catalog " + r.status);
+  catalog = await r.json();
+  refreshPetalSelect();
+  refreshMobSelect();
+}
+
+$("petalFilter").oninput = refreshPetalSelect;
+$("mobFilter").oninput = refreshMobSelect;
+
+$("btnAnn").onclick = async () => {
+  try {
+    $("btnAnn").disabled = true;
+    const j = await admin({ action: "announce", text: $("annText").value });
+    flashOk(j.msg);
+    $("annText").value = "";
+  } catch (e) { flashErr(e.message); }
+  finally { $("btnAnn").disabled = false; }
+};
+
+$("btnGive").onclick = async () => {
+  try {
+    $("btnGive").disabled = true;
+    const j = await admin({
+      action: "give",
+      who: $("giveWho").value.trim(),
+      petal_id: Number($("givePetal").value),
+      count: Number($("giveCount").value) || 1,
+    });
+    flashOk(j.msg);
+  } catch (e) { flashErr(e.message); }
+  finally { $("btnGive").disabled = false; }
+};
+
+$("btnSpawn").onclick = async () => {
+  try {
+    $("btnSpawn").disabled = true;
+    const j = await admin({
+      action: "spawn",
+      map_id: Number($("spawnMap").value),
+      mob_id: Number($("spawnMob").value),
+      near: $("spawnNear").value.trim(),
+      x: Number($("spawnX").value) || 0,
+      y: Number($("spawnY").value) || 0,
+    });
+    flashOk(j.msg);
+  } catch (e) { flashErr(e.message); }
+  finally { $("btnSpawn").disabled = false; }
+};
+
+function keyOf(p, i) {
+  return (p.account || "") + "|" + (p.name || "") + "|" + p.map_id + "|" + i;
+}
+
+function petalChip(p) {
+  if (!p || !p.name) return `<span class="petal">空</span>`;
+  const cnt = p.count != null ? ` ×${p.count}` : "";
+  return `<span class="petal">${esc(p.name)}${cnt}<span class="rz">${esc(p.rarity_zh || "")}</span></span>`;
+}
+
+function detailHtml(p) {
+  const loadout = (p.loadout || []).map(petalChip).join("") || `<span class="empty-msg">无</span>`;
+  const bag = (p.bag || []).map(petalChip).join("") || `<span class="empty-msg">空</span>`;
+  const bank = (p.bank || []).map((b) => petalChip({ ...b.petal, count: b.count })).join("")
+    || `<span class="empty-msg">空</span>`;
+  const hp = p.max_hp > 0 ? `${p.hp}/${p.max_hp}` : "—";
+  const who = p.name || p.account || "";
+  const giveBtn = who
+    ? `<button type="button" style="width:auto;margin:8px 0 0" data-give="${esc(who)}">给此人发花瓣</button>`
+    : "";
+  return `
+    <div class="meta">金币 ${p.coins ?? 0} · 生命 ${hp}</div>
+    <div class="meta">装备</div>
+    <div class="petals">${loadout}</div>
+    <div class="meta" style="margin-top:10px">背包</div>
+    <div class="petals">${bag}</div>
+    <div class="meta" style="margin-top:10px">银行溢出</div>
+    <div class="petals">${bank}</div>
+    ${giveBtn}`;
+}
+
+function fmtPlaytime(sec) {
+  sec = Number(sec) || 0;
+  const h = Math.floor(sec / 3600);
+  const m = Math.floor((sec % 3600) / 60);
+  if (h > 0) return `${h}时${m}分`;
+  return `${m}分`;
+}
+
+function fmtStat(catId, v) {
+  if (catId === 0) return fmtPlaytime(v);
+  return String(v);
+}
+
+function updatePlayerList(players) {
+  const names = [];
+  players.forEach((p) => {
+    if (p.name) names.push(p.name);
+    if (p.account && p.account !== p.name) names.push(p.account);
+  });
+  $("playerList").innerHTML = [...new Set(names)].map((n) =>
+    `<option value="${esc(n)}"></option>`
+  ).join("");
+}
+
+async function tick() {
+  try {
+    const r = await fetch("/api/live", { cache: "no-store" });
+    if (!r.ok) throw new Error("HTTP " + r.status);
+    const d = await r.json();
+    $("err").hidden = true;
+    $("online").textContent = d.online;
+    $("accounts").textContent = d.accounts;
+    $("drain").textContent = d.draining ? "排水中" : "正常";
+    $("ago").textContent = new Date(d.ts).toLocaleTimeString();
+
+    const dep = d.deploy || {};
+    applyAuthMode(!!(d.auth_required || dep.auth_required));
+    $("verHash").textContent = d.version_hash != null ? String(d.version_hash) : "—";
+    $("cacheV").textContent = dep.cache_v || "—";
+    $("updatedAt").textContent = dep.updated_at || "—";
+    $("deploySummary").textContent = dep.summary || "暂无简介";
+    $("deployNotes").textContent = dep.notes || "";
+    $("deployHighlights").innerHTML = (dep.highlights || [])
+      .map((h) => `<li>${esc(h)}</li>`).join("");
+
+    const maps = $("maps");
+    maps.innerHTML = "";
+    (d.maps || []).forEach((m) => {
+      const el = document.createElement("div");
+      el.className = "map" + (m.players ? "" : " empty");
+      el.innerHTML = `<div class="n">${m.players}</div><div class="l">${esc(m.name)}</div>`;
+      maps.appendChild(el);
+    });
+
+    const bosses = $("bosses");
+    bosses.innerHTML = "";
+    let aliveN = 0;
+    (d.bosses || []).forEach((b) => {
+      if (!b.has_boss) return;
+      if (b.alive) aliveN++;
+      const el = document.createElement("div");
+      el.className = "boss " + (b.alive ? "alive" : "dead");
+      const ratio = b.max_hp > 0 ? Math.max(0, Math.min(1, b.hp / b.max_hp)) : 0;
+      const status = b.alive
+        ? `${b.hp}/${b.max_hp}`
+        : (b.respawn_sec > 0 ? `${b.respawn_sec}s 重生` : "未刷新");
+      el.innerHTML = `
+        <div class="n">${esc(b.name || "?")}</div>
+        <div class="l">${esc(b.map)} · ${status}</div>
+        ${b.alive ? `<div class="hp"><i style="width:${(ratio * 100).toFixed(1)}%"></i></div>` : ""}`;
+      bosses.appendChild(el);
+    });
+    $("bossAlive").textContent = aliveN;
+
+    const feed = $("feed");
+    const bcs = d.broadcasts || [];
+    if (!bcs.length) {
+      feed.innerHTML = `<div class="empty-msg">暂无播报</div>`;
+      lastBcId = 0;
+    } else if (bcs[0].id !== lastBcId) {
+      lastBcId = bcs[0].id;
+      feed.innerHTML = bcs.map((b) =>
+        `<div class="row"><span class="who">${esc(b.sender)}</span>${esc(b.text)}</div>`
+      ).join("");
+    }
+
+    const players = d.players || [];
+    lastPlayers = players;
+    updatePlayerList(players);
+    players.sort((a, b) => {
+      const ai = a.in_game ? 1 : 0, bi = b.in_game ? 1 : 0;
+      if (bi !== ai) return bi - ai;
+      return (b.level - a.level) || String(a.name || "").localeCompare(String(b.name || ""), "zh");
+    });
+    const tbody = $("rows");
+    if (!players.length) {
+      tbody.innerHTML = `<tr><td colspan="7" class="empty-msg">当前无人在线</td></tr>`;
+    } else {
+      tbody.innerHTML = players.map((p, i) => {
+        const k = keyOf(p, i);
+        const title = !p.in_game;
+        const status = title ? "标题页 / 未进局" : (p.alive ? "存活" : "等待复活");
+        const name = title ? "—" : (p.name || "(未命名)");
+        const open = expanded.has(k);
+        return `
+          <tr class="player ${title ? "title" : (p.alive ? "" : "dead")}" data-k="${esc(k)}">
+            <td>${open ? "▾" : "▸"}</td>
+            <td>${esc(name)}</td>
+            <td>${title ? "—" : p.level}</td>
+            <td>${title ? "—" : esc(p.map)}</td>
+            <td>${esc(p.guild || "—")}</td>
+            <td>${esc(p.account || "游客")}</td>
+            <td>${status}</td>
+          </tr>
+          ${open ? `<tr class="detail"><td colspan="7">${detailHtml(p)}</td></tr>` : ""}`;
+      }).join("");
+      tbody.querySelectorAll("tr.player").forEach((tr) => {
+        tr.onclick = () => {
+          const k = tr.getAttribute("data-k");
+          if (expanded.has(k)) expanded.delete(k);
+          else expanded.add(k);
+          tick();
+        };
+      });
+      tbody.querySelectorAll("[data-give]").forEach((btn) => {
+        btn.onclick = (ev) => {
+          ev.stopPropagation();
+          $("giveWho").value = btn.getAttribute("data-give");
+          $("giveWho").scrollIntoView({ behavior: "smooth", block: "center" });
+          flashOk("已填入玩家，选好花瓣后点发放");
+        };
+      });
+    }
+
+    const lb = $("lb");
+    const score = (d.leaderboard && d.leaderboard.score) || [];
+    const stats = (d.leaderboard && d.leaderboard.stats) || [];
+    let html = `<div class="lb-col"><h3>分数</h3><ol>`;
+    html += score.length
+      ? score.map((r) => `<li>${esc(r.name)} <span class="v">${r.score}</span></li>`).join("")
+      : `<li class="empty-msg">空</li>`;
+    html += `</ol></div>`;
+    stats.forEach((col) => {
+      html += `<div class="lb-col"><h3>${esc(col.name)}</h3><ol>`;
+      html += (col.rows || []).length
+        ? col.rows.map((r) =>
+            `<li>${esc(r.name)} <span class="v">${fmtStat(col.id, r.value)}</span></li>`
+          ).join("")
+        : `<li class="empty-msg">空</li>`;
+      html += `</ol></div>`;
+    });
+    lb.innerHTML = html;
+  } catch (e) {
+    $("err").hidden = false;
+    $("err").textContent = "拉取失败：" + e.message;
+  }
+}
+
+function esc(s) {
+  return String(s ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
+
+loadCatalog().catch((e) => flashErr("目录加载失败：" + e.message));
+tick();
+setInterval(tick, 1000);
+</script>
+</body>
+</html>

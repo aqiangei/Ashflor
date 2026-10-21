@@ -41,10 +41,10 @@ namespace TerrainArt {
 
     inline ThemeMaterial const &theme(uint8_t map_id) {
         static ThemeMaterial const kTable[MapID::kNumMaps] = {
-            // Garden — G01/G04/G06/G07
+            // Garden — G01/G04/G06/G07 (channel: olive dirt, not warm pink bar)
             { 0xffB9DB91, 0x338FC777, 0x55F6E9B5,
               0xff285B35, 0xff4E914C, 0xff85C96D, 0xff34733D, 0xff1E472A,
-              0xff40916C, 0x66A8E6C0, 0xffE7C792, 0x99B98E64,
+              0xff40916C, 0x66A8E6C0, 0xffC8D6A8, 0x99A8B87A,
               Style::kHedge, 7.f, 22.f, 36.f, 72.f },
             // Desert — sand + sandstone
             { 0xffF2D79B, 0x40E6BE79, 0x55F9E7BA,

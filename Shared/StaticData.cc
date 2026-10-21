@@ -2618,10 +2618,188 @@ std::array<struct PetalData, PetalID::kNumPetals> const PETAL_DATA = {{
         .count = 1,
         .rarity = RarityID::kLegendary,
         .attributes = { .mass = 0.55f, .defend_only = 1, .rotation_style = PetalAttributes::kNoRot }
+    },
+    // ---- Honey / Meteor rarity ladders ----
+    {
+        .name = "Honey",
+        .description = "A thick amber honeycomb chunk. Sticky, durable, and slow when thrown.",
+        .health = 24.0,
+        .damage = 0.6,
+        .radius = 12.0,
+        .reload = 2.5,
+        .count = 1,
+        .rarity = RarityID::kCommon,
+        .attributes = { .mass = 0.35f, .defend_only = 1 }
+    },
+    {
+        .name = "Honey",
+        .description = "A thick amber honeycomb chunk. Sticky, durable, and slow when thrown.",
+        .health = 73.0,
+        .damage = 1.7,
+        .radius = 12.0,
+        .reload = 2.5,
+        .count = 1,
+        .rarity = RarityID::kUnusual,
+        .attributes = { .mass = 0.35f, .defend_only = 1 }
+    },
+    {
+        .name = "Honey",
+        .description = "A thick amber honeycomb chunk. Sticky, durable, and slow when thrown.",
+        .health = 660.0,
+        .damage = 15.0,
+        .radius = 12.0,
+        .reload = 2.5,
+        .count = 1,
+        .rarity = RarityID::kEpic,
+        .attributes = { .mass = 0.35f, .defend_only = 1 }
+    },
+    {
+        .name = "Honey",
+        .description = "A thick amber honeycomb chunk. Sticky, durable, and slow when thrown.",
+        .health = 1980.0,
+        .damage = 45.0,
+        .radius = 12.0,
+        .reload = 2.5,
+        .count = 1,
+        .rarity = RarityID::kLegendary,
+        .attributes = { .mass = 0.35f, .defend_only = 1 }
+    },
+    {
+        .name = "Honey",
+        .description = "A thick amber honeycomb chunk. Sticky, durable, and slow when thrown.",
+        .health = 5940.0,
+        .damage = 135.0,
+        .radius = 12.0,
+        .reload = 2.5,
+        .count = 1,
+        .rarity = RarityID::kMythic,
+        .attributes = { .mass = 0.35f, .defend_only = 1 }
+    },
+    {
+        .name = "Honey",
+        .description = "A thick amber honeycomb chunk. Sticky, durable, and slow when thrown.",
+        .health = 11880.0,
+        .damage = 270.0,
+        .radius = 12.0,
+        .reload = 2.5,
+        .count = 1,
+        .rarity = RarityID::kUnique,
+        .attributes = { .mass = 0.35f, .defend_only = 1 }
+    },
+    {
+        .name = "Honey",
+        .description = "A thick amber honeycomb chunk. Sticky, durable, and slow when thrown.",
+        .health = 23760.0,
+        .damage = 540.0,
+        .radius = 12.0,
+        .reload = 2.5,
+        .count = 1,
+        .rarity = RarityID::kSuper,
+        .attributes = { .mass = 0.35f, .defend_only = 1 }
+    },
+    {
+        .name = "Honey",
+        .description = "A thick amber honeycomb chunk. Sticky, durable, and slow when thrown.",
+        .health = 47520.0,
+        .damage = 1080.0,
+        .radius = 12.0,
+        .reload = 2.5,
+        .count = 1,
+        .rarity = RarityID::kUltra,
+        .attributes = { .mass = 0.35f, .defend_only = 1 }
+    },
+    {
+        .name = "Meteor",
+        .description = "A hollow meteor crater ring. Extremely durable ground obstacle with a standable center.",
+        .health = 40.0,
+        .damage = 0.2,
+        .radius = 15.0,
+        .reload = 20.0,
+        .count = 1,
+        .rarity = RarityID::kCommon,
+        .attributes = { .mass = 0.55f, .defend_only = 1, .rotation_style = PetalAttributes::kNoRot }
+    },
+    {
+        .name = "Meteor",
+        .description = "A hollow meteor crater ring. Extremely durable ground obstacle with a standable center.",
+        .health = 120.0,
+        .damage = 0.4,
+        .radius = 15.0,
+        .reload = 20.0,
+        .count = 1,
+        .rarity = RarityID::kUnusual,
+        .attributes = { .mass = 0.55f, .defend_only = 1, .rotation_style = PetalAttributes::kNoRot }
+    },
+    {
+        .name = "Meteor",
+        .description = "A hollow meteor crater ring. Extremely durable ground obstacle with a standable center.",
+        .health = 300.0,
+        .damage = 0.6,
+        .radius = 15.0,
+        .reload = 20.0,
+        .count = 1,
+        .rarity = RarityID::kRare,
+        .attributes = { .mass = 0.55f, .defend_only = 1, .rotation_style = PetalAttributes::kNoRot }
+    },
+    {
+        .name = "Meteor",
+        .description = "A hollow meteor crater ring. Extremely durable ground obstacle with a standable center.",
+        .health = 600.0,
+        .damage = 0.8,
+        .radius = 15.0,
+        .reload = 20.0,
+        .count = 1,
+        .rarity = RarityID::kEpic,
+        .attributes = { .mass = 0.55f, .defend_only = 1, .rotation_style = PetalAttributes::kNoRot }
+    },
+    {
+        .name = "Meteor",
+        .description = "A hollow meteor crater ring. Extremely durable ground obstacle with a standable center.",
+        .health = 2700.0,
+        .damage = 2.0,
+        .radius = 15.0,
+        .reload = 20.0,
+        .count = 1,
+        .rarity = RarityID::kMythic,
+        .attributes = { .mass = 0.55f, .defend_only = 1, .rotation_style = PetalAttributes::kNoRot }
+    },
+    {
+        .name = "Meteor",
+        .description = "A hollow meteor crater ring. Extremely durable ground obstacle with a standable center.",
+        .health = 5400.0,
+        .damage = 4.0,
+        .radius = 15.0,
+        .reload = 20.0,
+        .count = 1,
+        .rarity = RarityID::kUnique,
+        .attributes = { .mass = 0.55f, .defend_only = 1, .rotation_style = PetalAttributes::kNoRot }
+    },
+    {
+        .name = "Meteor",
+        .description = "A hollow meteor crater ring. Extremely durable ground obstacle with a standable center.",
+        .health = 10800.0,
+        .damage = 8.0,
+        .radius = 15.0,
+        .reload = 20.0,
+        .count = 1,
+        .rarity = RarityID::kSuper,
+        .attributes = { .mass = 0.55f, .defend_only = 1, .rotation_style = PetalAttributes::kNoRot }
+    },
+    {
+        .name = "Meteor",
+        .description = "A hollow meteor crater ring. Extremely durable ground obstacle with a standable center.",
+        .health = 21600.0,
+        .damage = 16.0,
+        .radius = 15.0,
+        .reload = 20.0,
+        .count = 1,
+        .rarity = RarityID::kUltra,
+        .attributes = { .mass = 0.55f, .defend_only = 1, .rotation_style = PetalAttributes::kNoRot }
     }
 }};
 
 std::array<struct MobData, MobID::kNumMobs> const MOB_DATA = {{
+
     {
         .name = "Baby Ant",
         .description = "Weak and defenseless, but big dreams.",
@@ -2673,7 +2851,7 @@ std::array<struct MobData, MobID::kNumMobs> const MOB_DATA = {{
         .xp = 4,
         .drops = {
             PetalID::kLight, PetalID::kStinger, PetalID::kTwin, PetalID::kWing,
-            PetalID::kMatBeeBarb, PetalID::kMatPollenDust
+            PetalID::kMatBeeBarb, PetalID::kMatPollenDust, PetalID::kHoney
         },
         .attributes = {}
     },
@@ -2754,7 +2932,7 @@ std::array<struct MobData, MobID::kNumMobs> const MOB_DATA = {{
         .xp = 12,
         .drops = {
             PetalID::kDandelion, PetalID::kMissile, PetalID::kWing, PetalID::kBubble, PetalID::kAntennae,
-            PetalID::kMatBeeBarb, PetalID::kMatRoyalJelly
+            PetalID::kMatBeeBarb, PetalID::kMatRoyalJelly, PetalID::kHoney
         },
         .attributes = {
             .aggro_radius = 600
@@ -2785,7 +2963,7 @@ std::array<struct MobData, MobID::kNumMobs> const MOB_DATA = {{
         .radius = {10.0, 25.0},
         .xp = 1,
         .drops = {
-            PetalID::kHeavy, PetalID::kLight, PetalID::kRock
+            PetalID::kHeavy, PetalID::kLight, PetalID::kRock, PetalID::kMeteor
         },
         .attributes = {
             .stationary = 1
@@ -2800,7 +2978,7 @@ std::array<struct MobData, MobID::kNumMobs> const MOB_DATA = {{
         .radius = {50.0, 75.0},
         .xp = 10,
         .drops = {
-            PetalID::kHeavy, PetalID::kRock, PetalID::kHeaviest, PetalID::kMoon
+            PetalID::kHeavy, PetalID::kRock, PetalID::kHeaviest, PetalID::kMoon, PetalID::kMeteor
         }, 
         .attributes = {
             .stationary = 1

@@ -72,7 +72,8 @@ namespace MapTheme {
     inline uint32_t const GARDEN_GROUND = 0xffB9DB91;
     inline uint32_t const GARDEN_HILL = 0xff285B35;
     inline uint32_t const GARDEN_WATER = 0xff40916c;
-    inline uint32_t const GARDEN_CHANNEL = 0xffE7C792;
+    // Olive dirt path — warm enough to read as a road, not a pink title bar.
+    inline uint32_t const GARDEN_CHANNEL = 0xffC8D6A8;
     inline uint32_t const DESERT_GROUND = 0xffF2D79B;
     inline uint32_t const DESERT_HILL = 0xff815337;
     inline uint32_t const DESERT_WATER = 0xff2a9d8f;
@@ -442,6 +443,23 @@ namespace PetalID {
         // AFK control petals (append only; art first — gameplay wiring later)
         kHoney,
         kMeteor,
+        // Honey / Meteor rarity ladders (same English name for craft_result)
+        kHoneyCommon,
+        kHoneyUnusual,
+        kHoneyEpic,
+        kHoneyLegendary,
+        kHoneyMythic,
+        kHoneyUnique,
+        kHoneySuper,
+        kHoneyUltra,
+        kMeteorCommon,
+        kMeteorUnusual,
+        kMeteorRare,
+        kMeteorEpic,
+        kMeteorMythic,
+        kMeteorUnique,
+        kMeteorSuper,
+        kMeteorUltra,
         kNumPetals
     };
 };

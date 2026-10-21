@@ -16,10 +16,16 @@
 
 #include <chrono>
 #include <cstring>
+#include <deque>
 #include <string>
+#include <vector>
 
 // 全服广播单独冷却，避免刷屏淹没附近/公会频道
 static constexpr uint64_t SERVER_CHAT_COOLDOWN_MS = 15000;
+
+// Single-threaded WASM server tick — no lock needed.
+static uint32_t g_live_bc_next_id = 1;
+static std::deque<Chat::LiveBroadcast> g_live_bc;
 
 static std::string display_name(Client *client) {
     if (client == nullptr || client->game == nullptr) return "Unnamed";
@@ -98,6 +104,16 @@ void Chat::send_to(Client *client, uint8_t channel, std::string const &sender, s
 }
 
 void Chat::broadcast_server(std::string const &sender, std::string const &text) {
+    {
+        Chat::LiveBroadcast entry;
+        entry.id = g_live_bc_next_id++;
+        if (g_live_bc_next_id == 0) g_live_bc_next_id = 1;
+        entry.sender = sender;
+        entry.text = text;
+        g_live_bc.push_front(std::move(entry));
+        while (g_live_bc.size() > Chat::LIVE_BROADCAST_CAP)
+            g_live_bc.pop_back();
+    }
     if (Server::games == nullptr) return;
     for (uint8_t mi = 0; mi < MapID::kNumMaps; ++mi) {
         for (Client *c : Server::games[mi].clients) {
@@ -105,6 +121,11 @@ void Chat::broadcast_server(std::string const &sender, std::string const &text) 
                 Chat::send_to(c, ChatChannel::kChatServer, sender, text);
         }
     }
+}
+
+void Chat::recent_broadcasts(std::vector<Chat::LiveBroadcast> &out) {
+    out.clear();
+    out.assign(g_live_bc.begin(), g_live_bc.end());
 }
 
 static void send_nearby(Client *client, std::string const &name, std::string const &text) {
