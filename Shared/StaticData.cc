@@ -3942,15 +3942,16 @@ std::array<StaticArray<float, MAX_DROPS_PER_MOB>, MobID::kNumMobs> const MOB_DRO
 }();
 
 uint32_t score_to_pass_level(uint32_t level) {
-    // Soft early (short sessions can climb); steeper after L50 so late grind
-    // is not free under kill_xp_grant_mult(). Uncapped.
-    // L1→2: 130 · L50→51: 1600 · L100→101: 5600 · L150→151: 14600
+    // No hard level cap. Soft ≤100 so newbies climb fast; cubic after L100 so
+    // even ~100 max-tier kills (zone×spawn×kill_xp_grant_mult) stay under L200.
+    // L1→2: 75 · L50→51: 810 · L100→101: 1560 · L150→151: ~1.27e5 · L199→200: ~9.7e5
+    // cum→100 ≈ 8.0e4 · cum→200 ≈ 2.47e7
     if (level < 1) level = 1;
-    uint32_t base = 100u + 30u * level;
-    if (level <= 50u) return base;
-    uint32_t over = level - 50u;
-    uint64_t extra = (uint64_t)over * (uint64_t)over;
-    uint64_t total = (uint64_t)base + extra;
+    if (level <= 100u)
+        return 60u + 15u * level;
+    uint32_t over = level - 100u;
+    uint64_t cube = (uint64_t)over * (uint64_t)over * (uint64_t)over;
+    uint64_t total = 1560ull + cube; // 60+15*100
     if (total > UINT32_MAX) return UINT32_MAX;
     return (uint32_t)total;
 }

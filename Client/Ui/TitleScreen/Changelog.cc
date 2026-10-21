@@ -45,8 +45,8 @@ static Element *make_changelog_contents() {
     Element *elt = new Ui::VContainer({
         make_date("2026年10月21日", "October 21st 2026"),
         make_entries({
-            {"高等级经验曲线加陡（L50 后二次项）；去掉 150 硬顶；击杀经验 ×25（图鉴同步）",
-             "Steeper high-level XP (quadratic after L50); no 150 cap; kill XP ×25 (gallery synced)"},
+            {"等级按累计 score 换算；严重膨胀账号累计经验按原高低映射到 130–160；曲线 ≤100 缓 / 其后立方；击杀 ×25；无硬顶",
+             "Level from cumulative score; inflated XP remapped into L130–160 by rank; soft≤100 then cubic; kill ×25; no cap"},
             {"死亡界面可正常聊天发消息（附近按镜头坐标；回车仍为继续重生，点输入框打开聊天）",
              "Chat works on death screen (nearby uses camera pos; Enter still Continues, click input to chat)"},
             {"本级所需经验曲线放缓（约 2.5× 更易升级）；图鉴 XP 同步显示实发经验",

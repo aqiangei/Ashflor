@@ -136,11 +136,10 @@ static uint8_t bind_session(Client *client, std::string const &username, Account
     client->guild_name = acc->guild_name;
     client->guild_leader = acc->guild_leader ? 1 : 0;
     {
-        uint32_t lv = acc->level < 1 ? 1 : acc->level;
-        uint32_t floor = level_to_score(lv);
+        // Cumulative score is authoritative; level already derived on load.
         uint32_t sc = acc->score;
-        if (sc < floor) sc = floor;
-        // Restore full mid-level XP (not just level floor).
+        if (sc == 0 && acc->level > 1)
+            sc = level_to_score(acc->level);
         client->pending_score = sc;
     }
     ACTIVE_SESSIONS.insert(username);
@@ -481,12 +480,15 @@ void AccountStore::load() {
                 }
             }
         }
-        // Legacy rows have no s: — start at level floor. Keep score ≥ floor.
+        // Score is cumulative & authoritative. Recompute level from score under
+        // the current curve (curve changes never wipe XP — only remap level).
         {
-            uint32_t floor = level_to_score(acc.level < 1 ? 1 : acc.level);
-            if (acc.score < floor) acc.score = floor;
-            uint32_t implied = score_to_level(acc.score);
-            if (implied > acc.level) acc.level = implied;
+            if (acc.level < 1) acc.level = 1;
+            if (acc.score == 0)
+                acc.score = level_to_score(acc.level); // legacy row without s:
+            acc.level = score_to_level(acc.score);
+            if (acc.level < 1) acc.level = 1;
+            Talent::clamp_ranks(acc.talent_ranks, acc.level);
         }
         ACCOUNTS[acc.username] = acc;
     }
@@ -637,14 +639,11 @@ static void copy_progress(Account &acc, Client *client) {
         for (uint32_t i = 0; i < 2 * MAX_SLOT_COUNT; ++i)
             next[i] = camera.get_inventory(i);
     }
-    // Never wipe inventory. Level/score uncapped (uint32 overflow only).
-    if (level > acc.level) acc.level = level;
+    // Never wipe inventory. Score is high-water; level always derived from score.
     if (score > acc.score) acc.score = score;
     {
-        uint32_t floor = level_to_score(acc.level);
-        if (acc.score < floor) acc.score = floor;
-        uint32_t implied = score_to_level(acc.score);
-        if (implied > acc.level) acc.level = implied;
+        acc.level = score_to_level(acc.score);
+        if (acc.level < 1) acc.level = 1;
     }
     // Keep session pending in sync so the next spawn / reconnect matches disk.
     if (client->pending_score < acc.score)
@@ -821,9 +820,6 @@ void AccountStore::note_score(Client *client, uint32_t score) {
     Account *acc = find(client->account_name);
     if (acc == nullptr) return;
     if (score > acc->score) acc->score = score;
-    uint32_t lv = score_to_level(score);
-    if (lv < 1) lv = 1;
-    if (lv > acc->level) acc->level = lv;
-    uint32_t floor = level_to_score(acc->level);
-    if (acc->score < floor) acc->score = floor;
+    acc->level = score_to_level(acc->score);
+    if (acc->level < 1) acc->level = 1;
 }
