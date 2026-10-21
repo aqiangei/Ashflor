@@ -609,47 +609,78 @@ Element *Ui::make_debug_stats() {
     return elt;
 }
 
-Element *Ui::make_github_link_button() {
-    Element *elt = new Ui::HContainer({
-        new Ui::Button(50, 50, 
-            new Ui::StaticIcon([](Element *elt, Renderer &ctx){
-                ctx.scale(elt->width / 20);
-                ctx.set_fill(0xfff1f1f1);
-                ctx.begin_path();
-                ctx.move_to(0.00, -10.00);
-                ctx.bcurve_to(5.52, -10.00, 10.00, -5.41, 10.00, 0.25);
-                ctx.bcurve_to(10.00, 4.78, 7.14, 8.62, 3.17, 9.98);
-                ctx.bcurve_to(2.66, 10.08, 2.48, 9.76, 2.48, 9.49);
-                ctx.bcurve_to(2.48, 9.15, 2.49, 8.05, 2.49, 6.67);
-                ctx.bcurve_to(2.49, 5.72, 2.17, 5.09, 1.81, 4.78);
-                ctx.bcurve_to(4.04, 4.52, 6.38, 3.66, 6.38, -0.28);
-                ctx.bcurve_to(6.38, -1.40, 5.99, -2.32, 5.35, -3.03);
-                ctx.bcurve_to(5.45, -3.29, 5.80, -4.34, 5.25, -5.75);
-                ctx.bcurve_to(5.25, -5.75, 4.41, -6.02, 2.50, -4.70);
-                ctx.bcurve_to(1.71, -4.92, 0.85, -5.04, 0.00, -5.04);
-                ctx.bcurve_to(-0.85, -5.04, -1.71, -4.92, -2.50, -4.70);
-                ctx.bcurve_to(-4.41, -6.02, -5.25, -5.75, -5.25, -5.75);
-                ctx.bcurve_to(-5.80, -4.34, -5.45, -3.29, -5.35, -3.03);
-                ctx.bcurve_to(-5.99, -2.32, -6.38, -1.40, -6.38, -0.28);
-                ctx.bcurve_to(-6.38, 3.65, -4.05, 4.53, -1.82, 4.79);
-                ctx.bcurve_to(-2.11, 5.04, -2.37, 5.49, -2.46, 6.16);
-                ctx.bcurve_to(-3.03, 6.42, -4.48, 6.87, -5.37, 5.30);
-                ctx.bcurve_to(-5.37, 5.30, -5.90, 4.32, -6.90, 4.25);
-                ctx.bcurve_to(-6.90, 4.25, -7.88, 4.23, -6.97, 4.87);
-                ctx.bcurve_to(-6.97, 4.87, -6.32, 5.18, -5.86, 6.37);
-                ctx.bcurve_to(-5.86, 6.37, -5.27, 8.20, -2.49, 7.58);
-                ctx.bcurve_to(-2.49, 8.44, -2.48, 9.24, -2.48, 9.49);
-                ctx.bcurve_to(-2.48, 9.76, -2.66, 10.08, -3.16, 9.98);
-                ctx.bcurve_to(-7.13, 8.63, -10.00, 4.78, -10.00, 0.25);
-                ctx.bcurve_to(-10.00, -5.41, -5.52, -10.00, 0.00, -10.00);
-                ctx.fill();
-            }, 40, 40),
-            [](Element *elt, uint8_t e){
-                if (e == Ui::kClick) DOM::open_page("https://github.com/aqiangei/ashflor");
+static Element *make_github_octocat_icon(float size) {
+    return new Ui::StaticIcon([](Element *elt, Renderer &ctx){
+        ctx.scale(elt->width / 20);
+        ctx.set_fill(0xfff1f1f1);
+        ctx.begin_path();
+        ctx.move_to(0.00, -10.00);
+        ctx.bcurve_to(5.52, -10.00, 10.00, -5.41, 10.00, 0.25);
+        ctx.bcurve_to(10.00, 4.78, 7.14, 8.62, 3.17, 9.98);
+        ctx.bcurve_to(2.66, 10.08, 2.48, 9.76, 2.48, 9.49);
+        ctx.bcurve_to(2.48, 9.15, 2.49, 8.05, 2.49, 6.67);
+        ctx.bcurve_to(2.49, 5.72, 2.17, 5.09, 1.81, 4.78);
+        ctx.bcurve_to(4.04, 4.52, 6.38, 3.66, 6.38, -0.28);
+        ctx.bcurve_to(6.38, -1.40, 5.99, -2.32, 5.35, -3.03);
+        ctx.bcurve_to(5.45, -3.29, 5.80, -4.34, 5.25, -5.75);
+        ctx.bcurve_to(5.25, -5.75, 4.41, -6.02, 2.50, -4.70);
+        ctx.bcurve_to(1.71, -4.92, 0.85, -5.04, 0.00, -5.04);
+        ctx.bcurve_to(-0.85, -5.04, -1.71, -4.92, -2.50, -4.70);
+        ctx.bcurve_to(-4.41, -6.02, -5.25, -5.75, -5.25, -5.75);
+        ctx.bcurve_to(-5.80, -4.34, -5.45, -3.29, -5.35, -3.03);
+        ctx.bcurve_to(-5.99, -2.32, -6.38, -1.40, -6.38, -0.28);
+        ctx.bcurve_to(-6.38, 3.65, -4.05, 4.53, -1.82, 4.79);
+        ctx.bcurve_to(-2.11, 5.04, -2.37, 5.49, -2.46, 6.16);
+        ctx.bcurve_to(-3.03, 6.42, -4.48, 6.87, -5.37, 5.30);
+        ctx.bcurve_to(-5.37, 5.30, -5.90, 4.32, -6.90, 4.25);
+        ctx.bcurve_to(-6.90, 4.25, -7.88, 4.23, -6.97, 4.87);
+        ctx.bcurve_to(-6.97, 4.87, -6.32, 5.18, -5.86, 6.37);
+        ctx.bcurve_to(-5.86, 6.37, -5.27, 8.20, -2.49, 7.58);
+        ctx.bcurve_to(-2.49, 8.44, -2.48, 9.24, -2.48, 9.49);
+        ctx.bcurve_to(-2.48, 9.76, -2.66, 10.08, -3.16, 9.98);
+        ctx.bcurve_to(-7.13, 8.63, -10.00, 4.78, -10.00, 0.25);
+        ctx.bcurve_to(-10.00, -5.41, -5.52, -10.00, 0.00, -10.00);
+        ctx.fill();
+    }, size, size);
+}
+
+static Element *make_labeled_github_button(
+    char const *label_zh, char const *label_en, char const *url, uint32_t fill
+) {
+    return new Ui::VContainer({
+        new Ui::Button(46, 46,
+            make_github_octocat_icon(36),
+            [url](Element *, uint8_t e){
+                if (e == Ui::kClick) DOM::open_page(url);
             },
             nullptr,
-            soft_btn(Chrome::kBtnIron)
+            soft_btn(fill)
+        ),
+        new Ui::DynamicText(11, [label_zh, label_en](){
+            return std::string{I18n::use_chinese ? label_zh : label_en};
+        }, { .fill = 0xffe8e8e8 })
+    }, 0, 4, { .h_justify = Style::Center, .v_justify = Style::Top });
+}
+
+Element *Ui::make_github_link_button() {
+    // Right: this fork. Left of it: upstream gardn (must stay credited).
+    Element *elt = new Ui::HContainer({
+        make_labeled_github_button(
+            "上游 gardn", "gardn",
+            "https://github.com/trigonal-bacon/gardn",
+            Chrome::kBtnMoss
+        ),
+        make_labeled_github_button(
+            "本仓库", "ashflor",
+            "https://github.com/aqiangei/ashflor",
+            Chrome::kBtnIron
         )
-    }, 14, 10, { .h_justify = Style::Right, .v_justify = Style::Top });
+    }, 10, 10, {
+        .should_render = [](){ return Game::should_render_title_ui() && Game::auth_panel == 0; },
+        .h_justify = Style::Right,
+        .v_justify = Style::Top
+    });
+    elt->x = -12;
+    elt->y = 12;
     return elt;
 }

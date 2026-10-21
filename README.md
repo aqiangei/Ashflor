@@ -83,9 +83,11 @@
 
 默认编译开 `USE_CODEPOINT_LEN`（中文截断）与 `GENERAL_SPATIAL_HASH`（大体型碰撞）。
 
-## 许可
+## 许可与致谢
 
-- 上游：[gardn](https://github.com/trigonal-bacon/gardn)
+ashflor 是 [trigonal-bacon/gardn](https://github.com/trigonal-bacon/gardn) 的 fork（AGPL-3.0）。游戏设置页作者旁与首页右上角均提供上游仓库链接；请保留对原作者的声明。
+
+- 上游：[gardn](https://github.com/trigonal-bacon/gardn)（trigonal-bacon）
 - 本仓库：[aqiangei/ashflor](https://github.com/aqiangei/ashflor)
 
 见 [LICENSE](./LICENSE)。

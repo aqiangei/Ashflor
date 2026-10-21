@@ -45,6 +45,8 @@ static Element *make_changelog_contents() {
     Element *elt = new Ui::VContainer({
         make_date("2026年10月21日", "October 21st 2026"),
         make_entries({
+            {"设置页作者旁正式声明 Fork 自 trigonal-bacon/gardn（AGPL-3.0）；首页右上角增加上游与本仓库两个 GitHub 入口",
+             "Settings credits Fork of trigonal-bacon/gardn (AGPL-3.0); title top-right: upstream + ashflor GitHub"},
             {"地图难度环对齐花瓣九档稀有度：G 键小地图同色；刷怪本环为主、相邻为次并缩放强度",
              "Nine map rings match petal rarities (G-key colors); spawns primary/adjacent with scaled power"},
             {"掉落私有强化：未组队看不见也捡不到他人掉落；需打满 5% 血（Boss 1%）才有 loot；重生不清空累计伤害",

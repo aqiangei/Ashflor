@@ -84,7 +84,28 @@ Element *Ui::make_settings_panel() {
         }, { .fill = Chrome::kGold, .h_justify = Style::Left }),
         new Ui::DynamicText(mobile ? 15.f : 14.f, [](){ return I18n::tr(I18n::kMadeBy); }, {
             .fill = Chrome::kMuted, .h_justify = Style::Left
-        })
+        }),
+        new Ui::DynamicText(mobile ? 13.f : 13.f, [](){ return I18n::tr(I18n::kAssetCredits); }, {
+            .fill = Chrome::kMuted, .h_justify = Style::Left
+        }),
+        new Ui::Button(mobile ? 220.f : 280.f, mobile ? 32.f : 34.f,
+            new Ui::DynamicText(mobile ? 13.f : 14.f, [](){
+                return I18n::use_chinese
+                    ? std::string{"打开上游 gardn 仓库"}
+                    : std::string{"Open upstream gardn"};
+            }),
+            [](Element *, uint8_t e){
+                if (e == Ui::kClick)
+                    DOM::open_page("https://github.com/trigonal-bacon/gardn");
+            },
+            nullptr,
+            { .fill = Chrome::kBtnMoss, .line_width = 0, .round_radius = Chrome::kRadius }
+        ),
+        new Ui::DynamicText(mobile ? 12.f : 12.f, [](){
+            return I18n::use_chinese
+                ? std::string{"github.com/trigonal-bacon/gardn"}
+                : std::string{"github.com/trigonal-bacon/gardn"};
+        }, { .fill = 0xff8ab4a0, .h_justify = Style::Left })
     }, pad, gap, {
         .fill = Chrome::kPanelDeep,
         .line_width = 0,
