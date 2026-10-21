@@ -14,35 +14,8 @@
 #include <iostream>
 #include <vector>
 
-static void calculate_leaderboard(Simulation *sim) {
-    std::vector<Entity const *> players;
-    sim->for_each<kCamera>([&](Simulation *sim, Entity &ent) {
-        if (!sim->ent_alive(ent.get_player())) return;
-        Entity const &player = sim->get_ent(ent.get_player());
-        players.push_back(&player);
-        // Persist best score for every named entrant
-        std::string const &name = player.get_name();
-        if (!name.empty())
-            LeaderboardStore::record(name, player.get_score(), player.get_color());
-    });
+static void update_minimap(Simulation *sim, std::vector<Entity const *> &players) {
     uint32_t online = (uint32_t) players.size();
-    sim->arena_info.set_player_count(online);
-    sim->arena_info.set_registered_count(LeaderboardStore::recorded_count());
-
-    std::vector<LeaderboardEntry> top;
-    LeaderboardStore::fill_top(top);
-    for (uint32_t i = 0; i < LEADERBOARD_SIZE; ++i) {
-        if (i < top.size()) {
-            sim->arena_info.set_names(i, top[i].name);
-            sim->arena_info.set_scores(i, top[i].score);
-            sim->arena_info.set_colors(i, top[i].color);
-        } else {
-            sim->arena_info.set_names(i, std::string{});
-            sim->arena_info.set_scores(i, 0);
-            sim->arena_info.set_colors(i, 0);
-        }
-    }
-    // Minimap: every living player on this map (not only leaderboard top)
     std::stable_sort(players.begin(), players.end(), [](Entity const *a, Entity const *b){
         return a->get_score() > b->get_score();
     });
@@ -62,35 +35,82 @@ static void calculate_leaderboard(Simulation *sim) {
     }
 }
 
+static void calculate_leaderboard(Simulation *sim) {
+    std::vector<Entity const *> players;
+    sim->for_each<kCamera>([&](Simulation *sim, Entity &ent) {
+        if (!sim->ent_alive(ent.get_player())) return;
+        Entity const &player = sim->get_ent(ent.get_player());
+        players.push_back(&player);
+        // Persist best score for every named entrant
+        std::string const &name = player.get_name();
+        if (!name.empty())
+            LeaderboardStore::record(name, player.get_score(), player.get_color());
+    });
+    uint32_t online = (uint32_t) players.size();
+    sim->arena_info.set_player_count(online);
+    sim->arena_info.set_registered_count(LeaderboardStore::recorded_count());
+
+    // fill_top sorts the entire historical store — throttle to 5 Hz; minimap stays every tick.
+    if (sim->tick_index % 4 == 0) {
+        std::vector<LeaderboardEntry> top;
+        LeaderboardStore::fill_top(top);
+        for (uint32_t i = 0; i < LEADERBOARD_SIZE; ++i) {
+            if (i < top.size()) {
+                sim->arena_info.set_names(i, top[i].name);
+                sim->arena_info.set_scores(i, top[i].score);
+                sim->arena_info.set_colors(i, top[i].color);
+            } else {
+                sim->arena_info.set_names(i, std::string{});
+                sim->arena_info.set_scores(i, 0);
+                sim->arena_info.set_colors(i, 0);
+            }
+        }
+    }
+    update_minimap(sim, players);
+}
+
 // 每图唯一的 Boss：由 MapGen 提供的锚点驱动，活着时不再生成，死了 45 秒重生。
 static void ensure_boss(Simulation *sim) {
     float bx = 0.f, by = 0.f;
     uint8_t mob_id = 0;
     if (!Map::boss_anchor(sim->map_id, bx, by, mob_id)) return;
-    bool alive = false;
-    sim->for_each<kMob>([&](Simulation *, Entity &m) {
-        if (m.get_mob_id() == mob_id && !m.pending_delete) alive = true;
-    });
-    if (alive) return;
+    // Cached id: avoid full mob scan every tick while boss is alive / on respawn CD.
+    if (sim->ent_alive(sim->boss_ent)) {
+        Entity &b = sim->get_ent(sim->boss_ent);
+        if (b.get_mob_id() == mob_id && !b.pending_delete) return;
+    }
     if (sim->boss_ever_spawned) {
         if (sim->boss_respawn_ticks <= 0)
             sim->boss_respawn_ticks = 45 * (int32_t)TPS;
         if (--sim->boss_respawn_ticks > 0) return;
     }
+    // Only scan when we are about to spawn (first time or CD finished).
+    {
+        bool alive = false;
+        sim->for_each<kMob>([&](Simulation *, Entity &m) {
+            if (m.get_mob_id() == mob_id && !m.pending_delete) {
+                alive = true;
+                sim->boss_ent = m.id;
+            }
+        });
+        if (alive) return;
+    }
     Map::resolve_circle_terrain(sim->map_id, bx, by, 100.f);
     std::cout << "[boss] map " << (int)sim->map_id << " spawning " << MOB_DATA[mob_id].name
               << " at (" << (int)bx << "," << (int)by << ")" << std::endl;
-    alloc_mob(sim, (MobID::T)mob_id, bx, by, NULL_ENTITY, [](Entity &mob) {
+    Entity &boss = alloc_mob(sim, (MobID::T)mob_id, bx, by, NULL_ENTITY, [](Entity &mob) {
         mob.score_reward = MOB_DATA[mob.get_mob_id()].xp;
         BitMath::set(mob.flags, EntityFlags::kHasCulling);
         mob.detection_radius = 1400.f;
         mob.zone = 0xFF;   // 不计入任何 Zone 的刷怪计数
     });
+    sim->boss_ent = boss.id;
     sim->boss_ever_spawned = 1;
     sim->boss_respawn_ticks = 0;
 }
 
 void Simulation::on_tick() {
+    ++tick_index;
     spatial_hash.refresh(ARENA_WIDTH, ARENA_HEIGHT);
     ensure_boss(this);
     // Double the spawn attempts so the doubled zone population fills at the old pace.
@@ -117,6 +137,7 @@ void Simulation::on_tick() {
     });
     for_each<kDrop>(tick_drop_behavior);
     for_each<kFlower>(tick_player_behavior);
+    tick_ai_prepare(this);
     for_each<kMob>(tick_ai_behavior);
     for_each<kCamera>(tick_player_ai_behavior);
     for_each<kPetal>(tick_petal_behavior);

@@ -25,7 +25,10 @@ public:
     // Boss 生命周期：唯一实例 + 死亡后重生计时
     SERVER_ONLY(int32_t boss_respawn_ticks;)
     SERVER_ONLY(uint8_t boss_ever_spawned;)
+    SERVER_ONLY(EntityID boss_ent;)
     SERVER_ONLY(SpatialHash spatial_hash;)
+    // Tick counter for throttling non-critical work (leaderboard fill_top, etc.)
+    SERVER_ONLY(uint32_t tick_index;)
     Arena arena_info;
     uint8_t map_id = MapID::kGarden;
     Simulation();

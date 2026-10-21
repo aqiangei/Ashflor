@@ -1219,7 +1219,8 @@ uint8_t Map::_spawn_zone_mob_once(Simulation *sim) {
     float x = 0.f, y = 0.f;
     if (!Map::sample_spawn_point(sim, zone_id, mob_id, x, y)) return 0;
     if (cls == SpawnClass::kAnchor) {
-        // 同款精英 1500 单位半径内至多 1 只（跨 Zone，总纲 R6）
+        // 同款精英 1500 单位半径内至多 1 只（跨 Zone，总纲 R6）。
+        // Must use for_each: spawn runs before spatial_hash.insert this tick.
         float const r2 = kEliteUniqueRadius * kEliteUniqueRadius;
         bool near = false;
         sim->for_each<kMob>([&](Simulation *, Entity &m) {

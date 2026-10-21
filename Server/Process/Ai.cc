@@ -9,6 +9,7 @@
 
 #include <Helpers/Math.hh>
 
+#include <array>
 #include <cmath>
 
 static void _focus_lose_clause(Entity &ent, Vector const &v) {
@@ -241,12 +242,22 @@ static void _fire_missile_fan(Simulation *sim, Entity &ent, float base_ang,
     }
 }
 
-static uint32_t _count_children(Simulation *sim, EntityID parent) {
-    uint32_t n = 0;
-    sim->for_each<kMob>([&](Simulation *s, Entity &m) {
-        if (m.get_parent() == parent && s->ent_alive(m.id)) ++n;
+// Built once per tick in tick_ai_prepare — bosses used to scan all mobs per summon check.
+static std::array<uint32_t, ENTITY_CAP> s_child_counts{};
+
+static uint32_t _count_children(Simulation *, EntityID parent) {
+    if (parent == NULL_ENTITY || parent.id >= ENTITY_CAP) return 0;
+    return s_child_counts[parent.id];
+}
+
+void tick_ai_prepare(Simulation *sim) {
+    s_child_counts.fill(0);
+    sim->for_each<kMob>([](Simulation *s, Entity &m) {
+        if (!s->ent_alive(m.id)) return;
+        EntityID parent = m.get_parent();
+        if (parent == NULL_ENTITY || parent.id >= ENTITY_CAP) return;
+        ++s_child_counts[parent.id];
     });
-    return n;
 }
 
 static void _clamp_to_disk(Entity &ent, float cx, float cy, float max_r) {

@@ -4,7 +4,7 @@
 #include <Shared/Entity.hh>
 
 #include <algorithm>
-#include <unordered_set>
+#include <cstring>
 
 static void _cell_range(Entity const &ent, uint32_t &sx, uint32_t &sy, uint32_t &ex, uint32_t &ey) {
     sx = (uint32_t) (fclamp(ent.get_x() - ent.get_radius(), 0, ARENA_WIDTH - 1) / GRID_SIZE);
@@ -58,23 +58,30 @@ void SpatialHash::collide(std::function<void(Simulation *, Entity &, Entity &)> 
 }
 
 void SpatialHash::query(float x, float y, float w, float h, std::function<void(Simulation *, Entity &)> cb) {
-    std::unordered_set<EntityID::id_type> seen_entities;
-    uint32_t sx = fclamp(x - w, 0, ARENA_WIDTH - 1) / GRID_SIZE;
-    uint32_t sy = fclamp(y - h, 0, ARENA_HEIGHT - 1) / GRID_SIZE;
-    uint32_t ex = fclamp(x + w, 0, ARENA_WIDTH - 1) / GRID_SIZE;
-    uint32_t ey = fclamp(y + h, 0, ARENA_HEIGHT - 1) / GRID_SIZE;
+    // Generation stamp: same dedupe as unordered_set, no heap traffic on magnet/AOI.
+    static uint32_t seen_stamp[ENTITY_CAP] = {};
+    static uint32_t query_gen = 0;
+    if (++query_gen == 0) {
+        std::memset(seen_stamp, 0, sizeof(seen_stamp));
+        query_gen = 1;
+    }
+    uint32_t sx = (uint32_t) (fclamp(x - w, 0, ARENA_WIDTH - 1) / GRID_SIZE);
+    uint32_t sy = (uint32_t) (fclamp(y - h, 0, ARENA_HEIGHT - 1) / GRID_SIZE);
+    uint32_t ex = (uint32_t) (fclamp(x + w, 0, ARENA_WIDTH - 1) / GRID_SIZE);
+    uint32_t ey = (uint32_t) (fclamp(y + h, 0, ARENA_HEIGHT - 1) / GRID_SIZE);
     for (uint32_t _x = sx; _x <= ex; ++_x) {
         for (uint32_t _y = sy; _y <= ey; ++_y) {
             std::vector<EntityID> const &cell = cells[_x][_y];
             for (uint32_t i = 0; i < cell.size(); ++i) {
+                EntityID::id_type id = cell[i].id;
+                if (id >= ENTITY_CAP || seen_stamp[id] == query_gen) continue;
                 Entity &ent = simulation->get_ent(cell[i]);
                 if (ent.get_x() + ent.get_radius() < x - w) continue;
                 if (ent.get_x() - ent.get_radius() > x + w) continue;
                 if (ent.get_y() + ent.get_radius() < y - h) continue;
                 if (ent.get_y() - ent.get_radius() > y + h) continue;
-                if (seen_entities.contains(cell[i].id)) continue;
+                seen_stamp[id] = query_gen;
                 cb(simulation, ent);
-                seen_entities.insert(cell[i].id);
             }
         }
     }

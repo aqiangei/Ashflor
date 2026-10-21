@@ -3,6 +3,7 @@
 class Simulation;
 class Entity;
 
+void tick_ai_prepare(Simulation *);
 void tick_ai_behavior(Simulation *, Entity &);
 void tick_camera_behavior(Simulation *, Entity &);
 void tick_curse_behavior(Simulation *);
