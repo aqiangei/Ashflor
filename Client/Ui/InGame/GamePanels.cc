@@ -2019,7 +2019,7 @@ public:
             if (idx >= Recipe::recipe_count()) return false;
             if (Recipe::recipe_at(idx).tier != recipe_filter_tier)
                 return false;
-            return recipe_visible(idx);
+            return recipe_visible(idx) != 0;
         };
     }
     void refactor() override {
