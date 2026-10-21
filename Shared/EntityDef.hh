@@ -173,7 +173,7 @@ public:
 namespace std {
     template<>
     struct hash<EntityID> {
-        size_t operator()(EntityID const &id) {
+        size_t operator()(EntityID const &id) const {
             return (size_t) EntityID::make_hash(id);
         }
     };
