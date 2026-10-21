@@ -45,10 +45,10 @@ static Element *make_changelog_contents() {
     Element *elt = new Ui::VContainer({
         make_date("2026年10月21日", "October 21st 2026"),
         make_entries({
-            {"死亡界面可正常聊天发消息（附近按镜头坐标；回车仍为继续重生，点输入框打开聊天）",
-             "Chat works on death screen (nearby uses camera pos; Enter still Continues, click input to chat)"},
-            {"升级加速：击杀经验 ×50；本级所需经验曲线放缓（约 2.5× 更易升级）；图鉴 XP 同步显示实发经验",
-             "Faster leveling: kill XP ×50; softer per-level curve; gallery XP shows granted amount"},
+            {"击杀经验由 ×50 下调为 ×25（图鉴同步）；死亡界面可正常聊天发消息",
+             "Kill XP ×50→×25 (gallery synced); chat works on death screen"},
+            {"本级所需经验曲线放缓（约 2.5× 更易升级）；图鉴 XP 同步显示实发经验",
+             "Softer per-level XP curve (~2.5× easier); gallery XP shows granted amount"},
             {"修复：刷新丢经验——打怪即时写入账号 score 高水位，每 tick 同步 pending；断线/重登恢复本级进度",
              "Fix: refresh XP loss — note_score on kills + per-tick sync; reconnect restores mid-level progress"},
             {"服务端卡顿优化（玩法数值不变）：碰撞规范格去重；query 代际戳；磁铁/拾取附近格；陨石/蜂蜜 ID 热路径；Boss 实体缓存；排行榜约 5Hz；召唤子怪计数预聚合",
