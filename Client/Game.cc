@@ -108,6 +108,8 @@ namespace Game {
     uint8_t chat_scroll_to_end = 0;
     std::unordered_map<std::string, SpeechBubble> speech_bubbles;
     ScreenAnnounce screen_announce;
+    uint8_t shop_announce_prompt_open = 0;
+    std::string shop_announce_draft;
     LootToast loot_toast;
     uint8_t chat_menu_open = 0;
     std::string chat_menu_name;
@@ -147,8 +149,8 @@ namespace Game {
     std::string loadout_preset_status;
     uint8_t mobile_l_preset_pick = 0;
     uint8_t preset_ghost_bank = 0;
-    uint8_t rot_speed_setting = 7;
-    float rot_speed_f = 7.f;
+    uint8_t rot_speed_setting = Talent::kRotSettingDefault;
+    float rot_speed_f = (float) Talent::kRotSettingDefault;
     float rot_hint_opacity = 0.f;
     double rot_hint_stamp = 0;
     uint8_t craft_selected_rarity = 0;
@@ -357,6 +359,9 @@ void Game::init() {
         Ui::make_shop_panel()
     );
     game_ui_window.add_child(
+        Ui::make_shop_announce_prompt()
+    );
+    game_ui_window.add_child(
         Ui::make_boost_panel()
     );
     Ui::make_petal_tooltips();
@@ -407,6 +412,8 @@ void Game::reset() {
     chat_draft.clear();
     chat_lines.clear();
     screen_announce = {};
+    shop_announce_prompt_open = 0;
+    shop_announce_draft.clear();
     loot_toast = {};
     chat_menu_open = 0;
     chat_menu_name.clear();
@@ -553,20 +560,66 @@ void Game::toggle_game_panel(uint8_t panel) {
     Input::game_inputs.flags = 0;
 }
 
+void Game::open_shop_announce_prompt() {
+    if (!alive() && !on_game_screen) return;
+    if (shop_announce_prompt_open) return;
+    if (chat_open) close_chat();
+    shop_announce_draft.clear();
+    shop_announce_prompt_open = 1;
+    if (Input::mobile_controls() || !Input::keyboard_movement) {
+        Input::keys_held.clear();
+        Input::keys_held_this_tick.clear();
+    }
+    if (Ui::TextInput *input = Ui::shop_announce_text_input()) {
+        input->clear();
+        input->focus();
+    }
+}
+
+void Game::close_shop_announce_prompt() {
+    if (!shop_announce_prompt_open) return;
+    shop_announce_prompt_open = 0;
+    if (Ui::TextInput *input = Ui::shop_announce_text_input()) {
+        input->clear();
+        input->blur();
+    }
+    shop_announce_draft.clear();
+}
+
+void Game::submit_shop_announce() {
+    if (!shop_announce_prompt_open) return;
+    if (Ui::TextInput *input = Ui::shop_announce_text_input())
+        input->sync_from_dom();
+    // Trim
+    std::string text = shop_announce_draft;
+    while (!text.empty() && (text.back() == ' ' || text.back() == '\t'
+        || text.back() == '\n' || text.back() == '\r'))
+        text.pop_back();
+    size_t start = 0;
+    while (start < text.size() && (text[start] == ' ' || text[start] == '\t'))
+        ++start;
+    if (start > 0) text = text.substr(start);
+    close_shop_announce_prompt();
+    if (text.empty()) {
+        craft_status = I18n::use_chinese ? "已取消广播" : "Announce cancelled";
+        return;
+    }
+    craft_buy_announce(text);
+}
+
 void Game::open_chat() {
     if (!alive() || pause_menu_open || leave_confirm_open) return;
+    if (shop_announce_prompt_open) close_shop_announce_prompt();
     close_game_panel();
     chat_open = 1;
     chat_scroll_to_end = 1;
-    // Drop held letter keys so they don't leak into binds / chat draft.
-    // Mobile: also stop the flower while the soft keyboard is up.
+    // Drop held keys so WASD/Space don't keep moving/attacking while the chat
+    // input owns the keyboard (names need W/A/S/D). Stand still until blur.
     Input::keys_held.clear();
     Input::keys_held_this_tick.clear();
-    if (Input::mobile_controls()) {
-        Input::game_inputs.x = 0;
-        Input::game_inputs.y = 0;
-        Input::game_inputs.flags = 0;
-    }
+    Input::game_inputs.x = 0;
+    Input::game_inputs.y = 0;
+    Input::game_inputs.flags = 0;
     if (Ui::TextInput *input = Ui::chat_text_input())
         input->focus();
 }
@@ -576,14 +629,10 @@ void Game::close_chat() {
     chat_open = 0;
     chat_completion_hint.clear();
     close_chat_menu();
-    // Clear DOM before blur — blur() syncs from the overlay and would otherwise
-    // put the just-sent message back into chat_draft.
-    if (Ui::TextInput *input = Ui::chat_text_input()) {
-        input->clear();
+    // Keep unsent draft: blur syncs DOM → chat_draft and hides the overlay.
+    // Cleared only after a successful send (see send_chat).
+    if (Ui::TextInput *input = Ui::chat_text_input())
         input->blur();
-    } else {
-        chat_draft.clear();
-    }
 }
 
 void Game::push_chat_line(uint8_t channel, std::string const &sender, std::string const &text,
@@ -593,12 +642,17 @@ void Game::push_chat_line(uint8_t channel, std::string const &sender, std::strin
     while (chat_lines.size() > CHAT_HISTORY)
         chat_lines.erase(chat_lines.begin());
     if (chat_open) chat_scroll_to_end = 1;
-    // Overhead bubble above speaker (~8s); skip system lines
-    if (!sender.empty() && !text.empty() && channel != ChatChannel::kChatSystem)
+    // Overhead bubble above speaker (~8s). Never for system/server — those have
+    // no flower body, and spoofed senders (old admin "aqa") falsely bubbled players.
+    if (!sender.empty() && !text.empty()
+        && channel != ChatChannel::kChatSystem
+        && channel != ChatChannel::kChatServer)
         speech_bubbles[sender] = { text, timestamp + 8000 };
-    // Admin account aqa → soft top banner for every in-game client (like boss HP).
-    if (channel == ChatChannel::kChatServer && sender == "aqa" && !text.empty()) {
-        screen_announce.sender = sender;
+    // Top banner: paid shop / ops announce (whisper_to == "banner").
+    // Legacy: sender "aqa" still lights the banner once for old packets.
+    if (channel == ChatChannel::kChatServer && !text.empty()
+        && (whisper_to == "banner" || sender == "aqa")) {
+        screen_announce.sender = (sender == "aqa") ? std::string{"公告"} : sender;
         screen_announce.text = text;
         screen_announce.expires_at = timestamp + SCREEN_ANNOUNCE_MS;
     }
@@ -622,26 +676,30 @@ void Game::cycle_chat_channel() {
         chat_channel = ChatChannel::kChatNearby;
 }
 
-// Slash commands offered for Tab complete (short forms first).
+// Slash commands offered for live letter hints + Tab complete (florr-style).
+// Longer aliases first so /guild Tab prefers /guild-invite over bare /guild.
 static char const *const kChatSlashCmds[] = {
     "/w", "/whisper", "/密语", "/私聊",
     "/r", "/reply", "/回复",
     "/local", "/附近",
+    "/squad-leave", "/party-leave",
+    "/squad-invite", "/party-invite",
     "/squad", "/party", "/组队聊",
-    "/guild", "/公会",
-    "/server", "/全服",
-    "/invite", "/组队",
-    "/leave", "/离队",
     "/guild-create", "/创建公会",
     "/guild-invite", "/公会邀请",
     "/guild-leave", "/退会",
     "/guild-motd", "/公告",
+    "/guild", "/公会",
+    "/server", "/全服",
+    "/invite", "/组队",
+    "/leave", "/离队",
     "/help", "/帮助",
 };
 
 static uint8_t chat_cmd_needs_name(std::string const &cmd) {
     return cmd == "/w" || cmd == "/whisper" || cmd == "/密语" || cmd == "/私聊"
         || cmd == "/invite" || cmd == "/组队"
+        || cmd == "/squad-invite" || cmd == "/party-invite"
         || cmd == "/guild-invite" || cmd == "/公会邀请";
 }
 
@@ -669,11 +727,17 @@ static std::vector<std::string> chat_completion_matches(std::string const &draft
         rest.erase(rest.begin());
 
     if (sp == std::string::npos) {
-        // Completing the command itself
+        // Completing the command itself — longer cmds first so Tab on /guild
+        // fills /guild-invite before the bare /guild channel switch.
         for (char const *cmd : kChatSlashCmds) {
             if (std::strncmp(cmd, head.c_str(), head.size()) == 0)
                 matches.push_back(cmd);
         }
+        std::stable_sort(matches.begin(), matches.end(),
+            [](std::string const &a, std::string const &b) {
+                if (a.size() != b.size()) return a.size() > b.size();
+                return false;
+            });
         return matches;
     }
 
@@ -693,24 +757,44 @@ static std::vector<std::string> chat_completion_matches(std::string const &draft
 
 static uint32_t g_chat_tab_cycle = 0;
 
+// Same "best" pick as the Tab→ hint: prefer a strict extension of the draft.
+static std::string chat_best_match(std::vector<std::string> const &matches,
+                                   std::string const &draft, uint32_t cycle) {
+    if (matches.empty()) return {};
+    if (cycle == 0) {
+        for (auto const &m : matches) {
+            if (m.size() > draft.size()
+                && m.compare(0, draft.size(), draft) == 0)
+                return m;
+        }
+    }
+    return matches[cycle % (uint32_t) matches.size()];
+}
+
 uint8_t Game::try_chat_tab_complete() {
     if (!chat_open) return 0;
     if (Ui::TextInput *input = Ui::chat_text_input())
         input->sync_from_dom();
     std::vector<std::string> matches = chat_completion_matches(chat_draft);
     if (matches.empty()) return 0;
-    uint32_t idx = g_chat_tab_cycle % (uint32_t) matches.size();
+    uint8_t was_cmd_only = chat_draft.find(' ') == std::string::npos;
+    std::string filled = chat_best_match(matches, chat_draft, g_chat_tab_cycle);
     ++g_chat_tab_cycle;
-    std::string filled = matches[idx];
-    uint8_t has_name = filled.find(' ') != std::string::npos;
     uint8_t bare_no_args = filled == "/help" || filled == "/帮助"
         || filled == "/leave" || filled == "/离队"
-        || filled == "/guild-leave" || filled == "/退会";
-    // Trailing space: ready to type args / message (except bare no-arg cmds)
+        || filled == "/squad-leave" || filled == "/party-leave"
+        || filled == "/guild-leave" || filled == "/退会"
+        || filled == "/guild" || filled == "/公会"
+        || filled == "/server" || filled == "/全服"
+        || filled == "/local" || filled == "/附近"
+        || filled == "/squad" || filled == "/party" || filled == "/组队聊";
+    // Trailing space: ready to type args / message (except bare channel/no-arg cmds)
     if (!bare_no_args && (filled.empty() || filled.back() != ' '))
         filled.push_back(' ');
-    (void) has_name;
     chat_draft = filled;
+    // Cmd → name suggestions: restart cycle so first Tab picks names[0]
+    if (was_cmd_only && chat_draft.find(' ') != std::string::npos)
+        g_chat_tab_cycle = 0;
     if (Ui::TextInput *input = Ui::chat_text_input())
         input->set_text(chat_draft);
     refresh_chat_completion_hint();
@@ -731,8 +815,22 @@ void Game::refresh_chat_completion_hint() {
             g_chat_tab_cycle = 0;
         last_draft_for_cycle = chat_draft;
     }
+    // Only hint while drafting a slash command (florr: type / → letter filter)
+    if (chat_draft.empty() || chat_draft.front() != '/') return;
     std::vector<std::string> matches = chat_completion_matches(chat_draft);
     if (matches.empty()) return;
+    // Show up to 6 prefix matches as you type; Tab still cycles / fills
+    constexpr size_t kHintCap = 6;
+    std::string list;
+    size_t shown = 0;
+    for (auto const &m : matches) {
+        if (shown >= kHintCap) break;
+        if (!list.empty()) list += "  ";
+        list += m;
+        ++shown;
+    }
+    if (matches.size() > kHintCap)
+        list += I18n::use_chinese ? " …" : " …";
     std::string best = matches[g_chat_tab_cycle % matches.size()];
     for (auto const &m : matches) {
         if (m.size() > chat_draft.size()
@@ -741,19 +839,19 @@ void Game::refresh_chat_completion_hint() {
             break;
         }
     }
-    if (best.size() <= chat_draft.size()) {
-        if (matches.size() > 1) {
-            chat_completion_hint = I18n::use_chinese
-                ? std::format("Tab 切换（{}/{}）· {}",
-                    (g_chat_tab_cycle % matches.size()) + 1, matches.size(), best)
-                : std::format("Tab cycle ({}/{}) · {}",
-                    (g_chat_tab_cycle % matches.size()) + 1, matches.size(), best);
-        }
-        return;
+    if (best.size() > chat_draft.size()) {
+        chat_completion_hint = I18n::use_chinese
+            ? std::format("{}  · Tab→{}", list, best)
+            : std::format("{}  · Tab→{}", list, best);
+    } else if (matches.size() > 1) {
+        chat_completion_hint = I18n::use_chinese
+            ? std::format("{}  · Tab切换（{}/{}）",
+                list, (g_chat_tab_cycle % matches.size()) + 1, matches.size())
+            : std::format("{}  · Tab cycle ({}/{})",
+                list, (g_chat_tab_cycle % matches.size()) + 1, matches.size());
+    } else {
+        chat_completion_hint = list;
     }
-    chat_completion_hint = I18n::use_chinese
-        ? std::format("Tab → {}", best)
-        : std::format("Tab → {}", best);
 }
 
 void Game::open_chat_menu(std::string const &name, float x, float y) {
@@ -950,9 +1048,19 @@ void Game::tick(double time) {
     // Higher base → less visual lag behind server snapshots (was 0.28)
     Ui::lerp_amount = 1 - pow(1 - 0.42, Ui::dt * 60 / 1000);
     g_last_time = time;
+    // JS key handlers read this while an HTML <input> is focused (chat, etc.).
+    EM_ASM({ Module.ashflorKeyboardMove = $0; },
+        (!Input::mobile_controls() && Input::keyboard_movement) ? 1 : 0);
     simulation.tick();
     
     renderer.reset();
+    // After a canvas buffer reset the bitmap is empty until render_game fills
+    // void. Paint the void early on pure in-game frames so a hitch never shows
+    // through as a black flash (skip during title↔game transition so title stays).
+    if (should_render_game_ui() && !should_render_title_ui()) {
+        renderer.set_fill(0xff2a2624);
+        renderer.fill_rect(0, 0, renderer.width, renderer.height);
+    }
     game_ui_renderer.set_dimensions(renderer.width, renderer.height);
     game_ui_renderer.reset();
     game_ui_renderer.clear();
@@ -1105,10 +1213,10 @@ void Game::tick(double time) {
         renderer.set_global_alpha(0.85);
         renderer.translate(renderer.width/2,renderer.height/2);
         renderer.draw_image(game_ui_renderer);
-    // Hold K/L: ghost first petal of presets 1..10 / 11..20 on primary slots (visual only).
-    // Plain number keys swap primary[i] ↔ secondary[i]. Apply presets via panel / mobile L-pick.
-    // Q/E = hold for continuous linear spin rate (not discrete taps).
+    // Hold K/L + digit: apply cloud presets 1..10 / 11..20 (petals only; shared talents).
+    // Plain number keys swap primary[i] ↔ secondary[i]. Q/E = spin rate.
     if (!Game::pause_menu_open && !Game::chat_open && !Game::leave_confirm_open
+            && !Game::shop_announce_prompt_open
             && !Game::game_panel_blocking()) {
             float const rot_rate = 4.5f; // levels / second while held
             float dt_s = (float) (Ui::dt / 1000.0);
@@ -1119,12 +1227,17 @@ void Game::tick(double time) {
                 Game::nudge_rot_speed(+rot_rate * dt_s);
             if (Input::keys_held_this_tick.contains('R'))
                 Game::swap_all_petals();
-            // Hold K / L: ghost-mark primary slots with that bank's preset first petal.
-            // Digits do NOT apply presets (apply only via panel / mobile L-pick).
             bool const k_held = Input::keys_held.contains('K');
             bool const l_held = Input::keys_held.contains('L');
             Game::preset_ghost_bank = k_held ? 1 : (l_held ? 2 : 0);
-            if (!k_held && !l_held) {
+            if (k_held || l_held) {
+                for (uint8_t i = 0; i < Game::loadout_count && i < MAX_SLOT_COUNT; ++i) {
+                    if (!Input::keys_held_this_tick.contains(SLOT_KEYBINDS[i])) continue;
+                    uint8_t const idx = (uint8_t) ((k_held ? 0 : 10) + i);
+                    Game::apply_loadout_preset(idx);
+                    break;
+                }
+            } else {
                 for (uint8_t i = 0; i < Game::loadout_count; ++i) {
                     if (!Input::keys_held_this_tick.contains(SLOT_KEYBINDS[i])) continue;
                     uint8_t sec = (uint8_t) (Game::loadout_count + i);
@@ -1175,15 +1288,14 @@ void Game::tick(double time) {
 
     //no rendering past this point
     // Touch HUD owns movement/flags when Request Mobile is on.
-    // Chat open: desktop keeps mouse-aim move (WASD can't reach the game while
-    // the HTML input is focused); mobile stands still.
-    if (chat_open && Input::mobile_controls()) {
+    // Chat open: stand still — text field owns WASD/Space (type names safely).
+    // Keyboard-move stays on the keyboard branch (zeros), never mouse-aim.
+    if (chat_open) {
         Input::game_inputs.x = 0;
         Input::game_inputs.y = 0;
         Input::game_inputs.flags = 0;
     } else if (!Input::mobile_controls()) {
-        // While typing, prefer mouse aim so keyboard-mode players can still move
-        if (Input::keyboard_movement && !chat_open) {
+        if (Input::keyboard_movement) {
             Input::game_inputs.x = 300 * (Input::keys_held.contains('D') - Input::keys_held.contains('A') + Input::keys_held.contains(39) - Input::keys_held.contains(37));
             Input::game_inputs.y = 300 * (Input::keys_held.contains('S') - Input::keys_held.contains('W') + Input::keys_held.contains(40) - Input::keys_held.contains(38));
         } else {
@@ -1213,6 +1325,13 @@ void Game::tick(double time) {
         Input::game_inputs.flags = (attack << InputFlags::kAttacking) | (defend << InputFlags::kDefending);
     }
 
+    // Talent editing takes the pointer and keyboard focus. Mouse-aim movement
+    // and LMB attacks must not keep driving the flower while clicking ranks.
+    if (game_panel == kPanelTalents) {
+        Input::game_inputs.x = 0;
+        Input::game_inputs.y = 0;
+        Input::game_inputs.flags = 0;
+    }
     if (socket.ready && alive()) send_inputs();
 
     if (Input::keys_held_this_tick.contains(';'))
@@ -1232,7 +1351,8 @@ void Game::tick(double time) {
     // Click outside chat / popups / drawers → close them (Esc still works)
     Ui::try_close_popups_outside_click();
     if (Input::keys_held_this_tick.contains(27) && Game::alive()) {
-        if (chat_menu_open) close_chat_menu();
+        if (shop_announce_prompt_open) close_shop_announce_prompt();
+        else if (chat_menu_open) close_chat_menu();
         else if (leave_confirm_open) leave_confirm_open = 0;
         else if (chat_open) close_chat();
         else if (game_panel != kPanelNone) close_game_panel();
@@ -1256,7 +1376,9 @@ void Game::tick(double time) {
     uint8_t const enter = Input::keys_held_this_tick.contains('\r') || DOM::text_enter_pressed;
     DOM::text_enter_pressed = 0;
     if (enter) {
-        if (Game::alive()) {
+        if (shop_announce_prompt_open) {
+            submit_shop_announce();
+        } else if (Game::alive()) {
             if (chat_open) send_chat();
             else if (!pause_menu_open && !leave_confirm_open
                 && Ui::active_text_input() == nullptr)

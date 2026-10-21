@@ -52,10 +52,12 @@ static void calculate_leaderboard(Simulation *sim) {
             sim->arena_info.set_minimap_x(i, players[i]->get_x());
             sim->arena_info.set_minimap_y(i, players[i]->get_y());
             sim->arena_info.set_minimap_colors(i, players[i]->get_color());
+            sim->arena_info.set_minimap_names(i, players[i]->get_name());
         } else {
             sim->arena_info.set_minimap_x(i, -1.f);
             sim->arena_info.set_minimap_y(i, -1.f);
             sim->arena_info.set_minimap_colors(i, 0);
+            sim->arena_info.set_minimap_names(i, std::string{});
         }
     }
 }
@@ -91,14 +93,14 @@ static void ensure_boss(Simulation *sim) {
 void Simulation::on_tick() {
     spatial_hash.refresh(ARENA_WIDTH, ARENA_HEIGHT);
     ensure_boss(this);
-    // 刷怪速率随在线人数缩放（总纲 R4）：基础 4/s，每名玩家 +1，上限 12/s
+    // Double the spawn attempts so the doubled zone population fills at the old pace.
     if (frand() < 1.0f / TPS) {
         uint32_t players = 0;
         for_each<kFlower>([&](Simulation *, Entity &ent) {
             if (!ent.has_component(kMob)) ++players;
         });
-        uint32_t batches = 4u + players;
-        if (batches > 12u) batches = 12u;
+        uint32_t batches = 2u * (4u + players);
+        if (batches > 24u) batches = 24u;
         for (uint32_t i = 0; i < batches; ++i)
             Map::spawn_zone_mob(this);
     }
@@ -141,10 +143,9 @@ void Simulation::post_tick() {
         }
         if (ent.immunity_ticks > 0) {
             --ent.immunity_ticks;
-        } else if (ent.has_component(kDrop) && ent.get_team() != NULL_ENTITY) {
-            // Private claim window ended → free-for-all
-            ent.set_team(NULL_ENTITY);
         }
+        // Team-tagged drops stay private for their whole lifetime (owner + party).
+        // Only unowned (manual discard) piles use immunity then go FFA — never clear team here.
     });
     for_each_entity([](Simulation *sim, Entity &ent) {
         if (!ent.pending_delete) return;

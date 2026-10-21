@@ -86,10 +86,12 @@ namespace Ui {
     Element *make_craft_panel();
     Element *make_special_craft_panel();
     Element *make_shop_panel();
+    Element *make_shop_announce_prompt();
     Element *make_boost_panel();
     // Overlay: place / take-back flies + craft win/miss bursts
     Element *make_craft_fx_layer();
     void craft_play_result(uint8_t result, PetalID::T petal);
     class TextInput;
     TextInput *chat_text_input();
+    TextInput *shop_announce_text_input();
 }

@@ -69,7 +69,8 @@ Renderer::Renderer() : context() {
         else
             idx = Module.ctxs.length;
         if (idx === 0) {
-            Module.ctxs[idx] = document.getElementById('canvas').getContext('2d');
+            // Opaque: cleared frames composite as solid (still fill void after resize).
+            Module.ctxs[idx] = document.getElementById('canvas').getContext('2d', { alpha: false });
         } else {
             const canvas = new OffscreenCanvas(1,1);
             Module.ctxs[idx] = canvas.getContext('2d');

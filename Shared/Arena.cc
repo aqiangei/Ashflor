@@ -20,6 +20,7 @@ void Arena::init() {
         minimap_x[i] = -1.f;
         minimap_y[i] = -1.f;
         minimap_colors[i] = 0;
+        minimap_names[i].clear();
     }
 }
 

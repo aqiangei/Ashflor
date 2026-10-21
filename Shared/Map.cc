@@ -961,7 +961,6 @@ static float zone_exclusive_area(uint8_t map_id, uint32_t zone_id) {
 }
 
 void Map::spawn_random_mob(Simulation *sim, float x, float y) {
-    if (Map::circle_hits_impassable(sim->map_id, x, y, 40.f)) return;
     uint32_t zone_id = Map::get_zone_from_pos(sim->map_id, x, y);
     struct ZoneDefinition const &zone = map_zones(sim->map_id)[zone_id];
     // Respawn plaza: only the difficulty-0 hub table, and only a handful.
@@ -969,8 +968,8 @@ void Map::spawn_random_mob(Simulation *sim, float x, float y) {
         if (zone.difficulty != 0) return;
         if (sim->plaza_mob_count >= 8) return;
     }
-    // Combat zones spawn denser; hub (diff 0) stays sparse.
-    float dens = zone.density * (zone.difficulty == 0 ? 1.f : 1.65f);
+    // Mild combat denser fill; hub (diff 0) stays sparse.
+    float dens = zone.density * (zone.difficulty == 0 ? 1.f : 1.25f);
     if (dens * zone_exclusive_area(sim->map_id, zone_id) / (500 * 500) < sim->zone_mob_counts[zone_id]) return;
     float sum = 0;
     for (SpawnChance const &s : zone.spawns)
@@ -979,6 +978,8 @@ void Map::spawn_random_mob(Simulation *sim, float x, float y) {
     for (SpawnChance const &s : zone.spawns) {
         sum -= s.chance;
         if (sum <= 0) {
+            float radius = MOB_DATA[s.id].radius.get_single(1.f) * MOB_RADIUS_MULTIPLIER;
+            if (Map::circle_hits_impassable(sim->map_id, x, y, radius + 8.f)) return;
             _spawn_mob_at(sim, zone_id, s.id, x, y);
             return;
         }
@@ -1012,7 +1013,7 @@ void Map::_spawn_mob_at(Simulation *sim, uint32_t zone_id, MobID::T mob_id, floa
         mob.damage *= mob_spawn_damage_mult(base_r, spawn_r);
         mob.score_reward = (uint32_t) (
             MOB_DATA[mob_id].xp * zone_xp_mult(diff)
-            * mob_spawn_threat_mult(base_r, spawn_r) + 0.5f
+            * mob_spawn_xp_mult(base_r, spawn_r) + 0.5f
         );
     });
 }
@@ -1083,7 +1084,7 @@ uint8_t Map::sample_spawn_point(Simulation *sim, uint32_t zone_id, uint8_t mob_i
     ZoneDefinition const &zone = zones[zone_id];
     SpawnRule const &rule = spawn_rules()[mob_id];
     uint8_t cls = spawn_class(mob_id);
-    float radius = MOB_DATA[mob_id].radius.get_single(frand());
+    float radius = MOB_DATA[mob_id].radius.get_single(frand()) * MOB_RADIUS_MULTIPLIER;
     float clearance = radius + 8.f;
     float const margin = 60.f;
     float zw = zone.right - zone.left - 2.f * margin;
@@ -1198,7 +1199,7 @@ uint8_t Map::_spawn_zone_mob_once(Simulation *sim) {
     MapZones const &zones = map_zones(sim->map_id);
     if (zone_id >= zones.size()) return 0;
     ZoneDefinition const &zone = zones[zone_id];
-    float dens = zone.density * (zone.difficulty == 0 ? 1.f : 1.65f);
+    float dens = zone.density * (zone.difficulty == 0 ? 1.f : 1.25f);
     if (dens * zone_exclusive_area(sim->map_id, zone_id) / (500 * 500) < sim->zone_mob_counts[zone_id]) return 0;
 
     float total = 0.f;

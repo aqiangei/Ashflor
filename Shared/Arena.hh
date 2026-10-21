@@ -21,7 +21,8 @@ CLIENT_ONLY(typedef LerpFloat Float;)
     /* plain float: LerpFloat sticks at -1 for empty slots and never steps */ \
     MULTIPLE(minimap_x, float, MINIMAP_PLAYER_CAP) \
     MULTIPLE(minimap_y, float, MINIMAP_PLAYER_CAP) \
-    MULTIPLE(minimap_colors, uint8_t, MINIMAP_PLAYER_CAP)
+    MULTIPLE(minimap_colors, uint8_t, MINIMAP_PLAYER_CAP) \
+    MULTIPLE(minimap_names, std::string, MINIMAP_PLAYER_CAP)
 
 class Arena {
     enum Fields {

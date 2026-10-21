@@ -113,6 +113,9 @@ int setup_inputs() {
             if (e.isComposing || e.keyCode === 229) return;
             const typing = e.target && (e.target.tagName === "INPUT" || e.target.tagName === "TEXTAREA");
             const pass = e.code === "Escape" || e.code === "Enter" || e.code === "NumpadEnter" || e.code === "Tab";
+            // Text fields own all printable keys (incl. WASD) so names like
+            // "KilO_War" can be typed. Keyboard-move players simply stand still
+            // while focused — C++ still uses the keyboard branch with empty holds.
             if (typing && !pass) return;
             if (typing && pass) e.preventDefault();
             !e.repeat && _key_event(stringToNewUTF8(e.code), 0);
@@ -202,11 +205,34 @@ void main_loop() {
         {
             Module.ashflorDpr = Math.min(window.devicePixelRatio || 1, 2);
             const r = Module.ashflorDpr;
-            const width = Math.max(1, Math.round(innerWidth * r));
-            const height = Math.max(1, Math.round(innerHeight * r));
+            let width = Math.max(1, Math.round(innerWidth * r));
+            let height = Math.max(1, Math.round(innerHeight * r));
+            // Stick buffer size until the change is meaningful. Assigning
+            // canvas.width/height clears the bitmap; 1px DPR/layout thrash
+            // otherwise flashes the page (black) behind the canvas for a frame.
+            if (Module._ashflorBufW == null) {
+                Module._ashflorBufW = width;
+                Module._ashflorBufH = height;
+            } else if (Math.abs(width - Module._ashflorBufW) >= 2
+                    || Math.abs(height - Module._ashflorBufH) >= 2) {
+                Module._ashflorBufW = width;
+                Module._ashflorBufH = height;
+            } else {
+                width = Module._ashflorBufW;
+                height = Module._ashflorBufH;
+            }
             if (Module.canvas.width !== width || Module.canvas.height !== height) {
                 Module.canvas.width = width;
                 Module.canvas.height = height;
+                // Fill void immediately so a slow wasm frame never shows page black.
+                const ctx = (Module.ctxs && Module.ctxs[0])
+                    ? Module.ctxs[0]
+                    : Module.canvas.getContext('2d');
+                if (ctx) {
+                    ctx.setTransform(1, 0, 0, 1, 0, 0);
+                    ctx.fillStyle = '#2a2624';
+                    ctx.fillRect(0, 0, width, height);
+                }
             }
             const frameStart = Module['profileFrames'] ? performance.now() : 0;
             _loop(time, width, height);

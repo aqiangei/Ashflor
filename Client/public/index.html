@@ -38,7 +38,8 @@
                 height: 100%;
                 cursor: default;
                 z-index: 1;
-                background: #000000;
+                /* Match in-game void so a cleared canvas never flashes pure black */
+                background: #2a2624;
                 touch-action: none;
                 -webkit-user-select: none;
                 user-select: none;
@@ -52,40 +53,38 @@
                 background: transparent !important;
                 pointer-events: auto;
             }
+            body input[type="text"].chat-input {
+                color: #f6f1ff !important;
+                caret-color: #d89aff !important;
+                -webkit-text-fill-color: #f6f1ff !important;
+            }
+            /* Match title-screen void — no green splash; hand off to in-game「连接中」 */
             #loading-bar {
                 position: absolute;
                 inset: 0;
-                background:
-                    radial-gradient(ellipse 70% 50% at 50% 42%, #1a2a1c 0%, #0a0a0a 62%, #050505 100%);
+                background: #2a2624;
                 z-index: 10;
                 display: flex;
                 flex-direction: column;
                 align-items: center;
                 justify-content: center;
-                gap: 28px;
-                transition: opacity 0.45s ease, visibility 0.45s ease;
+                gap: 14px;
             }
             #loading-bar.hide {
-                opacity: 0;
-                visibility: hidden;
+                display: none;
                 pointer-events: none;
             }
             #loading-brand {
                 font-family: Ubuntu, "Noto Sans SC", sans-serif;
-                font-size: clamp(28px, 6vw, 52px);
+                font-size: clamp(40px, 7vw, 68px);
                 font-weight: 700;
                 color: #f4f4f4;
-                letter-spacing: 0.04em;
-                animation: brand-breathe 2.4s ease-in-out infinite;
-            }
-            @keyframes brand-breathe {
-                0%, 100% { opacity: 0.72; transform: scale(1); }
-                50% { opacity: 1; transform: scale(1.03); }
+                letter-spacing: 0.02em;
             }
             #loading {
-                font-size: clamp(16px, 3.2vw, 22px);
+                font-size: clamp(22px, 4vw, 36px);
                 font-family: "Noto Sans SC", "Microsoft YaHei", sans-serif;
-                color: #d8d8d8;
+                color: #c8bfb0;
                 font-weight: 700;
                 white-space: nowrap;
                 min-height: 1.4em;
@@ -94,7 +93,7 @@
             }
             #loading.is-error {
                 color: #ff8a80;
-                animation: none;
+                font-size: clamp(16px, 3.2vw, 22px);
                 white-space: normal;
                 line-height: 1.35;
                 padding: 0 12px;
@@ -111,48 +110,17 @@
             #loading .dots span {
                 display: inline-block;
                 opacity: 0.2;
-                transform: translateY(0);
                 animation: loading-dot 1.05s ease-in-out infinite;
             }
             #loading .dots span:nth-child(1) { animation-delay: 0s; }
             #loading .dots span:nth-child(2) { animation-delay: 0.18s; }
             #loading .dots span:nth-child(3) { animation-delay: 0.36s; }
             @keyframes loading-dot {
-                0%, 80%, 100% {
-                    opacity: 0.2;
-                    transform: translateY(0);
-                }
-                40% {
-                    opacity: 1;
-                    transform: translateY(-4px);
-                }
+                0%, 80%, 100% { opacity: 0.2; }
+                40% { opacity: 1; }
             }
             #loading-track {
-                width: min(280px, 58vw);
-                height: 6px;
-                border-radius: 999px;
-                background: rgba(255, 255, 255, 0.12);
-                overflow: hidden;
-                position: relative;
-            }
-            #loading-track.done,
-            #loading-track.error {
                 display: none;
-            }
-            #loading-fill {
-                position: absolute;
-                top: 0;
-                left: 0;
-                height: 100%;
-                width: 38%;
-                border-radius: inherit;
-                background: linear-gradient(90deg, #149a22, #1dd129, #7dff8a);
-                animation: loading-slide 1.35s cubic-bezier(0.4, 0, 0.2, 1) infinite;
-            }
-            @keyframes loading-slide {
-                0% { left: -40%; width: 34%; }
-                50% { left: 28%; width: 48%; }
-                100% { left: 108%; width: 34%; }
             }
             /* Outside #loading-bar so fast loads do not cut display time short */
             #landscape-btn {
@@ -254,7 +222,7 @@
         <meta name="viewport" content="user-scalable=no, width=device-width, height=device-height, initial-scale=1, shrink-to-fit=no, viewport-fit=cover">
         <meta name="mobile-web-app-capable" content="yes">
         <meta name="apple-mobile-web-app-capable" content="yes">
-        <meta name="theme-color" content="#1b4332">
+        <meta name="theme-color" content="#2a2624">
         <link rel="icon" href="/favicon.svg" type="image/svg+xml">
         <link rel="icon" href="/favicon-32.png" type="image/png" sizes="32x32">
         <link rel="icon" href="/favicon-48.png" type="image/png" sizes="48x48">
@@ -266,8 +234,8 @@
     <body>
     <div id="loading-bar">
         <div id="loading-brand">ashflor.io</div>
-        <div id="loading"><span class="label">加载中</span><span class="dots" aria-hidden="true"><span>.</span><span>.</span><span>.</span></span></div>
-        <div id="loading-track" aria-hidden="true"><div id="loading-fill"></div></div>
+        <div id="loading"><span class="label">连接中</span><span class="dots" aria-hidden="true"><span>.</span><span>.</span><span>.</span></span></div>
+        <div id="loading-track" aria-hidden="true"></div>
     </div>
     <button id="landscape-btn" type="button">横屏游戏</button>
     <div id="reconnect-overlay" aria-hidden="true">
@@ -343,7 +311,7 @@
 
         document.addEventListener("DOMContentLoaded", () => {
             // deploy-update.ps1 bumps this digits-only string each release
-            var cacheV = '21612';
+            var cacheV = '21628';
             var hidden = false;
             var loadingEl = document.getElementById("loading");
             var trackEl = document.getElementById("loading-track");
@@ -357,15 +325,9 @@
                         '<span class="label"></span>' +
                         '<span class="dots" aria-hidden="true"><span>.</span><span>.</span><span>.</span></span>';
                     loadingEl.querySelector(".label").textContent = msg;
-                    if (trackEl) {
-                        trackEl.classList.remove("error", "done");
-                    }
-                    if (brandEl) brandEl.style.animationPlayState = "running";
                 } else {
                     loadingEl.classList.add("is-error");
                     loadingEl.textContent = msg;
-                    if (trackEl) trackEl.classList.add("error");
-                    if (brandEl) brandEl.style.animationPlayState = "paused";
                 }
             }
 
@@ -374,13 +336,7 @@
                 if (!window.Module || !window.Module.canvas) return;
                 hidden = true;
                 var bar = document.getElementById("loading-bar");
-                if (trackEl) trackEl.classList.add("done");
-                if (bar) {
-                    bar.classList.add("hide");
-                    setTimeout(function () {
-                        bar.style.display = "none";
-                    }, 480);
-                }
+                if (bar) bar.classList.add("hide");
             }
 
             if ('serviceWorker' in navigator) {
@@ -635,7 +591,8 @@
                 console.info('Ashflor first frame: ' + Math.round(performance.now()) + ' ms after navigation');
             };
             Module.onRuntimeInitialized = function () {
-                setLoadingMessage("初始化画面", true);
+                // Stay on「连接中」until first frame → title screen takes over.
+                setLoadingMessage("连接中", true);
             };
             Module.onAbort = function (what) {
                 var reason = String(what == null ? "" : what).replace(/\s+/g, " ").trim();
@@ -651,20 +608,16 @@
                         var m = s.match(/Aborted\((.*)\)/);
                         var detail = (m && m[1] && m[1] !== "undefined") ? m[1] : "内存不足或客户端异常";
                         setLoadingMessage("加载失败：" + detail.slice(0, 120), false);
-                    } else if (/wasm|fetch|download|network|instantiate|Prepare/i.test(s) && !hidden) {
-                        setLoadingMessage("仍在下载客户端", true);
                     }
+                    // Keep「连接中」copy during wasm download — no green splash / 「加载中」phase.
                 } catch (e) {}
             };
 
-            setLoadingMessage("加载中", true);
+            setLoadingMessage("连接中", true);
 
             setTimeout(function () {
-                if (!hidden) setLoadingMessage("仍在下载客户端", true);
-            }, 8000);
-            setTimeout(function () {
                 if (!hidden) {
-                    setLoadingMessage("加载超时：客户端下载过慢，请切换网络后刷新", false);
+                    setLoadingMessage("连接超时：客户端下载过慢，请切换网络后刷新", false);
                 }
             }, 120000);
 

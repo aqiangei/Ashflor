@@ -136,6 +136,60 @@ void Party::clear_corpse(Client *client) {
     client->revive_progress = 0;
 }
 
+static uint8_t party_level_gap_ok(Client *host, Client *candidate);
+
+static uint32_t party_count(Client *host) {
+    if (host == nullptr || host->game == nullptr) return 0;
+    if (host->party_id == 0) return 1;
+    uint32_t n = 0;
+    for (Client *c : host->game->clients)
+        if (c != nullptr && c->party_id == host->party_id) ++n;
+    return n;
+}
+
+static float party_dist2(Client *a, Client *b) {
+    if (a == nullptr || b == nullptr || a->game == nullptr || !a->alive() || !b->alive())
+        return 1e30f;
+    Simulation *sim = &a->game->simulation;
+    Entity &pa = sim->get_ent(sim->get_ent(a->camera).get_player());
+    Entity &pb = sim->get_ent(sim->get_ent(b->camera).get_player());
+    float dx = pa.get_x() - pb.get_x();
+    float dy = pa.get_y() - pb.get_y();
+    return dx * dx + dy * dy;
+}
+
+// Silent nearby auto-join (no invite prompt). Host may be solo or existing party.
+static uint8_t auto_join_into(Client *host, Client *joiner) {
+    if (host == nullptr || joiner == nullptr || host == joiner) return 0;
+    if (!host->alive() || !joiner->alive() || host->game == nullptr) return 0;
+    if (joiner->party_id != 0) return 0;
+    if (joiner->auto_party_cd > 0 || host->auto_party_cd > 0) return 0;
+    if (party_count(host) >= Party::MAX_SIZE) return 0;
+    if (!party_level_gap_ok(host, joiner)) return 0;
+    if (host->party_id == 0) {
+        host->party_id = NEXT_PARTY_ID++;
+        host->party_leader = 1;
+        Party::apply_team(host);
+        Party::send_update(host);
+    }
+    joiner->party_id = host->party_id;
+    joiner->party_leader = 0;
+    joiner->pending_party_from.clear();
+    joiner->pending_party_ttl = 0;
+    for (Client *c : host->game->clients) {
+        if (c != nullptr && c->party_id == host->party_id)
+            Party::apply_team(c);
+    }
+    std::string msg = "[队伍] " + player_name(joiner) + " 附近自动入队。";
+    for (Client *c : host->game->clients) {
+        if (c != nullptr && c->party_id == host->party_id) {
+            Party::notify(c, msg);
+            Party::send_update(c);
+        }
+    }
+    return 1;
+}
+
 void Party::leave(Client *client) {
     if (client == nullptr) return;
     uint32_t pid = client->party_id;
@@ -149,6 +203,9 @@ void Party::leave(Client *client) {
     clear_corpse(client);
     client->party_id = 0;
     client->party_leader = 0;
+    // Brief cool-down so nearby auto-join does not immediately pull them back
+    if (client->auto_party_cd < AUTO_PARTY_COOLDOWN)
+        client->auto_party_cd = AUTO_PARTY_COOLDOWN;
     if (game != nullptr && game->simulation.ent_exists(client->camera)) {
         Entity &camera = game->simulation.get_ent(client->camera);
         camera.set_team(client->camera);
@@ -438,6 +495,7 @@ void Party::tick(GameInstance *game) {
     Simulation *sim = &game->simulation;
     for (Client *c : game->clients) {
         if (c == nullptr) continue;
+        if (c->auto_party_cd > 0) --c->auto_party_cd;
         if (c->pending_party_ttl > 0) {
             --c->pending_party_ttl;
             if (c->pending_party_ttl == 0 && !c->pending_party_from.empty()) {
@@ -446,6 +504,67 @@ void Party::tick(GameInstance *game) {
             }
         }
     }
+
+    // Out of range → auto leave (check before join so hysteresis can settle)
+    {
+        float leave_r2 = AUTO_LEAVE_RADIUS * AUTO_LEAVE_RADIUS;
+        std::vector<Client *> to_leave;
+        for (Client *c : game->clients) {
+            if (c == nullptr || c->party_id == 0 || !c->alive()) continue;
+            float nearest = 1e30f;
+            for (Client *o : game->clients) {
+                if (o == nullptr || o == c || o->party_id != c->party_id) continue;
+                if (!o->alive() && !o->awaiting_revive) continue;
+                float d2;
+                if (o->awaiting_revive) {
+                    Entity &me = sim->get_ent(sim->get_ent(c->camera).get_player());
+                    float dx = me.get_x() - o->corpse_x;
+                    float dy = me.get_y() - o->corpse_y;
+                    d2 = dx * dx + dy * dy;
+                } else {
+                    d2 = party_dist2(c, o);
+                }
+                if (d2 < nearest) nearest = d2;
+            }
+            // Solo leftover (others gone) is handled by leave()'s dissolve path
+            if (nearest > leave_r2 && nearest < 1e29f)
+                to_leave.push_back(c);
+        }
+        for (Client *c : to_leave) {
+            notify(c, "[队伍] 超出范围，已自动离队。");
+            leave(c); // also applies AUTO_PARTY_COOLDOWN
+        }
+    }
+
+    // Nearby auto-join (~2 Hz): solo players merge with nearest eligible squad/solo
+    static uint8_t auto_join_cd = 0;
+    if (++auto_join_cd >= 10) {
+        auto_join_cd = 0;
+        float join_r2 = AUTO_JOIN_RADIUS * AUTO_JOIN_RADIUS;
+        std::vector<Client *> alive;
+        for (Client *c : game->clients) {
+            if (c != nullptr && c->alive()) alive.push_back(c);
+        }
+        for (Client *a : alive) {
+            if (a->party_id != 0 || a->auto_party_cd > 0) continue;
+            Client *best = nullptr;
+            float best_d2 = join_r2;
+            for (Client *b : alive) {
+                if (b == a || b->auto_party_cd > 0) continue;
+                // Prefer joining an existing party; otherwise another solo
+                if (b->party_id != 0 && party_count(b) >= MAX_SIZE) continue;
+                if (a->party_id != 0) continue;
+                float d2 = party_dist2(a, b);
+                if (d2 >= best_d2) continue;
+                if (!party_level_gap_ok(b, a)) continue;
+                best_d2 = d2;
+                best = b;
+            }
+            if (best != nullptr)
+                auto_join_into(best, a);
+        }
+    }
+
     // Refresh teammate HP / positions for HUD + minimap (~4 Hz)
     static uint8_t party_hud_cd = 0;
     if (++party_hud_cd >= 5) {

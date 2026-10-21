@@ -108,8 +108,29 @@ void HFlexContainer::refactor() {
     height = fmax(children[0]->height, children[1]->height);
 }
 
-void HFlexContainer::on_render(Renderer &ctx) {
+float HFlexContainer::stretched_width() const {
+    float w = width;
     if (parent != nullptr)
-        width = fmax(width, parent->width - 2 * outer_pad);
+        w = fmax(w, parent->width - 2 * outer_pad);
+    return w;
+}
+
+void HFlexContainer::on_render(Renderer &ctx) {
+    // Stretch to parent for this frame's title/close layout only.
+    // Do NOT keep the expanded width: VContainer parents set width =
+    // max(children) + 2*pad, so persisting parent->width here grows the
+    // panel forever (talents / other make_drawer panels).
+    float saved = width;
+    width = stretched_width();
     Container::on_render(ctx);
+    width = saved;
+}
+
+void HFlexContainer::poll_events(ScreenEvent const &event) {
+    // Must match on_render stretch: otherwise the Right-justified close (×)
+    // sits outside the narrow intrinsic hit box and never receives clicks.
+    float saved = width;
+    width = stretched_width();
+    Container::poll_events(event);
+    width = saved;
 }

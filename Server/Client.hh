@@ -53,7 +53,7 @@ public:
     uint8_t bonus_enabled = 0; // off by default; player must toggle on
     uint64_t last_bonus_tick = 0;
     uint64_t last_bonus_sync = 0;
-    uint8_t rot_speed_setting = 7; // Q/E wheel 0..10
+    uint8_t rot_speed_setting = Talent::kRotSettingDefault; // Q/E wheel 0..10
     uint64_t last_chat_ms = 0;
     uint64_t last_server_chat_ms = 0; // 全服频道单独冷却
     std::string last_whisper_from; // for /r /reply
@@ -66,6 +66,7 @@ public:
     uint8_t party_leader = 0;
     std::string pending_party_from;
     uint32_t pending_party_ttl = 0;
+    uint32_t auto_party_cd = 0; // ticks until nearby auto-join can fire again
     std::string guild_name;
     uint8_t guild_leader = 0;
     std::string pending_guild_from;
@@ -81,6 +82,9 @@ public:
     float death_x = 0;
     float death_y = 0;
     uint8_t death_map_id = 0;
+    // Full score carried across death/map transfer (not just level floor).
+    // Spawn restores this so mid-level XP is not wiped.
+    uint32_t pending_score = 0;
     // Rate-limit / backpressure (Native + Wasm)
     std::string remote_ip;
     uint8_t conn_counted = 0;

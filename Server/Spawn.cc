@@ -72,7 +72,7 @@ static Entity &__alloc_mob(
     Entity &mob = sim->alloc_ent();
 
     mob.add_component(kPhysics);
-    mob.set_radius(data.radius.get_single(seed));
+    mob.set_radius(data.radius.get_single(seed) * MOB_RADIUS_MULTIPLIER);
     mob.set_angle(frand() * 2 * M_PI);
     mob.set_x(x);
     mob.set_y(y);
@@ -95,7 +95,8 @@ static Entity &__alloc_mob(
     mob.set_health_ratio(1);
 
     mob.detection_radius = data.attributes.aggro_radius;
-    //mob.score_reward = data.xp;
+    // Default XP; zone spawn / AI callbacks may override.
+    mob.score_reward = data.xp;
 
     mob.add_component(kName);
     mob.set_name(data.name);
@@ -106,7 +107,7 @@ static Entity &__alloc_mob(
         mob.set_angle(0);
         mob.set_color(ColorID::kGray);
     }
-    if (on_spawn) 
+    if (on_spawn)
         on_spawn(mob);
     return mob;
 }
@@ -266,7 +267,18 @@ static void _finish_player_spawn(Simulation *sim, Entity &camera, Entity &player
     camera.set_camera_y(spawn_y);
     player.set_x(spawn_x);
     player.set_y(spawn_y);
-    player.set_score(level_to_score(camera.get_respawn_level()));
+    {
+        // Keep mid-level XP across death — never drop below the level floor.
+        uint32_t floor = level_to_score(camera.get_respawn_level());
+        uint32_t score = floor;
+        Client *owner = Server::client_by_camera(sim, camera.id);
+        if (owner != nullptr && owner->pending_score > score)
+            score = owner->pending_score;
+        uint32_t const cap = level_to_score(MAX_PLAYER_LEVEL);
+        if (score > cap) score = cap;
+        if (owner != nullptr) owner->pending_score = score;
+        player.set_score(score);
+    }
     {
         uint32_t slots = loadout_slots_at_level(camera.get_respawn_level());
         if (Client *owner = Server::client_by_camera(sim, camera.id))

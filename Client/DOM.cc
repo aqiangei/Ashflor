@@ -13,13 +13,15 @@ extern "C" void EMSCRIPTEN_KEEPALIVE ashflor_text_enter() {
     DOM::text_enter_pressed = 1;
 }
 
-void DOM::create_text_input(char const *name, uint32_t max_len, uint8_t password) {
+void DOM::create_text_input(char const *name, uint32_t max_len, uint8_t password,
+                            uint8_t dark) {
     EM_ASM(
     {
         const name = UTF8ToString($0);
         const elem = document.createElement('input');
         elem.id = name;
         elem.type = $2 ? "password" : "text";
+        if ($3) elem.classList.add("chat-input");
         elem.style.position = "absolute";
         // Above #canvas (z-index:1) so typed text is visible and clickable
         elem.style.zIndex = "5";
@@ -30,9 +32,9 @@ void DOM::create_text_input(char const *name, uint32_t max_len, uint8_t password
         elem.style.background = "transparent";
         elem.style.border = "none";
         elem.style.outline = "none";
-        elem.style.color = "#111111";
-        elem.style["caret-color"] = "#111111";
-        elem.style["-webkit-text-fill-color"] = "#111111";
+        elem.style.color = $3 ? "#f6f1ff" : "#111111";
+        elem.style["caret-color"] = $3 ? "#d89aff" : "#111111";
+        elem.style["-webkit-text-fill-color"] = $3 ? "#f6f1ff" : "#111111";
         elem.style["padding-left"] = "5px";
         elem.maxLength = ($1).toString();
         elem.setAttribute("spellcheck", "false");
@@ -87,7 +89,7 @@ void DOM::create_text_input(char const *name, uint32_t max_len, uint8_t password
             document.body.appendChild(elem);
         }
     },
-    name, max_len * 2, (int) password);
+    name, max_len * 2, (int) password, (int) dark);
 }
 
 void DOM::set_input_password(char const *name, uint8_t password) {

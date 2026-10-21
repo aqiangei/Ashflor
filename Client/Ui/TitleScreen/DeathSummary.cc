@@ -183,6 +183,7 @@ Element *Ui::make_death_life_summary() {
                 && !Game::alive()
                 && Game::on_game_screen
                 && !Game::leaving_to_title
+                && Game::spawn_request_at <= 0
                 && Game::should_render_game_ui();
         },
         .h_justify = Style::Right,

@@ -17,12 +17,14 @@ static std::string _gen_nonce() {
     return "fjs" + std::to_string(static_cast<uint32_t>(frand() * 49263 + 672));
 }
 
-TextInput::TextInput(std::string &r, float w, float h, uint32_t m, Style s, uint8_t password) : 
+TextInput::TextInput(std::string &r, float w, float h, uint32_t m, Style s,
+                     uint8_t password, uint8_t dark) :
     Element(w, h, s), name(_gen_nonce()), ref(r), max(m),
-    is_password(password), password_masked(password ? 1 : 0), editing(0) {
-    style.fill = 0xffeeeeee;
+    is_password(password), password_masked(password ? 1 : 0), editing(0),
+    dark_theme(dark) {
+    style.fill = dark ? 0xff303B54 : 0xffeeeeee;
     style.stroke_hsv = 0;
-    DOM::create_text_input(name.c_str(), max, is_password ? 1 : 0);
+    DOM::create_text_input(name.c_str(), max, is_password ? 1 : 0, dark);
     DOM::update_text(name.c_str(), r, max);
 }
 
@@ -96,7 +98,7 @@ void TextInput::on_render(Renderer &ctx) {
                 shown.assign(n, '*');
             }
             ctx.draw_text(shown.c_str(), {
-                .fill = 0xff111111,
+                .fill = dark_theme ? 0xffF6F1FF : 0xff111111,
                 .size = height * 0.45f,
                 .stroke_scale = 0
             });

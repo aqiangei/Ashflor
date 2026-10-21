@@ -109,6 +109,8 @@ static void send_loadout_preset_update(Client *client, uint8_t result, uint8_t i
         writer.write<uint8_t>(preset.slot_count);
         for (PetalID::T id : preset.petals)
             writer.write<PetalID::T>(id);
+        for (uint8_t i = 0; i < TalentID::kNum; ++i)
+            writer.write<uint8_t>(preset.talent_ranks[i]);
     }
     client->send_packet(writer.packet, writer.at - writer.packet);
 }
@@ -139,12 +141,12 @@ static uint32_t client_stats_level(Client *client) {
     return 0;
 }
 
-// Unique+ craft successes: 全服播报 + 排行榜「高级合成」计数（与播报同一门槛）
-static constexpr uint8_t kHighCraftRarity = RarityID::kUnique;
+// Super+Unique craft successes: 全服播报 + 排行榜「高级合成」计数（与播报同一门槛）
+static constexpr uint8_t kHighCraftRarity = RarityID::kSuper;
 
 static char const *rarity_zh(uint8_t rarity) {
     static char const *const names[RarityID::kNumRarities] = {
-        "普通", "罕见", "稀有", "史诗", "传奇", "神话", "独特", "超凡", "究极"
+        "普通", "罕见", "稀有", "史诗", "传奇", "神话", "究极", "超凡", "独特"
     };
     if (rarity >= RarityID::kNumRarities) return "?";
     return names[rarity];
@@ -174,8 +176,9 @@ static void credit_high_craft(Client *client, PetalID::T got) {
     if (client->stat_crafts < 4000000000u) ++client->stat_crafts;
     char const *pname = PETAL_DATA[got].name;
     if (pname == nullptr || pname[0] == 0) pname = "花瓣";
-    Chat::broadcast_server("系统",
-        craft_announce_name(client) + " 合成了【" + rarity_zh(r) + "】" + pname + "！");
+    // whisper_to "craft:N" → client paints the line in that rarity color
+    std::string msg = craft_announce_name(client) + " 合成了【" + rarity_zh(r) + "】" + pname + "！";
+    Chat::broadcast_server("系统", msg, "craft:" + std::to_string((unsigned) r));
 }
 
 void client_flush_stats(Client *client) {
@@ -827,6 +830,41 @@ void Client::on_message(WebSocket *ws, std::string_view message, uint64_t code) 
             flush_craft_bank_to_bag(client);
             uint8_t mode = reader.read<uint8_t>();
             uint16_t arg = reader.read<uint16_t>();
+            if (mode == CraftMode::kCraftBuyAnnounce) {
+                (void) arg;
+                if (client->check_invalid(validator.validate_string(MAX_CHAT_LENGTH))) return;
+                std::string text;
+                reader.read<std::string>(text);
+                // Trim
+                while (!text.empty() && (text.back() == ' ' || text.back() == '\t'
+                    || text.back() == '\n' || text.back() == '\r'))
+                    text.pop_back();
+                size_t start = 0;
+                while (start < text.size() && (text[start] == ' ' || text[start] == '\t'))
+                    ++start;
+                if (start > 0) text = text.substr(start);
+                if (text.empty()) {
+                    send_craft_update(client, CraftResultCode::kCraftNoMats, PetalID::kNone);
+                    break;
+                }
+                uint32_t cost = Craft::kShopAnnounceCost;
+                if (craft_owned(client, PetalID::kCoin) < cost) {
+                    send_craft_update(client, CraftResultCode::kCraftNoCoins, PetalID::kNone);
+                    break;
+                }
+                if (!consume_craft_mats(client, PetalID::kCoin, cost)) {
+                    send_craft_update(client, CraftResultCode::kCraftNoCoins, PetalID::kNone);
+                    break;
+                }
+                std::string who = craft_announce_name(client);
+                // Body always carries the payer name so chat + banner stay clear
+                // even if the title line is missed (small UI / faded alpha).
+                std::string body = who + "：" + text;
+                Chat::broadcast_server_banner(who, body);
+                persist_account(client);
+                send_craft_update(client, CraftResultCode::kCraftBought, PetalID::kNone);
+                break;
+            }
             if (mode == CraftMode::kCraftBuyRarity) {
                 uint8_t rarity = (uint8_t) arg;
                 if (rarity >= RarityID::kNumRarities) {
@@ -955,6 +993,7 @@ void Client::on_message(WebSocket *ws, std::string_view message, uint64_t code) 
             uint32_t wins = 0;
             uint8_t last_placed = 0;
             PetalID::T last_got = PetalID::kNone;
+            uint32_t last_lost = 0;
             while (done < max_batches && craft_owned(client, from) >= Craft::kCraftBatch) {
                 if (!consume_craft_mats(client, from, Craft::kCraftBatch)) break;
                 ++done;
@@ -962,10 +1001,23 @@ void Client::on_message(WebSocket *ws, std::string_view message, uint64_t code) 
                     ++client->craft_attempts;
                 if (frand() < Craft::success_chance(rarity)) {
                     last_got = Craft::craft_result(from);
-                    if (last_got == PetalID::kNone) continue;
+                    if (last_got == PetalID::kNone) {
+                        // Should not happen for upgradeable petals; refund batch.
+                        for (uint32_t i = 0; i < Craft::kCraftBatch; ++i)
+                            try_give_petal(client, from);
+                        continue;
+                    }
                     last_placed = try_give_petal(client, last_got);
                     ++wins;
                     credit_high_craft(client, last_got);
+                } else {
+                    // Miss: destroy 1–4 of the batch, refund the rest.
+                    uint32_t lost = Craft::craft_fail_loss();
+                    if (lost > Craft::kCraftBatch) lost = Craft::kCraftBatch;
+                    last_lost = lost;
+                    uint32_t refund = Craft::kCraftBatch - lost;
+                    for (uint32_t i = 0; i < refund; ++i)
+                        try_give_petal(client, from);
                 }
             }
             persist_account(client);
@@ -976,7 +1028,9 @@ void Client::on_message(WebSocket *ws, std::string_view message, uint64_t code) 
                     last_placed ? CraftResultCode::kCraftWin : CraftResultCode::kCraftInvFull,
                     last_got);
             else
-                send_craft_update(client, CraftResultCode::kCraftMiss, PetalID::kNone);
+                // Encode lost count in petal field (unused on miss).
+                send_craft_update(client, CraftResultCode::kCraftMiss,
+                    (PetalID::T) (last_lost > 0 ? last_lost : Craft::kCraftFailLossMin));
             break;
         }
         case Serverbound::kPetalSwap: {
@@ -1045,6 +1099,8 @@ void Client::on_message(WebSocket *ws, std::string_view message, uint64_t code) 
                 p.petals.fill(PetalID::kNone);
                 for (uint8_t i = 0; i < slots && i < MAX_SLOT_COUNT; ++i)
                     p.petals[i] = inventory[i];
+                // K/L presets share one account talent tree — do not snapshot ranks.
+                p.talent_ranks.fill(0);
             };
             // Empty bag: clear primary bar. Park petals on secondary/bag slots
             // so a later L1 apply can still find them; overflow ??craft_bank.
@@ -1133,6 +1189,7 @@ void Client::on_message(WebSocket *ws, std::string_view message, uint64_t code) 
             }
             write_inventory(inventory);
             client->active_loadout_preset = index;
+            // Petals only — talents stay on the shared account tree.
             AccountStore::capture_nosave(client);
             if (had_overflow)
                 send_craft_update(client, CraftResultCode::kCraftBankSync, PetalID::kNone);
@@ -1169,7 +1226,7 @@ void Client::on_message(WebSocket *ws, std::string_view message, uint64_t code) 
             if (lim > 2 * MAX_SLOT_COUNT) lim = 2 * MAX_SLOT_COUNT;
             uint8_t dest = want_dest;
             if (dest >= lim) {
-                // Auto: empty ??Basic ??empty secondary ??swap first different primary.
+                // Auto (tap): empty → Basic → empty secondary. Never displace.
                 dest = (uint8_t) -1;
                 for (uint8_t i = 0; i < n; ++i)
                     if (slot_at(i) == PetalID::kNone) { dest = i; break; }
@@ -1181,19 +1238,17 @@ void Client::on_message(WebSocket *ws, std::string_view message, uint64_t code) 
                         uint8_t s = (uint8_t) (n + i);
                         if (slot_at(s) == PetalID::kNone) { dest = s; break; }
                     }
-                if (dest == (uint8_t) -1)
-                    for (uint8_t i = 0; i < n; ++i)
-                        if (slot_at(i) != id) { dest = i; break; }
             }
+            // Explicit dest from bag drag: empty / Basic / replace (old → bank).
             if (dest == (uint8_t) -1 || dest >= lim) break;
             if (dest < n && Recipe::is_bag_only(id)) break;
             PetalID::T old = slot_at(dest);
-            if (old != PetalID::kNone && old != PetalID::kBasic) {
+            if (old == PetalID::kBasic) {
+                PetalTracker::remove_petal(simulation, old);
+            } else if (old != PetalID::kNone && old < PetalID::kNumPetals) {
                 if (client->craft_bank[old] >= 1000000) break;
+                PetalTracker::remove_petal(simulation, old);
                 ++client->craft_bank[old];
-                PetalTracker::remove_petal(simulation, old);
-            } else if (old == PetalID::kBasic) {
-                PetalTracker::remove_petal(simulation, old);
             }
             --client->craft_bank[id];
             PetalTracker::add_petal(simulation, id);
@@ -1384,6 +1439,7 @@ void Client::on_message(WebSocket *ws, std::string_view message, uint64_t code) 
                     for (uint32_t i = 0; i < 2 * MAX_SLOT_COUNT; ++i)
                         PetalTracker::remove_petal(simulation, camera.get_inventory(i));
                     camera.set_respawn_level(1);
+                    client->pending_score = 0;
                     for (uint8_t ti = 0; ti < TalentID::kNum; ++ti)
                         client->talent_ranks[ti] = 0;
                     uint32_t slots = client_slot_count(client);
@@ -1468,6 +1524,7 @@ void Client::on_message(WebSocket *ws, std::string_view message, uint64_t code) 
             for (uint32_t i = 0; i < 2 * MAX_SLOT_COUNT; ++i)
                 PetalTracker::remove_petal(simulation, camera.get_inventory(i));
             camera.set_respawn_level(level);
+            client->pending_score = level_to_score(level);
             uint32_t slots = client_slot_count(client);
             for (uint32_t i = 0; i < 2 * MAX_SLOT_COUNT; ++i) {
                 PetalID::T id = petals_tmp[i];

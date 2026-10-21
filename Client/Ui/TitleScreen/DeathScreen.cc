@@ -65,10 +65,14 @@ Element *Ui::make_death_main_screen() {
         40,
         new Ui::DynamicText(28, [](){ return I18n::tr(I18n::kContinue); }),
         [](Element *elt, uint8_t e){
-            if (e == Ui::kClick && !Game::alive() && !Game::leaving_to_title)
+            if (e == Ui::kClick && !Game::alive() && !Game::leaving_to_title
+                && Game::spawn_request_at <= 0)
                 Game::spawn_in();
         },
-        [](){ return !Game::alive() && !Game::leaving_to_title; },
+        [](){
+            return !Game::alive() && !Game::leaving_to_title
+                && Game::spawn_request_at <= 0;
+        },
         {.fill = Chrome::kBtnMoss, .line_width = 0, .round_radius = Chrome::kRadius }
     );
     Ui::Element *container = new Ui::VContainer({
@@ -98,9 +102,11 @@ Element *Ui::make_death_main_screen() {
     }, 0, 10, { .animate = [](Element *elt, Renderer &ctx) {
         ctx.translate(0, (elt->animation - 1) * ctx.height * 0.6);
     }, .should_render = [](){
-        // Soft-leave keeps on_game_screen=0 so we never flash death → Continue → revive
+        // Soft-leave: on_game_screen=0. Respawn wait: spawn_request_at > 0
+        // (do not clear on_game_screen — that collapsed the title transition).
         return !Game::alive() && Game::on_game_screen
-            && !Game::leaving_to_title && Game::should_render_game_ui();
+            && !Game::leaving_to_title && Game::spawn_request_at <= 0
+            && Game::should_render_game_ui();
     } });
     return container;
 }

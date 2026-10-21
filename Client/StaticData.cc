@@ -13,9 +13,9 @@ std::array<char const *, RarityID::kNumRarities> const RARITY_NAMES = {
     "Epic",
     "Legendary",
     "Mythic",
-    "Unique",
+    "Ultra",
     "Super",
-    "Ultra"
+    "Unique"
 };
 
 std::array<char const, MAX_SLOT_COUNT> const SLOT_KEYBINDS =

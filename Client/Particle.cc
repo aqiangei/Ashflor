@@ -213,7 +213,8 @@ void Particle::tick_game(Renderer &ctx, double dt) {
             .fill = t.fill,
             .stroke = 0xff000000,
             .size = t.size,
-            .stroke_scale = 0.18f
+            // Fill-only: strokeText on every pop was expensive in big fights.
+            .stroke_scale = 0.f
         });
     }
 

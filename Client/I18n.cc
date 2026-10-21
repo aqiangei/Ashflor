@@ -14,7 +14,7 @@ namespace I18n {
 #include "I18nData.inc"
 
 static char const *const RARITY_ZH[RarityID::kNumRarities] = {
-    "普通", "罕见", "稀有", "史诗", "传奇", "神话", "独特", "超凡", "究极"
+    "普通", "罕见", "稀有", "史诗", "传奇", "神话", "究极", "超凡", "独特"
 };
 
 static char const *const ZONE_ZH[] = {
@@ -160,7 +160,7 @@ static char const *const EN[I18n::kCount] = {
     "Assemble",
     "Primary, secondary and bag petals (including coins & craft mats). (X)",
     "Talent tree: one branch per type; click a node to jump or refund. (Z)",
-    "Combine 5 identical owned petals into a higher rarity. (C)",
+    "Combine 5 identical petals into a higher rarity; miss loses 1–4. (C)",
     "Assemble petals from bag ingredients. Result goes to bag. (V)",
     "Gamble x5",
     "Exchange (EV)",
@@ -168,7 +168,7 @@ static char const *const EN[I18n::kCount] = {
     "{}% · EV≈{}",
     "Guaranteed: {} → 1",
     "Not enough petals",
-    "Craft failed… petals lost",
+    "Craft failed — lost 1–4",
     "Success! Got {}",
     "Exchanged for {}",
     "Drop slot throws petals on the ground; T unequips; craft uses bag stacks",
@@ -317,7 +317,7 @@ static char const *const ZH[I18n::kCount] = {
     "组装",
     "主手、副手与背包花瓣（含钱币与合成原料）。（X）",
     "天赋树：每类一条分支，点击节点跳到该阶或回退。（Z）",
-    "五个相同已有花瓣合成更高一级。（C）",
+    "五个相同花瓣合成更高一级；失败损失1–4。（C）",
     "用背包花瓣组装成品，结果进背包。（V）",
     "概率合成×5",
     "期望直兑",
@@ -325,7 +325,7 @@ static char const *const ZH[I18n::kCount] = {
     "成功率 {}% · 期望消耗≈{}",
     "直兑：{} 个换 1 个",
     "花瓣不足",
-    "合成失败，花瓣已消耗",
+    "合成失败，损失1–4片",
     "成功！获得 {}",
     "直兑获得 {}",
     "丢弃槽扔到地上可捡；T 卸回背包；合成用背包堆叠",

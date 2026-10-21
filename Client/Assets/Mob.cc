@@ -397,6 +397,8 @@ void draw_static_mob(MobID::T mob_id, Renderer &ctx, MobRenderAttributes attr) {
         case MobID::kCentipede:
         case MobID::kEvilCentipede:
         case MobID::kDesertCentipede:
+            // Design units assume radius 35; live radius is × MOB_RADIUS_MULTIPLIER.
+            ctx.scale(radius / 35.f);
             if (mob_id == MobID::kCentipede) SET_BASE_COLOR(0xff8ac255)
             else if (mob_id == MobID::kEvilCentipede) SET_BASE_COLOR(0xff905db0)
             else SET_BASE_COLOR(0xffd4c66e)
@@ -435,6 +437,9 @@ void draw_static_mob(MobID::T mob_id, Renderer &ctx, MobRenderAttributes attr) {
             }
             break;
         case MobID::kSpider:
+            // Design units assume radius 15; live radius is × MOB_RADIUS_MULTIPLIER.
+            // Without this scale, body grows but legs stay short → sea-urchin look.
+            ctx.scale(radius / 15.f);
             SET_BASE_COLOR(0xff4f412e);
             ctx.set_fill(base_color);
             ctx.set_stroke(0xff333333);
@@ -459,7 +464,7 @@ void draw_static_mob(MobID::T mob_id, Renderer &ctx, MobRenderAttributes attr) {
             #undef draw_leg
             ctx.stroke();
             ctx.begin_path();
-            ctx.arc(0,0,radius);
+            ctx.arc(0,0,15);
             ctx.fill();
             ctx.set_stroke(Renderer::HSV(base_color, 0.8));
             ctx.set_line_width(5);

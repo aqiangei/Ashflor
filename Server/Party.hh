@@ -15,6 +15,10 @@ namespace Party {
     constexpr uint32_t MAX_LEVEL_GAP = 25;
     constexpr float REVIVE_RADIUS = 150.0f;
     constexpr float INVITE_RADIUS = 500.0f;
+    // Nearby auto-squad (florr-style): join within this, leave beyond leave radius.
+    constexpr float AUTO_JOIN_RADIUS = 500.0f;
+    constexpr float AUTO_LEAVE_RADIUS = 850.0f; // hysteresis so edge flicker is rare
+    constexpr uint32_t AUTO_PARTY_COOLDOWN = 20 * 5; // 5s after range-leave before rejoin
     // TPS is 20
     constexpr uint32_t REVIVE_TICKS = 60;
     constexpr uint32_t CORPSE_TTL = 60 * 20;

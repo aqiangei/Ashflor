@@ -40,9 +40,10 @@ extern "C" {
         return heap_strdup_std(Server::live_admin_announce(text ? text : ""));
     }
 
-    EMSCRIPTEN_KEEPALIVE char *live_admin_give(char const *who, int petal_id, int count) {
+    EMSCRIPTEN_KEEPALIVE char *live_admin_give(char const *who, int petal_id, int count, int rarity) {
         return heap_strdup_std(Server::live_admin_give(
-            who ? who : "", (uint32_t) petal_id, (uint32_t) (count < 1 ? 1 : count)));
+            who ? who : "", (uint32_t) petal_id, (uint32_t) (count < 1 ? 1 : count),
+            rarity < 0 ? 255u : (uint32_t) rarity));
     }
 
     EMSCRIPTEN_KEEPALIVE char *live_admin_spawn(int map_id, int mob_id, float x, float y,
@@ -249,8 +250,11 @@ WebSocketServer::WebSocketServer() {
                         }
                         if (action === "give") {
                             const p = cstr(j["who"] || "");
+                            const rarityRaw = j["rarity"];
+                            const rarity = (rarityRaw === undefined || rarityRaw === null || rarityRaw === "")
+                                ? -1 : (Number(rarityRaw) | 0);
                             const out = fromWasm(_live_admin_give(
-                                p, Number(j["petal_id"]) | 0, Number(j["count"]) | 0));
+                                p, Number(j["petal_id"]) | 0, Number(j["count"]) | 0, rarity));
                             _free(p);
                             sendJson(200, out);
                             return;

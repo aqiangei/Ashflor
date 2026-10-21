@@ -144,8 +144,14 @@ void Game::on_message(uint8_t *ptr, uint32_t len) {
                 craft_status = I18n::use_chinese ? "材料不足" : "Not enough materials";
             else if (result == CraftResultCode::kCraftNoCoins)
                 craft_status = I18n::use_chinese ? "钱币不足" : "Not enough coins";
-            else if (result == CraftResultCode::kCraftMiss)
-                craft_status = I18n::use_chinese ? "合成失败…" : "Craft failed…";
+            else if (result == CraftResultCode::kCraftMiss) {
+                uint32_t lost = (uint32_t) petal;
+                if (lost < Craft::kCraftFailLossMin || lost > Craft::kCraftFailLossMax)
+                    lost = Craft::kCraftFailLossMin;
+                craft_status = I18n::use_chinese
+                    ? std::format("合成失败，损失 {} 片", lost)
+                    : std::format("Craft failed — lost {}", lost);
+            }
             else if (result == CraftResultCode::kCraftWin)
                 craft_status = I18n::use_chinese
                     ? std::format("成功！获得 {}（已进背包）", I18n::petal_name(petal))
@@ -154,20 +160,25 @@ void Game::on_message(uint8_t *ptr, uint32_t len) {
                 craft_status = I18n::use_chinese
                     ? std::format("直兑获得 {}（已进背包）", I18n::petal_name(petal))
                     : std::format("Exchanged {} → bag", I18n::petal_name(petal));
-            else if (result == CraftResultCode::kCraftBought)
-                craft_status = I18n::use_chinese
-                    ? std::format("购买成功！{} 已放入背包", I18n::petal_name(petal))
-                    : std::format("Bought {} → backpack", I18n::petal_name(petal));
-            else if (result == CraftResultCode::kCraftInvFull)
+            else if (result == CraftResultCode::kCraftBought) {
+                if (petal == PetalID::kNone)
+                    craft_status = I18n::use_chinese
+                        ? "全服广播已发送" : "Server announce sent";
+                else
+                    craft_status = I18n::use_chinese
+                        ? std::format("购买成功！{} 已放入背包", I18n::petal_name(petal))
+                        : std::format("Bought {} → backpack", I18n::petal_name(petal));
+            } else if (result == CraftResultCode::kCraftInvFull)
                 craft_status = I18n::use_chinese
                     ? "背包已满，先腾出空位"
                     : "Backpack full — free a slot first";
             if (petal < PetalID::kNumPetals && petal != PetalID::kNone)
                 seen_petals[petal] = 1;
-            if (result == CraftResultCode::kCraftWin
+            if ((result == CraftResultCode::kCraftWin
                 || result == CraftResultCode::kCraftMiss
                 || result == CraftResultCode::kCraftExchanged
                 || result == CraftResultCode::kCraftBought)
+                && petal != PetalID::kNone)
                 Ui::craft_play_result(result, petal);
             break;
         }
@@ -231,6 +242,8 @@ void Game::on_message(uint8_t *ptr, uint32_t len) {
                     id = reader.read<PetalID::T>();
                     if (id >= PetalID::kNumPetals) id = PetalID::kNone;
                 }
+                for (uint8_t i = 0; i < TalentID::kNum; ++i)
+                    preset.talent_ranks[i] = reader.read<uint8_t>();
             }
             if (result == kPresetSaved)
                 loadout_preset_status = I18n::use_chinese
@@ -569,7 +582,7 @@ void Game::send_chat() {
     while (!text.empty() && (text.back() == ' ' || text.back() == '\t')) text.pop_back();
     uint8_t channel = chat_channel;
     std::string target = (channel == ChatChannel::kChatWhisper) ? chat_whisper_to : std::string{};
-    close_chat();
+    close_chat(); // preserves draft if we bail below
     if (text.empty() || !socket.ready) return;
     if (channel == ChatChannel::kChatWhisper && target.empty()) return;
     Writer writer(static_cast<uint8_t *>(OUTGOING_PACKET));
@@ -578,6 +591,11 @@ void Game::send_chat() {
     writer.write<std::string>(target);
     writer.write<std::string>(text);
     socket.send(writer.packet, writer.at - writer.packet);
+    // Only wipe draft after a real send
+    if (Ui::TextInput *input = Ui::chat_text_input())
+        input->clear();
+    else
+        chat_draft.clear();
 }
 
 void Game::send_spawn_request() {
@@ -611,12 +629,11 @@ void Game::spawn_in() {
     last_spawn_req = timestamp;
     // Intentional spawn from title / death Continue — cancel soft-leave guard
     leaving_to_title = 0;
-    // Death "Continue" and title Spawn both go through here: leave death UI then spawn
-    if (Game::on_game_screen != 0) {
-        Game::on_game_screen = 0;
-        awaiting_party_revive = 0;
-        revive_progress = 0;
-    }
+    // Keep on_game_screen during death→respawn so transition_circle / title UI
+    // do not collapse (that flash was the home screen). Death panel hides while
+    // spawn_request_at > 0 instead.
+    awaiting_party_revive = 0;
+    revive_progress = 0;
     // Drop stale touches so joystick / attack don't carry into the next life
     Input::touches.clear();
     Input::game_inputs.x = 0;
@@ -733,15 +750,15 @@ void Game::apply_loadout_preset(uint8_t index) {
     socket.send(writer.packet, writer.at - writer.packet);
 }
 
-void Game::withdraw_bank_petal(PetalID::T id, uint8_t dest) {
+uint8_t Game::withdraw_bank_petal(PetalID::T id, uint8_t dest) {
     if (!socket.ready || id == PetalID::kNone || id >= PetalID::kNumPetals
-        || craft_bank[id] == 0) return;
-    if (Recipe::is_bag_only(id)) return;
+        || craft_bank[id] == 0) return 0;
+    if (Recipe::is_bag_only(id)) return 0;
     uint8_t n = loadout_count;
-    if (n == 0 || n > MAX_SLOT_COUNT) return;
+    if (n == 0 || n > MAX_SLOT_COUNT) return 0;
     uint8_t lim = (uint8_t) (n + MAX_SLOT_COUNT);
     if (lim > 2 * MAX_SLOT_COUNT) lim = 2 * MAX_SLOT_COUNT;
-    // Explicit slot from a bag drag, else same auto priority as the server.
+    // Explicit slot from a bag drag (may replace); else empty/Basic only.
     if (dest >= lim) {
         dest = (uint8_t) -1;
         for (uint8_t i = 0; i < n; ++i)
@@ -754,16 +771,16 @@ void Game::withdraw_bank_petal(PetalID::T id, uint8_t dest) {
                 uint8_t s = (uint8_t) (n + i);
                 if (cached_loadout[s] == PetalID::kNone) { dest = s; break; }
             }
-        if (dest == (uint8_t) -1)
-            for (uint8_t i = 0; i < n; ++i)
-                if (cached_loadout[i] != id) { dest = i; break; }
     }
-    if (dest == (uint8_t) -1 || dest >= lim) return;
+    if (dest == (uint8_t) -1 || dest >= lim) return 0;
     // Coins cannot sit on primary.
-    if (dest < n && Recipe::is_bag_only(id)) return;
+    if (dest < n && Recipe::is_bag_only(id)) return 0;
     PetalID::T old = cached_loadout[dest];
-    if (old != PetalID::kNone && old != PetalID::kBasic) {
-        if (craft_bank[old] >= 1000000) return;
+    // Same as empty: equip. Real petal already there → bank it first.
+    if (old == PetalID::kBasic) {
+        // Basic is filler — drop without banking.
+    } else if (old != PetalID::kNone && old < PetalID::kNumPetals) {
+        if (craft_bank[old] >= 1000000) return 0;
         ++craft_bank[old];
     }
     --craft_bank[id];
@@ -782,6 +799,7 @@ void Game::withdraw_bank_petal(PetalID::T id, uint8_t dest) {
     writer.write<PetalID::T>(id);
     writer.write<uint8_t>(dest);
     socket.send(writer.packet, writer.at - writer.packet);
+    return 1;
 }
 
 void Game::deposit_bank_petal(uint8_t static_pos) {
@@ -948,6 +966,18 @@ void Game::craft_buy_special(PetalID::T id) {
     writer.write<uint8_t>(CraftMode::kCraftBuySpecial);
     writer.write<PetalID::T>(id);
     socket.send(writer.packet, writer.at - writer.packet);
+}
+
+void Game::craft_buy_announce(std::string const &text) {
+    if (!socket.ready || !(alive() || on_game_screen)) return;
+    if (text.empty()) return;
+    Writer writer(static_cast<uint8_t *>(OUTGOING_PACKET));
+    writer.write<uint8_t>(Serverbound::kPetalCraft);
+    writer.write<uint8_t>(CraftMode::kCraftBuyAnnounce);
+    writer.write<uint16_t>(0);
+    writer.write<std::string>(text);
+    socket.send(writer.packet, writer.at - writer.packet);
+    craft_status = I18n::use_chinese ? "正在发送全服广播…" : "Sending server announce…";
 }
 
 void Game::craft_recipe(uint16_t recipe_index) {

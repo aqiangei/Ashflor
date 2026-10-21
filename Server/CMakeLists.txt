@@ -38,6 +38,7 @@ set(SOURCES
     Spawn.cc
     TeamManager.cc
     Treasure.cc
+    XpMigration.cc
     ../Helpers/Math.cc
     ../Helpers/UTF8.cc
     ../Helpers/Vector.cc

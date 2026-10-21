@@ -12,9 +12,11 @@ namespace Ui {
         uint8_t is_password = 0;
         uint8_t password_masked = 1;
         uint8_t editing = 0;
+        uint8_t dark_theme = 0;
     public:
         // is_password=1 → start as masked type=password
-        TextInput(std::string &, float, float, uint32_t, Style = {}, uint8_t is_password = 0);
+        TextInput(std::string &, float, float, uint32_t, Style = {},
+                  uint8_t is_password = 0, uint8_t dark = 0);
 
         void focus();
         void blur();

@@ -642,7 +642,8 @@ static void tick_hornet_aggro(Simulation *sim, Entity &ent) {
             } else {
                 ent.acceleration.set(0, 0);
             }
-            if (ent.ai_tick >= (game_tick_t)(1.2f * TPS)) {
+            // Post-shot gap — was 1.2s; wasps felt too spammy at close range.
+            if (ent.ai_tick >= (game_tick_t)(2.0f * TPS)) {
                 ent.ai_state = 0;
                 ent.ai_tick = 0;
             }
@@ -656,7 +657,7 @@ static void tick_hornet_aggro(Simulation *sim, Entity &ent) {
         } else {
             ent.acceleration.set(0, 0);
         }
-        if (dist < 800 && ent.ai_tick >= (game_tick_t)(0.35f * TPS)) {
+        if (dist < 800 && ent.ai_tick >= (game_tick_t)(0.55f * TPS)) {
             ent.ai_state = 2;
             ent.ai_tick = 0;
         }

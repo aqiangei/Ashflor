@@ -159,5 +159,5 @@ void render_name(Renderer &ctx, Entity const &ent) {
         draw_label(ctx, ent.get_name().c_str(), 14, 0xffffe08a);
     }
 
-    // Mob name + rarity sit on the HP bar (render_health): name top-left, rarity bottom-right.
+    // Mob name + rarity only while damaged (see render_health; undamaged = FPS).
 }

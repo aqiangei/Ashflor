@@ -2,16 +2,24 @@
 
 #include <Shared/Recipe.hh>
 #include <Shared/StaticData.hh>
+#include <Shared/Talent.hh>
 
 #include <array>
 #include <cstdint>
 #include <cstring>
 
 inline constexpr uint8_t LOADOUT_PRESET_COUNT = 20;
+// Disk / wire width: slot_count + petals[MAX] + talent_ranks[kNum]
+inline constexpr uint32_t LOADOUT_PRESET_WIDTH =
+    1u + MAX_SLOT_COUNT + (uint32_t) TalentID::kNum;
+// Pre-talent presets (slot_count + petals only)
+inline constexpr uint32_t LOADOUT_PRESET_WIDTH_LEGACY = 1u + MAX_SLOT_COUNT;
 
 struct LoadoutPreset {
     uint8_t slot_count = 0; // 0 means unused
     std::array<PetalID::T, MAX_SLOT_COUNT> petals = {};
+    // Legacy wire/disk field — unused. K/L presets share account talent_ranks.
+    std::array<uint8_t, TalentID::kNum> talent_ranks = {};
 };
 
 // Resolve each saved primary slot from owned petals (inventory only):

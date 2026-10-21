@@ -30,6 +30,11 @@ extern float const PETAL_WING_WAVE_EXTRA;
 extern std::array<struct PetalData, PetalID::kNumPetals> const PETAL_DATA;
 extern std::array<struct MobData, MobID::kNumMobs> const MOB_DATA;
 
+// World mob size / population. Radius×2 + dense multi-segment packs (centipede/
+// leech) blew spatial-hash collide to ~100–200ms/tick — keep mild scale only.
+inline constexpr float MOB_RADIUS_MULTIPLIER = 1.25f;
+inline constexpr float MOB_DENSITY_MULTIPLIER = 1.0f;
+
 inline uint8_t petal_name_is(PetalID::T id, char const *name) {
     return id != PetalID::kNone && id < PetalID::kNumPetals
         && std::strcmp(PETAL_DATA[id].name, name) == 0;

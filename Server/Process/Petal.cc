@@ -32,6 +32,9 @@ void tick_petal_behavior(Simulation *sim, Entity &petal) {
         PetalID::T pid = petal.get_petal_id();
         if (petal_name_is(pid, "Missile") || pid == PetalID::kSandLeafDart) {
             petal.acceleration.unit_normal(petal.get_angle()).set_magnitude(2.0 * PLAYER_ACCELERATION);
+        } else if (petal_name_is(pid, "Honey")) {
+            // Very slow crawl — keep honey near the flower / magnet AFK bubble.
+            petal.acceleration.unit_normal(petal.get_angle()).set_magnitude(0.30f * PLAYER_ACCELERATION);
         } else if (pid == PetalID::kPoisonPeas || pid == PetalID::kPeas
                    || pid == PetalID::kGlassStorm) {
             petal.acceleration.unit_normal(petal.heading_angle).set_magnitude(2.0 * PLAYER_ACCELERATION);
@@ -113,6 +116,28 @@ void tick_petal_behavior(Simulation *sim, Entity &petal) {
                 petal.velocity.unit_normal(petal.get_angle()).set_magnitude(15 * PLAYER_ACCELERATION);
                 petal.friction = DEFAULT_FRICTION;
                 entity_set_despawn_tick(petal, 2.5 * TPS);
+            }
+    } else if (petal_name_is(pid, "Honey")) {
+            if (BitMath::at(player.input, InputFlags::kAttacking)) {
+                // Short soft toss; 4s life, stays close for AFK magnet farming.
+                petal.velocity.unit_normal(petal.get_angle()).set_magnitude(2.0f * PLAYER_ACCELERATION);
+                petal.friction = DEFAULT_FRICTION;
+                entity_set_despawn_tick(petal, 4.0 * TPS);
+            }
+    } else if (petal_name_is(pid, "Meteor")) {
+            if (BitMath::at(player.input, InputFlags::kAttacking)
+                || BitMath::at(player.input, InputFlags::kDefending)) {
+                // Plant under the petal's current orbit point — no toss.
+                petal.velocity.set(0, 0);
+                petal.acceleration.set(0, 0);
+                petal.friction = 1.f;
+                petal.set_split_projectile(1); // planted / fixed visual
+                // Footprint ≈ 16 flower areas (was 8, then ×2): R = BASE_FLOWER_RADIUS * √16
+                petal.set_radius(BASE_FLOWER_RADIUS * std::sqrt(16.f));
+                petal.mass = 12.f; // heavy obstacle; still overlaps other meteors (same team)
+                float dur = petal_data.attributes.aura_duration > 0
+                    ? petal_data.attributes.aura_duration : 18.f;
+                entity_set_despawn_tick(petal, (game_tick_t)(dur * TPS));
             }
     } else if (petal_name_is(pid, "Web")) {
             if (BitMath::at(player.input, InputFlags::kAttacking)) {

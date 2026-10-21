@@ -39,7 +39,7 @@ class ServerAnnounceBanner final : public Element {
     LerpFloat show;
 public:
     ServerAnnounceBanner()
-        : Element(560, 54, {
+        : Element(560, 72, {
             .should_render = [](){
                 return Game::should_render_game_ui()
                     && (Game::alive() || Game::on_game_screen)
@@ -53,8 +53,8 @@ public:
             uint8_t on = announce_active();
             show.set(on ? 1.f : 0.f);
             show.step(Ui::lerp_amount * 2.8f);
-            float target_w = fminf(680.f, (float) (Ui::window_width / Ui::scale) * 0.7f);
-            if (target_w < 260.f) target_w = 260.f;
+            float target_w = fminf(720.f, (float) (Ui::window_width / Ui::scale) * 0.78f);
+            if (target_w < 280.f) target_w = 280.f;
             width = target_w;
             float a = (float) show * (float) elt->animation * announce_alpha();
             ctx.set_global_alpha(a);
@@ -64,6 +64,7 @@ public:
 
     void on_render(Renderer &ctx) override {
         if (!announce_active()) return;
+        std::string const &who = Game::screen_announce.sender;
         std::string const &body = Game::screen_announce.text;
 
         // Soft warm plate (gentle cream, low-contrast edge — not a hard chrome card)
@@ -82,21 +83,34 @@ public:
         ctx.round_rect(-hw + 3.f, -hh + 3.f, width - 6.f, height - 6.f, 10.f);
         ctx.fill();
 
-        // Title row
+        // Hero line = payer name (shop broadcast). Body = their message.
+        std::string name = who.empty() ? (I18n::use_chinese ? "公告" : "Announce") : who;
         std::string title = I18n::use_chinese
-            ? std::string{"【全服】 "} + Game::screen_announce.sender
-            : std::string{"[Server] "} + Game::screen_announce.sender;
-        ctx.translate(0, -10.f);
+            ? (name + " 的全服广播")
+            : (name + " — server announce");
+        // If server already prefixed "name：" into body, strip for display so it
+        // doesn't read twice under the hero name.
+        std::string msg = body;
+        std::string prefix_zh = name + "：";
+        std::string prefix_en = name + ": ";
+        if (msg.compare(0, prefix_zh.size(), prefix_zh) == 0)
+            msg = msg.substr(prefix_zh.size());
+        else if (msg.compare(0, prefix_en.size(), prefix_en) == 0)
+            msg = msg.substr(prefix_en.size());
+
+        ctx.translate(0, -14.f);
         ctx.draw_text(title.c_str(), {
-            .fill = 0xffb8860b,
-            .size = 13,
-            .stroke_scale = 0.08f
+            .fill = 0xff5c3d0a,
+            .stroke = 0xfff8eedc,
+            .size = 18,
+            .stroke_scale = 0.12f
         });
-        ctx.translate(0, 22.f);
-        ctx.draw_text(body.c_str(), {
-            .fill = 0xff3a2a1a,
-            .size = 16,
-            .stroke_scale = 0.06f
+        ctx.translate(0, 26.f);
+        ctx.draw_text(msg.c_str(), {
+            .fill = 0xff2a1e12,
+            .stroke = 0xfff8eedc,
+            .size = 15,
+            .stroke_scale = 0.08f
         });
         ctx.translate(0, -12.f);
     }

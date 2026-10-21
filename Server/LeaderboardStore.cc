@@ -5,6 +5,7 @@
 #include <Server/NodeFs.hh>
 #include <Server/Server.hh>
 
+#include <Shared/StaticData.hh>
 #include <Shared/StaticDefinitions.hh>
 
 #include <algorithm>
@@ -106,6 +107,7 @@ void LeaderboardStore::load() {
         if (!(ls >> messages)) messages = 0;
         if (!(ls >> kills)) kills = 0;
         if (!(ls >> crafts)) crafts = 0;
+        // Inflated score/level left intact until XpMigration::run_once.
         e.score = score;
         e.color = (uint8_t) (color & 0xff);
         e.playtime = playtime;
@@ -145,6 +147,9 @@ uint32_t LeaderboardStore::recorded_count() {
 
 void LeaderboardStore::record(std::string const &name, uint32_t score, uint8_t color) {
     if (name.empty()) return;
+    // Soft ceiling for *new* gains after XP fix — does not rewrite legacy rows alone.
+    uint32_t const cap = level_to_score(MAX_PLAYER_LEVEL);
+    if (score > cap) score = cap;
     auto it = ENTRIES.find(name);
     if (it == ENTRIES.end()) {
         LeaderboardEntry e;
@@ -163,6 +168,30 @@ void LeaderboardStore::record(std::string const &name, uint32_t score, uint8_t c
         it->second.color = color;
         DIRTY = 1;
     }
+}
+
+void LeaderboardStore::force_set_level_score(std::string const &name, uint32_t level, uint32_t score) {
+    if (name.empty()) return;
+    auto it = ENTRIES.find(name);
+    if (it == ENTRIES.end()) {
+        LeaderboardEntry e;
+        e.name = name;
+        e.level = level;
+        e.score = score;
+        ENTRIES[name] = e;
+        DIRTY = 1;
+        return;
+    }
+    if (it->second.level != level || it->second.score != score) {
+        it->second.level = level;
+        it->second.score = score;
+        DIRTY = 1;
+    }
+}
+
+void LeaderboardStore::for_each_entry_mutable(std::function<void(LeaderboardEntry &)> const &fn) {
+    for (auto &kv : ENTRIES)
+        fn(kv.second);
 }
 
 void LeaderboardStore::fill_top(std::vector<LeaderboardEntry> &out) {

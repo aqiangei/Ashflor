@@ -185,18 +185,21 @@
         <label>玩家（游戏名或账号）</label>
         <input id="giveWho" list="playerList" placeholder="在线玩家名">
         <datalist id="playerList"></datalist>
+        <label>筛选（中英文名）</label>
+        <input id="petalFilter" placeholder="如：基本 / Basic / 玫瑰">
         <label>花瓣</label>
         <select id="givePetal"></select>
         <div class="row2">
           <div>
+            <label>等级（稀有度）</label>
+            <select id="giveRarity"></select>
+          </div>
+          <div>
             <label>数量</label>
             <input id="giveCount" type="number" min="1" max="64" value="1">
           </div>
-          <div>
-            <label>筛选</label>
-            <input id="petalFilter" placeholder="名称关键字">
-          </div>
         </div>
+        <p class="hint" id="giveRarityHint" style="margin-top:6px">选择花瓣后显示可用等级</p>
         <button type="button" id="btnGive">发放</button>
       </div>
       <div class="admin-box">
@@ -368,12 +371,51 @@ function fillSelect(sel, items, labelFn) {
   if ([...sel.options].some((o) => o.value === cur)) sel.value = cur;
 }
 
+const RARITY_ZH = ["普通","罕见","稀有","史诗","传奇","神话","独特","超凡","究极"];
+
+function refreshGiveRarity() {
+  const sel = $("givePetal");
+  const hint = $("giveRarityHint");
+  const rsel = $("giveRarity");
+  const p = (catalog.petals || []).find((x) => String(x.id) === String(sel.value));
+  if (!p) {
+    rsel.innerHTML = "";
+    hint.textContent = "选择花瓣后显示可用等级";
+    return;
+  }
+  const avail = Array.isArray(p.rarities) ? p.rarities.slice() : [p.rarity];
+  const cur = rsel.value;
+  rsel.innerHTML = avail.map((r) =>
+    `<option value="${r}">${RARITY_ZH[r] || ("稀有度"+r)} (${r})</option>`
+  ).join("");
+  if (avail.map(String).includes(String(cur))) rsel.value = cur;
+  else if (avail.includes(p.rarity)) rsel.value = String(p.rarity);
+  hint.textContent = `「${p.name_zh || p.name}」可用：` +
+    avail.map((r) => RARITY_ZH[r] || r).join("、");
+}
+
 function refreshPetalSelect() {
   const q = ($("petalFilter").value || "").trim().toLowerCase();
-  const items = catalog.petals.filter((p) =>
-    !q || p.name.toLowerCase().includes(q) || String(p.rarity_zh || "").includes(q)
+  // Deduplicate by English name — keep lowest id as representative
+  const byName = new Map();
+  (catalog.petals || []).forEach((p) => {
+    const key = p.name || String(p.id);
+    if (!byName.has(key) || p.id < byName.get(key).id) byName.set(key, p);
+  });
+  let items = [...byName.values()];
+  if (q) {
+    items = items.filter((p) => {
+      const en = String(p.name || "").toLowerCase();
+      const zh = String(p.name_zh || "");
+      const rz = String(p.rarity_zh || "");
+      return en.includes(q) || zh.includes(q) || zh.toLowerCase().includes(q) || rz.includes(q);
+    });
+  }
+  items.sort((a, b) => String(a.name_zh || a.name).localeCompare(String(b.name_zh || b.name), "zh"));
+  fillSelect($("givePetal"), items, (p) =>
+    `${p.name_zh || p.name} / ${p.name}（${(p.rarities || []).map((r) => RARITY_ZH[r] || r).join("/")}）`
   );
-  fillSelect($("givePetal"), items, (p) => `${p.name} [${p.rarity_zh}] #${p.id}`);
+  refreshGiveRarity();
 }
 
 function refreshMobSelect() {
@@ -395,6 +437,7 @@ async function loadCatalog() {
 }
 
 $("petalFilter").oninput = refreshPetalSelect;
+$("givePetal").onchange = refreshGiveRarity;
 $("mobFilter").oninput = refreshMobSelect;
 
 $("btnAnn").onclick = async () => {
@@ -414,6 +457,7 @@ $("btnGive").onclick = async () => {
       action: "give",
       who: $("giveWho").value.trim(),
       petal_id: Number($("givePetal").value),
+      rarity: Number($("giveRarity").value),
       count: Number($("giveCount").value) || 1,
     });
     flashOk(j.msg);

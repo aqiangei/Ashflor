@@ -19,27 +19,24 @@
 // Rebuild once per frame while G is held — avoid per-petal parent lookups.
 static double g_tier_stamp = -1.0;
 static uint8_t g_tier_on = 0;
-static std::unordered_set<EntityID> g_other_flower_ids;
+static std::unordered_set<EntityID> g_player_flower_ids;
 
 static void refresh_tier_overlay_state() {
     if (g_tier_stamp == Game::timestamp) return;
     g_tier_stamp = Game::timestamp;
     g_tier_on = Input::keys_held.contains('G') ? 1 : 0;
-    g_other_flower_ids.clear();
+    g_player_flower_ids.clear();
     if (!g_tier_on) return;
     Game::simulation.for_each<kFlower>([](Simulation *, Entity const &flower) {
         if (flower.has_component(kMob)) return;
-        if (Game::simulation.ent_alive(Game::player_id)
-            && flower.id == Game::player_id)
-            return;
-        g_other_flower_ids.insert(flower.id);
+        g_player_flower_ids.insert(flower.id);
     });
 }
 
-static uint8_t other_player_petal(Entity const &ent) {
+static uint8_t player_owned_petal(Entity const &ent) {
     EntityID const pid = ent.get_parent();
     if (pid == NULL_ENTITY) return 0;
-    return g_other_flower_ids.contains(pid) ? 1 : 0;
+    return g_player_flower_ids.contains(pid) ? 1 : 0;
 }
 
 void render_petal(Renderer &ctx, Entity const &ent) {
@@ -51,7 +48,7 @@ void render_petal(Renderer &ctx, Entity const &ent) {
     uint8_t const rarity = data.rarity;
     uint8_t const show_tier = g_tier_on
         && rarity < RarityID::kNumRarities
-        && other_player_petal(ent);
+        && player_owned_petal(ent);
 
     // Rooted Monstera: soft green heal disc under the leaf (world units, before petal scale).
     if (data.attributes.aura_heal > 0 && ent.get_split_projectile()

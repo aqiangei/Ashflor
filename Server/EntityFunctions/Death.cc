@@ -73,9 +73,19 @@ void flush_flower_loadout_to_camera(Simulation *sim, Entity &camera, Entity cons
     if (level < 1) level = 1;
     if (level < camera.get_respawn_level())
         level = camera.get_respawn_level();
+    if (level > MAX_PLAYER_LEVEL) level = MAX_PLAYER_LEVEL;
     for (uint32_t i = 0; i < 2 * MAX_SLOT_COUNT; ++i)
         PetalTracker::remove_petal(sim, camera.get_inventory(i));
     camera.set_respawn_level(level);
+    // Preserve mid-level XP for the next spawn (death / map transfer).
+    if (Client *owner = Server::client_by_camera(sim, camera.id)) {
+        uint32_t sc = flower.get_score();
+        uint32_t floor = level_to_score(level);
+        if (sc < floor) sc = floor;
+        uint32_t const cap = level_to_score(MAX_PLAYER_LEVEL);
+        if (sc > cap) sc = cap;
+        owner->pending_score = sc;
+    }
     for (uint32_t i = 0; i < 2 * MAX_SLOT_COUNT; ++i)
         camera.set_inventory(i, PetalID::kNone);
     for (uint32_t i = 0; i < total_slots && i < 2 * MAX_SLOT_COUNT; ++i) {
@@ -132,7 +142,9 @@ static void _alloc_drops(Simulation *sim, std::vector<PetalID::T> &success_drops
 
 // Weighted pick from mob drop table (chances sum to 1). Prefer non-Unique if Unique taken.
 // rarity_boost > 0 tilts the roll toward rarer petals (per-zone difficulty reward).
-static PetalID::T _roll_mob_drop(Simulation *sim, MobID::T mob_id, float rarity_boost) {
+// boss=1: crush mats / Common filler so map bosses feel rewarding.
+static PetalID::T _roll_mob_drop(Simulation *sim, MobID::T mob_id, float rarity_boost,
+                                 uint8_t boss = 0) {
     struct MobData const &mob_data = MOB_DATA[mob_id];
     StaticArray<float, MAX_DROPS_PER_MOB> const &chances = MOB_DROP_CHANCES[mob_id];
     if (mob_data.drops.size() == 0) return PetalID::kNone;
@@ -142,9 +154,21 @@ static PetalID::T _roll_mob_drop(Simulation *sim, MobID::T mob_id, float rarity_
         float w = chances[i];
         PetalID::T drop_id = mob_data.drops[i];
         w *= Craft::drop_weight_mult(drop_id);
+        uint8_t r = PETAL_DATA[drop_id].rarity;
+        if (boss) {
+            // Craft mats belong on trash mobs / shop — not boss kill rewards.
+            if (Craft::is_shop_material(drop_id))
+                w *= 0.05f;
+            // Common / Unusual combat fillers (Wing, Iris, AntEgg…) stay rare on bosses.
+            else if (r <= RarityID::kUnusual)
+                w *= 0.18f;
+            else if (r == RarityID::kRare)
+                w *= 0.85f;
+            else if (r >= RarityID::kEpic && r < RarityID::kUnique)
+                w *= 2.4f;
+        }
         if (rarity_boost > 0.f) {
-            uint8_t r = PETAL_DATA[drop_id].rarity;
-            // Zone tilt must not inflate Unique+ (Moon/Ygg) toward a first-kill guarantee.
+            // Zone / boss tilt must not inflate Unique+ (Moon/Ygg) toward a guarantee.
             if (r < RarityID::kUnique)
                 w *= std::pow(1.f + rarity_boost, (float)r);
         }
@@ -194,13 +218,21 @@ static void _add_mob_xp(Simulation *sim, EntityID const killer_id, Entity const 
                 if (!sim->ent_alive(cam.get_player())) continue;
                 Entity &flower = sim->get_ent(cam.get_player());
                 if (!flower.has_component(kScore)) continue;
-                flower.set_score(flower.get_score() + xp);
+                uint32_t next = flower.get_score() + xp;
+                uint32_t const cap = level_to_score(MAX_PLAYER_LEVEL);
+                if (next > cap) next = cap;
+                flower.set_score(next);
                 any = 1;
             }
             if (any) return;
         }
     }
-    killer.set_score(killer.get_score() + xp);
+    {
+        uint32_t next = killer.get_score() + xp;
+        uint32_t const cap = level_to_score(MAX_PLAYER_LEVEL);
+        if (next > cap) next = cap;
+        killer.set_score(next);
+    }
 }
 
 void entity_on_death(Simulation *sim, Entity const &ent) {
@@ -350,39 +382,71 @@ void entity_on_death(Simulation *sim, Entity const &ent) {
                 return 0;
             };
 
+            uint8_t const is_boss_kill =
+                spawn_class(ent.get_mob_id()) == SpawnClass::kBoss;
+
             auto roll_for_team = [&](EntityID drop_team, float angle_off) {
+                float boost = rarity_boost;
+                // Map bosses sit outside zone tables → often had ~0 tilt and
+                // rolled the same Common/mat junk as trash mobs.
+                if (is_boss_kill) {
+                    if (boost < 1.25f) boost = 1.25f;
+                    boost += 0.85f;
+                }
                 std::vector<PetalID::T> success_drops = {};
-                PetalID::T chosen = _roll_mob_drop(sim, ent.get_mob_id(), rarity_boost);
+                auto roll_one = [&]() {
+                    return _roll_mob_drop(sim, ent.get_mob_id(), boost, is_boss_kill);
+                };
+                PetalID::T chosen = roll_one();
                 if (chosen != PetalID::kNone)
                     success_drops.push_back(chosen);
-                float p2 = 0.26f + 0.045f * (float) live_rarity;
-                if (success_drops.size() < MAX_DROPS_PER_MOB && frand() < p2) {
-                    PetalID::T extra = _roll_mob_drop(sim, ent.get_mob_id(), rarity_boost);
-                    if (extra != PetalID::kNone)
-                        success_drops.push_back(extra);
-                }
-                if (live_rarity >= RarityID::kEpic
-                    && success_drops.size() < MAX_DROPS_PER_MOB) {
-                    float p3 = 0.10f + 0.025f * (float) live_rarity;
-                    if (frand() < p3) {
-                        PetalID::T extra = _roll_mob_drop(sim, ent.get_mob_id(), rarity_boost);
+                // Bosses: always at least 3 petal piles; normals keep chance curve.
+                if (is_boss_kill) {
+                    for (uint32_t n = 0; n < 2 && success_drops.size() < MAX_DROPS_PER_MOB; ++n) {
+                        PetalID::T extra = roll_one();
                         if (extra != PetalID::kNone)
                             success_drops.push_back(extra);
                     }
-                }
-                if (live_rarity >= RarityID::kLegendary
-                    && success_drops.size() < MAX_DROPS_PER_MOB) {
-                    float p4 = 0.05f + 0.02f * (float) (live_rarity - RarityID::kLegendary);
-                    if (frand() < p4) {
-                        PetalID::T extra = _roll_mob_drop(sim, ent.get_mob_id(), rarity_boost);
+                    if (success_drops.size() < MAX_DROPS_PER_MOB && frand() < 0.72f) {
+                        PetalID::T extra = roll_one();
                         if (extra != PetalID::kNone)
                             success_drops.push_back(extra);
+                    }
+                    if (success_drops.size() < MAX_DROPS_PER_MOB && frand() < 0.40f) {
+                        PetalID::T extra = roll_one();
+                        if (extra != PetalID::kNone)
+                            success_drops.push_back(extra);
+                    }
+                } else {
+                    float p2 = 0.26f + 0.045f * (float) live_rarity;
+                    if (success_drops.size() < MAX_DROPS_PER_MOB && frand() < p2) {
+                        PetalID::T extra = roll_one();
+                        if (extra != PetalID::kNone)
+                            success_drops.push_back(extra);
+                    }
+                    if (live_rarity >= RarityID::kEpic
+                        && success_drops.size() < MAX_DROPS_PER_MOB) {
+                        float p3 = 0.10f + 0.025f * (float) live_rarity;
+                        if (frand() < p3) {
+                            PetalID::T extra = roll_one();
+                            if (extra != PetalID::kNone)
+                                success_drops.push_back(extra);
+                        }
+                    }
+                    if (live_rarity >= RarityID::kLegendary
+                        && success_drops.size() < MAX_DROPS_PER_MOB) {
+                        float p4 = 0.05f + 0.02f * (float) (live_rarity - RarityID::kLegendary);
+                        if (frand() < p4) {
+                            PetalID::T extra = roll_one();
+                            if (extra != PetalID::kNone)
+                                success_drops.push_back(extra);
+                        }
                     }
                 }
                 if (team_has_bonus(drop_team)) {
                     size_t bonus_rolls = std::min<size_t>(success_drops.size() * 2, 12);
                     for (size_t i = 0; i < bonus_rolls; ++i) {
-                        PetalID::T extra = _roll_mob_drop(sim, ent.get_mob_id(), rarity_boost);
+                        PetalID::T extra = roll_one();
                         if (extra != PetalID::kNone
                             && PETAL_DATA[extra].rarity != RarityID::kUnique)
                             success_drops.push_back(extra);
@@ -398,7 +462,8 @@ void entity_on_death(Simulation *sim, Entity const &ent) {
                     if (ent.zone < zones.size())
                         diff = zones[ent.zone].difficulty;
                     coins = (uint32_t) (coins * zone_coin_mult(diff)
-                        * mob_spawn_threat_mult(mob_data.rarity, live_rarity) + 0.5f);
+                        * mob_spawn_xp_mult(mob_data.rarity, live_rarity) + 0.5f);
+                    if (is_boss_kill) coins = coins * 4u + 120u;
                     if (coins < 1) coins = 1;
                 }
                 if (coins > 0) {
@@ -485,12 +550,21 @@ void entity_on_death(Simulation *sim, Entity const &ent) {
         Entity &camera = sim->get_ent(ent.get_parent());
         float death_x = ent.get_x();
         float death_y = ent.get_y();
-        // Level never regresses on death — keep the floor reached this life.
+        // Level never regresses on death — keep floor + mid-level XP.
         uint32_t respawn_level = score_to_level(ent.get_score());
         if (respawn_level < 1) respawn_level = 1;
         if (respawn_level < camera.get_respawn_level())
             respawn_level = camera.get_respawn_level();
+        if (respawn_level > MAX_PLAYER_LEVEL) respawn_level = MAX_PLAYER_LEVEL;
         camera.set_respawn_level(respawn_level);
+        if (Client *owner = Server::client_by_camera(sim, camera.id)) {
+            uint32_t sc = ent.get_score();
+            uint32_t floor = level_to_score(respawn_level);
+            if (sc < floor) sc = floor;
+            uint32_t const cap = level_to_score(MAX_PLAYER_LEVEL);
+            if (sc > cap) sc = cap;
+            owner->pending_score = sc;
+        }
         uint32_t primary_slots = loadout_slots_at_level(respawn_level);
 
         for (uint32_t i = 0; i < 2 * MAX_SLOT_COUNT; ++i)

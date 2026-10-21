@@ -8,16 +8,22 @@
 #include <Server/LeaderboardStore.hh>
 #include <Server/RateLimit.hh>
 #include <Server/Spawn.hh>
+#include <Server/XpMigration.hh>
 
 #include <Helpers/Math.hh>
 
 #include <Shared/Binary.hh>
 #include <Shared/Config.hh>
+#include <Shared/Craft.hh>
 #include <Shared/Entity.hh>
 #include <Shared/Map.hh>
 #include <Shared/StaticData.hh>
 #include <Shared/StaticDefinitions.hh>
 #include <Shared/Talent.hh>
+
+#include <cstring>
+
+#include <Shared/PetalNameZh.inc>
 
 #include <chrono>
 #include <cstdio>
@@ -61,9 +67,9 @@ void Server::tick() {
         RateLimit::tick_prune();
     uint32_t online = 0;
     for (uint8_t i = 0; i < MapID::kNumMaps; ++i) {
-        // Empty maps (no WS clients): tick at 1/6 rate. 8 maps at full rate
-        // still push tick >40ms and make move/attack feel delayed.
-        if (Server::games[i].clients.empty() && ((tick_n + i) % 6) != 0) {
+        // Empty maps: ~1 Hz. Full collide on 8 packed biomes was the tick hog
+        // (segmented swarms × radius scale); occupied maps still tick every frame.
+        if (Server::games[i].clients.empty() && ((tick_n + i) % 25) != 0) {
             continue;
         }
         Server::games[i].tick();
@@ -196,7 +202,7 @@ static void json_escape_append(std::string &out, std::string const &s) {
 
 static char const *live_rarity_zh(uint8_t rarity) {
     static char const *const names[RarityID::kNumRarities] = {
-        "普通", "罕见", "稀有", "史诗", "传奇", "神话", "独特", "超凡", "究极"
+        "普通", "罕见", "稀有", "史诗", "传奇", "神话", "究极", "超凡", "独特"
     };
     if (rarity >= RarityID::kNumRarities) return "?";
     return names[rarity];
@@ -509,20 +515,40 @@ static Client *live_find_client(std::string const &who) {
 }
 
 std::string Server::live_catalog_json() {
-    std::string out = "{\"petals\":[";
+    std::string out = "{\"rarities\":[";
+    for (uint8_t r = 0; r < RarityID::kNumRarities; ++r) {
+        if (r) out += ',';
+        out += "{\"id\":";
+        out += std::to_string(r);
+        out += ",\"name_zh\":\"";
+        out += live_rarity_zh(r);
+        out += "\"}";
+    }
+    out += "],\"petals\":[";
     uint8_t first = 1;
     for (uint32_t id = 1; id < (uint32_t) PetalID::kNumPetals; ++id) {
         if (!first) out += ',';
         first = 0;
+        char const *en = PETAL_DATA[id].name;
         out += "{\"id\":";
         out += std::to_string(id);
         out += ",\"name\":\"";
-        json_escape_append(out, PETAL_DATA[id].name);
+        json_escape_append(out, en ? en : "");
+        out += "\",\"name_zh\":\"";
+        json_escape_append(out, LIVE_PETAL_NAME_ZH[id] ? LIVE_PETAL_NAME_ZH[id] : "");
         out += "\",\"rarity\":";
         out += std::to_string(PETAL_DATA[id].rarity);
         out += ",\"rarity_zh\":\"";
         out += live_rarity_zh(PETAL_DATA[id].rarity);
-        out += "\"}";
+        out += "\",\"rarities\":[";
+        uint8_t rf = 1;
+        for (uint8_t r = 0; r < RarityID::kNumRarities; ++r) {
+            if (Craft::petal_at_rarity((PetalID::T) id, r) == PetalID::kNone) continue;
+            if (!rf) out += ',';
+            rf = 0;
+            out += std::to_string(r);
+        }
+        out += "]}";
     }
     out += "],\"mobs\":[";
     first = 1;
@@ -549,32 +575,65 @@ std::string Server::live_admin_announce(std::string const &text) {
         t.pop_back();
     if (t.empty()) return live_admin_err("公告内容为空");
     if (t.size() > 200) return live_admin_err("公告过长（最多200字）");
-    // sender "aqa" triggers the in-game top banner
-    Chat::broadcast_server("aqa", t);
+    // Do NOT spoof as player "aqa" — that looked like the owner typed in nearby chat.
+    // Banner flag is whisper_to "banner" (see Chat::broadcast_server_banner).
+    Chat::broadcast_server_banner("公告", t);
     return live_admin_ok("已全服公告");
 }
 
-std::string Server::live_admin_give(std::string const &who, uint32_t petal_id, uint32_t count) {
+std::string Server::live_admin_give(std::string const &who, uint32_t petal_id, uint32_t count,
+                                   uint32_t rarity) {
     if (who.empty()) return live_admin_err("未指定玩家");
     if (petal_id == 0 || petal_id >= PetalID::kNumPetals)
         return live_admin_err("无效花瓣 id");
     if (count < 1) count = 1;
     if (count > 64) count = 64;
+
+    PetalID::T give_id = (PetalID::T) petal_id;
+    char const *base_en = PETAL_DATA[petal_id].name ? PETAL_DATA[petal_id].name : "?";
+    char const *base_zh = LIVE_PETAL_NAME_ZH[petal_id] ? LIVE_PETAL_NAME_ZH[petal_id] : base_en;
+
+    if (rarity != 255) {
+        if (rarity >= RarityID::kNumRarities)
+            return live_admin_err("无效稀有度等级");
+        PetalID::T resolved = Craft::petal_at_rarity((PetalID::T) petal_id, (uint8_t) rarity);
+        if (resolved == PetalID::kNone) {
+            std::string err = "「";
+            err += base_zh;
+            err += "」没有【";
+            err += live_rarity_zh((uint8_t) rarity);
+            err += "】等级。现有：";
+            uint8_t any = 0;
+            for (uint8_t r = 0; r < RarityID::kNumRarities; ++r) {
+                if (Craft::petal_at_rarity((PetalID::T) petal_id, r) == PetalID::kNone) continue;
+                if (any) err += "、";
+                any = 1;
+                err += live_rarity_zh(r);
+            }
+            if (!any) err += "无";
+            return live_admin_err(err);
+        }
+        give_id = resolved;
+    }
+
     Client *c = live_find_client(who);
     if (c == nullptr) return live_admin_err("找不到在线玩家：" + who);
     uint32_t given = 0;
     for (uint32_t i = 0; i < count; ++i) {
-        if (client_award_petal(c, (PetalID::T) petal_id)) ++given;
+        if (client_award_petal(c, give_id)) ++given;
         else break;
     }
     if (given == 0) return live_admin_err("发放失败（背包/银行可能已满）");
-    client_send_loot_toast(c, (PetalID::T) petal_id, (uint16_t) given, "管理员发放");
+    client_send_loot_toast(c, give_id, (uint16_t) given, "管理员发放");
     std::string msg = "已向 ";
     msg += who;
     msg += " 发放 ";
     msg += std::to_string(given);
     msg += "× ";
-    msg += PETAL_DATA[petal_id].name;
+    msg += base_zh;
+    msg += "【";
+    msg += live_rarity_zh(PETAL_DATA[give_id].rarity);
+    msg += "】";
     return live_admin_ok(msg);
 }
 
@@ -621,6 +680,8 @@ void Server::init() {
     AccountStore::load();
     Guild::load();
     LeaderboardStore::load();
+    // Correct XP-inflation levels only (safe/gray untouched; no inventory wipe).
+    XpMigration::run_once();
     // Seed the ranked "level" column from the saved accounts
     AccountStore::seed_leaderboard_levels();
     LeaderboardStore::flush();

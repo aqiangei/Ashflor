@@ -14,12 +14,16 @@ inline float const MAP_SPAWN_Y = ARENA_HEIGHT * 0.5f;
 
 inline uint32_t const MAX_SLOT_COUNT = 10;
 inline uint32_t const LEVELS_PER_EXTRA_SLOT = 15;
+// Soft ceiling for *future* XP gains after the zone×combat threat bug.
+// Boot migration compresses only level>150 into ~101–130; see XpMigration
+// and todo/xp-inflation-migration-plan.md. Safe/gray accounts are untouched.
+inline uint32_t const MAX_PLAYER_LEVEL = 150;
 inline uint32_t const LEADERBOARD_SIZE = 10;
 // Rows kept per category on the multi-column leaderboard board
 inline uint32_t const LEADERBOARD_STAT_SIZE = 10;
 inline uint32_t const MINIMAP_PLAYER_CAP = 128;
 inline uint32_t const MAX_PETALS_IN_CLUMP = 4;
-// Matches RarityID::kNumRarities - 1 (Common..Ultra). Zone difficulty == petal rarity.
+// Matches RarityID::kNumRarities - 1 (Common..Unique). Zone difficulty == petal rarity.
 inline uint32_t const MAX_DIFFICULTY = 8;
 inline uint32_t const MAX_DROPS_PER_MOB = 8;
 // Concept maps need many specialty Zone AABBs + large terrain pieces
@@ -377,7 +381,7 @@ namespace PetalID {
         kWorldTreeSeed,
         kSkyblade,
         kChaosPrism,
-        // Super/Ultra ladders (append-only; Unique→Super→Ultra craft)
+        // Ultra/Super/Unique ladders (append-only; Ultra→Super→Unique craft)
         kBasicUnique,
         kBasicSuper,
         kBasicUltra,
@@ -601,9 +605,9 @@ namespace RarityID {
         kEpic,
         kLegendary,
         kMythic,
-        kUnique,
-        kSuper,
-        kUltra,
+        kUltra,  // 究极 — below Super
+        kSuper,  // 超凡
+        kUnique, // 独特 — top of ladder
         kNumRarities
     };
 };

@@ -23,6 +23,7 @@
 #include <Helpers/Math.hh>
 
 #include <Shared/Binary.hh>
+#include <Shared/Config.hh>
 #include <Shared/Craft.hh>
 #include <Shared/Recipe.hh>
 #include <Shared/StaticData.hh>
@@ -382,6 +383,9 @@ static Element *make_drawer(std::vector<Element *> children, uint8_t panel_id) {
         .line_width = 0,
         .round_radius = Chrome::kRadius,
         .animate = [](Element *elt, Renderer &ctx){
+            // Hard stop on runaway width (HFlex stretch ↔ VContainer feedback).
+            float const cap = Input::is_mobile ? 480.f : 760.f;
+            if (elt->width > cap) elt->width = cap;
             ctx.translate(0, (1.f - (float) elt->animation) * (elt->height + 16.f));
         },
         .should_render = [panel_id](){
@@ -472,8 +476,12 @@ static void on_craft_btn(Element *, uint8_t e) {
 static void on_special_btn(Element *, uint8_t e) {
     if (e == Ui::kClick) Game::toggle_game_panel(Game::kPanelSpecial);
 }
+static void shop_snap_rarity_to_tab();
 static void on_shop_btn(Element *, uint8_t e) {
-    if (e == Ui::kClick) Game::toggle_game_panel(Game::kPanelShop);
+    if (e != Ui::kClick) return;
+    Game::toggle_game_panel(Game::kPanelShop);
+    if (Game::game_panel == Game::kPanelShop)
+        shop_snap_rarity_to_tab();
 }
 static uint8_t preset_save_mode = 0;
 static bool inventory_active() { return Game::game_panel == Game::kPanelInventory; }
@@ -997,18 +1005,6 @@ static PetalID::T resolve_craft_family_slot(char const *name, uint8_t rarity) {
     return best_any;
 }
 
-static uint8_t craft_family_any_owned(char const *name) {
-    if (name == nullptr) return 0;
-    for (uint32_t raw = 1; raw < (uint32_t) PetalID::kNumPetals; ++raw) {
-        PetalID::T id = (PetalID::T) raw;
-        if (Recipe::is_bag_only(id)) continue;
-        if (PETAL_DATA[id].name == nullptr) continue;
-        if (std::strcmp(PETAL_DATA[id].name, name) != 0) continue;
-        if (Game::craft_owned(id) > 0) return 1;
-    }
-    return 0;
-}
-
 class CraftMatCell final : public Element {
     char const *family_name;
     uint8_t rarity;
@@ -1146,7 +1142,7 @@ public:
             }
             if (!Craft::can_upgrade_petal(petal_id)) {
                 Game::craft_status = I18n::use_chinese
-                    ? "该花瓣无法再合成更高稀有度" : "Cannot craft a higher rarity";
+                    ? "已达最高稀有度（独特）" : "Already at max rarity (Unique)";
                 return;
             }
             CraftFx::remember_mat(petal_id, screen_x, screen_y);
@@ -1211,8 +1207,9 @@ static Element *make_craft_material_grid() {
             cells.push_back(new CraftMatCell(name, r));
         // Spacer keeps column alignment with older layout.
         cells.push_back(new CraftMatCell(nullptr, 0));
+        // Always list every family × rarity column — empty plates for unowned
+        // slots so the catalog is never blank.
         vrows.push_back(new Ui::HContainer(cells, 0, 4, {
-            .should_render = [name](){ return craft_family_any_owned(name); },
             .h_justify = Style::Left,
             .no_animation = 1
         }));
@@ -1435,8 +1432,8 @@ Element *Ui::make_presets_panel() {
         ),
         new Ui::DynamicText(14, [](){
             if (!Game::account_logged_in)
-                return I18n::use_chinese ? std::string{"登录账号后跨设备同步方案和天赋"}
-                    : std::string{"Sign in to sync presets and talents"};
+                return I18n::use_chinese ? std::string{"登录账号后跨设备同步配装（天赋全账号共用）"}
+                    : std::string{"Sign in to sync petal presets (talents are account-wide)"};
             return Game::loadout_preset_status;
         }, { .fill = Chrome::kGold })
     }, Game::kPanelPresets);
@@ -1497,7 +1494,7 @@ static std::string talent_effect_text(uint8_t id, uint8_t rank) {
     }
 }
 
-// ---- Talent panel redesign: select node → explicit +/− buttons (no click-to-mutate) ----
+// ---- Talent panel: first click selects node; second click on same node upgrades ----
 namespace TalentUi {
     constexpr uint32_t kCard       = 0xff9B7548;
     constexpr uint32_t kCardEdge   = 0xff765333;
@@ -1511,8 +1508,6 @@ namespace TalentUi {
     constexpr uint32_t kNextStroke = 0xffC4A84A;
     constexpr uint32_t kText       = 0xffFFF4DC;
     constexpr uint32_t kCapsule    = 0xcc5C4030;
-    constexpr uint32_t kBtnUp      = 0xff6FBE59;
-    constexpr uint32_t kBtnDown    = 0xffE7A04F;
     constexpr uint32_t kBtnReset   = 0xffE87973;
     constexpr float kNodeHit = 42.f;
     constexpr float kStemW = 12.f;
@@ -1541,53 +1536,85 @@ static uint8_t talent_is_slots(uint8_t id) { return id == TalentID::kSlots; }
 static uint32_t talent_active_fill(uint8_t id, uint8_t rank) {
     if (talent_is_slots(id))
         return (RARITY_COLORS[Talent::rank_grade(rank) % RarityID::kNumRarities] & 0x00ffffff) | 0xff000000;
-    return TalentUi::kActive;
+    static constexpr uint32_t colors[] = {
+        0xffFF7894, 0xff75B7FF, 0xffFFBB5C,
+        0xffA893F5, 0xff66D6AE, 0xff72CFE2
+    };
+    return colors[id];
 }
 
 static uint32_t talent_active_stroke(uint8_t id, uint8_t rank) {
     if (talent_is_slots(id))
         return RARITY_COLORS[Talent::rank_grade(rank) % RarityID::kNumRarities] | 0xff000000;
-    return TalentUi::kActiveStroke;
+    return Renderer::HSV(talent_active_fill(id, rank), 0.68f);
 }
 
-static bool talent_can_upgrade() {
-    if (g_tal_sel_id >= TalentID::kNum || g_tal_sel_rank == 0) return false;
+static uint32_t talent_card_fill(uint8_t id) {
+    static constexpr uint32_t colors[] = {
+        0xff8D6074, 0xff5E7898, 0xff95744F,
+        0xff74668F, 0xff517E72, 0xff587F87, 0xff8C704A
+    };
+    return colors[id];
+}
+
+// Second click applies selection:
+//   rank > cur  → jump forward (spend cost_to_reach)
+//   rank < cur  → jump back to that node (refund the difference)
+//   rank == cur → refund one step (unlight the tip → cur-1)
+static uint8_t talent_apply_target(uint8_t id, uint8_t rank) {
+    if (id >= TalentID::kNum) return 0xFF;
+    uint8_t cur = Game::talent_ranks[id];
+    if (rank > cur) return rank;
+    if (rank < cur) return rank;
+    // tip re-click → step back one
+    return cur > 0 ? (uint8_t) (cur - 1) : 0;
+}
+
+static bool talent_can_apply_to(uint8_t id, uint8_t rank) {
+    if (id >= TalentID::kNum) return false;
     if (Game::talent_pending) return false;
+    uint8_t target = talent_apply_target(id, rank);
+    if (target == 0xFF) return false;
+    uint8_t cur = Game::talent_ranks[id];
+    if (target == cur) return false;
     uint32_t level = talent_player_level();
-    uint8_t cur = Game::talent_ranks[g_tal_sel_id];
-    if (g_tal_sel_rank != (uint8_t) (cur + 1)) return false;
-    return Talent::can_set_rank(g_tal_sel_id, g_tal_sel_rank, level, Game::talent_ranks.data()) != 0;
+    return Talent::can_set_rank(id, target, level, Game::talent_ranks.data()) != 0;
 }
 
-static bool talent_can_refund() {
-    if (g_tal_sel_id >= TalentID::kNum || g_tal_sel_rank == 0) return false;
-    if (Game::talent_pending) return false;
-    uint8_t cur = Game::talent_ranks[g_tal_sel_id];
-    return cur > 0 && g_tal_sel_rank == cur;
-}
-
-static bool talent_upgrade_darken() { return !talent_can_upgrade(); }
-static bool talent_refund_darken() { return !talent_can_refund(); }
-
-static void on_talent_upgrade(Element *, uint8_t e) {
-    if (e != Ui::kClick || !talent_can_upgrade()) return;
+static void talent_try_apply_selected() {
     uint8_t id = g_tal_sel_id;
-    uint8_t rank = g_tal_sel_rank;
-    Game::talent_set_rank(id, rank);
+    uint8_t sel = g_tal_sel_rank;
+    if (id >= TalentID::kNum) return;
+    uint8_t cur = Game::talent_ranks[id];
+    uint8_t target = talent_apply_target(id, sel);
+    uint32_t level = talent_player_level();
+    if (!talent_can_apply_to(id, sel)) {
+        if (Game::talent_pending) {
+            Game::talent_status = I18n::use_chinese
+                ? "天赋同步中…" : "Syncing talents…";
+        } else if (target > cur
+            && target > Talent::max_rank_for(id, level)) {
+            Game::talent_status = I18n::use_chinese
+                ? "当前等级尚未解锁该阶" : "Rank locked at this level";
+        } else if (target > cur) {
+            uint32_t need = Talent::cost_to_reach(cur, target);
+            uint32_t have = Talent::points_free(level, Game::talent_ranks);
+            Game::talent_status = I18n::use_chinese
+                ? std::format("天赋点不足（需 {}，现有 {}）", need, have)
+                : std::format("Not enough points (need {}, have {})", need, have);
+        } else {
+            Game::talent_status = I18n::use_chinese
+                ? "无法退回" : "Cannot refund";
+        }
+        return;
+    }
+    Game::talent_set_rank(id, target);
     g_tal_fx_id = id;
-    g_tal_fx_rank = rank;
+    g_tal_fx_rank = target > 0 ? target : 1;
     g_tal_fx_until = Game::timestamp + 160.0;
-}
-
-static void on_talent_refund_one(Element *, uint8_t e) {
-    if (e != Ui::kClick || !talent_can_refund()) return;
-    uint8_t id = g_tal_sel_id;
-    uint8_t rank = g_tal_sel_rank;
-    Game::talent_set_rank(id, (uint8_t) (rank - 1));
-    g_tal_fx_id = id;
-    g_tal_fx_rank = rank;
-    g_tal_fx_until = Game::timestamp + 160.0;
-    // Keep selection on the node that just became the next upgrade target.
+    // Keep selection on the new tip / chosen node
+    g_tal_sel_rank = target;
+    Game::talent_status.clear();
 }
 
 static void on_talent_reset_ask(Element *, uint8_t e) {
@@ -1611,7 +1638,8 @@ class TalentInfoCapsule final : public Element {
     uint8_t kind; // 0=level 1=points 2=slots
 public:
     explicit TalentInfoCapsule(uint8_t k)
-        : Element(118, 34, { .no_animation = 1 }), kind(k) {}
+        : Element(Input::is_mobile ? 108.f : 118.f, 34,
+                  { .no_animation = 1 }), kind(k) {}
     void on_render(Renderer &ctx) override {
         uint32_t lv = talent_player_level();
         uint32_t free = Talent::points_free(lv, Game::talent_ranks);
@@ -1647,7 +1675,7 @@ public:
         uint32_t col = lit
             ? (talent_is_slots(talent_id)
                 ? (RARITY_COLORS[Talent::rank_grade((uint8_t) (after_rank + 1)) % RarityID::kNumRarities] | 0xff000000)
-                : TalentUi::kActive)
+                : talent_active_fill(talent_id, (uint8_t) (after_rank + 1)))
             : TalentUi::kBranch;
         ctx.round_line_cap();
         ctx.set_stroke(col);
@@ -1659,7 +1687,7 @@ public:
     }
 };
 
-// Decorative root — select only (never mutates ranks).
+// Root node — 1st click selects; 2nd click refunds the whole branch to Lv0.
 class TalentRootNode final : public Element {
     uint8_t talent_id;
 public:
@@ -1670,8 +1698,8 @@ public:
         uint8_t cur = Game::talent_ranks[talent_id];
         uint8_t selected = g_tal_sel_id == talent_id && g_tal_sel_rank == 0;
         float r = 11.f;
-        uint32_t fill = cur > 0 ? TalentUi::kActive : 0xffC9B896;
-        uint32_t stroke = cur > 0 ? TalentUi::kActiveStroke : TalentUi::kTipRing;
+        uint32_t fill = cur > 0 ? talent_active_fill(talent_id, 1) : 0xffC9B896;
+        uint32_t stroke = cur > 0 ? talent_active_stroke(talent_id, 1) : TalentUi::kTipRing;
         ctx.set_fill(fill);
         ctx.begin_path();
         ctx.arc(0, 0, r);
@@ -1696,17 +1724,32 @@ public:
         }
     }
     void on_event(uint8_t e) override {
-        if (e == Ui::kClick) talent_select(talent_id, 0);
+        if (e != Ui::kClick) return;
+        uint8_t already = g_tal_sel_id == talent_id && g_tal_sel_rank == 0;
+        if (already) {
+            talent_try_apply_selected();
+            return;
+        }
+        talent_select(talent_id, 0);
+        uint8_t cur = Game::talent_ranks[talent_id];
+        Game::talent_status = cur > 0
+            ? (I18n::use_chinese
+                ? std::format("再次点击退回全部（返还 {} 点）",
+                    Talent::cost_to_reach(0, cur))
+                : std::format("Click again to clear (refund {} pts)",
+                    Talent::cost_to_reach(0, cur)))
+            : std::string{};
     }
 };
 
-// Rank node — select only; upgrade/refund via action bar.
+// Rank node — 1st click selects; 2nd click: forward = upgrade, back = refund.
 class TalentRankNode final : public Element {
     uint8_t talent_id;
     uint8_t rank;
 public:
     TalentRankNode(uint8_t id, uint8_t r)
-        : Element(TalentUi::kNodeHit, TalentUi::kBranchH, { .no_animation = 1 }),
+        : Element(TalentUi::kNodeHit, Input::is_mobile ? 46.f : TalentUi::kBranchH,
+                  { .no_animation = 1 }),
           talent_id(id), rank(r) {}
     void on_render(Renderer &ctx) override {
         uint32_t level = talent_player_level();
@@ -1715,14 +1758,16 @@ public:
         uint8_t locked = rank > max_r;
         uint8_t owned = cur >= rank;
         uint8_t tip = cur == rank;
-        uint8_t next = !owned && !locked && rank == (uint8_t) (cur + 1);
-        uint8_t next_ok = next
+        // Any higher unlocked rank is a jump target (not only cur+1)
+        uint8_t jump = !owned && !locked && rank > cur;
+        uint8_t jump_ok = jump
             && Talent::can_set_rank(talent_id, rank, level, Game::talent_ranks.data());
+        uint8_t next = jump && rank == (uint8_t) (cur + 1);
         uint8_t selected = g_tal_sel_id == talent_id && g_tal_sel_rank == rank;
         uint8_t pulsing = g_tal_fx_id == talent_id && g_tal_fx_rank == rank
             && Game::timestamp < g_tal_fx_until;
 
-        float r = tip ? 19.f : (next ? 17.f : 16.f);
+        float r = tip ? 19.f : (jump_ok ? 17.f : 16.f);
         if (pulsing) {
             float t = (float) ((g_tal_fx_until - Game::timestamp) / 160.0);
             r *= 1.f + 0.12f * t;
@@ -1734,19 +1779,19 @@ public:
         uint32_t stroke;
         float stroke_w;
         if (locked) {
-            fill = TalentUi::kLocked;
+            fill = 0xff65564E;
             stroke = 0xff2E2C28;
             stroke_w = 2.f;
         } else if (owned) {
             fill = talent_active_fill(talent_id, rank);
             stroke = tip ? TalentUi::kTipRing : talent_active_stroke(talent_id, rank);
             stroke_w = tip ? 3.2f : 2.6f;
-        } else if (next) {
-            fill = next_ok ? TalentUi::kNextFill : 0xff8A7A55;
-            stroke = next_ok ? TalentUi::kNextStroke : 0xff5A5040;
-            stroke_w = 3.f;
+        } else if (jump) {
+            fill = jump_ok ? 0xffFFF0B5 : 0xff9B846A;
+            stroke = jump_ok ? talent_active_fill(talent_id, rank) : 0xff6D5B4C;
+            stroke_w = next ? 3.f : 2.6f;
         } else {
-            fill = 0xff3A342C;
+            fill = 0xff715D4D;
             stroke = TalentUi::kBranch;
             stroke_w = 2.f;
         }
@@ -1756,7 +1801,7 @@ public:
         ctx.arc(0, 0, r);
         ctx.fill();
         if (!locked && owned && !talent_is_slots(talent_id)) {
-            ctx.set_fill(0x66A8E68A);
+            ctx.set_fill(0x66ffffff);
             ctx.begin_path();
             ctx.arc(-r * 0.28f, -r * 0.30f, r * 0.38f);
             ctx.fill();
@@ -1766,16 +1811,16 @@ public:
         ctx.begin_path();
         ctx.arc(0, 0, r);
         ctx.stroke();
-        if (next && next_ok) {
+        if (jump && jump_ok) {
             ctx.set_stroke(TalentUi::kTipRing);
             ctx.set_line_width(1.8f);
             ctx.begin_path();
             ctx.arc(0, 0, r + 3.f);
             ctx.stroke();
-            {
+            if (next) {
                 RenderContext g(&ctx);
                 ctx.translate(r * 0.55f, -r * 0.75f);
-                ctx.set_fill(TalentUi::kActive);
+                ctx.set_fill(talent_active_fill(talent_id, rank));
                 ctx.begin_path();
                 ctx.arc(0, 0, 7.f);
                 ctx.fill();
@@ -1795,7 +1840,7 @@ public:
             snprintf(buf, sizeof(buf), "%u", (unsigned) rank);
             ctx.set_text_size(13.f);
             ctx.draw_text(buf, {
-                .fill = owned ? 0xffffffff : (next ? 0xffFFF4DC : 0xff8A8070),
+                .fill = owned ? 0xffffffff : (jump ? 0xffFFF4DC : 0xff8A8070),
                 .size = 13.f,
                 .stroke_scale = 0.12f
             });
@@ -1824,13 +1869,23 @@ public:
             std::string tip_s;
             if (locked)
                 tip_s = I18n::use_chinese ? "等级不足" : "Level locked";
-            else if (owned)
-                tip_s = talent_effect_text(talent_id, rank);
-            else if (next) {
-                uint32_t cost = Talent::rank_cost(rank);
+            else if (owned) {
+                if (rank < cur) {
+                    uint32_t back = Talent::cost_to_reach(rank, cur);
+                    tip_s = I18n::use_chinese
+                        ? std::format("再点退回到此（还 {} 点）", back)
+                        : std::format("Click again to refund {} pts", back);
+                } else if (rank == cur && cur > 0) {
+                    tip_s = I18n::use_chinese
+                        ? std::format("再点退回一级（还 {} 点）", Talent::rank_cost(cur))
+                        : std::format("Click again −1 (refund {} pts)", Talent::rank_cost(cur));
+                } else
+                    tip_s = talent_effect_text(talent_id, rank);
+            } else if (jump) {
+                uint32_t cost = Talent::cost_to_reach(cur, rank);
                 tip_s = I18n::use_chinese
-                    ? std::format("升级消耗 {} 点", cost)
-                    : std::format("Costs {} pts", cost);
+                    ? std::format("再点升到此阶（花 {} 点）", cost)
+                    : std::format("Click again (spend {} pts)", cost);
             } else
                 tip_s = I18n::use_chinese ? "需先点亮前置" : "Need prior rank";
             ctx.set_text_size(11.f);
@@ -1841,11 +1896,35 @@ public:
     }
     void on_event(uint8_t e) override {
         if (e != Ui::kClick) return;
+        uint8_t already = g_tal_sel_id == talent_id && g_tal_sel_rank == rank;
+        if (already) {
+            talent_try_apply_selected();
+            return;
+        }
         talent_select(talent_id, rank);
         uint32_t level = talent_player_level();
-        if (rank > Talent::max_rank_for(talent_id, level)) {
+        uint8_t cur = Game::talent_ranks[talent_id];
+        uint8_t target = talent_apply_target(talent_id, rank);
+        if (rank > Talent::max_rank_for(talent_id, level) && rank > cur) {
             Game::talent_status = I18n::use_chinese
                 ? "当前等级尚未解锁该阶" : "Rank locked at this level";
+        } else if (target > cur) {
+            uint32_t cost = Talent::cost_to_reach(cur, target);
+            if (talent_can_apply_to(talent_id, rank)) {
+                Game::talent_status = I18n::use_chinese
+                    ? std::format("再次点击升到第{}级（花费 {} 点）", target, cost)
+                    : std::format("Click again → rank {} (spend {} pts)", target, cost);
+            } else {
+                uint32_t have = Talent::points_free(level, Game::talent_ranks);
+                Game::talent_status = I18n::use_chinese
+                    ? std::format("升到第{}级需 {} 点（现有 {}）", target, cost, have)
+                    : std::format("Rank {} needs {} pts (have {})", target, cost, have);
+            }
+        } else if (target < cur) {
+            uint32_t back = Talent::cost_to_reach(target, cur);
+            Game::talent_status = I18n::use_chinese
+                ? std::format("再次点击退回到第{}级（返还 {} 点）", target, back)
+                : std::format("Click again → rank {} (refund {} pts)", target, back);
         } else {
             Game::talent_status.clear();
         }
@@ -1856,12 +1935,15 @@ class TalentBranchLabel final : public Element {
     uint8_t talent_id;
 public:
     explicit TalentBranchLabel(uint8_t id)
-        : Element(86, TalentUi::kBranchH, { .no_animation = 1 }), talent_id(id) {}
+        : Element(Input::is_mobile ? 260.f : 86.f,
+                  Input::is_mobile ? 38.f : TalentUi::kBranchH,
+                  { .no_animation = 1 }), talent_id(id) {}
     void on_render(Renderer &ctx) override {
         uint8_t cur = Game::talent_ranks[talent_id];
+        if (Input::is_mobile) ctx.translate(-width * 0.5f + 36.f, -3.f);
         ctx.set_text_size(15.f);
         ctx.draw_text(talent_name(talent_id), {
-            .fill = TalentUi::kText, .size = 15.f, .stroke_scale = 0.12f
+            .fill = talent_active_fill(talent_id, 1), .size = 15.f, .stroke_scale = 0.12f
         });
         {
             RenderContext g(&ctx);
@@ -1882,6 +1964,24 @@ public:
 static Element *make_talent_branch(uint8_t id) {
     uint8_t max_nodes = id == TalentID::kSlots
         ? Talent::kMaxSlotRanks : Talent::kMaxGradeRank;
+    if (Input::is_mobile) {
+        std::vector<Element *> first, second;
+        for (uint8_t r = 1; r <= max_nodes; ++r) {
+            if (r <= 5) first.push_back(new TalentRankNode(id, r));
+            else second.push_back(new TalentRankNode(id, r));
+        }
+        std::vector<Element *> contents = {
+            new TalentBranchLabel(id),
+            new Ui::HContainer(first, 0, 10, { .no_animation = 1 })
+        };
+        if (!second.empty())
+            contents.push_back(new Ui::HContainer(second, 0, 10, { .no_animation = 1 }));
+        return new Ui::VContainer(contents, 8, 0, {
+            .fill = talent_card_fill(id),
+            .round_radius = 16,
+            .no_animation = 1
+        });
+    }
     std::vector<Element *> row;
     row.push_back(new TalentBranchLabel(id));
     row.push_back(new TalentRootNode(id));
@@ -1890,67 +1990,102 @@ static Element *make_talent_branch(uint8_t id) {
         row.push_back(new TalentRankNode(id, r));
     }
     return new Ui::HContainer(row, 8, 3, {
-        .fill = TalentUi::kCard,
+        .fill = talent_card_fill(id),
         .line_width = 0,
-        .round_radius = 12,
+        .round_radius = 16,
         .no_animation = 1
     });
 }
 
+class TalentTreeScroll final : public Ui::ScrollContainer {
+public:
+    explicit TalentTreeScroll(Element *content) : Ui::ScrollContainer(content, 490.f) {
+        always_capture_wheel = 1;
+    }
+    void refactor() override {
+        float view_h = (float) (Ui::window_height / Ui::scale);
+        height = std::clamp(view_h - (Input::is_mobile ? 330.f : 340.f), 220.f, 510.f);
+        Ui::ScrollContainer::refactor();
+    }
+};
+
 class TalentActionSummary final : public Element {
 public:
-    TalentActionSummary() : Element(420, 36, { .no_animation = 1 }) {}
+    TalentActionSummary()
+        : Element(Input::is_mobile ? 340.f : 420.f, 36,
+                  { .no_animation = 1 }) {}
     void refactor() override {
-        width = parent != nullptr ? fmax(420.f, parent->width - 24.f) : 420.f;
+        // Fixed content width — never follow parent (VContainer ↔ child loop).
+        width = Input::is_mobile ? 340.f : 520.f;
     }
     void on_render(Renderer &ctx) override {
         std::string line;
-        if (g_tal_sel_id >= TalentID::kNum) {
+        if (Input::is_mobile) {
+            if (g_tal_sel_id >= TalentID::kNum)
+                line = I18n::use_chinese
+                    ? "点选→再点：往后升 / 往前退" : "Select→tap: forward / back";
+            else {
+                uint8_t cur = Game::talent_ranks[g_tal_sel_id];
+                uint8_t target = talent_apply_target(g_tal_sel_id, g_tal_sel_rank);
+                if (target > cur) {
+                    uint32_t cost = Talent::cost_to_reach(cur, target);
+                    line = I18n::use_chinese
+                        ? std::format("{} · {}→{} · 花{}点 · 再点升",
+                            talent_name(g_tal_sel_id), cur, target, cost)
+                        : std::format("{} · {}→{} · {}pts · tap up",
+                            talent_name(g_tal_sel_id), cur, target, cost);
+                } else if (target < cur) {
+                    uint32_t back = Talent::cost_to_reach(target, cur);
+                    line = I18n::use_chinese
+                        ? std::format("{} · {}→{} · 还{}点 · 再点退",
+                            talent_name(g_tal_sel_id), cur, target, back)
+                        : std::format("{} · {}→{} · +{}pts · tap back",
+                            talent_name(g_tal_sel_id), cur, target, back);
+                } else {
+                    line = std::format("{}  Lv{}", talent_name(g_tal_sel_id), cur);
+                }
+            }
+        } else if (g_tal_sel_id >= TalentID::kNum) {
             line = I18n::use_chinese
-                ? "选择天赋节点查看详情" : "Select a talent node for details";
-        } else if (g_tal_sel_rank == 0) {
-            uint8_t cur = Game::talent_ranks[g_tal_sel_id];
-            line = I18n::use_chinese
-                ? std::format("选中：{} · 当前 Lv{}", talent_name(g_tal_sel_id), cur)
-                : std::format("Selected: {} · Lv{}", talent_name(g_tal_sel_id), cur);
+                ? "第一次选中；再点：往后升级，往前退回"
+                : "Select once; again: forward upgrades, back refunds";
         } else {
             uint8_t cur = Game::talent_ranks[g_tal_sel_id];
+            uint8_t target = talent_apply_target(g_tal_sel_id, g_tal_sel_rank);
             uint32_t level = talent_player_level();
-            uint8_t locked = g_tal_sel_rank > Talent::max_rank_for(g_tal_sel_id, level);
-            if (locked) {
+            if (target > cur
+                && g_tal_sel_rank > Talent::max_rank_for(g_tal_sel_id, level)) {
                 line = I18n::use_chinese
                     ? std::format("选中：{} · 第{}级（未解锁）",
                         talent_name(g_tal_sel_id), g_tal_sel_rank)
                     : std::format("Selected: {} · rank {} (locked)",
                         talent_name(g_tal_sel_id), g_tal_sel_rank);
-            } else if (g_tal_sel_rank == (uint8_t) (cur + 1)) {
-                uint32_t cost = Talent::rank_cost(g_tal_sel_rank);
+            } else if (target > cur) {
+                uint32_t cost = Talent::cost_to_reach(cur, target);
+                uint8_t ok = Talent::can_set_rank(
+                    g_tal_sel_id, target, level, Game::talent_ranks.data());
                 line = I18n::use_chinese
-                    ? std::format("选中：{} · {} → {}（消耗 {} 点）",
-                        talent_name(g_tal_sel_id), cur, g_tal_sel_rank, cost)
-                    : std::format("Selected: {} · {} → {} ({} pts)",
-                        talent_name(g_tal_sel_id), cur, g_tal_sel_rank, cost);
-            } else if (g_tal_sel_rank == cur && cur > 0) {
-                uint32_t back = Talent::rank_cost(cur);
+                    ? (ok
+                        ? std::format("选中：{} · {} → {}（再点升级，花费 {} 点）",
+                            talent_name(g_tal_sel_id), cur, target, cost)
+                        : std::format("选中：{} · {} → {}（需 {} 点，不足）",
+                            talent_name(g_tal_sel_id), cur, target, cost))
+                    : (ok
+                        ? std::format("Selected: {} · {} → {} (click to spend {} pts)",
+                            talent_name(g_tal_sel_id), cur, target, cost)
+                        : std::format("Selected: {} · {} → {} (need {} pts)",
+                            talent_name(g_tal_sel_id), cur, target, cost));
+            } else if (target < cur) {
+                uint32_t back = Talent::cost_to_reach(target, cur);
                 line = I18n::use_chinese
-                    ? std::format("选中：{} · 第{}级（可退回，返还 {} 点）",
-                        talent_name(g_tal_sel_id), cur, back)
-                    : std::format("Selected: {} · rank {} (refund {} pts)",
-                        talent_name(g_tal_sel_id), cur, back);
-            } else if (g_tal_sel_rank <= cur) {
-                line = I18n::use_chinese
-                    ? std::format("选中：{} · 第{}级 · {}",
-                        talent_name(g_tal_sel_id), g_tal_sel_rank,
-                        talent_effect_text(g_tal_sel_id, g_tal_sel_rank))
-                    : std::format("Selected: {} · rank {} · {}",
-                        talent_name(g_tal_sel_id), g_tal_sel_rank,
-                        talent_effect_text(g_tal_sel_id, g_tal_sel_rank));
+                    ? std::format("选中：{} · {} → {}（再点退回，返还 {} 点）",
+                        talent_name(g_tal_sel_id), cur, target, back)
+                    : std::format("Selected: {} · {} → {} (click to refund {} pts)",
+                        talent_name(g_tal_sel_id), cur, target, back);
             } else {
                 line = I18n::use_chinese
-                    ? std::format("选中：{} · 第{}级（需先点亮前置）",
-                        talent_name(g_tal_sel_id), g_tal_sel_rank)
-                    : std::format("Selected: {} · rank {} (need prior)",
-                        talent_name(g_tal_sel_id), g_tal_sel_rank);
+                    ? std::format("选中：{} · 当前 Lv{}", talent_name(g_tal_sel_id), cur)
+                    : std::format("Selected: {} · Lv{}", talent_name(g_tal_sel_id), cur);
             }
         }
         ctx.set_text_size(13.f);
@@ -1964,21 +2099,15 @@ Element *Ui::make_talents_panel() {
     std::vector<Element *> attr_branches;
     for (uint8_t id = 0; id < TalentID::kSlots; ++id)
         attr_branches.push_back(make_talent_branch(id));
-    Element *slots_branch = make_talent_branch(TalentID::kSlots);
+    Element *tree = new TalentTreeScroll(new Ui::VContainer({
+        new Ui::VContainer(attr_branches, 0, 6, { .no_animation = 1 }),
+        new Ui::DynamicText(14, [](){
+            return I18n::use_chinese ? std::string{"✦ 槽位分支"} : std::string{"✦ Slot branch"};
+        }, { .fill = Chrome::kGold, .h_justify = Style::Left }),
+        make_talent_branch(TalentID::kSlots)
+    }, 0, 8, { .h_justify = Style::Left, .no_animation = 1 }));
 
     Element *normal_actions = new Ui::HContainer({
-        new Ui::Button(118, 40,
-            new Ui::DynamicText(15, [](){
-                return I18n::use_chinese ? std::string{"− 退回"} : std::string{"− Refund"};
-            }),
-            on_talent_refund_one, talent_refund_darken,
-            { .fill = TalentUi::kBtnDown, .line_width = 0, .round_radius = 10 }),
-        new Ui::Button(118, 40,
-            new Ui::DynamicText(15, [](){
-                return I18n::use_chinese ? std::string{"+ 升级"} : std::string{"+ Upgrade"};
-            }),
-            on_talent_upgrade, talent_upgrade_darken,
-            { .fill = TalentUi::kBtnUp, .line_width = 0, .round_radius = 10 }),
         new Ui::Button(108, 34,
             new Ui::DynamicText(13, [](){
                 return I18n::use_chinese ? std::string{"重置全部"} : std::string{"Reset all"};
@@ -1990,12 +2119,15 @@ Element *Ui::make_talents_panel() {
         .no_animation = 1
     });
 
-    Element *confirm_actions = new Ui::HContainer({
-        new Ui::DynamicText(13, [](){
-            return I18n::use_chinese
-                ? std::string{"重置全部天赋？将按规则返还已分配点数。"}
-                : std::string{"Reset all talents? Points refunded per rules."};
-        }, { .fill = TalentUi::kText }),
+    Element *confirm_label = new Ui::DynamicText(13, [](){
+        if (Input::is_mobile)
+            return I18n::use_chinese ? std::string{"重置全部天赋并返还点数？"}
+                : std::string{"Reset and refund all points?"};
+        return I18n::use_chinese
+            ? std::string{"重置全部天赋？将按规则返还已分配点数。"}
+            : std::string{"Reset all talents? Points refunded per rules."};
+    }, { .fill = TalentUi::kText });
+    Element *confirm_buttons = new Ui::HContainer({
         new Ui::Button(88, 34,
             new Ui::DynamicText(13, [](){
                 return I18n::use_chinese ? std::string{"取消"} : std::string{"Cancel"};
@@ -2008,30 +2140,39 @@ Element *Ui::make_talents_panel() {
             }),
             on_talent_reset_confirm, nullptr,
             { .fill = TalentUi::kBtnReset, .line_width = 0, .round_radius = 9 }),
-    }, 0, 10, {
+    }, 0, 10, { .no_animation = 1 });
+    Element *confirm_actions = new Ui::VContainer({
+        confirm_label, confirm_buttons
+    }, 0, 4, {
         .should_render = [](){ return g_tal_reset_ask != 0; },
         .no_animation = 1
     });
 
-    return make_drawer({
-        new Ui::DynamicText(28, [](){ return I18n::tr(I18n::kPanelTalents); }, {
-            .fill = Chrome::kTitle, .h_justify = Style::Left
-        }),
+    Element *panel = make_drawer({
+        new Ui::HFlexContainer(
+            new Ui::DynamicText(28, [](){ return I18n::tr(I18n::kPanelTalents); }, {
+                .fill = Chrome::kTitle
+            }),
+            new Ui::Button(36, 36,
+                new Ui::DynamicText(20, [](){ return std::string{"×"}; }),
+                on_close_inventory, nullptr,
+                { .fill = Chrome::kBtnDanger, .round_radius = 12 }),
+            0, 8, { .no_animation = 1 }),
         new Ui::HContainer({
             new TalentInfoCapsule(0),
             new TalentInfoCapsule(1),
             new TalentInfoCapsule(2),
         }, 0, 8, { .h_justify = Style::Left, .no_animation = 1 }),
         new Ui::DynamicText(12, [](){
+            if (Input::is_mobile)
+                return I18n::use_chinese
+                    ? std::string{"点选→再点：往后升级，往前退回（点数按中间各级加减）"}
+                    : std::string{"Select→tap: forward upgrades, back refunds"};
             return I18n::use_chinese
-                ? "点击节点查看；用下方按钮升级或退回（每级+1点，升阶消耗递增）。"
-                : "Select a node, then Upgrade / Refund below. +1 pt/level; costs rise per rank.";
+                ? std::string{"第一次点选中；再点同节点：往后升级、往前退回。点数按点亮/熄灭的节点累计加减。"}
+                : std::string{"Click to select; click again: forward = upgrade, back = refund. Points = sum of ranks."};
         }, { .fill = 0xffE8D4B0, .h_justify = Style::Left }),
-        new Ui::VContainer(attr_branches, 2, 6, { .no_animation = 1 }),
-        new Ui::DynamicText(12, [](){
-            return I18n::use_chinese ? std::string{"槽位分支"} : std::string{"Slot branch"};
-        }, { .fill = Chrome::kGold, .h_justify = Style::Left }),
-        slots_branch,
+        tree,
         new TalentActionSummary(),
         normal_actions,
         confirm_actions,
@@ -2044,6 +2185,12 @@ Element *Ui::make_talents_panel() {
             .fill = Chrome::kGold, .h_justify = Style::Left
         })
     }, Game::kPanelTalents);
+    panel->style.round_radius = 18.f;
+    if (Input::is_mobile) {
+        panel->x = 76.f;
+        panel->style.no_animation = 1;
+    }
+    return panel;
 }
 
 class CraftHeader final : public Ui::Container {
@@ -2087,15 +2234,20 @@ Element *Ui::make_craft_panel() {
                     return I18n::use_chinese ? "将五个相同的花瓣" : "Place five matching petals";
                 }, { .fill = Chrome::kTitle, .h_justify = Style::Left }),
                 new Ui::DynamicText(15, [](){
-                    return I18n::use_chinese ? "合成为更高稀有度" : "to craft a higher rarity";
+                    return I18n::use_chinese
+                        ? "合成为更高稀有度（失败损失1–4）"
+                        : "to a higher rarity (miss loses 1–4)";
                 }, { .fill = Chrome::kTitle, .h_justify = Style::Left }),
                 new Ui::DynamicText(13, [](){
                     if (Game::craft_tray_id == PetalID::kNone) return std::string{};
                     uint8_t r = PETAL_DATA[Game::craft_tray_id].rarity;
                     if (r + 1 >= RarityID::kNumRarities)
                         return I18n::use_chinese ? std::string{"已达最高稀有度"} : std::string{"Max rarity"};
-                    return std::format("{} {:.0f}%", I18n::rarity_name((uint8_t)(r + 1)),
-                                       Craft::success_chance(r) * 100.f);
+                    float pct = Craft::success_chance(r) * 100.f;
+                    // High tiers are <1%; integer % wrongly shows "0%".
+                    if (pct > 0.f && pct < 10.f)
+                        return std::format("{} {:.1f}%", I18n::rarity_name((uint8_t)(r + 1)), pct);
+                    return std::format("{} {:.0f}%", I18n::rarity_name((uint8_t)(r + 1)), pct);
                 }, { .fill = Chrome::kBody, .h_justify = Style::Left })
             }, 0, 7, { .h_justify = Style::Left })
         }, 0, 14, { .h_justify = Style::Left }),
@@ -2283,10 +2435,11 @@ static uint8_t recipe_can_craft(uint16_t idx) {
     return 1;
 }
 
-// Only list recipes the player can complete — partial recipes flash missing
-// petals that are not in the bag and make the hammer look broken.
+// Catalog: list every recipe in the tier. Missing mats stay visible (red
+// counts); hammer stays disabled until recipe_can_craft.
 static uint8_t recipe_visible(uint16_t idx) {
-    return recipe_can_craft(idx);
+    (void) idx;
+    return 1;
 }
 
 class RecipePetalChip final : public Element {
@@ -2567,8 +2720,8 @@ Element *Ui::make_special_craft_panel() {
         }, 0, 12, {}),
         new Ui::DynamicText(13, [](){
             return I18n::use_chinese
-                ? "只显示你有材料的配方；够数点右侧锤头。原料与成品都在背包。"
-                : "Only recipes with mats you own; hammer when ready. Mats & results in bag.";
+                ? "列出本阶全部配方；材料不足也会显示。够数点右侧锤头，原料与成品都在背包。"
+                : "All recipes in this tier (missing mats shown). Hammer when ready; mats & results in bag.";
         }, { .fill = 0xffb8e0e0, .h_justify = Style::Left }),
         new Ui::DynamicText(14, [](){ return Game::craft_status; }, {
             .fill = Chrome::kGold, .h_justify = Style::Left
@@ -2590,19 +2743,51 @@ static char const *shop_rarity_label() {
 }
 
 static uint8_t shop_offer_matches_rarity(Craft::ShopOffer const &offer) {
+    if (Craft::is_shop_announce(offer)) return 1; // always listed under 奇物
     if (offer.random_rarity)
         return offer.rarity == shop_filter_rarity ? 1 : 0;
     if (offer.id == PetalID::kNone || offer.id >= PetalID::kNumPetals) return 0;
     return PETAL_DATA[offer.id].rarity == shop_filter_rarity ? 1 : 0;
 }
 
+static uint8_t shop_tab_has_rarity(uint8_t tab, uint8_t rarity) {
+    uint16_t n = Craft::shop_offer_count();
+    for (uint16_t i = 0; i < n; ++i) {
+        Craft::ShopOffer const &o = Craft::shop_offer_at(i);
+        if (o.tab != tab) continue;
+        if (o.random_rarity) {
+            if (o.rarity == rarity) return 1;
+            continue;
+        }
+        if (o.id == PetalID::kNone || o.id >= PetalID::kNumPetals) continue;
+        if (PETAL_DATA[o.id].rarity == rarity) return 1;
+    }
+    return 0;
+}
+
+static void shop_snap_rarity_to_tab() {
+    if (shop_tab_has_rarity(shop_filter_tab, shop_filter_rarity)) return;
+    for (uint8_t r = 0; r < RarityID::kNumRarities; ++r) {
+        if (shop_tab_has_rarity(shop_filter_tab, r)) {
+            shop_filter_rarity = r;
+            return;
+        }
+    }
+}
+
 static void on_shop_rarity_prev(Element *, uint8_t e) {
     if (e != Ui::kClick) return;
-    shop_filter_rarity = (uint8_t) ((shop_filter_rarity + RarityID::kNumRarities - 1) % RarityID::kNumRarities);
+    for (uint8_t step = 0; step < RarityID::kNumRarities; ++step) {
+        shop_filter_rarity = (uint8_t) ((shop_filter_rarity + RarityID::kNumRarities - 1) % RarityID::kNumRarities);
+        if (shop_tab_has_rarity(shop_filter_tab, shop_filter_rarity)) return;
+    }
 }
 static void on_shop_rarity_next(Element *, uint8_t e) {
     if (e != Ui::kClick) return;
-    shop_filter_rarity = (uint8_t) ((shop_filter_rarity + 1) % RarityID::kNumRarities);
+    for (uint8_t step = 0; step < RarityID::kNumRarities; ++step) {
+        shop_filter_rarity = (uint8_t) ((shop_filter_rarity + 1) % RarityID::kNumRarities);
+        if (shop_tab_has_rarity(shop_filter_tab, shop_filter_rarity)) return;
+    }
 }
 
 static char const *shop_tab_label() {
@@ -2630,7 +2815,7 @@ static char const *shop_tab_hint() {
     if (I18n::use_chinese) {
         switch (shop_filter_tab) {
             case Craft::kShopSpecials:
-                return "机制花瓣：刷币购买，野外掉率刻意压低。";
+                return "机制花瓣与全服广播；广播点购买后输入内容，空则取消。";
             case Craft::kShopMaterials:
                 return "常见群系素材；图内刷更划算，商店补缺口。";
             case Craft::kShopRareMats:
@@ -2644,7 +2829,7 @@ static char const *shop_tab_hint() {
     }
     switch (shop_filter_tab) {
         case Craft::kShopSpecials:
-            return "Utility petals — farm coins; wild drops are nerfed.";
+            return "Utility petals + server announce; buy then type (empty cancels).";
         case Craft::kShopMaterials:
             return "Common biome mats; farming is better EV, shop fills gaps.";
         case Craft::kShopRareMats:
@@ -2686,7 +2871,16 @@ public:
         uint32_t have = Game::craft_owned(PetalID::kCoin);
         uint8_t can = have >= cost;
         Chrome::draw_plate(ctx, width, height, 0xff3a4a52, Chrome::kRadius, 0.f);
-        if (offer.random_rarity) {
+        if (Craft::is_shop_announce(offer)) {
+            ctx.translate(-width * 0.5f + 36.f, 0);
+            Chrome::draw_plate(ctx, 56.f, 56.f, 0xffb8860b, Chrome::kRadius, 0.f);
+            ctx.draw_text("!", { .fill = 0xffffffff, .size = 28.f, .stroke_scale = 0.1f });
+            ctx.translate(width * 0.5f - 36.f, 0);
+            ctx.translate(-width * 0.5f + 110.f, -10.f);
+            ctx.draw_text(I18n::use_chinese ? "全服广播" : "Server Announce", {
+                .fill = 0xffffffff, .size = 18.f, .stroke_scale = 0.1f
+            });
+        } else if (offer.random_rarity) {
             ctx.translate(-width * 0.5f + 36.f, 0);
             Chrome::draw_plate(ctx, 56.f, 56.f, RARITY_COLORS[offer.rarity], Chrome::kRadius, 0.f);
             ctx.draw_text("?", { .fill = 0xffffffff, .size = 28.f, .stroke_scale = 0.1f });
@@ -2743,6 +2937,10 @@ public:
             Game::craft_status = I18n::use_chinese ? "钱币不足" : "Not enough coins";
             return;
         }
+        if (Craft::is_shop_announce(offer)) {
+            Game::open_shop_announce_prompt();
+            return;
+        }
         if (offer.random_rarity) {
             Game::craft_buy_rarity(offer.rarity);
             return;
@@ -2767,10 +2965,12 @@ static Element *make_shop_scroll() {
 static void on_shop_tab_prev(Element *, uint8_t e) {
     if (e != Ui::kClick) return;
     shop_filter_tab = (uint8_t) ((shop_filter_tab + Craft::kShopTabCount - 1) % Craft::kShopTabCount);
+    shop_snap_rarity_to_tab();
 }
 static void on_shop_tab_next(Element *, uint8_t e) {
     if (e != Ui::kClick) return;
     shop_filter_tab = (uint8_t) ((shop_filter_tab + 1) % Craft::kShopTabCount);
+    shop_snap_rarity_to_tab();
 }
 
 Element *Ui::make_shop_panel() {
@@ -2837,5 +3037,64 @@ Element *Ui::make_shop_panel() {
         })
     }, Game::kPanelShop);
     elt->style.fill = 0xff2c3e50;
+    return elt;
+}
+
+static TextInput *g_shop_announce_input = nullptr;
+
+TextInput *Ui::shop_announce_text_input() {
+    return g_shop_announce_input;
+}
+
+Element *Ui::make_shop_announce_prompt() {
+    g_shop_announce_input = new TextInput(
+        Game::shop_announce_draft,
+        Input::is_mobile ? 300.f : 420.f,
+        42, MAX_CHAT_LENGTH, {
+            .fill = 0xfff5f5f5, .line_width = 2, .round_radius = 6,
+            .h_justify = Style::Left, .no_animation = 1
+        });
+    Element *elt = new Ui::VContainer({
+        new Ui::DynamicText(22, [](){
+            return I18n::use_chinese ? "全服广播" : "Server Announce";
+        }, { .fill = 0xffffffff }),
+        new Ui::DynamicText(13, [](){
+            return I18n::use_chinese
+                ? std::format("输入内容后回车发送（{} 币）；空内容 / Esc 取消",
+                              Craft::kShopAnnounceCost)
+                : std::format("Enter to send ({} coins); empty / Esc cancels",
+                              Craft::kShopAnnounceCost);
+        }, { .fill = 0xffd0d8e0 }),
+        g_shop_announce_input,
+        new Ui::HContainer({
+            new Ui::Button(100, 40,
+                new Ui::DynamicText(15, [](){
+                    return I18n::use_chinese ? std::string{"取消"} : std::string{"Cancel"};
+                }),
+                [](Element *, uint8_t e){
+                    if (e == Ui::kClick) Game::close_shop_announce_prompt();
+                }, nullptr,
+                { .fill = Chrome::kBtnIron, .line_width = 0, .round_radius = Chrome::kRadius }),
+            new Ui::Button(100, 40,
+                new Ui::DynamicText(15, [](){
+                    return I18n::use_chinese ? std::string{"发送"} : std::string{"Send"};
+                }),
+                [](Element *, uint8_t e){
+                    if (e == Ui::kClick) Game::submit_shop_announce();
+                }, nullptr,
+                { .fill = Chrome::kBtnMoss, .line_width = 0, .round_radius = Chrome::kRadius }),
+        }, 0, 12)
+    }, 18, 12, {
+        .fill = 0xee2c3e50,
+        .line_width = Chrome::kRim,
+        .round_radius = Chrome::kRadius,
+        .should_render = [](){
+            return Game::shop_announce_prompt_open
+                && (Game::alive() || Game::on_game_screen)
+                && Game::should_render_game_ui();
+        },
+        .h_justify = Style::Center,
+        .v_justify = Style::Middle
+    });
     return elt;
 }

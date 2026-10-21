@@ -123,7 +123,7 @@ void GameInstance::init(uint8_t id) {
     // Density-capped fill (was ENTITY_CAP/2 = 4096 attempts × 8 maps → boot+CPU hog).
     // Zone caps inside spawn_zone_mob still apply; this only limits attempts.
     // Keep init lean: occupied-map tick must stay well under 50ms for input feel.
-    constexpr uint32_t kInitSpawnAttempts = 840;
+    constexpr uint32_t kInitSpawnAttempts = 900;
     for (uint32_t i = 0; i < kInitSpawnAttempts; ++i)
         Map::spawn_zone_mob(&simulation);
     // Startup diagnostics: which mob species actually spawned in this biome.

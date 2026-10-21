@@ -237,6 +237,7 @@ void push_zone(MapZones &z, ZoneDefinition tmpl, float l, float top, float r, fl
     tmpl.left = l; tmpl.top = top; tmpl.right = r; tmpl.bottom = b;
     tmpl.difficulty = diff;
     tmpl.color = color;
+    tmpl.density *= MOB_DENSITY_MULTIPLIER;
     z.push(tmpl);
 }
 

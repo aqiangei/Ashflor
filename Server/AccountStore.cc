@@ -135,6 +135,12 @@ static uint8_t bind_session(Client *client, std::string const &username, Account
     client->last_bonus_sync = 0;
     client->guild_name = acc->guild_name;
     client->guild_leader = acc->guild_leader ? 1 : 0;
+    {
+        uint32_t lv = acc->level < 1 ? 1 : acc->level;
+        if (lv > MAX_PLAYER_LEVEL) lv = MAX_PLAYER_LEVEL;
+        // Account only stores level floor; mid-level XP is session-side.
+        client->pending_score = level_to_score(lv);
+    }
     ACTIVE_SESSIONS.insert(username);
     if (client->game != nullptr && client->game->simulation.ent_exists(client->camera) && !client->alive())
         AccountStore::apply_to_camera(&client->game->simulation, client->game->simulation.get_ent(client->camera), *acc);
@@ -258,7 +264,10 @@ void AccountStore::load() {
         ls >> acc.username >> pass_hash >> level;
         if (acc.username.empty() || !valid_username(acc.username)) continue;
         acc.pass_hash = pass_hash;
-        acc.level = level < 1 ? 1 : level;
+        // Do NOT clamp inflated levels here — XpMigration::run_once rewrites
+        // only exploded accounts; safe/gray rows must stay byte-identical.
+        if (level < 1) level = 1;
+        acc.level = level;
         acc.petals.fill(PetalID::kNone);
         acc.craft_bank.fill(0);
         acc.coins = 0;
@@ -499,6 +508,11 @@ uint32_t AccountStore::registered_count() {
     return (uint32_t) ACCOUNTS.size();
 }
 
+void AccountStore::for_each_account(std::function<void(std::string const &, Account &)> const &fn) {
+    for (auto &kv : ACCOUNTS)
+        fn(kv.first, kv.second);
+}
+
 void AccountStore::seed_leaderboard_levels() {
     for (auto const &kv : ACCOUNTS) {
         if (kv.first.empty()) continue;
@@ -591,7 +605,10 @@ static void copy_progress(Account &acc, Client *client) {
         for (uint32_t i = 0; i < 2 * MAX_SLOT_COUNT; ++i)
             next[i] = camera.get_inventory(i);
     }
+    // Future soft ceiling only (post-migration grind). Never wipe inventory.
+    if (level > MAX_PLAYER_LEVEL) level = MAX_PLAYER_LEVEL;
     if (level > acc.level) acc.level = level;
+    if (acc.level > MAX_PLAYER_LEVEL) acc.level = MAX_PLAYER_LEVEL;
 
     uint32_t const primary_n = account_primary_slots(acc, client);
     uint32_t const next_v = count_valuable_petals(next);
@@ -662,7 +679,12 @@ uint8_t AccountStore::register_account(Client *client, std::string const &userna
 void AccountStore::apply_to_camera(Simulation *sim, Entity &camera, Account const &acc) {
     for (uint32_t i = 0; i < 2 * MAX_SLOT_COUNT; ++i)
         PetalTracker::remove_petal(sim, camera.get_inventory(i));
-    camera.set_respawn_level(acc.level);
+    {
+        uint32_t lv = acc.level;
+        if (lv < 1) lv = 1;
+        if (lv > MAX_PLAYER_LEVEL) lv = MAX_PLAYER_LEVEL;
+        camera.set_respawn_level(lv);
+    }
     for (uint32_t i = 0; i < 2 * MAX_SLOT_COUNT; ++i) {
         PetalID::T id = acc.petals[i];
         if (id >= PetalID::kNumPetals) id = PetalID::kNone;

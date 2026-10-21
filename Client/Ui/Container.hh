@@ -37,10 +37,13 @@ namespace Ui {
     class HFlexContainer final : public Container {
         float inner_pad = 0;
         float outer_pad = 0;
+        // Same stretch as on_render: title left / close right without growing parent.
+        float stretched_width() const;
     public:
         HFlexContainer(Element *, Element *, float, float, Style = {});
 
         virtual void refactor() override;
         virtual void on_render(Renderer &) override;
+        virtual void poll_events(ScreenEvent const &) override;
     };
 }

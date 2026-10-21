@@ -74,8 +74,11 @@ namespace Ui {
     void ui_swap_petals(uint8_t, uint8_t);
     // Primary ↔ paired secondary with cross-fly animation
     void ui_swap_paired_slots(uint8_t from_pos, uint8_t to_pos);
-    // Bag click: empty/Basic primary L→R, then empty secondary; 0 if full
+    // Bag click: empty/Basic primary L→R, then empty secondary; 0 if full (bounce)
     uint8_t ui_auto_equip_from_bag(uint8_t bag_pos, float screen_x, float screen_y);
+    // Brief fly toward the loadout bar then snap back (no empty slot / refuse drop).
+    void play_bag_equip_bounce(PetalID::T id, float from_sx, float from_sy,
+                               float tip_sx = -1.f, float tip_sy = -1.f);
     // Click primary↔paired secondary (equip out / retract)
     void ui_toggle_petal_slot(uint8_t static_pos);
     // Unequip → backpack stacks (never secondary)

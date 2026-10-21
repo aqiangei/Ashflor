@@ -103,7 +103,8 @@ void Chat::send_to(Client *client, uint8_t channel, std::string const &sender, s
     client->send_packet(writer.packet, writer.at - writer.packet);
 }
 
-void Chat::broadcast_server(std::string const &sender, std::string const &text) {
+void Chat::broadcast_server(std::string const &sender, std::string const &text,
+                            std::string const &whisper_to) {
     {
         Chat::LiveBroadcast entry;
         entry.id = g_live_bc_next_id++;
@@ -118,7 +119,28 @@ void Chat::broadcast_server(std::string const &sender, std::string const &text) 
     for (uint8_t mi = 0; mi < MapID::kNumMaps; ++mi) {
         for (Client *c : Server::games[mi].clients) {
             if (c != nullptr)
-                Chat::send_to(c, ChatChannel::kChatServer, sender, text);
+                Chat::send_to(c, ChatChannel::kChatServer, sender, text, whisper_to);
+        }
+    }
+}
+
+void Chat::broadcast_server_banner(std::string const &sender, std::string const &text) {
+    {
+        Chat::LiveBroadcast entry;
+        entry.id = g_live_bc_next_id++;
+        if (g_live_bc_next_id == 0) g_live_bc_next_id = 1;
+        entry.sender = sender;
+        entry.text = text;
+        g_live_bc.push_front(std::move(entry));
+        while (g_live_bc.size() > Chat::LIVE_BROADCAST_CAP)
+            g_live_bc.pop_back();
+    }
+    if (Server::games == nullptr) return;
+    // whisper_to "banner" → client top-of-screen announce (same look as aqa)
+    for (uint8_t mi = 0; mi < MapID::kNumMaps; ++mi) {
+        for (Client *c : Server::games[mi].clients) {
+            if (c != nullptr)
+                Chat::send_to(c, ChatChannel::kChatServer, sender, text, "banner");
         }
     }
 }
@@ -214,8 +236,9 @@ static void send_help(Client *client) {
         "/server|/全服 内容 — 全服(15s)",
         "/w|/whisper|/密语 名 内容 — 私聊",
         "/r|/reply|/回复 内容 — 回最近私聊",
-        "/invite|/组队 名 — 邀请入队",
-        "/leave|/离队 — 离开队伍",
+        "/invite|/组队|/squad-invite 名 — 邀请入队",
+        "/leave|/离队|/squad-leave — 离开队伍",
+        "（附近自动组队；超出范围自动离队）",
         "/guild-create|/创建公会 名",
         "/guild-invite|/公会邀请 名",
         "/guild-leave|/退会 — 离开公会",

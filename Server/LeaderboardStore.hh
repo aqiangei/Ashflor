@@ -3,6 +3,7 @@
 #include <Shared/Binary.hh>
 
 #include <cstdint>
+#include <functional>
 #include <string>
 #include <vector>
 
@@ -32,6 +33,9 @@ namespace LeaderboardStore {
     uint32_t recorded_count();
     // Upsert by name; keeps the higher score and refreshes color when score ties/raises.
     void record(std::string const &name, uint32_t score, uint8_t color);
+    // Absolute set (may lower). Used by XP inflation migration only.
+    void force_set_level_score(std::string const &name, uint32_t level, uint32_t score);
+    void for_each_entry_mutable(std::function<void(LeaderboardEntry &)> const &fn);
     // Fill top LEADERBOARD_SIZE entries sorted by score desc.
     void fill_top(std::vector<LeaderboardEntry> &out);
     // True if another connected client already claimed this play name.

@@ -169,6 +169,138 @@ static Ui::Element *make_petal_stat_container(PetalID::T id) {
             new Ui::StaticText(12, format_number(attrs.slow_inflict_seconds) + "s")
         }, 0, 5, { .h_justify = Style::Left }));
     }
+    if (attrs.dandelion_inflict_seconds > 0) {
+        stats.push_back(new Ui::HContainer({
+            new Ui::DynamicText(12, [](){
+                return I18n::use_chinese ? "禁疗：" : "Anti-heal:";
+            }, { .fill = 0xffc4a35a }),
+            new Ui::StaticText(12, format_number(attrs.dandelion_inflict_seconds) + "s")
+        }, 0, 5, { .h_justify = Style::Left }));
+    }
+    // Ground aura (Monstera / World Tree / Chrono…): heal, range, duration
+    if (attrs.aura_heal > 0) {
+        stats.push_back(new Ui::HContainer({
+            new Ui::DynamicText(12, [](){
+                return I18n::use_chinese ? "光环治疗：" : "Aura Heal:";
+            }, { .fill = 0xff6fdc8c }),
+            new Ui::StaticText(12, format_number(attrs.aura_heal) + "/s")
+        }, 0, 5, { .h_justify = Style::Left }));
+    }
+    if (attrs.aura_radius > 0) {
+        stats.push_back(new Ui::HContainer({
+            new Ui::DynamicText(12, [](){
+                return I18n::use_chinese ? "光环范围：" : "Aura Range:";
+            }, { .fill = 0xff6fdc8c }),
+            new Ui::StaticText(12, format_number(attrs.aura_radius))
+        }, 0, 5, { .h_justify = Style::Left }));
+    }
+    if (attrs.aura_duration > 0) {
+        stats.push_back(new Ui::HContainer({
+            new Ui::DynamicText(12, [](){
+                return I18n::use_chinese ? "光环持续：" : "Aura Duration:";
+            }, { .fill = 0xff6fdc8c }),
+            new Ui::StaticText(12, format_number(attrs.aura_duration) + "s")
+        }, 0, 5, { .h_justify = Style::Left }));
+    }
+    if (attrs.aura_slow_seconds > 0) {
+        stats.push_back(new Ui::HContainer({
+            new Ui::DynamicText(12, [](){
+                return I18n::use_chinese ? "光环减速：" : "Aura Slow:";
+            }, { .fill = 0xff7ec8e3 }),
+            new Ui::StaticText(12, format_number(attrs.aura_slow_seconds) + "s")
+        }, 0, 5, { .h_justify = Style::Left }));
+    }
+    if (attrs.splash_damage > 0) {
+        stats.push_back(new Ui::HContainer({
+            new Ui::DynamicText(12, [](){
+                return I18n::use_chinese ? "溅射伤害：" : "Splash Dmg:";
+            }, { .fill = 0xffff9966 }),
+            new Ui::StaticText(12, format_number(attrs.splash_damage)
+                + (attrs.splash_radius > 0
+                    ? (" (" + format_number(attrs.splash_radius) + ")")
+                    : std::string{}))
+        }, 0, 5, { .h_justify = Style::Left }));
+    }
+    if (attrs.radial_pulse_damage > 0) {
+        stats.push_back(new Ui::HContainer({
+            new Ui::DynamicText(12, [](){
+                return I18n::use_chinese ? "脉冲伤害：" : "Pulse Dmg:";
+            }, { .fill = 0xffffaa55 }),
+            new Ui::StaticText(12, format_number(attrs.radial_pulse_damage)
+                + (attrs.radial_pulse_radius > 0
+                    ? (" (" + format_number(attrs.radial_pulse_radius) + ")")
+                    : std::string{}))
+        }, 0, 5, { .h_justify = Style::Left }));
+    }
+    if (attrs.snare_seconds > 0) {
+        stats.push_back(new Ui::HContainer({
+            new Ui::DynamicText(12, [](){
+                return I18n::use_chinese ? "定身：" : "Snare:";
+            }, { .fill = 0xffc9a227 }),
+            new Ui::StaticText(12, format_number(attrs.snare_seconds) + "s")
+        }, 0, 5, { .h_justify = Style::Left }));
+    }
+    if (attrs.execute_threshold > 0) {
+        stats.push_back(new Ui::HContainer({
+            new Ui::DynamicText(12, [](){
+                return I18n::use_chinese ? "斩杀：" : "Execute:";
+            }, { .fill = 0xffff5577 }),
+            new Ui::StaticText(12,
+                format_pct(attrs.execute_threshold * 100) + " HP → ×"
+                + format_number(attrs.execute_factor))
+        }, 0, 5, { .h_justify = Style::Left }));
+    }
+    if (attrs.taunt_radius > 0) {
+        stats.push_back(new Ui::HContainer({
+            new Ui::DynamicText(12, [](){
+                return I18n::use_chinese ? "嘲讽范围：" : "Taunt Range:";
+            }, { .fill = 0xffe0a060 }),
+            new Ui::StaticText(12, format_number(attrs.taunt_radius))
+        }, 0, 5, { .h_justify = Style::Left }));
+    }
+    if (attrs.on_hit_heal > 0) {
+        stats.push_back(new Ui::HContainer({
+            new Ui::DynamicText(12, [](){
+                return I18n::use_chinese ? "击中回血：" : "On-hit Heal:";
+            }, { .fill = 0xffff96cb }),
+            new Ui::StaticText(12, format_number(attrs.on_hit_heal))
+        }, 0, 5, { .h_justify = Style::Left }));
+    }
+    if (attrs.bonus_vs_poisoned > 0) {
+        stats.push_back(new Ui::HContainer({
+            new Ui::DynamicText(12, [](){
+                return I18n::use_chinese ? "对中毒加成：" : "Vs Poisoned:";
+            }, { .fill = 0xffce76db }),
+            new Ui::StaticText(12, "+" + format_pct(attrs.bonus_vs_poisoned * 100))
+        }, 0, 5, { .h_justify = Style::Left }));
+    }
+    if (attrs.bonus_vs_slowed > 0) {
+        stats.push_back(new Ui::HContainer({
+            new Ui::DynamicText(12, [](){
+                return I18n::use_chinese ? "对减速加成：" : "Vs Slowed:";
+            }, { .fill = 0xff7ec8e3 }),
+            new Ui::StaticText(12, "+" + format_pct(attrs.bonus_vs_slowed * 100))
+        }, 0, 5, { .h_justify = Style::Left }));
+    }
+    if (attrs.hit_cycle > 0) {
+        stats.push_back(new Ui::HContainer({
+            new Ui::DynamicText(12, [](){
+                return I18n::use_chinese ? "连击强化：" : "Hit Cycle:";
+            }, { .fill = 0xffffcc66 }),
+            new Ui::StaticText(12,
+                "×" + format_number(attrs.hit_cycle_factor)
+                + " /" + format_number((float) attrs.hit_cycle))
+        }, 0, 5, { .h_justify = Style::Left }));
+    }
+    // Non-default mass (Honey / Meteor ground props)
+    if (attrs.mass > 0.1001f || attrs.mass < 0.0999f) {
+        stats.push_back(new Ui::HContainer({
+            new Ui::DynamicText(12, [](){
+                return I18n::use_chinese ? "质量：" : "Mass:";
+            }, { .fill = 0xffbbbbbb }),
+            new Ui::StaticText(12, format_number(attrs.mass))
+        }, 0, 5, { .h_justify = Style::Left }));
+    }
     if (attrs.defend_only) {
         stats.push_back(new Ui::HContainer({
             new Ui::DynamicText(12, [](){

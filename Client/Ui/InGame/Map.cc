@@ -123,6 +123,7 @@ void Minimap::on_render(Renderer &ctx) {
         if (mid >= MapID::kNumMaps) mid = MapID::kGarden;
 
         bool const show_levels = Input::keys_held.contains('G');
+        bool const show_names = show_levels; // Hold G: rarity rings + player names on dots
         ctx.draw_image_at(static_minimap(mid, width, height, show_levels), 0.f, 0.f);
 
         float self_x = -1.f;
@@ -193,6 +194,18 @@ void Minimap::on_render(Renderer &ctx) {
             ctx.arc(px, py, pr_other);
             ctx.fill();
             ctx.stroke();
+            if (show_names) {
+                std::string const &nm = Game::simulation.arena_info.minimap_names[i];
+                if (!nm.empty()) {
+                    RenderContext label(&ctx);
+                    ctx.translate(px, py - pr_other - 8.f);
+                    ctx.draw_text(nm.c_str(), {
+                        .fill = 0xffffffff,
+                        .size = Game::minimap_expanded ? 11.f : 9.5f,
+                        .stroke_scale = 0.12f
+                    });
+                }
+            }
         }
 
         // DOWN teammates (corpse pos) — pink, not in living minimap list

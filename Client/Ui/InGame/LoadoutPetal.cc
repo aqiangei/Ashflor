@@ -89,32 +89,63 @@ void Ui::ui_swap_petals(uint8_t static_pos1, uint8_t static_pos2) {
     Game::swap_petals(static_pos1, static_pos2);
 }
 
-// Gardn swap is a no-op when both sides are the same petal. Skip those slots
-// or a click on Basic looks like it did nothing.
+// Empty / Basic only — never displace a real equipped petal.
 static uint8_t find_auto_equip_target(PetalID::T incoming) {
+    (void) incoming;
     uint8_t n = Game::loadout_count;
-    auto open = [&](uint8_t i) {
-        PetalID::T id = Game::cached_loadout[i];
-        return id != incoming;
-    };
     for (uint8_t i = 0; i < n; ++i) {
-        if (Game::cached_loadout[i] == PetalID::kNone && open(i))
+        if (Game::cached_loadout[i] == PetalID::kNone)
             return i;
     }
     for (uint8_t i = 0; i < n; ++i) {
-        if (Game::cached_loadout[i] == PetalID::kBasic && open(i))
+        if (Game::cached_loadout[i] == PetalID::kBasic)
             return i;
     }
     for (uint8_t i = 0; i < n; ++i) {
         uint8_t s = (uint8_t) (n + i);
-        if (Game::cached_loadout[s] == PetalID::kNone && open(s))
+        if (Game::cached_loadout[s] == PetalID::kNone)
             return s;
     }
-    // Full bar: still equip by swapping with the first different primary.
-    for (uint8_t i = 0; i < n; ++i) {
-        if (open(i)) return i;
-    }
     return (uint8_t) -1;
+}
+
+// Bounce ghost: fly toward loadout tip then return to origin.
+static PetalID::T bag_bounce_id = PetalID::kNone;
+static float bag_bounce_ox = 0, bag_bounce_oy = 0;
+static float bag_bounce_tx = 0, bag_bounce_ty = 0;
+static double bag_bounce_start = 0;
+static constexpr float BAG_BOUNCE_MS = 320.f;
+
+void Ui::play_bag_equip_bounce(PetalID::T id, float from_sx, float from_sy,
+                               float tip_sx, float tip_sy) {
+    if (id == PetalID::kNone || id >= PetalID::kNumPetals) return;
+    bag_bounce_id = id;
+    bag_bounce_ox = from_sx;
+    bag_bounce_oy = from_sy;
+    if (tip_sx < 0.f || tip_sy < 0.f) {
+        // Aim at the middle of the primary bar (slot 0 or first visible bg).
+        UiLoadoutSlot *slot = Ui::UiLoadout::petal_backgrounds[0];
+        if (slot != nullptr && slot->showed) {
+            tip_sx = slot->screen_x;
+            tip_sy = slot->screen_y;
+        } else {
+            tip_sx = Ui::window_width * 0.5f;
+            tip_sy = Ui::window_height - 80.f * Ui::scale;
+        }
+    }
+    bag_bounce_tx = tip_sx;
+    bag_bounce_ty = tip_sy;
+    bag_bounce_start = Game::timestamp;
+}
+
+static PetalID::T bag_bounce_ghost_petal() {
+    if (bag_bounce_id == PetalID::kNone) return PetalID::kNone;
+    float elapsed = (float) (Game::timestamp - bag_bounce_start);
+    if (elapsed >= BAG_BOUNCE_MS) {
+        bag_bounce_id = PetalID::kNone;
+        return PetalID::kNone;
+    }
+    return bag_bounce_id;
 }
 
 static uint8_t loadout_editable() {
@@ -129,7 +160,10 @@ uint8_t Ui::ui_auto_equip_from_bag(uint8_t bag_pos, float screen_x, float screen
     PetalID::T id = Game::cached_loadout[bag_pos];
     if (id == PetalID::kNone || id >= PetalID::kNumPetals || Recipe::is_bag_only(id)) return 0;
     uint8_t target = find_auto_equip_target(id);
-    if (target == (uint8_t) -1 || target == bag_pos) return 0;
+    if (target == (uint8_t) -1 || target == bag_pos) {
+        play_bag_equip_bounce(id, screen_x, screen_y);
+        return 0;
+    }
 
     ui_swap_petals(target, bag_pos);
     if (Game::alive()) {
@@ -506,9 +540,10 @@ void Ui::finish_bag_gesture() {
         // Moved past slop inside the bag = scroll/swipe, not tap-to-equip.
         if (Input::is_mobile && dist >= Input::pointer_slop())
             return;
-        if (from_bank)
-            Game::withdraw_bank_petal(bank_id);
-        else if (Game::cached_loadout[pos] != PetalID::kNone)
+        if (from_bank) {
+            if (!Game::withdraw_bank_petal(bank_id))
+                play_bag_equip_bounce(bank_id, bag_gesture_x, bag_gesture_y);
+        } else if (Game::cached_loadout[pos] != PetalID::kNone)
             ui_auto_equip_from_bag(pos, bag_gesture_x, bag_gesture_y);
         return;
     }
@@ -521,9 +556,14 @@ void Ui::finish_bag_gesture() {
     }
     if (dyn == (uint8_t) -1) return;
     uint8_t dest = loadout_dynamic_to_static(dyn);
-    if (from_bank)
-        Game::withdraw_bank_petal(bank_id, dest);
-    else if (Game::cached_loadout[pos] != PetalID::kNone && dest != pos)
+    if (from_bank) {
+        float tip_sx = mx, tip_sy = my;
+        UiLoadoutSlot *bg = dyn < 2 * MAX_SLOT_COUNT + 1
+            ? Ui::UiLoadout::petal_backgrounds[dyn] : nullptr;
+        if (bg != nullptr) { tip_sx = bg->screen_x; tip_sy = bg->screen_y; }
+        if (!Game::withdraw_bank_petal(bank_id, dest))
+            play_bag_equip_bounce(bank_id, bag_gesture_x, bag_gesture_y, tip_sx, tip_sy);
+    } else if (Game::cached_loadout[pos] != PetalID::kNone && dest != pos)
         ui_swap_petals(dest, pos);
 }
 
@@ -853,9 +893,29 @@ public:
     BagDragGhost() : Element(60, 60, { .no_animation = 1, .no_polling = 1 }) {
         style.layer = 1;
         style.should_render = [](){
-            return Game::alive() && Ui::bag_gesture_ghost_petal() != PetalID::kNone;
+            if (!Game::alive()) return false;
+            return Ui::bag_gesture_ghost_petal() != PetalID::kNone
+                || bag_bounce_ghost_petal() != PetalID::kNone;
         };
         style.animate = [](Element *elt, Renderer &){
+            PetalID::T bounce = bag_bounce_ghost_petal();
+            if (bounce != PetalID::kNone) {
+                float elapsed = (float) (Game::timestamp - bag_bounce_start);
+                float u = elapsed / BAG_BOUNCE_MS;
+                if (u < 0.f) u = 0.f;
+                if (u > 1.f) u = 1.f;
+                // Out to tip by ~45%, then ease back to origin.
+                float tip = 0.45f;
+                float a = u < tip ? (u / tip) : (1.f - (u - tip) / (1.f - tip));
+                a = a * a * (3.f - 2.f * a); // smoothstep
+                float sx = bag_bounce_ox + (bag_bounce_tx - bag_bounce_ox) * a;
+                float sy = bag_bounce_oy + (bag_bounce_ty - bag_bounce_oy) * a;
+                elt->x = (sx - Ui::window_width / 2) / Ui::scale;
+                elt->y = (sy - Ui::window_height / 2) / Ui::scale;
+                elt->width = lerp(elt->width, 56.f, Ui::lerp_amount);
+                elt->height = lerp(elt->height, 56.f, Ui::lerp_amount);
+                return;
+            }
             float mx = Input::mouse_x;
             float my = Input::mouse_y;
             if (Input::is_mobile) {
@@ -883,6 +943,7 @@ public:
     }
     void on_render(Renderer &ctx) override {
         PetalID::T id = Ui::bag_gesture_ghost_petal();
+        if (id == PetalID::kNone) id = bag_bounce_ghost_petal();
         if (id == PetalID::kNone || id >= PetalID::kNumPetals) return;
         ctx.scale(width / 60.f);
         draw_loadout_background(ctx, id);

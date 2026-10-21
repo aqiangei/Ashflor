@@ -30,7 +30,7 @@ namespace Game {
         double expires_at = 0;
     };
 
-    // Top-of-screen banner for admin (aqa) 全服 broadcasts — boss-bar style.
+    // Top-of-screen banner for admin (aqa) / shop 全服 broadcasts — boss-bar style.
     struct ScreenAnnounce {
         std::string sender;
         std::string text;
@@ -38,6 +38,13 @@ namespace Game {
     };
     extern ScreenAnnounce screen_announce;
     constexpr double SCREEN_ANNOUNCE_MS = 7000;
+
+    // Shop: buy announce → type message; empty / Esc cancels (no charge).
+    extern uint8_t shop_announce_prompt_open;
+    extern std::string shop_announce_draft;
+    void open_shop_announce_prompt();
+    void close_shop_announce_prompt();
+    void submit_shop_announce();
 
     // Auto fade-in/out treasure reward (no click) — does not block input
     struct LootToast {
@@ -243,7 +250,8 @@ namespace Game {
     void save_loadout_preset(uint8_t index);
     void apply_loadout_preset(uint8_t index);
     // Equip one copy from backpack stacks. dest 0xFF = auto (empty/Basic/…).
-    void withdraw_bank_petal(PetalID::T id, uint8_t dest = (uint8_t) -1);
+    // Returns 1 if equipped into an empty/Basic slot; 0 if barred (full bar).
+    uint8_t withdraw_bank_petal(PetalID::T id, uint8_t dest = (uint8_t) -1);
     // Unequip primary/secondary into backpack stacks.
     void deposit_bank_petal(uint8_t static_pos);
     // Next non-empty cloud preset after the active one (wraps). Returns 1 if sent.
@@ -316,6 +324,7 @@ namespace Game {
     void craft_petals(uint8_t mode, PetalID::T petal_id, uint16_t max_batches = 1);
     void craft_buy_rarity(uint8_t rarity);
     void craft_buy_special(PetalID::T id);
+    void craft_buy_announce(std::string const &text);
     void craft_recipe(uint16_t recipe_index);
     // Secondary + pure bag slot copies (not primary)
     uint32_t craft_bag_count(PetalID::T id);

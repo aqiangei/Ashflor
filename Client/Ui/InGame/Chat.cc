@@ -14,16 +14,20 @@
 
 #include <Shared/Binary.hh>
 #include <Shared/Config.hh>
+#include <Shared/RarityScale.hh>
+#include <Shared/StaticDefinitions.hh>
 
 #include <Helpers/Bits.hh>
 #include <Helpers/Math.hh>
 
+#include <algorithm>
 #include <cmath>
 #include <string>
 
 using namespace Ui;
 
 static TextInput *chat_input = nullptr;
+static constexpr uint32_t kWhisperAccent = 0xffD89AFF;
 
 TextInput *Ui::chat_text_input() {
     return chat_input;
@@ -33,11 +37,25 @@ static uint32_t channel_color(uint8_t channel) {
     switch (channel) {
         case ChatChannel::kChatParty: return 0xffff69b4;
         case ChatChannel::kChatGuild: return 0xff40e0d0;
-        case ChatChannel::kChatWhisper: return 0xff9b30ff;
+        case ChatChannel::kChatWhisper: return kWhisperAccent;
         case ChatChannel::kChatSystem: return 0xffaaaaaa;
         case ChatChannel::kChatServer: return 0xffffd700;
         default: return 0xffffffff;
     }
+}
+
+// whisper_to "craft:N" from high-craft broadcast → Super/Unique rarity tint
+static uint32_t craft_line_color(Game::ChatLine const &line) {
+    if (line.whisper_to.size() < 7 || line.whisper_to.compare(0, 6, "craft:") != 0)
+        return 0;
+    unsigned r = 0;
+    for (size_t i = 6; i < line.whisper_to.size(); ++i) {
+        char c = line.whisper_to[i];
+        if (c < '0' || c > '9') break;
+        r = r * 10u + (unsigned) (c - '0');
+    }
+    if (r >= RarityID::kNumRarities) return 0;
+    return RARITY_COLORS[r] | 0xff000000;
 }
 
 static std::string channel_bracket_label() {
@@ -48,7 +66,9 @@ static std::string channel_bracket_label() {
     if (Game::chat_channel == ChatChannel::kChatServer)
         return std::string{"【"} + I18n::tr(I18n::kChatServer) + "】";
     if (Game::chat_channel == ChatChannel::kChatWhisper && !Game::chat_whisper_to.empty())
-        return "【" + Game::chat_whisper_to + "】";
+        return I18n::use_chinese
+            ? "[私聊 " + Game::chat_whisper_to + "]"
+            : "[Whisper " + Game::chat_whisper_to + "]";
     return std::string{"【"} + I18n::tr(I18n::kChatNearby) + "】";
 }
 
@@ -68,10 +88,49 @@ static uint8_t line_visible_now(uint32_t i) {
     return collapsed_line_alpha(Game::chat_lines[i]) > 0.02f;
 }
 
+struct ChatLineParts {
+    std::string tag;
+    std::string lead;
+    std::string name;
+    std::string tail;
+    std::string message;
+};
+
+static ChatLineParts chat_line_parts(Game::ChatLine const &line) {
+    if (line.channel == ChatChannel::kChatWhisper && !line.sender.empty()) {
+        bool outgoing = line.sender == Game::nickname || line.sender == Game::username;
+        return {
+            I18n::use_chinese ? "[私聊] " : "[Whisper] ",
+            outgoing ? (I18n::use_chinese ? "发给 " : "To ") : std::string{},
+            outgoing && !line.whisper_to.empty() ? line.whisper_to : line.sender,
+            outgoing ? ": " : (I18n::use_chinese ? " 对你说: " : " to you: "),
+            line.text
+        };
+    }
+    // Server channel must not look like nearby player chat (ops used to spoof "aqa").
+    if (line.channel == ChatChannel::kChatServer && !line.sender.empty()) {
+        uint8_t is_craft = line.whisper_to.size() >= 6
+            && line.whisper_to.compare(0, 6, "craft:") == 0;
+        uint8_t is_banner = line.whisper_to == "banner";
+        return {
+            is_craft
+                ? (I18n::use_chinese ? "[合成] " : "[Craft] ")
+                : (is_banner
+                    ? (I18n::use_chinese ? "[广播] " : "[Announce] ")
+                    : (I18n::use_chinese ? "[全服] " : "[Server] ")),
+            {},
+            line.sender,
+            I18n::use_chinese ? "：" : ": ",
+            line.text
+        };
+    }
+    return { {}, {}, line.sender, ": ", line.text };
+}
+
 class ChatTextInput : public TextInput {
 public:
     ChatTextInput(std::string &r, float w, float h, uint32_t m, Style s)
-        : TextInput(r, w, h, m, s) {}
+        : TextInput(r, w, h, m, s, 0, 1) {}
 
     void on_event(uint8_t e) override {
         if (e == kMouseDown || e == kClick) {
@@ -87,8 +146,20 @@ public:
         }
         TextInput::on_render_skip(ctx);
         Element::on_render(ctx);
-        ctx.set_fill(0xff888888);
-        ctx.draw_text(I18n::tr(I18n::kChatPrompt), { .fill = 0xff888888, .size = height * 0.45f });
+        // Keep unsent draft visible while collapsed (blur / Esc / outside click)
+        if (!Game::chat_draft.empty()) {
+            ctx.draw_text(Game::chat_draft.c_str(), {
+                .fill = 0xffF6F1FF,
+                .size = Input::is_mobile ? 12.5f : height * 0.45f,
+                .stroke_scale = 0
+            });
+            return;
+        }
+        ctx.draw_text(I18n::use_chinese ? "按回车键或点击此处聊天"
+                                        : (Input::is_mobile ? "Tap or Enter to chat"
+                                                            : "Press Enter or click to chat"), {
+            .fill = 0xffF6F1FF, .size = Input::is_mobile ? 12.5f : height * 0.42f
+        });
     }
 };
 
@@ -111,17 +182,14 @@ public:
             return;
         }
         visible = 1;
-        height = 16;
+        height = 17;
         Game::ChatLine const &line = Game::chat_lines[index];
         Game::renderer.set_text_size(height);
-        std::string full;
-        if (line.channel == ChatChannel::kChatSystem || line.sender.empty())
-            full = line.text;
-        else if (line.channel == ChatChannel::kChatWhisper && !line.whisper_to.empty())
-            full = line.sender + " → " + line.whisper_to + ": " + line.text;
-        else
-            full = line.sender + ": " + line.text;
-        width = Game::renderer.get_text_size(full.c_str());
+        ChatLineParts p = chat_line_parts(line);
+        std::string full = line.channel == ChatChannel::kChatSystem || line.sender.empty()
+            ? line.text : p.tag + p.lead + p.name + p.tail + p.message;
+        width = std::min(Game::renderer.get_text_size(full.c_str()),
+                         Input::is_mobile ? 350.f : 500.f);
         if (width < 40.f) width = 40.f;
     }
 
@@ -132,6 +200,8 @@ public:
         if (alpha <= 0.02f) return;
         ctx.set_global_alpha(alpha);
         uint32_t color = channel_color(line.channel);
+        uint32_t craft_col = craft_line_color(line);
+        if (craft_col != 0) color = craft_col;
         ctx.set_text_size(height);
         ctx.center_text_baseline();
         float left = -width / 2;
@@ -140,31 +210,46 @@ public:
             ctx.translate(left + ctx.get_text_size(line.text.c_str()) / 2, 0);
             ctx.fill_text(line.text.c_str());
         } else {
-            uint8_t whisper = line.channel == ChatChannel::kChatWhisper
-                && !line.whisper_to.empty();
-            std::string name = line.sender;
-            std::string arrow = whisper ? (" → " + line.whisper_to) : "";
-            std::string rest = ": " + line.text;
-            float name_w = ctx.get_text_size(name.c_str());
-            float arrow_w = arrow.empty() ? 0.f : ctx.get_text_size(arrow.c_str());
-            float rest_w = ctx.get_text_size(rest.c_str());
-            {
+            ChatLineParts p = chat_line_parts(line);
+            float tag_w = ctx.get_text_size(p.tag.c_str());
+            float lead_w = ctx.get_text_size(p.lead.c_str());
+            float name_w = ctx.get_text_size(p.name.c_str());
+            float tail_w = ctx.get_text_size(p.tail.c_str());
+            float msg_w = ctx.get_text_size(p.message.c_str());
+            float pos = left;
+            if (!p.tag.empty()) {
                 RenderContext c(&ctx);
-                ctx.set_fill(color);
-                ctx.translate(left + name_w / 2, 0);
-                ctx.fill_text(name.c_str());
+                ctx.set_fill(craft_col != 0 ? craft_col : kWhisperAccent);
+                ctx.translate(pos + tag_w / 2, 0);
+                ctx.fill_text(p.tag.c_str());
             }
-            if (!arrow.empty()) {
-                RenderContext c(&ctx);
-                ctx.set_fill(color);
-                ctx.translate(left + name_w + arrow_w / 2, 0);
-                ctx.fill_text(arrow.c_str());
-            }
-            {
+            pos += tag_w;
+            if (!p.lead.empty()) {
                 RenderContext c(&ctx);
                 ctx.set_fill(0xffffffff);
-                ctx.translate(left + name_w + arrow_w + rest_w / 2, 0);
-                ctx.fill_text(rest.c_str());
+                ctx.translate(pos + lead_w / 2, 0);
+                ctx.fill_text(p.lead.c_str());
+            }
+            pos += lead_w;
+            {
+                RenderContext c(&ctx);
+                ctx.set_fill(line.channel == ChatChannel::kChatWhisper ? 0xffffffff : color);
+                ctx.translate(pos + name_w / 2, 0);
+                ctx.fill_text(p.name.c_str());
+            }
+            pos += name_w;
+            if (!p.tail.empty()) {
+                RenderContext c(&ctx);
+                ctx.set_fill(craft_col != 0 ? craft_col : 0xffffffff);
+                ctx.translate(pos + tail_w / 2, 0);
+                ctx.fill_text(p.tail.c_str());
+            }
+            pos += tail_w;
+            {
+                RenderContext c(&ctx);
+                ctx.set_fill(craft_col != 0 ? craft_col : 0xffffffff);
+                ctx.translate(pos + msg_w / 2, 0);
+                ctx.fill_text(p.message.c_str());
             }
             if (Game::chat_open
                 && BitMath::at(Input::mouse_buttons_pressed, Input::RightMouse)) {
@@ -173,13 +258,11 @@ public:
                 float name_left = screen_x - width * Ui::scale / 2;
                 float top = screen_y - height * Ui::scale / 2;
                 float bot = screen_y + height * Ui::scale / 2;
-                float sender_right = name_left + name_w * Ui::scale;
-                float arrow_right = sender_right + arrow_w * Ui::scale;
+                float sender_left = name_left + (tag_w + lead_w) * Ui::scale;
+                float sender_right = sender_left + name_w * Ui::scale;
                 if (my >= top && my <= bot) {
-                    if (mx >= name_left && mx <= sender_right)
-                        Game::open_chat_menu(line.sender, mx, my);
-                    else if (whisper && mx > sender_right && mx <= arrow_right)
-                        Game::open_chat_menu(line.whisper_to, mx, my);
+                    if (mx >= sender_left && mx <= sender_right)
+                        Game::open_chat_menu(p.name, mx, my);
                 }
             }
         }
@@ -231,6 +314,12 @@ public:
             return;
         }
 
+        // ScrollContainer width followed the longest line, so the thumb sat mid
+        // panel. Stretch to the input-row width floor — content stays Left,
+        // bar stays Right → thumb flush with the chat panel edge.
+        float const want = Input::is_mobile ? 280.f : 470.f;
+        if (want > width) width = want;
+
         if (!Game::chat_scroll_to_end) return;
         Game::chat_scroll_to_end = 0;
         if (content != nullptr && content->height > height + 0.5f) {
@@ -251,12 +340,12 @@ Element *Ui::make_chat_panel() {
     for (uint32_t i = 0; i < Game::CHAT_HISTORY; ++i)
         line_els.push_back(new ChatLineElement(i));
     Element *history = new Ui::VContainer(line_els, 4, 3, {
-        .no_animation = 1,
-        .h_justify = Style::Left
+        .h_justify = Style::Left,
+        .no_animation = 1
     });
 
     uint8_t const mobile = Input::is_mobile;
-    float const open_h = mobile ? 160.f : 200.f;
+    float const open_h = mobile ? 320.f : 260.f;
     auto *scroll = new ChatScroll(history, open_h);
     scroll->style.should_render = [](){
         if (!(Game::alive() && Game::should_render_game_ui())) return false;
@@ -267,11 +356,11 @@ Element *Ui::make_chat_panel() {
     };
     scroll->style.h_justify = Style::Left;
 
-    float const input_w = mobile ? 300.f : 360.f;
+    float const input_w = mobile ? 180.f : 360.f;
     float const input_h = mobile ? 36.f : 32.f;
     chat_input = new ChatTextInput(Game::chat_draft, input_w, input_h, MAX_CHAT_LENGTH, {
         .line_width = 0,
-        .round_radius = Chrome::kRadius,
+        .round_radius = 10.f,
         .should_render = [](){
             return Game::alive() && Game::should_render_game_ui();
         }
@@ -315,25 +404,27 @@ Element *Ui::make_chat_panel() {
         return Game::chat_completion_hint;
     }, {
         .fill = 0xffc8b0ff,
-        .h_justify = Style::Left,
         .should_render = [](){
             return Game::chat_open && !Game::chat_completion_hint.empty();
-        }
+        },
+        .h_justify = Style::Left
     });
 
     Element *elt = new Ui::VContainer({ scroll, input_row, tab_hint }, 10, 4, {
-        .fill = 0x88000000,
-        .round_radius = Chrome::kRadius,
+        .fill = 0x990F2038,
+        .round_radius = 12.f,
         .animate = [](Element *elt, Renderer &) {
-            // Solid panel while focused; transparent when only fading toasts show.
+            // Cool translucent chat overlay; whisper mode gets a violet tint.
+            uint8_t whisper = Game::chat_channel == ChatChannel::kChatWhisper;
             if (Game::chat_open)
-                elt->style.fill = 0x88000000;
+                elt->style.fill = whisper ? 0xaa24203F : 0x990F2038;
             else {
                 uint8_t any = 0;
                 for (uint32_t i = 0; i < Game::chat_lines.size(); ++i) {
                     if (line_visible_now(i)) { any = 1; break; }
                 }
-                elt->style.fill = any ? 0x44000000 : 0x00000000;
+                elt->style.fill = any
+                    ? (whisper ? 0x8824203F : 0x770F2038) : 0x00000000;
             }
         },
         .should_render = [](){
@@ -342,14 +433,36 @@ Element *Ui::make_chat_panel() {
         .h_justify = Style::Left,
         .v_justify = Style::Bottom
     });
-    elt->x = mobile ? 64.f : 72.f;
+    elt->x = mobile ? 52.f : 72.f;
     elt->y = -16;
     Ui::chat_panel_root = elt;
     return elt;
 }
 
+class ChatContextMenu final : public Ui::VContainer {
+public:
+    ChatContextMenu(std::vector<Element *> const &children, float opad, float ipad, Style s)
+        : Ui::VContainer(children, opad, ipad, s) {}
+    void refactor() override {
+        Ui::VContainer::refactor();
+        // Left/Top window justify: x/y are UI-space offsets from screen top-left.
+        // Clamp so the whole menu stays on-screen (RMB near bottom was clipped).
+        float sx = (float) (Ui::window_width / Ui::scale);
+        float sy = (float) (Ui::window_height / Ui::scale);
+        float mx = Game::chat_menu_x / (float) Ui::scale;
+        float my = Game::chat_menu_y / (float) Ui::scale;
+        float const margin = 8.f;
+        if (mx + width > sx - margin) mx = sx - margin - width;
+        if (my + height > sy - margin) my = sy - margin - height;
+        if (mx < margin) mx = margin;
+        if (my < margin) my = margin;
+        x = mx;
+        y = my;
+    }
+};
+
 Element *Ui::make_chat_context_menu() {
-    Element *elt = new Ui::VContainer({
+    Element *elt = new ChatContextMenu({
         new Ui::DynamicText(12, [](){ return Game::chat_menu_name; }, {
             .fill = Chrome::kBody
         }),
@@ -379,10 +492,6 @@ Element *Ui::make_chat_context_menu() {
         )
     }, 8, 6, {
         .fill = Chrome::kPanelDeep, .line_width = 0, .round_radius = Chrome::kRadius,
-        .animate = [](Element *elt, Renderer &) {
-            elt->x = Game::chat_menu_x / Ui::scale;
-            elt->y = Game::chat_menu_y / Ui::scale;
-        },
         .should_render = [](){
             return Game::chat_menu_open && Game::alive() && Game::should_render_game_ui();
         },

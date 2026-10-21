@@ -6,6 +6,7 @@
 
 #include <array>
 #include <cstdint>
+#include <functional>
 #include <string>
 #include <unordered_map>
 #include <unordered_set>
@@ -54,6 +55,8 @@ namespace AccountStore {
     uint8_t valid_username(std::string const &);
     uint8_t valid_password(std::string const &);
     Account *find(std::string const &username);
+    // Mutable walk for one-shot XP inflation migration (petals/coins untouched).
+    void for_each_account(std::function<void(std::string const &, Account &)> const &fn);
     uint8_t name_reserved_for_guest(std::string const &name);
     uint8_t register_account(Client *, std::string const &username, std::string const &password);
     uint8_t login(Client *, std::string const &username, std::string const &password);

@@ -24,14 +24,18 @@ void render_health(Renderer &ctx, Entity const &ent) {
         && (ent.id == Game::player_id);
     // Level / guild stay visible at full HP; only the bar fades with opacity.
     uint8_t show_identity = is_player && !is_self;
-    uint8_t show_bar = ent.healthbar_opacity >= 0.01f;
-    if (!show_bar && !show_identity) return;
+    // Reward loot chests: always draw an HP bar (walk-up open, but still a
+    // combat-looking prop). Other mobs: name+rarity always; bar after damage.
+    uint8_t is_loot_chest = is_mob && ent.get_mob_id() == MobID::kLootChest;
+    uint8_t show_mob_label = is_mob;
+    uint8_t show_bar = is_loot_chest || ent.healthbar_opacity >= 0.01f;
+    if (!show_bar && !show_identity && !show_mob_label) return;
 
-    // Skip prop clutter (same set as nametag)
+    // Skip non-combat props (pads / crates / guide NPC). Loot chests keep a bar.
     if (is_mob) {
         MobID::T mid = ent.get_mob_id();
         if (mid == MobID::kPushCrate || mid == MobID::kYahahaPad
-            || mid == MobID::kTreasureNpc || mid == MobID::kLootChest)
+            || mid == MobID::kTreasureNpc)
             return;
     }
 
@@ -42,16 +46,18 @@ void render_health(Renderer &ctx, Entity const &ent) {
     ctx.translate(-w, w + 15);
     ctx.round_line_cap();
 
-    float const alpha = (1 - ent.deletion_animation) * (show_bar ? ent.healthbar_opacity : 1.f);
+    float const label_alpha = 1.f - ent.deletion_animation;
+    // Loot chests keep a solid bar even at full HP (opacity otherwise fades to 0).
+    float const bar_alpha = label_alpha * (is_loot_chest ? 1.f
+        : (show_bar ? ent.healthbar_opacity : 1.f));
 
-    // Mob name — top-left of the bar (screenshot layout)
-    if (is_mob && show_bar) {
+    if (is_mob) {
         MobID::T mid = ent.get_mob_id();
         if (mid < MobID::kNumMobs) {
             char const *name = I18n::mob_name(mid);
             if (name != nullptr && name[0] != '\0') {
                 RenderContext nm(&ctx);
-                ctx.set_global_alpha(alpha);
+                ctx.set_global_alpha(label_alpha);
                 ctx.set_text_size(12);
                 float tw = ctx.get_text_size(name);
                 ctx.translate(tw * 0.5f, -11.f);
@@ -67,7 +73,7 @@ void render_health(Renderer &ctx, Entity const &ent) {
 
     if (show_bar) {
         RenderContext bar(&ctx);
-        ctx.set_global_alpha(alpha);
+        ctx.set_global_alpha(bar_alpha);
         ctx.set_stroke(0xff222222);
         ctx.set_line_width(9);
         ctx.begin_path();
@@ -90,8 +96,7 @@ void render_health(Renderer &ctx, Entity const &ent) {
         ctx.stroke();
     }
 
-    // Mob rarity — bottom-right of the bar (live spawn rarity when present)
-    if (is_mob && show_bar) {
+    if (is_mob && !is_loot_chest) {
         MobID::T mid = ent.get_mob_id();
         if (mid < MobID::kNumMobs) {
             uint8_t rarity = ent.get_rarity();
@@ -100,9 +105,10 @@ void render_health(Renderer &ctx, Entity const &ent) {
             if (rarity < RarityID::kNumRarities) {
                 char const *label = I18n::rarity_name(rarity);
                 RenderContext rare(&ctx);
-                ctx.set_global_alpha(alpha);
+                ctx.set_global_alpha(label_alpha);
                 ctx.set_text_size(12);
                 float tw = ctx.get_text_size(label);
+                // Always bottom-right of the HP bar slot (even if bar is hidden).
                 ctx.translate(bar_w - tw * 0.5f, 12.f);
                 ctx.draw_text(label, {
                     .fill = RARITY_COLORS[rarity] | 0xff000000,

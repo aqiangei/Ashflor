@@ -128,7 +128,7 @@ namespace Talent {
     }
 
     inline constexpr uint8_t kRotSettingMax = 10;
-    inline constexpr uint8_t kRotSettingDefault = 7;
+    inline constexpr uint8_t kRotSettingDefault = 4; // was 7 — slower default spin
     inline float rot_setting_mult(uint8_t setting) {
         if (setting > kRotSettingMax) setting = kRotSettingMax;
         return 0.35f + 0.15f * (float) setting;
