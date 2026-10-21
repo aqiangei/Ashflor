@@ -32,7 +32,7 @@ void tick_petal_behavior(Simulation *sim, Entity &petal) {
         PetalID::T pid = petal.get_petal_id();
         if (petal_name_is(pid, "Missile") || pid == PetalID::kSandLeafDart) {
             petal.acceleration.unit_normal(petal.get_angle()).set_magnitude(2.0 * PLAYER_ACCELERATION);
-        } else if (petal_name_is(pid, "Honey")) {
+        } else if (petal_is_honey(pid)) {
             // Very slow crawl — keep honey near the flower / magnet AFK bubble.
             petal.acceleration.unit_normal(petal.get_angle()).set_magnitude(0.30f * PLAYER_ACCELERATION);
         } else if (pid == PetalID::kPoisonPeas || pid == PetalID::kPeas
@@ -117,14 +117,14 @@ void tick_petal_behavior(Simulation *sim, Entity &petal) {
                 petal.friction = DEFAULT_FRICTION;
                 entity_set_despawn_tick(petal, 2.5 * TPS);
             }
-    } else if (petal_name_is(pid, "Honey")) {
+    } else if (petal_is_honey(pid)) {
             if (BitMath::at(player.input, InputFlags::kAttacking)) {
                 // Short soft toss; 4s life, stays close for AFK magnet farming.
                 petal.velocity.unit_normal(petal.get_angle()).set_magnitude(2.0f * PLAYER_ACCELERATION);
                 petal.friction = DEFAULT_FRICTION;
                 entity_set_despawn_tick(petal, 4.0 * TPS);
             }
-    } else if (petal_name_is(pid, "Meteor")) {
+    } else if (petal_is_meteor(pid)) {
             if (BitMath::at(player.input, InputFlags::kAttacking)
                 || BitMath::at(player.input, InputFlags::kDefending)) {
                 // Plant under the petal's current orbit point — no toss.

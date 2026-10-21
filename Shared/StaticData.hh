@@ -46,6 +46,11 @@ inline uint8_t petal_is_meteor(PetalID::T id) {
         || (id >= PetalID::kMeteorCommon && id <= PetalID::kMeteorUltra);
 }
 
+inline uint8_t petal_is_honey(PetalID::T id) {
+    return id == PetalID::kHoney
+        || (id >= PetalID::kHoneyCommon && id <= PetalID::kHoneyUltra);
+}
+
 using MapZones = StaticArray<struct ZoneDefinition, MAX_ZONES_PER_MAP>;
 using MapTerrain = StaticArray<struct TerrainFeature, MAX_TERRAIN_PER_MAP>;
 
