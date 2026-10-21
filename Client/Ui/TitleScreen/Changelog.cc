@@ -45,8 +45,8 @@ static Element *make_changelog_contents() {
     Element *elt = new Ui::VContainer({
         make_date("2026年10月21日", "October 21st 2026"),
         make_entries({
-            {"服务端性能：碰撞规范格去重、query 代际戳去重、磁铁/拾取附近格、Boss 缓存、排行榜 5Hz、召唤子怪计数预聚合",
-             "Server perf: grid collide, stamp query dedupe, AOI pickup, boss cache, LB 5Hz, summon child counts prepass"},
+            {"服务端卡顿优化（玩法数值不变）：碰撞规范格去重；query 代际戳；磁铁/拾取附近格；陨石/蜂蜜 ID 热路径；Boss 实体缓存；排行榜约 5Hz；召唤子怪计数预聚合",
+             "Server stutter fix (mechanics unchanged): canonical collide; stamp query; AOI pickup; meteor/honey ID hotpath; boss cache; LB ~5Hz; summon child prepass"},
             {"死亡保留本级内经验：重生不再清到等级地板；经验通胀一次性账号迁移（不碰花瓣/金币）",
              "Death keeps mid-level XP on respawn; one-shot XP-inflation account migration (petals/coins untouched)"},
             {"Boss 掉落加强：压制素材/低稀有填充、抬高 Epic+、至少 3 堆瓣、金币加成；Unique+ 仍不保底",
