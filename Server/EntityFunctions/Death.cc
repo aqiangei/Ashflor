@@ -198,7 +198,8 @@ static PetalID::T _roll_mob_drop(Simulation *sim, MobID::T mob_id, float rarity_
 // a full copy of the mob's XP.
 static void _add_mob_xp(Simulation *sim, EntityID const killer_id, Entity const &mob) {
     if (!mob.has_component(kMob)) return;
-    uint32_t const xp = mob.score_reward;
+    uint32_t xp = (uint32_t)(mob.score_reward * kill_xp_grant_mult() + 0.5f);
+    if (xp == 0 && mob.score_reward > 0) xp = 1;
     if (xp == 0 || !sim->ent_exists(killer_id)) return;
     Entity &killer = sim->get_ent(killer_id);
     if (!killer.has_component(kScore)) return;

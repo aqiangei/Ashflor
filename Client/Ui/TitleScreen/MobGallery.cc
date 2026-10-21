@@ -13,6 +13,8 @@
 #include <Client/Input.hh>
 #include <Client/StaticData.hh>
 
+#include <Shared/RarityScale.hh>
+
 #include <algorithm>
 #include <array>
 #include <cstring>
@@ -149,10 +151,14 @@ static Element *make_mob_stat_container(MobID::T id) {
             new Ui::StaticText(12, format_number(attrs.poison_damage.damage * attrs.poison_damage.time) + " (" + format_number(attrs.poison_damage.damage) + "/s)")
         }, 0, 5, { .h_justify = Style::Left }));
     }
-    stats.push_back(new Ui::HContainer({
-        new Ui::DynamicText(12, [](){ return I18n::tr(I18n::kXp); }, { .fill = 0xff7777ff }),
-        new Ui::StaticText(12, format_score(mob_data.xp))
-    }, 0, 5, { .h_justify = Style::Left }));
+    {
+        uint32_t grant_xp = (uint32_t)(mob_data.xp * kill_xp_grant_mult() + 0.5f);
+        if (grant_xp == 0 && mob_data.xp > 0) grant_xp = 1;
+        stats.push_back(new Ui::HContainer({
+            new Ui::DynamicText(12, [](){ return I18n::tr(I18n::kXp); }, { .fill = 0xff7777ff }),
+            new Ui::StaticText(12, format_score((float) grant_xp))
+        }, 0, 5, { .h_justify = Style::Left }));
+    }
     return new Ui::VContainer(stats, 0, 2, { .h_justify = Style::Left });
 }
 

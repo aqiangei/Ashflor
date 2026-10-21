@@ -111,6 +111,10 @@ inline float mob_spawn_threat_mult(uint8_t base_rarity, uint8_t spawn_rarity) {
     return rarity_combat_mult(spawn_rarity) / base;
 }
 
+// Applied at kill grant (Death::_add_mob_xp). Raises leveling pace without
+// restacking Ultra commons via combat-threat × zone tables.
+inline float kill_xp_grant_mult() { return 50.f; }
+
 // Soft XP/loot scale base→spawn. Do NOT reuse mob_spawn_threat_mult (combat ×3):
 // zone_xp_mult × combat threat made Ultra commons drop ~2e6 score each.
 inline float mob_spawn_xp_mult(uint8_t base_rarity, uint8_t spawn_rarity) {
