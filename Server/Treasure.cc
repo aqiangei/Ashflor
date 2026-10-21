@@ -25,7 +25,7 @@ constexpr float kPadSnap = 55.f;
 constexpr float kNpcHintR = 280.f;
 constexpr float kSiteClaimR = 520.f;
 constexpr float kChestOpenR = 70.f;
-constexpr uint32_t kHintCooldownTicks = 12 * TPS;
+uint32_t const kHintCooldownTicks = 12 * TPS;
 
 struct SiteLayout {
     float ox, oy; // offset from map center
