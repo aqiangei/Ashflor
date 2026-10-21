@@ -49,6 +49,8 @@ namespace AccountStore {
     void capture_nosave(Client *);
     // capture_nosave + save()
     void capture(Client *);
+    // Raise pending_score + account score/level high-water (call on XP gain).
+    void note_score(Client *, uint32_t score);
     uint32_t registered_count();
     // Publish every account's level to the leaderboard store so the ranked
     // "level" column is populated before the player logs in again.

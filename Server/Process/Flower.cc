@@ -1,5 +1,6 @@
 #include <Server/Process.hh>
 
+#include <Server/AccountStore.hh>
 #include <Server/Client.hh>
 #include <Server/EntityFunctions.hh>
 #include <Server/Party.hh>
@@ -150,9 +151,14 @@ void tick_player_behavior(Simulation *sim, Entity &player) {
     buffs.reload_factor *= talent_reload;
     float health_ratio = player.health / player.max_health;
     if (!player.has_component(kMob)) {
-        uint32_t level = score_to_level(player.get_score());
+        uint32_t const sc = player.get_score();
+        uint32_t level = score_to_level(sc);
         player.max_health = hp_at_level(level) + buffs.extra_health + talent_hp;
         player.damage = body_damage_at_level(level) + buffs.extra_damage;
+        // Keep account/pending XP high-water every tick so refresh cannot miss
+        // mid-level progress if disconnect capture races the flower teardown.
+        if (Client *owner = Server::client_by_camera(sim, player.get_parent()))
+            AccountStore::note_score(owner, sc);
     }
     player.health = health_ratio * player.max_health;
     if (buffs.heal > 0)

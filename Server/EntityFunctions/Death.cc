@@ -82,9 +82,7 @@ void flush_flower_loadout_to_camera(Simulation *sim, Entity &camera, Entity cons
         uint32_t sc = flower.get_score();
         uint32_t floor = level_to_score(level);
         if (sc < floor) sc = floor;
-        uint32_t const cap = level_to_score(MAX_PLAYER_LEVEL);
-        if (sc > cap) sc = cap;
-        owner->pending_score = sc;
+        AccountStore::note_score(owner, sc);
     }
     for (uint32_t i = 0; i < 2 * MAX_SLOT_COUNT; ++i)
         camera.set_inventory(i, PetalID::kNone);
@@ -222,9 +220,8 @@ static void _add_mob_xp(Simulation *sim, EntityID const killer_id, Entity const 
                 uint32_t const cap = level_to_score(MAX_PLAYER_LEVEL);
                 if (next > cap) next = cap;
                 flower.set_score(next);
-                if (Client *ow = Server::client_by_camera(sim, cam.id)) {
-                    if (next > ow->pending_score) ow->pending_score = next;
-                }
+                if (Client *ow = Server::client_by_camera(sim, cam.id))
+                    AccountStore::note_score(ow, next);
                 any = 1;
             }
             if (any) return;
@@ -235,9 +232,8 @@ static void _add_mob_xp(Simulation *sim, EntityID const killer_id, Entity const 
         uint32_t const cap = level_to_score(MAX_PLAYER_LEVEL);
         if (next > cap) next = cap;
         killer.set_score(next);
-        if (Client *ow = Server::client_by_camera(sim, killer.get_parent())) {
-            if (next > ow->pending_score) ow->pending_score = next;
-        }
+        if (Client *ow = Server::client_by_camera(sim, killer.get_parent()))
+            AccountStore::note_score(ow, next);
     }
 }
 
@@ -567,9 +563,7 @@ void entity_on_death(Simulation *sim, Entity const &ent) {
             uint32_t sc = ent.get_score();
             uint32_t floor = level_to_score(respawn_level);
             if (sc < floor) sc = floor;
-            uint32_t const cap = level_to_score(MAX_PLAYER_LEVEL);
-            if (sc > cap) sc = cap;
-            owner->pending_score = sc;
+            AccountStore::note_score(owner, sc);
         }
         uint32_t primary_slots = loadout_slots_at_level(respawn_level);
 

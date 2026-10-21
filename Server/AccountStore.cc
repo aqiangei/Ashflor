@@ -824,3 +824,21 @@ void AccountStore::capture(Client *client) {
     if (client != nullptr && !client->account_name.empty())
         save();
 }
+
+void AccountStore::note_score(Client *client, uint32_t score) {
+    if (client == nullptr || score == 0) return;
+    uint32_t const cap = level_to_score(MAX_PLAYER_LEVEL);
+    if (score > cap) score = cap;
+    if (score > client->pending_score)
+        client->pending_score = score;
+    if (client->account_name.empty()) return;
+    Account *acc = find(client->account_name);
+    if (acc == nullptr) return;
+    if (score > acc->score) acc->score = score;
+    uint32_t lv = score_to_level(score);
+    if (lv < 1) lv = 1;
+    if (lv > MAX_PLAYER_LEVEL) lv = MAX_PLAYER_LEVEL;
+    if (lv > acc->level) acc->level = lv;
+    uint32_t floor = level_to_score(acc->level);
+    if (acc->score < floor) acc->score = floor;
+}
