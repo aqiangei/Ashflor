@@ -154,12 +154,13 @@ WebSocketServer::WebSocketServer() {
                     try {
                         deploy = JSON.parse(fs.readFileSync("deploy-info.json", "utf8"));
                     } catch (e) {}
-                    data["deploy"] = Object.assign({
+                    // Runtime fields last so stale deploy-info.json cannot overwrite cache_v.
+                    data["deploy"] = Object.assign({}, deploy, {
                         "cache_v": cacheV,
                         "port": process.env["PORT"] || 9001,
                         "auth_required": data["auth_required"],
                         "node": process.version
-                    }, deploy);
+                    });
                     body = JSON.stringify(data);
                 } catch (e) {}
                 sendJson(200, body);
