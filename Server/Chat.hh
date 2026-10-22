@@ -15,8 +15,10 @@ namespace Chat {
     constexpr uint32_t LIVE_BROADCAST_FEED = 80;
     // Disk + memory caps (×10). Over broadcast cap: drop kill then craft only —
     // announce + chat are never evicted.
-    constexpr uint32_t LIVE_BROADCAST_CAP = 80000;
-    constexpr uint32_t CHAT_LOG_CAP = 200000;
+    // Capped memory for live broadcast/chat log (deques grow until cap, never shrink).
+    // Typical entry ~200 bytes. At these caps: broadcasts ≈6MB, chatlog ≈20MB.
+    constexpr uint32_t LIVE_BROADCAST_CAP = 30000;    // was 80000
+    constexpr uint32_t CHAT_LOG_CAP = 100000;         // was 200000
     // map_id == 255 → 来源未知（后台公告 / 旧数据）。地图字段只表示「在哪发的」，
     // 与是否全服可见无关（全服可见看 kind/channel）。
     constexpr uint8_t MAP_UNKNOWN = 255;
