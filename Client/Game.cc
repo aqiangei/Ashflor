@@ -132,6 +132,7 @@ namespace Game {
     uint8_t guild_panel_open = 0;
     std::string guild_create_draft;
     std::array<uint32_t, PetalID::kNumPetals> craft_bank = {};
+    std::array<uint32_t, PetalID::kNumPetals> petal_levels = {};
     uint32_t coins = 0;
     uint8_t guest_save_valid = 0;
     uint32_t guest_level = 1;
@@ -485,6 +486,7 @@ void Game::reset() {
     craft_tray_count = 0;
     craft_result_id = PetalID::kNone;
     craft_result_count = 0;
+    petal_levels = {};
     simulation.reset();
 }
 

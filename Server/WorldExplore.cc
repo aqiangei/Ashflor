@@ -133,6 +133,9 @@ struct MapRuntime {
     float idle_x = 0, idle_y = 0;
     float dest_x = 0, dest_y = 0;
     EntityID spirit = NULL_ENTITY; // map-owned guide — not per-player
+    // Authoritative path position. The spirit reuses ordinary mob ids whose AI
+    // still aggros/charges players; reading npc x/y back would let that drag it.
+    float spirit_x = 0, spirit_y = 0;
     uint32_t spirit_cd = 0;
     uint8_t spawned = 0;
     uint8_t def_index = 0;
@@ -240,13 +243,13 @@ static void award_followers_near(GameInstance *game, MapExploreDef const &def,
         float dx = player.get_x() - x, dy = player.get_y() - y;
         if (dx * dx + dy * dy > r2) continue;
 
-        uint32_t coins = 180;
+        uint32_t coins = 200;
         client_award_coins(client, coins);
         client_send_loot_toast(client, PetalID::kCoin, (uint16_t) coins, def.spirit_zh);
         uint8_t mats = 0;
         std::string mat_line;
         for (uint8_t i = 0; i < 2; ++i) {
-            PetalID::T mat = TreasureSites::pick_explore_mat(mid);
+            PetalID::T mat = TreasureSites::pick_explore_mat(mid, TreasureSites::kTierNormal);
             if (mat == PetalID::kNone) continue;
             if (!client_award_petal(client, mat)) continue;
             ++mats;
@@ -340,6 +343,8 @@ void WorldExplore::tick(GameInstance *game) {
         npc.score_reward = 0;
         npc.velocity = Vector(0, 0);
         npc.acceleration = Vector(0, 0);
+        npc.collision_velocity = Vector(0, 0);
+        npc.target = NULL_ENTITY;
         if (!npc.get_parent().null())
             npc.set_parent(NULL_ENTITY);
         BitMath::unset(npc.flags, EntityFlags::kIsCulled);
@@ -347,7 +352,8 @@ void WorldExplore::tick(GameInstance *game) {
         BitMath::unset(npc.flags, EntityFlags::kSpawnedFromZone);
         BitMath::unset(npc.flags, EntityFlags::kIsDespawning);
 
-        float nx = npc.get_x(), ny = npc.get_y();
+        // Continue from our own path point, not wherever AI/collision pushed it.
+        float nx = rt.spirit_x, ny = rt.spirit_y;
         if (!std::isfinite(nx) || !std::isfinite(ny)) {
             despawn_spirit(sim, rt);
             rt.spirit_cd = kSpiritCooldownTicks;
@@ -376,6 +382,8 @@ void WorldExplore::tick(GameInstance *game) {
                         // Soft terrain — avoid hard snap that yanks spirit back.
                         if ((g_tick & 15u) == 0)
                             Map::resolve_circle_terrain(mid, mx, my, 18.f);
+                        rt.spirit_x = mx;
+                        rt.spirit_y = my;
                         npc.set_x(mx);
                         npc.set_y(my);
                     }
@@ -400,6 +408,8 @@ void WorldExplore::tick(GameInstance *game) {
                 place_xy_once(mid, sx, sy);
                 Entity &npc = spawn_spirit(sim, def.spirit_mob, sx, sy, def.spirit_zh);
                 rt.spirit = npc.id;
+                rt.spirit_x = sx;
+                rt.spirit_y = sy;
                 // Tip only players near spawn so they can choose to follow.
                 float tip_r2 = 900.f * 900.f;
                 for (Client *client : game->clients) {
@@ -436,13 +446,13 @@ void WorldExplore::tick(GameInstance *game) {
                 ++client->explore_puzzle_step;
                 if (client->explore_puzzle_step >= 3) {
                     client->explore_puzzle_done[mid] = 1;
-                    uint32_t coins = 220;
+                    uint32_t coins = 250;
                     client_award_coins(client, coins);
                     client_send_loot_toast(client, PetalID::kCoin, (uint16_t) coins, "探索印记");
                     uint8_t mats = 0;
                     std::string mat_line;
                     for (uint8_t i = 0; i < 3; ++i) {
-                        PetalID::T mat = TreasureSites::pick_explore_mat(mid);
+                        PetalID::T mat = TreasureSites::pick_explore_mat(mid, TreasureSites::kTierHard);
                         if (mat == PetalID::kNone) continue;
                         if (!client_award_petal(client, mat)) continue;
                         ++mats;

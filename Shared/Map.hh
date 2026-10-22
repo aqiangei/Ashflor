@@ -74,6 +74,8 @@ namespace Map {
     extern void spawn_random_mob(Simulation *, float, float);
     // 按 Zone 密度加权选区 → 按落点类别选点 → 抽怪生成
     extern void spawn_zone_mob(Simulation *);
+    // Crowd lowered dens target: drain surplus hub/soft-zone mobs (no loot).
+    extern void thin_soft_zone_excess(Simulation *);
     extern bool find_spawn_location(Simulation *, float, Vector &);
     // 在指定 Zone 内按落点类别采样；clearance 用 spawn_rarity 放大后半径。成功返回 1
     extern uint8_t sample_spawn_point(Simulation *, uint32_t zone_id, uint8_t mob_id, float &x, float &y, uint8_t spawn_rarity);

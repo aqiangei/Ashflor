@@ -18,8 +18,10 @@
 
 void render_health(Renderer &ctx, Entity const &ent) {
     if (ent.has_component(kPetal)) return;
-    // Worm body segments: only the head shows a bar / name
-    if (ent.has_component(kSegmented)) return;
+    // Worm body segments (kSegmented): each link has its own HP. Show a bar
+    // when damaged — skipping them entirely hid chrome on non-head hits.
+    // Name/rarity stay on the head only so the worm is not a label stack.
+    uint8_t const is_segment = ent.has_component(kSegmented);
 
     uint8_t is_player = ent.has_component(kFlower) && !ent.has_component(kMob)
         && ent.has_component(kName);
@@ -31,7 +33,7 @@ void render_health(Renderer &ctx, Entity const &ent) {
     // Reward loot chests: always draw an HP bar (walk-up open, but still a
     // combat-looking prop). Other mobs: name+rarity always; bar after damage.
     uint8_t is_loot_chest = is_mob && ent.get_mob_id() == MobID::kLootChest;
-    uint8_t show_mob_label = is_mob;
+    uint8_t show_mob_label = is_mob && !is_segment;
     uint8_t show_bar = is_loot_chest || ent.healthbar_opacity >= 0.01f;
     if (!show_bar && !show_identity && !show_mob_label) return;
 
@@ -109,8 +111,9 @@ void render_health(Renderer &ctx, Entity const &ent) {
 
     // Mob chrome under the bar line: name LEFT, rarity RIGHT (same as
     // player Lv / guild). At full HP the bar is hidden but labels stay.
+    // Segments: bar only (head keeps name/rarity).
     float const under_y = 13.f;
-    if (is_mob && !is_loot_chest) {
+    if (show_mob_label && !is_loot_chest) {
         if (mob_name != nullptr) {
             RenderContext nm(&ctx);
             ctx.set_global_alpha(label_alpha);

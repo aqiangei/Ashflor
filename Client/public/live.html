@@ -287,7 +287,7 @@
           </div>
           <div>
             <label>数量</label>
-            <input id="giveCount" type="number" min="1" max="64" value="1">
+            <input id="giveCount" type="number" min="1" max="10" value="1" title="每次最多 10 个">
           </div>
         </div>
         <p class="hint" id="giveRarityHint" style="margin-top:6px">选择花瓣后显示可用等级</p>
@@ -331,6 +331,26 @@
   <div class="panel">
     <h2>地图在线</h2>
     <div class="maps" id="maps"></div>
+  </div>
+
+  <div class="panel">
+    <h2>在线玩家</h2>
+    <p class="hint">点击行展开装备 / 背包</p>
+    <table>
+      <thead>
+        <tr>
+          <th></th>
+          <th>账号</th>
+          <th>等级</th>
+          <th>地图</th>
+          <th>公会</th>
+          <th>状态</th>
+        </tr>
+      </thead>
+      <tbody id="rows">
+        <tr><td colspan="6" class="empty-msg">加载中…</td></tr>
+      </tbody>
+    </table>
   </div>
 
   <div class="panel">
@@ -422,26 +442,6 @@
       <button type="button" id="chatApply">筛选</button>
     </div>
     <div class="feed" id="chatFeed"><div class="empty-msg">暂无记录</div></div>
-  </div>
-
-  <div class="panel">
-    <h2>在线玩家</h2>
-    <p class="hint">点击行展开装备 / 背包</p>
-    <table>
-      <thead>
-        <tr>
-          <th></th>
-          <th>账号</th>
-          <th>等级</th>
-          <th>地图</th>
-          <th>公会</th>
-          <th>状态</th>
-        </tr>
-      </thead>
-      <tbody id="rows">
-        <tr><td colspan="6" class="empty-msg">加载中…</td></tr>
-      </tbody>
-    </table>
   </div>
 
   <div class="panel">
@@ -566,7 +566,7 @@ if ($("btnLogout")) $("btnLogout").onclick = () => {
 
 const MAP_NAMES = ["花园","沙漠","海洋","雪原","丛林","蚁穴","火山","王城"];
 // Matches RarityID / Server::live_rarity_zh: Common…Mythic, Ultra, Super, Unique
-const RARITY_ZH = ["普通","罕见","稀有","史诗","传奇","神话","究极","超凡","独特"];
+const RARITY_ZH = ["普通","罕见","稀有","史诗","传奇","神话","究极","超凡","唯一"]; // Unique
 const openCombos = new Set();
 
 function uiBusy() {
@@ -618,6 +618,14 @@ function debounce(fn, ms) {
   };
 }
 
+function syncGiveCountLimit() {
+  const cnt = $("giveCount");
+  if (!cnt) return;
+  cnt.max = 10;
+  if (Number(cnt.value) > 10) cnt.value = 10;
+  cnt.title = "每次最多发 10 个";
+}
+
 function refreshGiveRarity() {
   const sel = $("givePetal");
   const hint = $("giveRarityHint");
@@ -626,9 +634,13 @@ function refreshGiveRarity() {
   if (!p) {
     if (document.activeElement !== rsel) rsel.innerHTML = "";
     hint.textContent = "选择花瓣后显示可用等级";
+    syncGiveCountLimit();
     return;
   }
-  const avail = Array.isArray(p.rarities) ? p.rarities.slice() : [p.rarity];
+  // Admin give: rarities through Unique（唯一）only.
+  const maxGiveR = RARITY_ZH.length - 1;
+  const avail = (Array.isArray(p.rarities) ? p.rarities.slice() : [p.rarity])
+    .filter((r) => r <= maxGiveR);
   const cur = rsel.value;
   const html = avail.map((r) =>
     `<option value="${r}">${RARITY_ZH[r] || ("稀有度"+r)} (${r})</option>`
@@ -638,8 +650,9 @@ function refreshGiveRarity() {
   }
   if (avail.map(String).includes(String(cur))) rsel.value = cur;
   else if (avail.includes(p.rarity)) rsel.value = String(p.rarity);
-  hint.textContent = `「${p.name_zh || p.name}」可用：` +
+  hint.textContent = `「${p.name_zh || p.name}」可发至唯一：` +
     avail.map((r) => RARITY_ZH[r] || r).join("、");
+  syncGiveCountLimit();
 }
 
 function refreshPetalSelect() {
@@ -1072,6 +1085,14 @@ async function loadMapLayout() {
 
 $("petalFilter").oninput = debounce(refreshPetalSelect, 120);
 $("givePetal").onchange = refreshGiveRarity;
+if ($("giveRarity")) $("giveRarity").onchange = syncGiveCountLimit;
+if ($("giveCount")) {
+  $("giveCount").addEventListener("input", () => {
+    syncGiveCountLimit();
+    const max = Number($("giveCount").max) || 10;
+    if (Number($("giveCount").value) > max) $("giveCount").value = max;
+  });
+}
 $("mobFilter").oninput = debounce(refreshMobSelect, 120);
 bindPlayerCombo("giveWho", "giveWhoMenu", null);
 bindPlayerCombo("spawnNear", "spawnNearMenu", (it) => syncSpawnMapFromPlayer(it));
@@ -1103,12 +1124,15 @@ $("btnAnn").onclick = async () => {
 $("btnGive").onclick = async () => {
   try {
     $("btnGive").disabled = true;
+    syncGiveCountLimit();
+    let count = Number($("giveCount").value) || 1;
+    if (count > 10) count = 10;
     const j = await admin({
       action: "give",
       who: $("giveWho").value.trim(),
       petal_id: Number($("givePetal").value),
       rarity: Number($("giveRarity").value),
-      count: Number($("giveCount").value) || 1,
+      count,
     });
     flashOk(j.msg);
   } catch (e) { flashErr(e.message); }

@@ -27,6 +27,8 @@ struct Account {
     std::array<uint32_t, PetalID::kNumPetals> craft_bank = {};
     uint32_t coins = 0;
     uint32_t craft_attempts = 0; // successful+failed 5-in-1 batches
+    // Infinite petal levels; saved as trailing "l:id=lv,id=lv" token.
+    std::array<uint32_t, PetalID::kNumPetals> petal_levels = {};
     uint8_t talent_ranks[TalentID::kNum] = {};
     std::array<LoadoutPreset, LOADOUT_PRESET_COUNT> loadout_presets = {};
     // 0..19 = last used K1-10 / L1-10; LOADOUT_PRESET_COUNT = none

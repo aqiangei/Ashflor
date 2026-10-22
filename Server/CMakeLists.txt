@@ -26,6 +26,7 @@ set(SOURCES
     AccountStore.cc
     Chat.cc
     Client.cc
+    DevCheats.cc
     Game.cc
     LeaderboardStore.cc
     Main.cc

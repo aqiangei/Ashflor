@@ -490,9 +490,11 @@ void build_zones(MapZones &zones, uint8_t map_id, uint32_t &rng,
         return hard;
     };
     auto dens_for = [](uint32_t diff) -> float {
-        // Common/Unusual: pack the hub + adjacent belt full of low-tier mobs.
+        // Hub is ~6200×4700. dens 3.90×1.45 → ~650 Common heads (zone cap),
+        // not ~150 — live tick avg ~50ms with a few players in 花园. Soft zones
+        // also get an absolute head-cap in Map.cc; dens only sets the floor.
         static float const k[] = {
-            3.90f, 4.20f, 3.00f, 2.80f, 2.85f, 3.35f, 3.55f, 3.70f, 3.85f
+            0.65f, 1.60f, 3.00f, 2.80f, 2.85f, 3.35f, 3.55f, 3.70f, 3.85f
         };
         return k[diff > MAX_DIFFICULTY ? MAX_DIFFICULTY : diff];
     };

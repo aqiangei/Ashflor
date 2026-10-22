@@ -29,15 +29,11 @@ addToLibrary({
     var p = UTF8ToString(pathPtr);
     try {
       var tmp = p + '.tmp';
-      var bak = p + '.bak';
       var bytes = Buffer.from(HEAPU8.subarray(dataPtr, dataPtr + len));
+      // Atomic replace only — no .bak copy on the tick hot path.
+      // Periodic node_fs_snapshot() already keeps timestamped backups/.
       fs.writeFileSync(tmp, bytes);
-      try {
-        // Bracket access keeps this newer Node API name intact under Closure.
-        if (fs.existsSync(p)) fs['copyFileSync'](p, bak);
-      } catch (e1) {}
       fs.renameSync(tmp, p);
-      console.log('[node_fs_write_atomic]', p, 'bytes=' + len);
       return 1;
     } catch (e) {
       console.error('[node_fs_write_atomic]', p, e);

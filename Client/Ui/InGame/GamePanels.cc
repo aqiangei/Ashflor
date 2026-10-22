@@ -388,7 +388,7 @@ public:
 
 // Drawer: slides up from above the bottom-left buttons
 static Element *make_drawer(std::vector<Element *> children, uint8_t panel_id) {
-    Element *elt = new Ui::VContainer(children, 20, 12, {
+    Element *elt = new Ui::VContainer(children, 22, 12, {
         .fill = Chrome::kPanelDeep,
         .line_width = 0,
         .round_radius = Chrome::kRadius,
@@ -444,12 +444,22 @@ public:
 // Overflow scrolls inside this clip; underfill leaves empty space below.
 class BagScroll final : public Ui::ScrollContainer {
     float viewport_h;
+    float viewport_w;
 public:
-    BagScroll(Element *content, float h)
-        : Ui::ScrollContainer(content, h), viewport_h(h) {}
+    BagScroll(Element *content, float h, float w = 0.f)
+        : Ui::ScrollContainer(content, h), viewport_h(h), viewport_w(w) {}
     void refactor() override {
         Ui::ScrollContainer::refactor();
         height = viewport_h;
+        if (viewport_w <= 0.f) return;
+        Element *content = children[0];
+        Element *bar = children[1];
+        float bar_space = (bar != nullptr && bar->visible)
+            ? (inner_pad + bar->width) : 0.f;
+        float const target = fmax(viewport_w, content->width + bar_space);
+        width = target;
+        float slack = target - content->width - bar_space;
+        content->x = slack * 0.5f;
     }
 };
 
@@ -458,6 +468,7 @@ static Element *make_bag_scroll() {
     std::vector<Element *> rows;
     uint8_t const kCols = Input::is_mobile ? 4 : 5;
     float const scroll_h = Input::is_mobile ? kBagScrollHMobile : kBagScrollH;
+    float const content_w = Input::is_mobile ? kBagPanelWMobile : kBagPanelW;
     uint16_t row_count = (PetalID::kNumPetals - 1 + kCols - 1) / kCols;
     for (uint16_t row = 0; row < row_count; ++row) {
         std::vector<Element *> cells;
@@ -469,7 +480,7 @@ static Element *make_bag_scroll() {
         rows.push_back(new BagGridRow(cells, (uint16_t)(row * kCols)));
     }
     Element *grid = new Ui::VContainer(rows, 0, 6, { .no_animation = 1 });
-    auto *scroll = new BagScroll(grid, scroll_h);
+    auto *scroll = new BagScroll(grid, scroll_h, content_w);
     scroll->always_capture_wheel = 1;
     return scroll;
 }
@@ -709,16 +720,14 @@ static void begin_craft_absorb() {
     tray_pulse = 1.f;
 }
 
-static void play_result(uint8_t result, PetalID::T petal) {
+static void play_result(uint8_t result, PetalID::T petal, uint32_t amount) {
     float cx, cy;
     if (!tray_center_screen(cx, cy)) {
         cx = (float) Ui::window_width * 0.35f;
         cy = (float) Ui::window_height * 0.55f;
     }
-    if (result == CraftResultCode::kCraftWin
-        || result == CraftResultCode::kCraftExchanged
-        || result == CraftResultCode::kCraftBought) {
-        // Product stays in tray center until claimed — rarity-colored reveal, no fly-away.
+    if (result == CraftResultCode::kCraftWin) {
+        // Synthesis only: product stays in tray center until claimed.
         PetalID::T show = (petal != PetalID::kNone && petal < PetalID::kNumPetals)
             ? petal : Game::craft_result_id;
         uint8_t r = 0;
@@ -735,6 +744,29 @@ static void play_result(uint8_t result, PetalID::T petal) {
         uint32_t n_speck = (uint32_t) (12.f + inten * 22.f);
         if (n_speck > 40) n_speck = 40;
         for (uint32_t i = 0; i < n_speck; ++i)
+            spawn_speck(cx, cy, col);
+    } else if (result == CraftResultCode::kCraftExchanged
+        || result == CraftResultCode::kCraftBought) {
+        // Shop / assemble / exchange: fly straight into the bag (legacy).
+        if (petal != PetalID::kNone && petal < PetalID::kNumPetals) {
+            uint32_t n = amount > 0 ? amount : 1u;
+            fly_result_claim(petal, n);
+            win_flash = 1.f;
+            tray_pulse = 1.f;
+            uint8_t r = PETAL_DATA[petal].rarity;
+            uint32_t col = 0xffffe763;
+            if (r < RarityID::kNumRarities) col = RARITY_COLORS[r] | 0xff000000;
+            for (uint32_t i = 0; i < 10; ++i)
+                spawn_speck(cx, cy, col);
+        }
+    } else if (result == CraftResultCode::kCraftLevelWin) {
+        // Level-up: no product to claim — just flash in the petal's color.
+        win_flash = 1.f;
+        tray_pulse = 1.f;
+        uint32_t col = 0xffffe763;
+        if (petal != PetalID::kNone && petal < PetalID::kNumPetals)
+            col = RARITY_COLORS[PETAL_DATA[petal].rarity] | 0xff000000;
+        for (uint32_t i = 0; i < 18; ++i)
             spawn_speck(cx, cy, col);
     } else if (result == CraftResultCode::kCraftMiss) {
         tray_shake = 1.f;
@@ -945,6 +977,31 @@ static void on_craft_once(Element *, uint8_t e) {
         Game::craft_petals(CraftMode::kCraftGambleAll, id, 65535);
         Game::craft_tray_clear();
     }
+}
+// Guaranteed result for the expected cost (rarity +1, or Unique level +1).
+static uint32_t craft_exchange_price(PetalID::T id) {
+    if (id == PetalID::kNone || id >= PetalID::kNumPetals) return 0;
+    if (Craft::can_level_petal(id))
+        return Craft::level_exchange_cost(Game::petal_levels[id]);
+    if (Craft::can_upgrade_petal(id))
+        return Craft::exchange_cost(PETAL_DATA[id].rarity);
+    return 0;
+}
+static void on_craft_exchange(Element *, uint8_t e) {
+    if (e != Ui::kClick) return;
+    PetalID::T id = Game::craft_tray_id;
+    if (id == PetalID::kNone) return;
+    uint32_t cost = craft_exchange_price(id);
+    if (cost == 0 || cost >= 999999) return;
+    if (Game::craft_owned(id) < cost) {
+        Game::craft_status = I18n::use_chinese
+            ? std::format("直兑需要 {} 片（当前 {}）", cost, Game::craft_owned(id))
+            : std::format("Exchange needs {} (have {})", cost, Game::craft_owned(id));
+        return;
+    }
+    CraftFx::begin_craft_absorb();
+    Game::craft_petals(CraftMode::kCraftExchange, id, 1);
+    Game::craft_tray_clear();
 }
 static void on_craft_all(Element *, uint8_t e) {
     if (e != Ui::kClick) return;
@@ -1411,6 +1468,21 @@ public:
             ctx.stroke_text(qty.c_str());
             ctx.fill_text(qty.c_str());
         }
+        // Unique column (last rarity): show Lv only after at least one successful level-up.
+        if (empty_anim > 0.5f && Craft::can_level_petal(draw_id)
+            && Game::petal_levels[draw_id] > 0) {
+            RenderContext t(&ctx);
+            std::string lv = std::format("Lv.{}", Game::petal_levels[draw_id]);
+            ctx.set_global_alpha(empty_anim);
+            ctx.set_fill(Chrome::kGold);
+            ctx.set_stroke(0xff111111);
+            ctx.set_text_size(12);
+            ctx.set_line_width(1.2f);
+            float tw = (float) ctx.get_text_size(lv.c_str());
+            ctx.translate(width / 2 - 3 - tw, height / 2 - 24);
+            ctx.stroke_text(lv.c_str());
+            ctx.fill_text(lv.c_str());
+        }
         if (empty_anim > 0.5f) {
             RenderContext t(&ctx);
             ctx.set_global_alpha(empty_anim);
@@ -1435,9 +1507,15 @@ public:
                     ? "已全部放上托盘" : "All copies are on the tray";
                 return;
             }
-            if (!Craft::can_upgrade_petal(petal_id)) {
-                Game::craft_status = I18n::use_chinese
-                    ? "已达最高稀有度（独特）" : "Already at max rarity (Unique)";
+            if (!Craft::can_craft_petal(petal_id)) {
+                uint8_t r = PETAL_DATA[petal_id].rarity;
+                if (r + 1 >= RarityID::kNumRarities)
+                    Game::craft_status = I18n::use_chinese
+                        ? "已达最高稀有度（唯一）" : "Already at max rarity (Unique)";
+                else
+                    Game::craft_status = I18n::use_chinese
+                        ? "该花瓣没有更高稀有度，无法合成"
+                        : "No higher rarity for this petal — cannot craft";
                 return;
             }
             CraftFx::remember_mat(petal_id, screen_x, screen_y);
@@ -1568,11 +1646,11 @@ static void on_compact_bag(Element *, uint8_t e) {
 
 Element *Ui::make_inventory_panel() {
     float const content_w = Input::is_mobile ? kBagPanelWMobile : kBagPanelW;
-    float const panel_pad = 20.f;
+    float const panel_pad = 24.f;
     Element *body = new Ui::VContainer({
         new Ui::Element(content_w, 1),
         new Ui::HFlexContainer(
-            new Ui::DynamicText(28, [](){ return I18n::use_chinese ? "背包" : "Backpack"; }, {
+            new Ui::DynamicText(26, [](){ return I18n::use_chinese ? "背包" : "Backpack"; }, {
                 .fill = Chrome::kTitle
             }),
             new Ui::Button(36, 36,
@@ -1581,9 +1659,9 @@ Element *Ui::make_inventory_panel() {
                 { .fill = Chrome::kBtnDanger, .line_width = 0, .round_radius = Chrome::kRadius }),
             panel_pad, 12, {}
         ),
-        // Centered search — Left justify looked jammed into the rim.
-        new Ui::TextInput(bag_search_text, content_w - 8.f, 42, 48, {
+        new Ui::TextInput(bag_search_text, content_w - 24.f, 42, 48, {
             .fill = 0xfff5f5f5, .line_width = 3, .round_radius = 3,
+            .h_justify = Style::Center,
             .no_animation = 1
         }),
         make_bag_scroll(),
@@ -2528,28 +2606,64 @@ Element *Ui::make_craft_panel() {
         new Ui::HContainer({
             new CraftTrayView(),
             new Ui::VContainer({
-                new Ui::Button(112, 48,
-                    new Ui::DynamicText(19, [](){ return I18n::use_chinese ? "合成" : "Craft"; }),
-                    on_craft_once, nullptr,
-                    { .fill = Chrome::kBtnStone, .round_radius = 8 }),
+                new Ui::HContainer({
+                    new Ui::Button(112, 48,
+                        new Ui::DynamicText(19, [](){ return I18n::use_chinese ? "合成" : "Craft"; }),
+                        on_craft_once, nullptr,
+                        { .fill = Chrome::kBtnStone, .round_radius = 8 }),
+                    new Ui::Button(112, 48,
+                        new Ui::DynamicText(17, [](){
+                            uint32_t cost = craft_exchange_price(Game::craft_tray_id);
+                            if (cost == 0 || cost >= 999999)
+                                return I18n::use_chinese ? std::string{"期望直兑"} : std::string{"Exchange"};
+                            return I18n::use_chinese
+                                ? std::format("直兑 ×{}", format_stack(cost))
+                                : std::format("Buy ×{}", format_stack(cost));
+                        }),
+                        on_craft_exchange, nullptr,
+                        { .fill = Chrome::kBtnStone, .round_radius = 8 })
+                }, 0, 8, { .h_justify = Style::Left }),
                 new Ui::DynamicText(15, [](){
                     return I18n::use_chinese ? "将五个相同的花瓣" : "Place five matching petals";
                 }, { .fill = Chrome::kTitle, .h_justify = Style::Left }),
                 new Ui::DynamicText(15, [](){
                     return I18n::use_chinese
-                        ? "合成为更高稀有度（失败损失1–4）"
-                        : "to a higher rarity (miss loses 1–4)";
+                        ? "升阶，唯一可无限升级（失败损失1–4）"
+                        : "to rank up; Unique levels forever (miss loses 1–4)";
                 }, { .fill = Chrome::kTitle, .h_justify = Style::Left }),
                 new Ui::DynamicText(13, [](){
                     if (Game::craft_tray_id == PetalID::kNone) return std::string{};
-                    uint8_t r = PETAL_DATA[Game::craft_tray_id].rarity;
-                    if (r + 1 >= RarityID::kNumRarities)
-                        return I18n::use_chinese ? std::string{"已达最高稀有度"} : std::string{"Max rarity"};
-                    float pct = Craft::success_chance(r) * 100.f;
+                    PetalID::T tid = Game::craft_tray_id;
+                    uint8_t r = PETAL_DATA[tid].rarity;
                     // High tiers are <1%; integer % wrongly shows "0%".
-                    if (pct > 0.f && pct < 10.f)
-                        return std::format("{} {:.1f}%", I18n::rarity_name((uint8_t)(r + 1)), pct);
-                    return std::format("{} {:.0f}%", I18n::rarity_name((uint8_t)(r + 1)), pct);
+                    auto pct_str = [](float p) {
+                        float pct = p * 100.f;
+                        return (pct > 0.f && pct < 10.f)
+                            ? std::format("{:.1f}%", pct) : std::format("{:.0f}%", pct);
+                    };
+                    if (Craft::can_level_petal(tid)) {
+                        uint32_t lv = Game::petal_levels[tid];
+                        float p = Craft::level_success_chance(lv);
+                        return I18n::use_chinese
+                            ? std::format("Lv.{}→{} {} · 属性+{:.0f}%", lv, lv + 1, pct_str(p),
+                                (Craft::level_stat_mult(lv) - 1.f) * 100.f)
+                            : std::format("Lv.{}→{} {} · stats +{:.0f}%", lv, lv + 1, pct_str(p),
+                                (Craft::level_stat_mult(lv) - 1.f) * 100.f);
+                    }
+                    if (!Craft::can_upgrade_petal(tid))
+                        return I18n::use_chinese
+                            ? std::string{"该花瓣没有更高稀有度，无法合成"}
+                            : std::string{"No higher rarity — cannot craft"};
+                    return std::format("{} {}", I18n::rarity_name((uint8_t)(r + 1)),
+                        pct_str(Craft::success_chance(r)));
+                }, { .fill = Chrome::kBody, .h_justify = Style::Left }),
+                new Ui::DynamicText(13, [](){
+                    PetalID::T tid = Game::craft_tray_id;
+                    uint32_t cost = craft_exchange_price(tid);
+                    if (cost == 0 || cost >= 999999) return std::string{};
+                    return I18n::use_chinese
+                        ? std::format("期望消耗 {} 片 · 持有 {}", cost, Game::craft_owned(tid))
+                        : std::format("Expected cost {} · own {}", cost, Game::craft_owned(tid));
                 }, { .fill = Chrome::kBody, .h_justify = Style::Left })
             }, 0, 7, { .h_justify = Style::Left })
         }, 0, 14, { .h_justify = Style::Left }),
@@ -2605,8 +2719,8 @@ Element *Ui::make_craft_fx_layer() {
     return new CraftFxLayer();
 }
 
-void Ui::craft_play_result(uint8_t result, PetalID::T petal) {
-    CraftFx::play_result(result, petal);
+void Ui::craft_play_result(uint8_t result, PetalID::T petal, uint32_t amount) {
+    CraftFx::play_result(result, petal, amount);
 }
 
 static std::string bonus_clock(uint32_t sec) {

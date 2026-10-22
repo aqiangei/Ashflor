@@ -1,6 +1,7 @@
 #ifdef WASM_SERVER
 #include <Server/Chat.hh>
 #include <Server/Client.hh>
+#include <Server/DevCheats.hh>
 #include <Server/RateLimit.hh>
 #include <Server/Server.hh>
 
@@ -75,6 +76,11 @@ extern "C" {
             (uint8_t) map_id, (uint32_t) mob_id, x, y, near_who ? near_who : ""));
     }
 
+    // Local QA only — Node sets this when ASHFLOR_DEV_CHEATS=1 (never on prod).
+    EMSCRIPTEN_KEEPALIVE void ashflor_dev_cheats_set(int on) {
+        DevCheats::set_enabled(on ? 1 : 0);
+    }
+
     void on_connect(int ws_id, char const *ip) {
         std::printf("client connect: [%d]\n", ws_id);
         WebSocket *ws = new WebSocket(ws_id);
@@ -126,6 +132,36 @@ WebSocketServer::WebSocketServer() {
         const WSS = require("ws");
         const http = require("http");
         const fs = require("fs");
+        // Admin mutate rate-limit: per-IP sliding window (ms).
+        // Avoid `{key: val}` object literals — EM_ASM macro parsing breaks on `:`.
+        const adminRate = Object.create(null);
+        const adminRateOk = (ip, action) => {
+            const now = Date.now();
+            const windowMs = 60000;
+            let lim = 20;
+            if (action === "announce") lim = 10;
+            else if (action === "spawn") lim = 30;
+            else if (action === "login") lim = 30;
+            else if (action === "give") lim = 20;
+            const key = String(ip || "?") + "|" + String(action || "");
+            let e = adminRate[key];
+            if (!e || (now - e["t"]) > windowMs) {
+                e = Object.create(null);
+                e["t"] = now;
+                e["n"] = 0;
+            }
+            e["n"] = (e["n"] | 0) + 1;
+            adminRate[key] = e;
+            return e["n"] <= lim;
+        };
+        const clientIp = (req) => {
+            const xf = req.headers["x-forwarded-for"];
+            if (xf) {
+                const first = String(xf).split(",")[0].trim();
+                if (first) return first;
+            }
+            return (req.socket && req.socket.remoteAddress) || "?";
+        };
         const server = http.createServer(function(req, res) {
             let encodeType = "text/html; charset=utf-8";
             let file = "index.html";
@@ -167,6 +203,7 @@ WebSocketServer::WebSocketServer() {
                 body = body.replace(/"ts":[0-9]+/, '"ts":' + Date.now());
                 try {
                     const data = JSON.parse(body);
+                    // Auth OFF unless ASHFLOR_LIVE_AUTH=1 (plus USER/PASS).
                     data["auth_required"] = process.env["ASHFLOR_LIVE_AUTH"] === "1";
                     let cacheV = "";
                     try {
@@ -274,7 +311,13 @@ WebSocketServer::WebSocketServer() {
                     try { j = JSON.parse(Buffer.concat(chunks).toString("utf8") || "{}"); }
                     catch (e) { sendJson(400, "{\"ok\":false,\"msg\":\"bad json\"}"); return; }
                     // Bracket keys so Closure does not rename JSON field names.
-                    // Auth is OFF unless ASHFLOR_LIVE_AUTH=1 (plus USER/PASS).
+                    // Auth OFF unless ASHFLOR_LIVE_AUTH=1 (plus USER/PASS).
+                    const ip = clientIp(req);
+                    const action = (j && j["action"]) || "";
+                    if (!adminRateOk(ip, action || "login")) {
+                        sendJson(429, "{\"ok\":false,\"msg\":\"操作过于频繁，稍后再试\"}");
+                        return;
+                    }
                     const authOn = process.env["ASHFLOR_LIVE_AUTH"] === "1";
                     if (authOn) {
                         const needUser = process.env["ASHFLOR_LIVE_USER"] || "";
@@ -309,7 +352,6 @@ WebSocketServer::WebSocketServer() {
                             return;
                         }
                     }
-                    const action = (j && j["action"]) || "";
                     try {
                         if (action === "login") {
                             sendJson(200, authOn
@@ -541,6 +583,11 @@ WebSocketServer::WebSocketServer() {
 void Server::run() {
     EM_ASM({
         globalThis.Module = Module;
+        if (typeof process !== "undefined" && process.env
+            && process.env["ASHFLOR_DEV_CHEATS"] === "1"
+            && typeof _ashflor_dev_cheats_set === "function") {
+            _ashflor_dev_cheats_set(1);
+        }
         process.on("SIGUSR2", function () {
             console.log("SIGUSR2: draining...");
             _sigusr2();

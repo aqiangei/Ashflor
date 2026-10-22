@@ -43,6 +43,8 @@ Entity &Simulation::alloc_ent() {
         return entities[i];
     }
     assert(!"Entity cap reached");
+    // assert may be compiled out; falling off a non-void fn is UB → wasm trap.
+    abort();
 }
 
 Entity &Simulation::get_ent(EntityID const &id) {

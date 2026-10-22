@@ -1,7 +1,10 @@
 #include <Server/Process.hh>
 
+#include <Server/Client.hh>
 #include <Server/EntityFunctions.hh>
+#include <Server/Server.hh>
 #include <Server/Spawn.hh>
+#include <Shared/Craft.hh>
 #include <Shared/Entity.hh>
 #include <Shared/Simulation.hh>
 #include <Shared/StaticData.hh>
@@ -9,6 +12,14 @@
 #include <Helpers/Vector.hh>
 
 #include <cmath>
+
+static float owner_petal_level_mult(Simulation *sim, Entity const &player, PetalID::T id) {
+    if (player.has_component(kMob) || id == PetalID::kNone || id >= PetalID::kNumPetals)
+        return 1.f;
+    Client *owner = Server::client_by_camera(sim, player.get_parent());
+    if (owner == nullptr) return 1.f;
+    return Craft::level_stat_mult(owner->petal_levels[id]);
+}
 
 void tick_petal_behavior(Simulation *sim, Entity &petal) {
     if (petal.pending_delete) return;
@@ -52,7 +63,8 @@ void tick_petal_behavior(Simulation *sim, Entity &petal) {
         if (petal_data.attributes.aura_radius > 0
             && (petal_data.attributes.aura_heal > 0 || petal_data.attributes.aura_slow_seconds > 0)) {
             float const R = petal_data.attributes.aura_radius;
-            float const heal = petal_data.attributes.aura_heal / TPS;
+            float const lv_mult = owner_petal_level_mult(sim, player, pid);
+            float const heal = petal_data.attributes.aura_heal * lv_mult / TPS;
             float const px = petal.get_x();
             float const py = petal.get_y();
             EntityID const team = petal.get_team();
@@ -79,12 +91,13 @@ void tick_petal_behavior(Simulation *sim, Entity &petal) {
         ++petal.secondary_reload;
         return;
     }
+    float const lv_mult = owner_petal_level_mult(sim, player, petal.get_petal_id());
     // Radial pulse: damage enemies around the flower when attacking.
     if (petal_data.attributes.radial_pulse_damage > 0
         && petal_data.attributes.radial_pulse_radius > 0
         && BitMath::at(player.input, InputFlags::kAttacking)) {
         float const R = petal_data.attributes.radial_pulse_radius;
-        float const dmg = petal_data.attributes.radial_pulse_damage;
+        float const dmg = petal_data.attributes.radial_pulse_damage * lv_mult;
         float const px = player.get_x();
         float const py = player.get_y();
         EntityID const team = player.get_team();
@@ -103,7 +116,7 @@ void tick_petal_behavior(Simulation *sim, Entity &petal) {
     if (petal_data.attributes.burst_heal > 0 && player.health < player.max_health && player.dandy_ticks == 0) {
         Vector delta(player.get_x() - petal.get_x(), player.get_y() - petal.get_y());
         if (delta.magnitude() < petal.get_radius()) {
-            inflict_heal(sim, player, petal_data.attributes.burst_heal);
+            inflict_heal(sim, player, petal_data.attributes.burst_heal * lv_mult);
             sim->request_delete(petal.id);
             return;
         }

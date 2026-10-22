@@ -19,6 +19,6 @@ void DynamicText::on_render(Renderer &ctx) {
     ctx.draw_text(text.c_str(), {
         .fill = style.fill,
         .size = height,
-        .stroke_scale = 0.12f
+        .stroke_scale = 0.08f
     });
 }

@@ -23,6 +23,7 @@ namespace {
 struct SpiritTrailPrev {
     float x = 0;
     float y = 0;
+    double t = 0;
     uint8_t ok = 0;
 };
 std::unordered_map<uint32_t, SpiritTrailPrev> spirit_trail_prev;
@@ -85,21 +86,17 @@ void render_mob(Renderer &ctx, Entity const &ent) {
         float const y = ent.get_y();
         uint32_t const key = EntityID::make_hash(ent.id);
         SpiritTrailPrev &prev = spirit_trail_prev[key];
-        uint8_t had_prev = prev.ok;
-        float bdx = 0.f, bdy = 0.f;
-        if (had_prev) {
-            bdx = prev.x - x;
-            bdy = prev.y - y;
-        }
-        prev.x = x;
-        prev.y = y;
-        prev.ok = 1;
-        float moved2 = bdx * bdx + bdy * bdy;
-        // Unique-petal density while on screen; denser ribbon when moving.
-        Particle::add_spirit_trail(x, y, had_prev ? bdx : 0.f, had_prev ? bdy : 0.f);
-        if (had_prev && moved2 > 0.5f * 0.5f) {
-            Particle::add_spirit_trail(x + bdx * 0.35f, y + bdy * 0.35f, bdx, bdy);
-            Particle::add_spirit_trail(x + bdx * 0.7f, y + bdy * 0.7f, bdx, bdy);
+        // Emit ~every 70ms, not every frame: per-frame emission at 60–144fps
+        // hit the particle cap and starved the ribbon. Back direction = last
+        // emit point → now, so it points along the walked path.
+        if (!prev.ok || Game::timestamp - prev.t >= 70.0) {
+            float bdx = prev.ok ? prev.x - x : 0.f;
+            float bdy = prev.ok ? prev.y - y : 0.f;
+            Particle::add_spirit_trail(x, y, bdx, bdy);
+            prev.x = x;
+            prev.y = y;
+            prev.t = Game::timestamp;
+            prev.ok = 1;
         }
     }
     if (ent.deletion_animation > 0)

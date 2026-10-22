@@ -968,19 +968,107 @@ static uint8_t resolve_zone_spawn_rarity(uint8_t base_r, uint32_t zone_difficult
     return spawn_r;
 }
 
+// Solo hub stays packed; overlapping player AOIs used to refill soft zones
+// to dens×hub_area (~650 Common heads at dens 3.9) and never despawn while
+// anyone is watching → multiplayer hub lag.
+static float soft_zone_density_mul(Simulation *sim, uint32_t difficulty) {
+    float mul = 1.15f;
+    if (difficulty > RarityID::kUnusual)
+        return mul;
+    uint32_t flowers = 0;
+    sim->for_each<kFlower>([&](Simulation *, Entity &f) {
+        if (!f.has_component(kMob)) ++flowers;
+    });
+    // 1–2 players: full mul. Each extra flower softens ~18% (compound).
+    if (flowers > 2) {
+        float scale = 1.f;
+        uint32_t extra = flowers - 2;
+        if (extra > 12) extra = 12;
+        for (uint32_t i = 0; i < extra; ++i)
+            scale *= 0.82f;
+        mul *= scale;
+    }
+    return mul;
+}
+
+static constexpr uint32_t kPlazaMobCap = 16;
+// dens×area alone is not safe: Common hub ≈ 29e6 units² → hundreds of heads.
+static constexpr uint32_t kSoftAbsCapCommon = 64;
+static constexpr uint32_t kSoftAbsCapUnusual = 80;
+
+static uint32_t soft_zone_abs_cap(uint32_t difficulty) {
+    if (difficulty == 0) return kSoftAbsCapCommon;
+    if (difficulty <= RarityID::kUnusual) return kSoftAbsCapUnusual;
+    return 0xffffffffu;
+}
+
+static float soft_zone_spawn_target(Simulation *sim, uint32_t zone_id,
+                                   ZoneDefinition const &zone) {
+    float dens = zone.density * soft_zone_density_mul(sim, zone.difficulty);
+    float target = dens * zone_exclusive_area(sim->map_id, zone_id) / (500.f * 500.f);
+    float abs_cap = (float)soft_zone_abs_cap(zone.difficulty);
+    if (target > abs_cap) target = abs_cap;
+    return target;
+}
+
+void Map::thin_soft_zone_excess(Simulation *sim) {
+    MapZones const &zones = map_zones(sim->map_id);
+    for (uint32_t z = 0; z < zones.size(); ++z) {
+        ZoneDefinition const &zone = zones[z];
+        if (zone.difficulty > RarityID::kUnusual) continue;
+        float target = soft_zone_spawn_target(sim, z, zone);
+        float count = (float)sim->zone_mob_counts[z];
+        if (count <= target + 3.f) continue;
+        float over = count - target;
+        // ~18% of surplus per pass (~6Hz); was 12%/max6 — too slow vs refill.
+        uint32_t budget = (uint32_t)(over * 0.18f + 0.99f);
+        if (budget < 1) budget = 1;
+        if (budget > 10) budget = 10;
+        sim->for_each<kMob>([&](Simulation *s, Entity &ent) {
+            if (budget == 0) return;
+            if (ent.pending_delete) return;
+            if (ent.zone != z) return;
+            if (!BitMath::at(ent.flags, EntityFlags::kSpawnedFromZone)) return;
+            if (BitMath::at(ent.flags, EntityFlags::kIsDespawning)) return;
+            uint8_t culled = BitMath::at(ent.flags, EntityFlags::kIsCulled);
+            if (!culled && over < target * 0.35f) return;
+            if (!culled && frand() > 0.40f) return;
+            BitMath::set(ent.flags, EntityFlags::kNoDrops);
+            s->request_delete(ent.id);
+            --budget;
+        });
+    }
+    if (sim->plaza_mob_count > kPlazaMobCap) {
+        uint32_t budget = sim->plaza_mob_count - kPlazaMobCap;
+        if (budget > 4) budget = 4;
+        sim->for_each<kMob>([&](Simulation *s, Entity &ent) {
+            if (budget == 0) return;
+            if (ent.pending_delete) return;
+            if (!BitMath::at(ent.flags, EntityFlags::kSpawnedFromZone)) return;
+            if (!in_spawn_plaza(ent.get_x(), ent.get_y())) return;
+            BitMath::set(ent.flags, EntityFlags::kNoDrops);
+            s->request_delete(ent.id);
+            --budget;
+        });
+    }
+}
+
 void Map::spawn_random_mob(Simulation *sim, float x, float y) {
     uint32_t zone_id = Map::get_zone_from_pos(sim->map_id, x, y);
     struct ZoneDefinition const &zone = map_zones(sim->map_id)[zone_id];
-    // Respawn plaza: only difficulty-0 table; raised cap so pad edge isn't barren.
+    // Respawn plaza: only difficulty-0 table; hard cap stops pad pile-up.
     if (in_spawn_plaza(x, y)) {
         if (zone.difficulty != 0) return;
-        if (sim->plaza_mob_count >= 56) return;
+        if (sim->plaza_mob_count >= kPlazaMobCap) return;
     }
-    // Hub + Unusual belt: heavy fill so periphery looks packed.
-    float dens_mul = 1.25f;
-    if (zone.difficulty <= RarityID::kUnusual) dens_mul = 1.75f;
-    float dens = zone.density * dens_mul;
-    if (dens * zone_exclusive_area(sim->map_id, zone_id) / (500 * 500) < sim->zone_mob_counts[zone_id]) return;
+    if (zone.difficulty <= RarityID::kUnusual) {
+        if ((float)sim->zone_mob_counts[zone_id] >= soft_zone_spawn_target(sim, zone_id, zone))
+            return;
+    } else {
+        float dens = zone.density * soft_zone_density_mul(sim, zone.difficulty);
+        if (dens * zone_exclusive_area(sim->map_id, zone_id) / (500 * 500) < sim->zone_mob_counts[zone_id])
+            return;
+    }
     float sum = 0;
     for (SpawnChance const &s : zone.spawns)
         sum += s.chance;
@@ -1263,10 +1351,14 @@ uint8_t Map::_spawn_zone_mob_once(Simulation *sim) {
     }
     if (zone_id >= zones.size()) return 0;
     ZoneDefinition const &zone = zones[zone_id];
-    float dens_mul = 1.25f;
-    if (zone.difficulty <= RarityID::kUnusual) dens_mul = 1.75f;
-    float dens = zone.density * dens_mul;
-    if (dens * zone_exclusive_area(sim->map_id, zone_id) / (500 * 500) < sim->zone_mob_counts[zone_id]) return 0;
+    if (zone.difficulty <= RarityID::kUnusual) {
+        if ((float)sim->zone_mob_counts[zone_id] >= soft_zone_spawn_target(sim, zone_id, zone))
+            return 0;
+    } else {
+        float dens = zone.density * soft_zone_density_mul(sim, zone.difficulty);
+        if (dens * zone_exclusive_area(sim->map_id, zone_id) / (500 * 500) < sim->zone_mob_counts[zone_id])
+            return 0;
+    }
 
     float total = 0.f;
     for (SpawnChance const &s : zone.spawns) total += s.chance;
@@ -1313,7 +1405,7 @@ uint8_t Map::_spawn_zone_mob_once(Simulation *sim) {
     }
     if (in_spawn_plaza(x, y)) {
         if (zone.difficulty != 0) return 0;
-        if (sim->plaza_mob_count >= 56) return 0;
+        if (sim->plaza_mob_count >= kPlazaMobCap) return 0;
     }
     _spawn_mob_at(sim, zone_id, mob_id, x, y, spawn_r);
     return 1;

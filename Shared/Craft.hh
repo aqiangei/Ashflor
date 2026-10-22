@@ -33,7 +33,21 @@ namespace Craft {
     constexpr uint32_t kShopAnnounceCost = 2500;
 
     float success_chance(uint8_t from_rarity);
+    // Guaranteed-exchange price: ceil(5 / chance) copies (ignores miss refunds,
+    // so it costs a bit more than gambling on average — convenience tax).
+    uint32_t expected_cost(float chance);
     uint32_t exchange_cost(uint8_t from_rarity);
+
+    // Infinite petal levels: Unique petals keep merging 5 → Lv.L+1. Level is
+    // per account per PetalID; every equipped copy gets the stat bonus.
+    constexpr uint32_t kMaxPetalLevel = 65535;
+    constexpr float kLevelStatPerLevel = 0.03f; // +3% damage & health per level
+    uint8_t can_level_petal(PetalID::T id);
+    // Tray accepts it (rarity upgrade or level-up).
+    uint8_t can_craft_petal(PetalID::T id);
+    float level_success_chance(uint32_t level);
+    uint32_t level_exchange_cost(uint32_t level);
+    float level_stat_mult(uint32_t level);
     float farm_seconds(uint8_t rarity);
     // Uniform roll in [kCraftFailLossMin, kCraftFailLossMax] for a missed gamble.
     uint32_t craft_fail_loss();

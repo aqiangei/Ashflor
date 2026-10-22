@@ -557,19 +557,26 @@ static void spawn_ambush_mobs(Simulation *sim, uint8_t mid, EventRuntime &ev, Mo
     }
 }
 
+static char const *rarity_zh(uint8_t r) {
+    static char const *const kZh[RarityID::kNumRarities] = {
+        "普通", "罕见", "稀有", "史诗", "传奇", "神话", "究极", "超凡", "唯一"
+    };
+    return r < RarityID::kNumRarities ? kZh[r] : "?";
+}
+
 static void grant_explore(Client *client, uint8_t mid, uint32_t coins, uint8_t mat_n,
-                          char const *toast) {
+                          char const *toast, uint8_t tier = TreasureSites::kTierNormal) {
     if (client == nullptr) return;
     char const *title = toast != nullptr ? toast : "探索";
     if (coins > 0) {
         client_award_coins(client, coins);
         client_send_loot_toast(client, PetalID::kCoin, (uint16_t) coins, title);
     }
-    // Map-themed scrap only (primary / secondary / tertiary biome pool).
+    // Map-themed scrap × rarity ladder (assemble mats by event tier).
     uint8_t given = 0;
     std::string mat_line;
     for (uint8_t i = 0; i < mat_n; ++i) {
-        PetalID::T mat = TreasureSites::pick_explore_mat(mid);
+        PetalID::T mat = TreasureSites::pick_explore_mat(mid, tier);
         if (mat == PetalID::kNone) continue;
         if (!client_award_petal(client, mat)) continue;
         ++given;
@@ -578,6 +585,8 @@ static void grant_explore(Client *client, uint8_t mid, uint32_t coins, uint8_t m
             ? PETAL_DATA[mat].name : "残片";
         if (!mat_line.empty()) mat_line += "、";
         mat_line += pname;
+        if (mat < PetalID::kNumPetals)
+            mat_line += std::string{"("} + rarity_zh(PETAL_DATA[mat].rarity) + ")";
     }
     if (coins || given) {
         Chat::send_to(client, ChatChannel::kChatSystem, "",
@@ -752,7 +761,7 @@ void WorldEvent::tick(GameInstance *game) {
                 client->world_event_claimed[mid] |= bit;
                 Chat::send_to(client, ChatChannel::kChatSystem, "", def.lore_zh);
                 Chat::send_to(client, ChatChannel::kChatSystem, "", def.lore_en);
-                grant_explore(client, mid, 100, 2, def.name_zh);
+                grant_explore(client, mid, 80, 2, def.name_zh, TreasureSites::kTierLore);
                 continue;
             }
 
@@ -784,7 +793,7 @@ void WorldEvent::tick(GameInstance *game) {
                 client->world_event_claimed[mid] |= bit;
                 Chat::send_to(client, ChatChannel::kChatSystem, "", def.lore_zh);
                 Chat::send_to(client, ChatChannel::kChatSystem, "", def.lore_en);
-                grant_explore(client, mid, 150, 3, def.name_zh);
+                grant_explore(client, mid, 180, 3, def.name_zh, TreasureSites::kTierNormal);
                 continue;
             }
 
@@ -802,7 +811,7 @@ void WorldEvent::tick(GameInstance *game) {
                     Chat::send_to(client, ChatChannel::kChatSystem, "", def.lore_en);
                     if (!(client->world_event_claimed[mid] & bit)) {
                         client->world_event_claimed[mid] |= bit;
-                        grant_explore(client, mid, 120, 2, def.name_zh);
+                        grant_explore(client, mid, 140, 2, def.name_zh, TreasureSites::kTierNormal);
                     }
                 } else if (ev.sleep_phase == kAwake && !sim->ent_alive(bug.target)
                            && d2 <= kSleepWakeR2) {
@@ -823,7 +832,7 @@ void WorldEvent::tick(GameInstance *game) {
                 if (ev.ambush_phase >= 1 && !(client->world_event_claimed[mid] & bit)
                     && ed2 <= kAmbushArmR2) {
                     client->world_event_claimed[mid] |= bit;
-                    grant_explore(client, mid, 150, 2, def.name_zh);
+                    grant_explore(client, mid, 160, 2, def.name_zh, TreasureSites::kTierNormal);
                 }
                 continue;
             }
@@ -840,7 +849,7 @@ void WorldEvent::tick(GameInstance *game) {
                 client->world_event_claimed[mid] |= bit;
                 Chat::send_to(client, ChatChannel::kChatSystem, "", def.lore_zh);
                 Chat::send_to(client, ChatChannel::kChatSystem, "", def.lore_en);
-                grant_explore(client, mid, 80, 1, def.name_zh);
+                grant_explore(client, mid, 60, 1, def.name_zh, TreasureSites::kTierLore);
                 continue;
             }
 
@@ -865,7 +874,7 @@ void WorldEvent::tick(GameInstance *game) {
                             client->height_order_event = 255;
                             Chat::send_to(client, ChatChannel::kChatSystem, "",
                                 "【机关】顺序正确——印记依次亮起。");
-                            grant_explore(client, mid, 220, 3, def.name_zh);
+                            grant_explore(client, mid, 260, 3, def.name_zh, TreasureSites::kTierHard);
                         } else {
                             Chat::send_to(client, ChatChannel::kChatSystem, "",
                                 std::string{"【机关】"}
@@ -914,7 +923,7 @@ void WorldEvent::tick(GameInstance *game) {
                 client->timed_touch_event = 255;
                 Chat::send_to(client, ChatChannel::kChatSystem, "",
                     "【印记】三枚印记同时记得你。");
-                grant_explore(client, mid, 200, 3, def.name_zh);
+                grant_explore(client, mid, 240, 3, def.name_zh, TreasureSites::kTierHard);
             }
         }
     }

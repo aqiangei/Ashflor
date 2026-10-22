@@ -11,15 +11,16 @@
 
 namespace Craft {
     // Indexed by from-rarity. Ladder: …Mythic → Ultra → Super → Unique.
+    // Doubled vs prior so ceil(5/p) matches the halved exchange prices.
     static float const SUCCESS[RarityID::kNumRarities - 1] = {
-        0.64f,   // Common → Unusual
-        0.36f,   // Unusual → Rare
-        0.18f,   // Rare → Epic
-        0.09f,   // Epic → Legendary
-        0.04f,   // Legendary → Mythic
-        0.015f,  // Mythic → Ultra
-        0.008f,  // Ultra → Super
-        0.004f   // Super → Unique
+        1.00f,   // Common → Unusual (was 64%; capped)
+        0.72f,   // Unusual → Rare
+        0.36f,   // Rare → Epic
+        0.18f,   // Epic → Legendary
+        0.08f,   // Legendary → Mythic
+        0.030f,  // Mythic → Ultra
+        0.016f,  // Ultra → Super
+        0.008f   // Super → Unique
     };
 
     // Expected seconds to meaningfully progress a rarity via kill→drop→craft.
@@ -97,10 +98,39 @@ namespace Craft {
         return SUCCESS[from_rarity];
     }
 
+    uint32_t expected_cost(float chance) {
+        if (chance <= 0.0001f) return 999999;
+        return (uint32_t) std::ceil((double) kCraftBatch / (double) chance);
+    }
+
     uint32_t exchange_cost(uint8_t from_rarity) {
-        float p = success_chance(from_rarity);
-        if (p <= 0.0001f) return 999999;
-        return (uint32_t) std::ceil((double) kCraftBatch / (double) p);
+        return expected_cost(success_chance(from_rarity));
+    }
+
+    uint8_t can_level_petal(PetalID::T id) {
+        if (id == PetalID::kNone || id >= PetalID::kNumPetals) return 0;
+        if (id == PetalID::kCoin) return 0;
+        if (Recipe::is_bag_only(id)) return 0;
+        return PETAL_DATA[id].rarity == RarityID::kUnique ? 1 : 0;
+    }
+
+    uint8_t can_craft_petal(PetalID::T id) {
+        return can_upgrade_petal(id) || can_level_petal(id);
+    }
+
+    // 60% at Lv.0, ×0.9 per level, floor 2% from ~Lv.33 (exchange ≈250/level).
+    float level_success_chance(uint32_t level) {
+        if (level >= kMaxPetalLevel) return 0;
+        float p = 0.60f * std::pow(0.9f, (float) level);
+        return p < 0.02f ? 0.02f : p;
+    }
+
+    uint32_t level_exchange_cost(uint32_t level) {
+        return expected_cost(level_success_chance(level));
+    }
+
+    float level_stat_mult(uint32_t level) {
+        return 1.f + kLevelStatPerLevel * (float) level;
     }
 
     float farm_seconds(uint8_t rarity) {
@@ -172,15 +202,17 @@ namespace Craft {
         if (id == PetalID::kCoin) return 0; // currency — not a 5-merge ladder
         if (Recipe::is_bag_only(id)) return 0;
         uint8_t r = PETAL_DATA[id].rarity;
-        return r < RarityID::kNumRarities - 1 ? 1 : 0;
+        if (r >= RarityID::kNumRarities - 1) return 0;
+        // Only if this family has a +1 rarity entry — never cross into other petals.
+        return find_same_name_at_rarity(id, (uint8_t)(r + 1)) != PetalID::kNone ? 1 : 0;
     }
 
     PetalID::T craft_result(PetalID::T from) {
         if (!can_upgrade_petal(from)) return PetalID::kNone;
         uint8_t next_r = (uint8_t) (PETAL_DATA[from].rarity + 1);
-        PetalID::T same = find_same_name_at_rarity(from, next_r);
-        if (same != PetalID::kNone) return same;
-        return random_petal_of_rarity(next_r);
+        // Same English-name ladder only. No random_petal_of_rarity fallback —
+        // that used to spit out unrelated petals when a rung was missing.
+        return find_same_name_at_rarity(from, next_r);
     }
 
     PetalID::T petal_at_rarity(PetalID::T from, uint8_t rarity) {

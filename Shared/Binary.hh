@@ -31,7 +31,11 @@ enum InviteType : uint8_t {
 
 enum SpawnResultCode : uint8_t {
     kSpawnOk = 0,
-    kSpawnNameTaken = 1
+    kSpawnNameTaken = 1,
+    // Guest only: server minted a free G#XXXXXX (string follows). Client must
+    // persist it — same localStorage id on two tabs / stale sockets used to
+    // surface "nickname taken" instead of spawning.
+    kSpawnGuestIdAssigned = 2
 };
 
 enum Serverbound {
@@ -86,6 +90,7 @@ enum CraftMode : uint8_t {
     kCraftGambleAll = 4,  // arg = PetalID → craft every possible batch
     kCraftRecipe = 5,     // arg = recipe index → consume ingredients, give result
     kCraftBuyAnnounce = 6 // arg unused; followed by string → paid screen banner
+    // Gamble / GambleAll / Exchange on a Unique petal roll its infinite level.
 };
 
 enum CraftResultCode : uint8_t {
@@ -96,7 +101,8 @@ enum CraftResultCode : uint8_t {
     kCraftExchanged = 4,
     kCraftNoCoins = 5,
     kCraftBought = 6,
-    kCraftInvFull = 7
+    kCraftInvFull = 7,
+    kCraftLevelWin = 8 // petal = leveled id, amount = new level
 };
 
 enum LoadoutPresetResult : uint8_t {

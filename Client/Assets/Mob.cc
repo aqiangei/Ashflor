@@ -223,7 +223,6 @@ void draw_static_mob(MobID::T mob_id, Renderer &ctx, MobRenderAttributes attr) {
             break;
         case MobID::kBeetle:
         case MobID::kMassiveBeetle:
-        case MobID::kFlowerGuardian:
             ctx.scale(radius / 35);
             SET_BASE_COLOR(0xff905db0)
             ctx.begin_path();
@@ -297,6 +296,137 @@ void draw_static_mob(MobID::T mob_id, Renderer &ctx, MobRenderAttributes attr) {
             ctx.arc(17,12,5);
             ctx.fill();
             break;
+        case MobID::kFlowerGuardian: {
+            // Garden sovereign — bloom carapace + leaf mandibles (not the purple beetle).
+            ctx.scale(radius / 52.f);
+            float const jaw = 0.14f * animation_value;
+            ctx.round_line_cap();
+            ctx.round_line_join();
+            // Leaf mandibles (front = +X, same facing as common beetles)
+            ctx.set_fill(0xff3F8B4A);
+            ctx.set_stroke(0xff1A3A24);
+            ctx.set_line_width(4.5f);
+            {
+                RenderContext rc(&ctx);
+                ctx.rotate(-0.12f + jaw);
+                ctx.begin_path();
+                ctx.move_to(8.f, 10.f);
+                ctx.qcurve_to(28.f, 22.f, 46.f, 8.f);
+                ctx.qcurve_to(30.f, 14.f, 10.f, 2.f);
+                ctx.close_path();
+                ctx.fill();
+                ctx.stroke();
+            }
+            {
+                RenderContext rc(&ctx);
+                ctx.rotate(0.12f - jaw);
+                ctx.begin_path();
+                ctx.move_to(8.f, -10.f);
+                ctx.qcurve_to(28.f, -22.f, 46.f, -8.f);
+                ctx.qcurve_to(30.f, -14.f, 10.f, -2.f);
+                ctx.close_path();
+                ctx.fill();
+                ctx.stroke();
+            }
+            // Soft under-glow (pollen halo)
+            ctx.set_fill(0x33FFE08A);
+            ctx.begin_path();
+            ctx.ellipse(0.f, 0.f, 48.f, 40.f);
+            ctx.fill();
+            // Outer gold sovereign rim
+            ctx.set_fill(0xffC9A227);
+            ctx.begin_path();
+            ctx.ellipse(0.f, 0.f, 44.f, 36.f);
+            ctx.fill();
+            // Rose bloom body
+            ctx.set_fill(0xffE85A7A);
+            ctx.set_stroke(0xff8B2E4A);
+            ctx.set_line_width(5.f);
+            ctx.begin_path();
+            ctx.ellipse(0.f, 0.f, 40.f, 32.f);
+            ctx.fill();
+            ctx.stroke();
+            // Split petal elytra
+            ctx.set_fill(0xffF07A96);
+            ctx.begin_path();
+            ctx.move_to(2.f, -28.f);
+            ctx.qcurve_to(38.f, -22.f, 34.f, 0.f);
+            ctx.qcurve_to(38.f, 22.f, 2.f, 28.f);
+            ctx.qcurve_to(10.f, 0.f, 2.f, -28.f);
+            ctx.fill();
+            ctx.begin_path();
+            ctx.move_to(-2.f, -28.f);
+            ctx.qcurve_to(-38.f, -22.f, -34.f, 0.f);
+            ctx.qcurve_to(-38.f, 22.f, -2.f, 28.f);
+            ctx.qcurve_to(-10.f, 0.f, -2.f, -28.f);
+            ctx.fill();
+            // Elytra seam
+            ctx.set_stroke(0xff8B2E4A);
+            ctx.set_line_width(4.f);
+            ctx.begin_path();
+            ctx.move_to(0.f, -26.f);
+            ctx.line_to(0.f, 26.f);
+            ctx.stroke();
+            // Petal veins
+            ctx.set_stroke(0xffC94466);
+            ctx.set_line_width(2.2f);
+            ctx.begin_path();
+            ctx.move_to(6.f, -18.f); ctx.qcurve_to(22.f, -8.f, 28.f, 4.f);
+            ctx.move_to(6.f, 18.f); ctx.qcurve_to(22.f, 8.f, 28.f, -4.f);
+            ctx.move_to(-6.f, -18.f); ctx.qcurve_to(-22.f, -8.f, -28.f, 4.f);
+            ctx.move_to(-6.f, 18.f); ctx.qcurve_to(-22.f, 8.f, -28.f, -4.f);
+            ctx.stroke();
+            // Heart-of-flower core (overlapping petals)
+            for (uint32_t i = 0; i < 5; ++i) {
+                float a = (float)i * (float)M_PI * 2.f / 5.f - (float)M_PI * 0.5f;
+                ctx.set_fill(0xffFFB3C6);
+                ctx.begin_path();
+                ctx.ellipse(cosf(a) * 9.f, sinf(a) * 9.f, 8.f, 5.5f);
+                ctx.fill();
+            }
+            ctx.set_fill(0xffFFE08A);
+            ctx.begin_path();
+            ctx.arc(0.f, 0.f, 6.5f);
+            ctx.fill();
+            ctx.set_fill(0xffF5C842);
+            ctx.begin_path();
+            ctx.arc(0.f, 0.f, 3.5f);
+            ctx.fill();
+            // Head plate
+            ctx.set_fill(0xff3F8B4A);
+            ctx.set_stroke(0xff1A3A24);
+            ctx.set_line_width(3.5f);
+            ctx.begin_path();
+            ctx.ellipse(22.f, 0.f, 12.f, 14.f);
+            ctx.fill();
+            ctx.stroke();
+            // Eyes
+            ctx.set_fill(0xff1A1A1A);
+            ctx.begin_path();
+            ctx.arc(26.f, -6.f, 3.2f);
+            ctx.arc(26.f, 6.f, 3.2f);
+            ctx.fill();
+            ctx.set_fill(0xffffffff);
+            ctx.begin_path();
+            ctx.arc(27.f, -7.f, 1.1f);
+            ctx.arc(27.f, 5.f, 1.1f);
+            ctx.fill();
+            // Antennae
+            ctx.set_stroke(0xff1A3A24);
+            ctx.set_line_width(2.4f);
+            ctx.begin_path();
+            ctx.move_to(30.f, -8.f);
+            ctx.qcurve_to(40.f, -18.f - jaw * 8.f, 48.f, -12.f);
+            ctx.move_to(30.f, 8.f);
+            ctx.qcurve_to(40.f, 18.f + jaw * 8.f, 48.f, 12.f);
+            ctx.stroke();
+            ctx.set_fill(0xffE85A7A);
+            ctx.begin_path();
+            ctx.arc(48.f, -12.f, 2.4f);
+            ctx.arc(48.f, 12.f, 2.4f);
+            ctx.fill();
+            break;
+        }
         case MobID::kHornet:
             SET_BASE_COLOR(0xffffe763)
             ctx.set_fill(0xff333333);

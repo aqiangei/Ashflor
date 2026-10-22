@@ -190,17 +190,28 @@ void Particle::tick_game(Renderer &ctx, double dt) {
         RenderContext c(&ctx);
         part.x += part.x_velocity * dt / 1000;
         part.y += part.y_velocity * dt / 1000;
-        // Spirit motes: same read as Unique petal sparkles (bright + halo).
+        // Spirit motes: bright gold/white halo. Unique ash: soft graphite bloom.
         uint8_t spirit = (part.fill == 0xfffff6d0 || part.fill == 0xffffd060
             || part.fill == 0xffffffff || part.fill == 0xffffc84a
             || part.fill == 0xffff8ad8);
-        float fade = spirit ? (float) (dt / 1600.0) : (float) (dt / 1000.0);
+        uint8_t unique_ash = (part.fill == 0xd0121418 || part.fill == 0xc0282c32
+            || part.fill == 0xb03c424a || part.fill == 0xa05a6068
+            || part.fill == 0x909098a0
+            || part.fill == ((RARITY_COLORS[RarityID::kUnique] & 0x00ffffff) | 0xb0000000));
+        float fade = spirit ? (float) (dt / 1600.0)
+            : unique_ash ? (float) (dt / 1400.0)
+            : (float) (dt / 1000.0);
         part.opacity = fclamp(part.opacity - fade, 0, 1);
         ctx.set_global_alpha(part.opacity);
         if (spirit) {
             ctx.set_fill(0x90ffe08a);
             ctx.begin_path();
             ctx.arc(part.x, part.y, part.radius * 2.4f);
+            ctx.fill();
+        } else if (unique_ash) {
+            ctx.set_fill(0x55202830);
+            ctx.begin_path();
+            ctx.arc(part.x, part.y, part.radius * 2.2f);
             ctx.fill();
         }
         ctx.set_fill(part.fill);
@@ -458,17 +469,28 @@ void Particle::tick_guide_sprite(double dt) {
 }
 
 void Particle::add_unique_particle(float x, float y) {
-    // Top-of-ladder Unique petal sparkle (not Super mint — Unique pink-red).
-    GameParticleEntity part;
-    part.x = x;
-    part.y = y;
-    part.radius = 4;
-    part.opacity = 1;
-    part.fill = (RARITY_COLORS[RarityID::kUnique] & 0x00ffffff) | 0xb0000000;
-    Vector rand = Vector::rand(50);
-    part.x_velocity = rand.x;
-    part.y_velocity = rand.y;
-    game_particles.push_back(std::move(part));
+    // Unique（唯一）: textured gray-black grit — charcoal core + gunmetal flecks.
+    // Palette is also used by tick_game for a soft ash halo (not Super mint / old pink).
+    static uint32_t const kAsh[5] = {
+        0xd0121418, // near-black
+        0xc0282c32, // deep charcoal
+        0xb03c424a, // slate (matches RARITY_COLORS[kUnique] family)
+        0xa05a6068, // gunmetal
+        0x909098a0  // cool steel highlight
+    };
+    int n = 2 + (frand() < 0.35f ? 1 : 0);
+    for (int i = 0; i < n; ++i) {
+        GameParticleEntity part;
+        Vector rand = Vector::rand(42);
+        part.x = x + (frand() - 0.5f) * 10.f;
+        part.y = y + (frand() - 0.5f) * 10.f;
+        part.radius = 2.8f + frand() * 3.2f;
+        part.opacity = 0.92f + frand() * 0.08f;
+        part.fill = kAsh[(int) (frand() * 5.f) % 5];
+        part.x_velocity = rand.x * (0.55f + frand() * 0.5f);
+        part.y_velocity = rand.y * (0.55f + frand() * 0.5f);
+        game_particles.push_back(std::move(part));
+    }
 }
 
 size_t Particle::game_particle_count() {
@@ -494,10 +516,10 @@ void Particle::add_spirit_trail(float x, float y, float back_dx, float back_dy) 
         0xffffffff, 0xfffff6d0, 0xffffd060, 0xffffc84a, 0xffff8ad8
     };
 
-    // 1) Body sparkles like Unique petals (scatter around the spirit).
+    // 1) Body sparkles like Unique petals (low scatter so they stay on the spirit).
     for (int i = 0; i < 4; ++i) {
         GameParticleEntity part;
-        Vector rand = Vector::rand(70);
+        Vector rand = Vector::rand(25);
         part.x = x + (frand() - 0.5f) * 22.f;
         part.y = y + (frand() - 0.5f) * 22.f;
         part.radius = 5.5f + frand() * 5.f;
@@ -519,8 +541,9 @@ void Particle::add_spirit_trail(float x, float y, float back_dx, float back_dy) 
         part.radius = 7.f + frand() * 8.f;
         part.opacity = 1.f;
         part.fill = kCols[i % 5];
-        part.x_velocity = ux * (24.f + frand() * 20.f) + (frand() - 0.5f) * 10.f;
-        part.y_velocity = uy * (24.f + frand() * 20.f) + (frand() - 0.5f) * 10.f;
+        // Near-stationary so the ribbon stays laid along the path it walked.
+        part.x_velocity = ux * (6.f + frand() * 6.f) + (frand() - 0.5f) * 6.f;
+        part.y_velocity = uy * (6.f + frand() * 6.f) + (frand() - 0.5f) * 6.f;
         game_particles.push_back(std::move(part));
     }
 }

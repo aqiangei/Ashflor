@@ -1,5 +1,8 @@
 #include <Server/EntityFunctions.hh>
 
+#include <Server/Client.hh>
+#include <Server/DevCheats.hh>
+#include <Server/Server.hh>
 #include <Server/Spawn.hh>
 #include <Shared/Entity.hh>
 #include <Shared/Simulation.hh>
@@ -30,6 +33,11 @@ void inflict_damage(Simulation *sim, EntityID const atk_id, EntityID const def_i
     DEBUG_ONLY(assert(!defender.pending_delete);)
     DEBUG_ONLY(assert(defender.has_component(kHealth));)
     if (defender.immunity_ticks > 0) return;
+    // Local QA: "dev" account godmode (does not use immunity_ticks — portals still work).
+    if (defender.has_component(kFlower)) {
+        Client *owner = Server::client_by_camera(sim, defender.get_parent());
+        if (DevCheats::active(owner)) return;
+    }
     // Explore guide spirits / treasure NPCs: scripted props, never die to petals or mobs.
     if (defender.has_component(kMob)
         && defender.damage <= 0.f && defender.score_reward == 0

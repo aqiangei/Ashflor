@@ -29,7 +29,9 @@ inline std::array<uint32_t, RarityID::kNumRarities> const RARITY_COLORS = {{
     0xfff70fb6, // Ultra (究极)
     // Mint / aqua-green — green-family like florr Super (#2bffa4), not Common lime.
     0xff2bffa4, // Super (超凡)
-    0xffde1f65  // Unique (独特)
+    // Charcoal / gunmetal — Unique（唯一）top tier; petals, mobs, map rings share this.
+    // Mid-steel so nameplates stay readable with the black stroke bake.
+    0xff5a616c  // Unique (唯一)
 }};
 
 // Zone difficulty 0..MAX_DIFFICULTY == RarityID. Combat follows petal ×3 curve;

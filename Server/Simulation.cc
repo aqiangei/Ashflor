@@ -161,11 +161,12 @@ void Simulation::on_tick() {
         return;
     }
 
-    // Occupied: refill near players. Cap restored to 8 — network-AOI near box
-    // is ~2.9× AI-cull area, so the earlier cut to 6 felt sparse on zone entry.
+    // Occupied: refill near players. Soft-cap batches — linear 2+flowers up to 8
+    // overfilled hub when a crowd's AOIs overlapped the Common belt.
     if (frand() < 1.0f / TPS) {
-        uint32_t batches = 2u + flowers;
-        if (batches > 8u) batches = 8u;
+        uint32_t extra = flowers;
+        if (extra > 3u) extra = 3u;
+        uint32_t batches = 2u + extra;
         for (uint32_t i = 0; i < batches; ++i)
             Map::spawn_zone_mob(this);
     }
@@ -179,8 +180,9 @@ void Simulation::on_tick() {
 
     // florr unseenDespawn: zone mobs still culled after AOI → delete, no loot.
     // Stride ~5 ticks (~6Hz). unseen_ticks==0 = never in any camera AOI.
-    // Hub/plaza used the same 30s as the wild → packs around spawn felt like they
-    // blinked out while you turned; soft zones keep fauna longer.
+    // Plaza/soft longer than wild 30s so solo circling doesn't blink packs out;
+    // not multi-minute — crowd AOIs keep mobs "seen" forever, so long timers
+    // only delayed cleanup when people leave a pocket.
     if (tick_index % 5 == 0) {
         for_each<kMob>([](Simulation *sim, Entity &ent) {
             if (!BitMath::at(ent.flags, EntityFlags::kSpawnedFromZone)) return;
@@ -195,12 +197,11 @@ void Simulation::on_tick() {
             if (ent.zone < MAX_ZONES_PER_MAP)
                 zdiff = map_zones(sim->map_id)[ent.zone].difficulty;
             if (in_plaza) {
-                // Respawn pad fauna: persist while you circle the hub.
-                unseen_limit = (game_tick_t)(180 * TPS);
-                never_seen_life = (game_tick_t)(180 * TPS);
+                unseen_limit = (game_tick_t)(55 * TPS);
+                never_seen_life = (game_tick_t)(70 * TPS);
             } else if (zdiff <= RarityID::kUnusual) {
-                unseen_limit = (game_tick_t)(90 * TPS);
-                never_seen_life = (game_tick_t)(120 * TPS);
+                unseen_limit = (game_tick_t)(40 * TPS);
+                never_seen_life = (game_tick_t)(75 * TPS);
             }
 
             if (BitMath::at(ent.flags, EntityFlags::kIsCulled)) {
@@ -221,6 +222,8 @@ void Simulation::on_tick() {
                 ent.unseen_ticks = 1;
             }
         });
+        // After unseen pass: drain soft-zone surplus under crowd dens_mul.
+        Map::thin_soft_zone_excess(this);
     }
 
     // Magnet pulls rewrite drop acceleration each tick

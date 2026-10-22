@@ -73,7 +73,8 @@ static void write_guild_file(char const *path, std::string const &data) {
 
 static void persist_client_guild(Client *client) {
     if (client == nullptr || client->account_name.empty()) return;
-    AccountStore::capture(client);
+    // Memory only — periodic Server flush / disconnect persist to disk.
+    AccountStore::capture_nosave(client);
 }
 
 static std::string player_name(Client *client) {

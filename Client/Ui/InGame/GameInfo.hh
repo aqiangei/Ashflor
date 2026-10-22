@@ -91,7 +91,7 @@ namespace Ui {
     Element *make_boost_panel();
     // Overlay: place / take-back flies + craft win/miss bursts
     Element *make_craft_fx_layer();
-    void craft_play_result(uint8_t result, PetalID::T petal);
+    void craft_play_result(uint8_t result, PetalID::T petal, uint32_t amount = 1);
     class TextInput;
     TextInput *chat_text_input();
     TextInput *shop_announce_text_input();

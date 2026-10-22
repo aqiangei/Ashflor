@@ -3,6 +3,7 @@
 #include <Server/AccountStore.hh>
 #include <Server/Chat.hh>
 #include <Server/Client.hh>
+#include <Server/DevCheats.hh>
 #include <Server/Game.hh>
 #include <Server/Guild.hh>
 #include <Server/LeaderboardStore.hh>
@@ -66,18 +67,20 @@ void Server::tick() {
     auto start = std::chrono::steady_clock::now();
     static uint32_t tick_n = 0;
     ++tick_n;
-    if ((tick_n % 75) == 0) // ~3s at 25 TPS
+    if ((tick_n % 60) == 0) // ~3s at 20 TPS
         RateLimit::tick_prune();
     uint32_t online = 0;
     for (uint8_t i = 0; i < MapID::kNumMaps; ++i) {
         // Empty maps: ~1 Hz. Full collide on 8 packed biomes was the tick hog
         // (segmented swarms × radius scale); occupied maps still tick every frame.
-        if (Server::games[i].clients.empty() && ((tick_n + i) % 25) != 0) {
+        if (Server::games[i].clients.empty() && ((tick_n + i) % 20) != 0) {
             continue;
         }
         Server::games[i].tick();
-        for (Client *c : Server::games[i].clients)
+        for (Client *c : Server::games[i].clients) {
             client_tick_bonus(c);
+            DevCheats::tick_client(c);
+        }
         online += (uint32_t) Server::games[i].clients.size();
     }
     Server::player_count = online;
@@ -124,23 +127,28 @@ void Server::tick() {
             }
         }
     }
+    // Playtime + chat/leaderboard disk flush (~5s at 20 TPS).
+    // Was 1s: every score tick dirtied LB and sync-wrote leaderboard.dat,
+    // stacking with accounts.dat on the single WASM thread.
     static uint32_t lb_flush_ticks = 0;
-    if (++lb_flush_ticks >= 25) { // ~1s at 25 TPS
+    if (++lb_flush_ticks >= 100) {
         lb_flush_ticks = 0;
         LeaderboardStore::flush();
         Chat::flush();
-        // Play time counter: one second per connected, spawned player
         for (uint8_t i = 0; i < MapID::kNumMaps; ++i) {
             for (Client *c : Server::games[i].clients) {
                 if (c == nullptr || c->play_name.empty()) continue;
-                if (c->stat_playtime < 4000000000u)
-                    ++c->stat_playtime;
+                // ~5 playtime seconds per flush cadence
+                if (c->stat_playtime < 4000000000u - 5u)
+                    c->stat_playtime += 5;
+                else
+                    c->stat_playtime = 4000000000u;
             }
         }
     }
-    // Push the session stat counters into the leaderboard store (~5s)
+    // Push the session stat counters into the leaderboard store (~10s)
     static uint32_t stat_flush_ticks = 0;
-    if (++stat_flush_ticks >= 125) {
+    if (++stat_flush_ticks >= 200) {
         stat_flush_ticks = 0;
         uint8_t any = 0;
         for (uint8_t i = 0; i < MapID::kNumMaps; ++i) {
@@ -152,9 +160,9 @@ void Server::tick() {
         }
         if (any) LeaderboardStore::flush();
     }
-    // Periodic full account snapshot for all logged-in clients (~5s)
+    // Periodic full account snapshot for all logged-in clients (~15s)
     static uint32_t acc_flush_ticks = 0;
-    if (++acc_flush_ticks >= 125) {
+    if (++acc_flush_ticks >= 300) {
         acc_flush_ticks = 0;
         AccountStore::prune_stale_sessions();
         uint8_t any = 0;
@@ -206,7 +214,7 @@ static void json_escape_append(std::string &out, std::string const &s) {
 
 static char const *live_rarity_zh(uint8_t rarity) {
     static char const *const names[RarityID::kNumRarities] = {
-        "普通", "罕见", "稀有", "史诗", "传奇", "神话", "究极", "超凡", "独特"
+        "普通", "罕见", "稀有", "史诗", "传奇", "神话", "究极", "超凡", "唯一"
     };
     if (rarity >= RarityID::kNumRarities) return "?";
     return names[rarity];
@@ -821,13 +829,16 @@ std::string Server::live_admin_give(std::string const &who, uint32_t petal_id, u
     if (petal_id == 0 || petal_id >= PetalID::kNumPetals)
         return live_admin_err("无效花瓣 id");
     if (count < 1) count = 1;
-    if (count > 64) count = 64;
+    if (count > 10) return live_admin_err("每次最多发放 10 个");
 
     PetalID::T give_id = (PetalID::T) petal_id;
     char const *base_en = PETAL_DATA[petal_id].name ? PETAL_DATA[petal_id].name : "?";
     char const *base_zh = LIVE_PETAL_NAME_ZH[petal_id] ? LIVE_PETAL_NAME_ZH[petal_id] : base_en;
 
     if (rarity != 255) {
+        // Admin give stops at Unique（唯一）— highest ladder tier.
+        if (rarity > RarityID::kUnique)
+            return live_admin_err("发放等级最高到【唯一】");
         if (rarity >= RarityID::kNumRarities)
             return live_admin_err("无效稀有度等级");
         PetalID::T resolved = Craft::petal_at_rarity((PetalID::T) petal_id, (uint8_t) rarity);
@@ -849,6 +860,7 @@ std::string Server::live_admin_give(std::string const &who, uint32_t petal_id, u
         }
         give_id = resolved;
     }
+
 
     Client *c = live_find_client(who);
     if (c == nullptr) return live_admin_err("找不到在线玩家：" + who);

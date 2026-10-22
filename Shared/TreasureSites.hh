@@ -1,5 +1,6 @@
 #pragma once
 
+#include <Shared/Craft.hh>
 #include <Shared/StaticData.hh>
 #include <Shared/StaticDefinitions.hh>
 
@@ -332,13 +333,70 @@ namespace TreasureSites {
         return kMats[mid];
     }
 
-    // Explore / world-event drops: always this map's craft pool.
-    // ~55% primary, ~30% secondary, ~15% tertiary.
-    inline PetalID::T pick_explore_mat(uint8_t mid) {
+    // Event difficulty → mat rarity ladder (assemble rarity variants).
+    // Never Unique; Legendary+ only on hard/ritual. No boss-core families.
+    enum ExploreTier : uint8_t {
+        kTierLore = 0,    // seed / mirage — Common heavy
+        kTierNormal = 1,  // flee / sleep / ambush / spirit
+        kTierHard = 2,    // timed / height / 3-touch / near chest
+        kTierRitual = 3,  // push-crate ritual / outer chests
+    };
+
+    inline PetalID::T pick_mat_family(uint8_t mid) {
         float r = frand();
         if (r < 0.55f) return common_mat_for(mid);
         if (r < 0.85f) return secondary_mat_for(mid);
         return tertiary_mat_for(mid);
+    }
+
+    // Same English-name material at exact rarity; falls back to base if rung missing.
+    inline PetalID::T mat_at_rarity(PetalID::T base, uint8_t rarity) {
+        if (base == PetalID::kNone || base >= PetalID::kNumPetals) return PetalID::kNone;
+        if (rarity >= RarityID::kNumRarities) rarity = RarityID::kCommon;
+        PetalID::T v = Craft::petal_at_rarity(base, rarity);
+        return v != PetalID::kNone ? v : base;
+    }
+
+    inline uint8_t roll_mat_rarity(uint8_t tier) {
+        float r = frand();
+        switch (tier) {
+        case kTierLore:
+            // Common 68 · Unusual 27 · Rare 5
+            if (r < 0.68f) return RarityID::kCommon;
+            if (r < 0.95f) return RarityID::kUnusual;
+            return RarityID::kRare;
+        case kTierNormal:
+            // Common 38 · Unusual 42 · Rare 17 · Epic 3
+            if (r < 0.38f) return RarityID::kCommon;
+            if (r < 0.80f) return RarityID::kUnusual;
+            if (r < 0.97f) return RarityID::kRare;
+            return RarityID::kEpic;
+        case kTierHard:
+            // Common 18 · Unusual 38 · Rare 32 · Epic 10 · Legendary 2
+            if (r < 0.18f) return RarityID::kCommon;
+            if (r < 0.56f) return RarityID::kUnusual;
+            if (r < 0.88f) return RarityID::kRare;
+            if (r < 0.98f) return RarityID::kEpic;
+            return RarityID::kLegendary;
+        case kTierRitual:
+        default:
+            // Unusual 22 · Rare 40 · Epic 28 · Legendary 8 · Mythic 2
+            if (r < 0.22f) return RarityID::kUnusual;
+            if (r < 0.62f) return RarityID::kRare;
+            if (r < 0.90f) return RarityID::kEpic;
+            if (r < 0.98f) return RarityID::kLegendary;
+            return RarityID::kMythic;
+        }
+    }
+
+    // Explore / world-event drops: map craft pool × rarity ladder.
+    inline PetalID::T pick_explore_mat(uint8_t mid, uint8_t tier = kTierNormal) {
+        return mat_at_rarity(pick_mat_family(mid), roll_mat_rarity(tier));
+    }
+
+    // Ritual thematic scrap: keep SiteDef family, roll rarity on the ladder.
+    inline PetalID::T pick_ritual_mat(PetalID::T base_family) {
+        return mat_at_rarity(base_family, roll_mat_rarity(kTierRitual));
     }
 
     inline MapPack pack(uint8_t map_id) {

@@ -293,12 +293,12 @@ void GameInstance::remove_client(Client *client) {
         if (simulation.ent_alive(cam.get_player())) {
             Entity &player = simulation.get_ent(cam.get_player());
             LeaderboardStore::record(client->play_name, player.get_score(), player.get_color());
-            LeaderboardStore::flush();
         }
     }
     // Move the session stat counters into the leaderboard store
     client_flush_stats(client);
-    AccountStore::capture(client);
+    AccountStore::capture(client); // sync disk on disconnect
+    LeaderboardStore::flush();
     AccountStore::logout(client);
     Party::leave(client);
     // Keep guild roster membership on disconnect so others see them offline.
@@ -355,8 +355,9 @@ void GameInstance::transfer_client(Client *client, GameInstance *dest) {
         }
     }
 
-    // Persist after flush so accounts.dat gets the real loadout + score.
-    AccountStore::capture(client);
+    // Memory snapshot only — portal hops must not sync-write 150KB accounts.dat.
+    // Periodic flush (~15s) and disconnect still persist.
+    AccountStore::capture_nosave(client);
     Account *acc = client->account_name.empty()
         ? nullptr
         : AccountStore::find(client->account_name);

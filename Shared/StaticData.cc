@@ -2609,7 +2609,10 @@ std::array<struct PetalData, PetalID::kNumPetals> const PETAL_DATA = {{
         .reload = 2.5,
         .count = 1,
         .rarity = RarityID::kRare,
-        .attributes = { .mass = 0.35f, .defend_only = 1 }
+        .attributes = {
+            .secondary_reload = 0.5f, .mass = 0.35f, .defend_only = 1,
+            .rotation_style = PetalAttributes::kFollowRot
+        }
     },
     {
         .name = "Meteor",
@@ -2620,7 +2623,10 @@ std::array<struct PetalData, PetalID::kNumPetals> const PETAL_DATA = {{
         .reload = 20.0,
         .count = 1,
         .rarity = RarityID::kLegendary,
-        .attributes = { .mass = 0.55f, .defend_only = 1, .rotation_style = PetalAttributes::kNoRot }
+        .attributes = {
+            .secondary_reload = 0.5f, .mass = 0.55f, .aura_duration = 18.0f,
+            .defend_only = 1, .rotation_style = PetalAttributes::kNoRot
+        }
     },
     // ---- Honey / Meteor rarity ladders ----
     {
@@ -2632,7 +2638,10 @@ std::array<struct PetalData, PetalID::kNumPetals> const PETAL_DATA = {{
         .reload = 2.5,
         .count = 1,
         .rarity = RarityID::kCommon,
-        .attributes = { .mass = 0.35f, .defend_only = 1 }
+        .attributes = {
+            .secondary_reload = 0.5f, .mass = 0.35f, .defend_only = 1,
+            .rotation_style = PetalAttributes::kFollowRot
+        }
     },
     {
         .name = "Honey",
@@ -2643,7 +2652,10 @@ std::array<struct PetalData, PetalID::kNumPetals> const PETAL_DATA = {{
         .reload = 2.5,
         .count = 1,
         .rarity = RarityID::kUnusual,
-        .attributes = { .mass = 0.35f, .defend_only = 1 }
+        .attributes = {
+            .secondary_reload = 0.5f, .mass = 0.35f, .defend_only = 1,
+            .rotation_style = PetalAttributes::kFollowRot
+        }
     },
     {
         .name = "Honey",
@@ -2654,7 +2666,10 @@ std::array<struct PetalData, PetalID::kNumPetals> const PETAL_DATA = {{
         .reload = 2.5,
         .count = 1,
         .rarity = RarityID::kEpic,
-        .attributes = { .mass = 0.35f, .defend_only = 1 }
+        .attributes = {
+            .secondary_reload = 0.5f, .mass = 0.35f, .defend_only = 1,
+            .rotation_style = PetalAttributes::kFollowRot
+        }
     },
     {
         .name = "Honey",
@@ -2665,7 +2680,10 @@ std::array<struct PetalData, PetalID::kNumPetals> const PETAL_DATA = {{
         .reload = 2.5,
         .count = 1,
         .rarity = RarityID::kLegendary,
-        .attributes = { .mass = 0.35f, .defend_only = 1 }
+        .attributes = {
+            .secondary_reload = 0.5f, .mass = 0.35f, .defend_only = 1,
+            .rotation_style = PetalAttributes::kFollowRot
+        }
     },
     {
         .name = "Honey",
@@ -2676,7 +2694,10 @@ std::array<struct PetalData, PetalID::kNumPetals> const PETAL_DATA = {{
         .reload = 2.5,
         .count = 1,
         .rarity = RarityID::kMythic,
-        .attributes = { .mass = 0.35f, .defend_only = 1 }
+        .attributes = {
+            .secondary_reload = 0.5f, .mass = 0.35f, .defend_only = 1,
+            .rotation_style = PetalAttributes::kFollowRot
+        }
     },
     {
         .name = "Honey",
@@ -2687,7 +2708,10 @@ std::array<struct PetalData, PetalID::kNumPetals> const PETAL_DATA = {{
         .reload = 2.5,
         .count = 1,
         .rarity = RarityID::kUnique,
-        .attributes = { .mass = 0.35f, .defend_only = 1 }
+        .attributes = {
+            .secondary_reload = 0.5f, .mass = 0.35f, .defend_only = 1,
+            .rotation_style = PetalAttributes::kFollowRot
+        }
     },
     {
         .name = "Honey",
@@ -2698,7 +2722,10 @@ std::array<struct PetalData, PetalID::kNumPetals> const PETAL_DATA = {{
         .reload = 2.5,
         .count = 1,
         .rarity = RarityID::kSuper,
-        .attributes = { .mass = 0.35f, .defend_only = 1 }
+        .attributes = {
+            .secondary_reload = 0.5f, .mass = 0.35f, .defend_only = 1,
+            .rotation_style = PetalAttributes::kFollowRot
+        }
     },
     {
         .name = "Honey",
@@ -2709,7 +2736,10 @@ std::array<struct PetalData, PetalID::kNumPetals> const PETAL_DATA = {{
         .reload = 2.5,
         .count = 1,
         .rarity = RarityID::kUltra,
-        .attributes = { .mass = 0.35f, .defend_only = 1 }
+        .attributes = {
+            .secondary_reload = 0.5f, .mass = 0.35f, .defend_only = 1,
+            .rotation_style = PetalAttributes::kFollowRot
+        }
     },
     {
         .name = "Meteor",
@@ -2720,7 +2750,10 @@ std::array<struct PetalData, PetalID::kNumPetals> const PETAL_DATA = {{
         .reload = 20.0,
         .count = 1,
         .rarity = RarityID::kCommon,
-        .attributes = { .mass = 0.55f, .defend_only = 1, .rotation_style = PetalAttributes::kNoRot }
+        .attributes = {
+            .secondary_reload = 0.5f, .mass = 0.55f, .aura_duration = 18.0f,
+            .defend_only = 1, .rotation_style = PetalAttributes::kNoRot
+        }
     },
     {
         .name = "Meteor",
@@ -2731,7 +2764,10 @@ std::array<struct PetalData, PetalID::kNumPetals> const PETAL_DATA = {{
         .reload = 20.0,
         .count = 1,
         .rarity = RarityID::kUnusual,
-        .attributes = { .mass = 0.55f, .defend_only = 1, .rotation_style = PetalAttributes::kNoRot }
+        .attributes = {
+            .secondary_reload = 0.5f, .mass = 0.55f, .aura_duration = 18.0f,
+            .defend_only = 1, .rotation_style = PetalAttributes::kNoRot
+        }
     },
     {
         .name = "Meteor",
@@ -2742,7 +2778,10 @@ std::array<struct PetalData, PetalID::kNumPetals> const PETAL_DATA = {{
         .reload = 20.0,
         .count = 1,
         .rarity = RarityID::kRare,
-        .attributes = { .mass = 0.55f, .defend_only = 1, .rotation_style = PetalAttributes::kNoRot }
+        .attributes = {
+            .secondary_reload = 0.5f, .mass = 0.55f, .aura_duration = 18.0f,
+            .defend_only = 1, .rotation_style = PetalAttributes::kNoRot
+        }
     },
     {
         .name = "Meteor",
@@ -2753,7 +2792,10 @@ std::array<struct PetalData, PetalID::kNumPetals> const PETAL_DATA = {{
         .reload = 20.0,
         .count = 1,
         .rarity = RarityID::kEpic,
-        .attributes = { .mass = 0.55f, .defend_only = 1, .rotation_style = PetalAttributes::kNoRot }
+        .attributes = {
+            .secondary_reload = 0.5f, .mass = 0.55f, .aura_duration = 18.0f,
+            .defend_only = 1, .rotation_style = PetalAttributes::kNoRot
+        }
     },
     {
         .name = "Meteor",
@@ -2764,7 +2806,10 @@ std::array<struct PetalData, PetalID::kNumPetals> const PETAL_DATA = {{
         .reload = 20.0,
         .count = 1,
         .rarity = RarityID::kMythic,
-        .attributes = { .mass = 0.55f, .defend_only = 1, .rotation_style = PetalAttributes::kNoRot }
+        .attributes = {
+            .secondary_reload = 0.5f, .mass = 0.55f, .aura_duration = 18.0f,
+            .defend_only = 1, .rotation_style = PetalAttributes::kNoRot
+        }
     },
     {
         .name = "Meteor",
@@ -2775,7 +2820,10 @@ std::array<struct PetalData, PetalID::kNumPetals> const PETAL_DATA = {{
         .reload = 20.0,
         .count = 1,
         .rarity = RarityID::kUnique,
-        .attributes = { .mass = 0.55f, .defend_only = 1, .rotation_style = PetalAttributes::kNoRot }
+        .attributes = {
+            .secondary_reload = 0.5f, .mass = 0.55f, .aura_duration = 18.0f,
+            .defend_only = 1, .rotation_style = PetalAttributes::kNoRot
+        }
     },
     {
         .name = "Meteor",
@@ -2786,7 +2834,10 @@ std::array<struct PetalData, PetalID::kNumPetals> const PETAL_DATA = {{
         .reload = 20.0,
         .count = 1,
         .rarity = RarityID::kSuper,
-        .attributes = { .mass = 0.55f, .defend_only = 1, .rotation_style = PetalAttributes::kNoRot }
+        .attributes = {
+            .secondary_reload = 0.5f, .mass = 0.55f, .aura_duration = 18.0f,
+            .defend_only = 1, .rotation_style = PetalAttributes::kNoRot
+        }
     },
     {
         .name = "Meteor",
@@ -2797,7 +2848,10 @@ std::array<struct PetalData, PetalID::kNumPetals> const PETAL_DATA = {{
         .reload = 20.0,
         .count = 1,
         .rarity = RarityID::kUltra,
-        .attributes = { .mass = 0.55f, .defend_only = 1, .rotation_style = PetalAttributes::kNoRot }
+        .attributes = {
+            .secondary_reload = 0.5f, .mass = 0.55f, .aura_duration = 18.0f,
+            .defend_only = 1, .rotation_style = PetalAttributes::kNoRot
+        }
     },
     // ---- Golden Leaf ladder (CD reduction; stacks multiplicatively) ----
     {
@@ -2841,6 +2895,8257 @@ std::array<struct PetalData, PetalID::kNumPetals> const PETAL_DATA = {{
         .health = 2592.0, .damage = 1296.0, .radius = 10.0, .reload = 1.0, .count = 1,
         .rarity = RarityID::kUnique,
         .attributes = { .extra_reload_factor = 0.74f, .icon_angle = -1 } // -26%
+    },
+    // ---- Auto-filled rarity ladders (gen_petal_ladders.py) ----
+    {
+        .name = "Abyssal Tide",
+        .description = "Abyssal ring + slow. Sovereign relic of Tide Core and Blizzard Eye.",
+        .health = 270.0,
+        .damage = 96.0,
+        .radius = 24.0,
+        .reload = 7.0,
+        .count = 1,
+        .rarity = RarityID::kMythic,
+        .attributes = {
+            .secondary_reload = 3.5,
+            .slow_inflict_seconds = 0.85,
+            .extra_range = 42,
+            .radial_pulse_damage = 28.0,
+            .radial_pulse_radius = 140.0
+        }
+    },
+    {
+        .name = "Abyssal Tide",
+        .description = "Abyssal ring + slow. Sovereign relic of Tide Core and Blizzard Eye.",
+        .health = 540.0,
+        .damage = 192.0,
+        .radius = 24.0,
+        .reload = 7.0,
+        .count = 1,
+        .rarity = RarityID::kUltra,
+        .attributes = {
+            .secondary_reload = 3.5,
+            .slow_inflict_seconds = 0.85,
+            .extra_range = 42,
+            .radial_pulse_damage = 28.0,
+            .radial_pulse_radius = 140.0
+        }
+    },
+    {
+        .name = "Abyssal Tide",
+        .description = "Abyssal ring + slow. Sovereign relic of Tide Core and Blizzard Eye.",
+        .health = 1080.0,
+        .damage = 384.0,
+        .radius = 24.0,
+        .reload = 7.0,
+        .count = 1,
+        .rarity = RarityID::kSuper,
+        .attributes = {
+            .secondary_reload = 3.5,
+            .slow_inflict_seconds = 0.85,
+            .extra_range = 42,
+            .radial_pulse_damage = 28.0,
+            .radial_pulse_radius = 140.0
+        }
+    },
+    {
+        .name = "Abyssal Tide",
+        .description = "Abyssal ring + slow. Sovereign relic of Tide Core and Blizzard Eye.",
+        .health = 2160.0,
+        .damage = 768.0,
+        .radius = 24.0,
+        .reload = 7.0,
+        .count = 1,
+        .rarity = RarityID::kUnique,
+        .attributes = {
+            .secondary_reload = 3.5,
+            .slow_inflict_seconds = 0.85,
+            .extra_range = 42,
+            .radial_pulse_damage = 28.0,
+            .radial_pulse_radius = 140.0
+        }
+    },
+    {
+        .name = "Accelerator",
+        .description = "A light boost for long runs — faster travel without rocketing away",
+        .health = 24.0,
+        .damage = 15.0,
+        .radius = 12.0,
+        .reload = 2.5,
+        .count = 1,
+        .rarity = RarityID::kRare,
+        .attributes = {
+            // Was 1.65 (+65%) — felt like a rocket. +30% still cuts map travel
+            // time meaningfully without making chase / PvE feel broken.
+            .move_speed_factor = 1.30f,
+            .equipment = EquipmentFlags::kAccelerator
+        }
+    },
+    {
+        .name = "Accelerator",
+        .description = "A light boost for long runs — faster travel without rocketing away",
+        .health = 72.0,
+        .damage = 45.0,
+        .radius = 12.0,
+        .reload = 2.5,
+        .count = 1,
+        .rarity = RarityID::kEpic,
+        .attributes = {
+            // Was 1.65 (+65%) — felt like a rocket. +30% still cuts map travel
+            // time meaningfully without making chase / PvE feel broken.
+            .move_speed_factor = 1.30f,
+            .equipment = EquipmentFlags::kAccelerator
+        }
+    },
+    {
+        .name = "Accelerator",
+        .description = "A light boost for long runs — faster travel without rocketing away",
+        .health = 216.0,
+        .damage = 135.0,
+        .radius = 12.0,
+        .reload = 2.5,
+        .count = 1,
+        .rarity = RarityID::kLegendary,
+        .attributes = {
+            // Was 1.65 (+65%) — felt like a rocket. +30% still cuts map travel
+            // time meaningfully without making chase / PvE feel broken.
+            .move_speed_factor = 1.30f,
+            .equipment = EquipmentFlags::kAccelerator
+        }
+    },
+    {
+        .name = "Accelerator",
+        .description = "A light boost for long runs — faster travel without rocketing away",
+        .health = 648.0,
+        .damage = 405.0,
+        .radius = 12.0,
+        .reload = 2.5,
+        .count = 1,
+        .rarity = RarityID::kMythic,
+        .attributes = {
+            // Was 1.65 (+65%) — felt like a rocket. +30% still cuts map travel
+            // time meaningfully without making chase / PvE feel broken.
+            .move_speed_factor = 1.30f,
+            .equipment = EquipmentFlags::kAccelerator
+        }
+    },
+    {
+        .name = "Accelerator",
+        .description = "A light boost for long runs — faster travel without rocketing away",
+        .health = 1296.0,
+        .damage = 810.0,
+        .radius = 12.0,
+        .reload = 2.5,
+        .count = 1,
+        .rarity = RarityID::kUltra,
+        .attributes = {
+            // Was 1.65 (+65%) — felt like a rocket. +30% still cuts map travel
+            // time meaningfully without making chase / PvE feel broken.
+            .move_speed_factor = 1.30f,
+            .equipment = EquipmentFlags::kAccelerator
+        }
+    },
+    {
+        .name = "Accelerator",
+        .description = "A light boost for long runs — faster travel without rocketing away",
+        .health = 2592.0,
+        .damage = 1620.0,
+        .radius = 12.0,
+        .reload = 2.5,
+        .count = 1,
+        .rarity = RarityID::kSuper,
+        .attributes = {
+            // Was 1.65 (+65%) — felt like a rocket. +30% still cuts map travel
+            // time meaningfully without making chase / PvE feel broken.
+            .move_speed_factor = 1.30f,
+            .equipment = EquipmentFlags::kAccelerator
+        }
+    },
+    {
+        .name = "Accelerator",
+        .description = "A light boost for long runs — faster travel without rocketing away",
+        .health = 5184.0,
+        .damage = 3240.0,
+        .radius = 12.0,
+        .reload = 2.5,
+        .count = 1,
+        .rarity = RarityID::kUnique,
+        .attributes = {
+            // Was 1.65 (+65%) — felt like a rocket. +30% still cuts map travel
+            // time meaningfully without making chase / PvE feel broken.
+            .move_speed_factor = 1.30f,
+            .equipment = EquipmentFlags::kAccelerator
+        }
+    },
+    {
+        .name = "Acid Droplet",
+        .description = "A lone acid bead that poisons on contact",
+        .health = 54.0,
+        .damage = 24.0,
+        .radius = 9.0,
+        .reload = 3.5,
+        .count = 1,
+        .rarity = RarityID::kRare,
+        .attributes = { .poison_damage = { .damage = 21.0, .time = 10.5 } }
+    },
+    {
+        .name = "Acid Droplet",
+        .description = "A lone acid bead that poisons on contact",
+        .health = 162.0,
+        .damage = 72.0,
+        .radius = 9.0,
+        .reload = 3.5,
+        .count = 1,
+        .rarity = RarityID::kEpic,
+        .attributes = { .poison_damage = { .damage = 63.0, .time = 31.5 } }
+    },
+    {
+        .name = "Acid Droplet",
+        .description = "A lone acid bead that poisons on contact",
+        .health = 486.0,
+        .damage = 216.0,
+        .radius = 9.0,
+        .reload = 3.5,
+        .count = 1,
+        .rarity = RarityID::kLegendary,
+        .attributes = { .poison_damage = { .damage = 189.0, .time = 94.5 } }
+    },
+    {
+        .name = "Acid Droplet",
+        .description = "A lone acid bead that poisons on contact",
+        .health = 1458.0,
+        .damage = 648.0,
+        .radius = 9.0,
+        .reload = 3.5,
+        .count = 1,
+        .rarity = RarityID::kMythic,
+        .attributes = { .poison_damage = { .damage = 567.0, .time = 283.5 } }
+    },
+    {
+        .name = "Acid Droplet",
+        .description = "A lone acid bead that poisons on contact",
+        .health = 2916.0,
+        .damage = 1296.0,
+        .radius = 9.0,
+        .reload = 3.5,
+        .count = 1,
+        .rarity = RarityID::kUltra,
+        .attributes = { .poison_damage = { .damage = 1134.0, .time = 567.0 } }
+    },
+    {
+        .name = "Acid Droplet",
+        .description = "A lone acid bead that poisons on contact",
+        .health = 5832.0,
+        .damage = 2592.0,
+        .radius = 9.0,
+        .reload = 3.5,
+        .count = 1,
+        .rarity = RarityID::kSuper,
+        .attributes = { .poison_damage = { .damage = 2268.0, .time = 1134.0 } }
+    },
+    {
+        .name = "Acid Droplet",
+        .description = "A lone acid bead that poisons on contact",
+        .health = 11664.0,
+        .damage = 5184.0,
+        .radius = 9.0,
+        .reload = 3.5,
+        .count = 1,
+        .rarity = RarityID::kUnique,
+        .attributes = { .poison_damage = { .damage = 4536.0, .time = 2268.0 } }
+    },
+    {
+        .name = "Acid Flask",
+        .description = "Long poison. Ant Hell acid craft.",
+        .health = 63.0,
+        .damage = 12.0,
+        .radius = 13.0,
+        .reload = 4.2,
+        .count = 1,
+        .rarity = RarityID::kRare,
+        .attributes = { .poison_damage = { .damage = 6.0, .time = 18.0 } }
+    },
+    {
+        .name = "Acid Flask",
+        .description = "Long poison. Ant Hell acid craft.",
+        .health = 189.0,
+        .damage = 36.0,
+        .radius = 13.0,
+        .reload = 4.2,
+        .count = 1,
+        .rarity = RarityID::kEpic,
+        .attributes = { .poison_damage = { .damage = 18.0, .time = 54.0 } }
+    },
+    {
+        .name = "Acid Flask",
+        .description = "Long poison. Ant Hell acid craft.",
+        .health = 567.0,
+        .damage = 108.0,
+        .radius = 13.0,
+        .reload = 4.2,
+        .count = 1,
+        .rarity = RarityID::kLegendary,
+        .attributes = { .poison_damage = { .damage = 54.0, .time = 162.0 } }
+    },
+    {
+        .name = "Acid Flask",
+        .description = "Long poison. Ant Hell acid craft.",
+        .health = 1701.0,
+        .damage = 324.0,
+        .radius = 13.0,
+        .reload = 4.2,
+        .count = 1,
+        .rarity = RarityID::kMythic,
+        .attributes = { .poison_damage = { .damage = 162.0, .time = 486.0 } }
+    },
+    {
+        .name = "Acid Flask",
+        .description = "Long poison. Ant Hell acid craft.",
+        .health = 3402.0,
+        .damage = 648.0,
+        .radius = 13.0,
+        .reload = 4.2,
+        .count = 1,
+        .rarity = RarityID::kUltra,
+        .attributes = { .poison_damage = { .damage = 324.0, .time = 972.0 } }
+    },
+    {
+        .name = "Acid Flask",
+        .description = "Long poison. Ant Hell acid craft.",
+        .health = 6804.0,
+        .damage = 1296.0,
+        .radius = 13.0,
+        .reload = 4.2,
+        .count = 1,
+        .rarity = RarityID::kSuper,
+        .attributes = { .poison_damage = { .damage = 648.0, .time = 1944.0 } }
+    },
+    {
+        .name = "Acid Flask",
+        .description = "Long poison. Ant Hell acid craft.",
+        .health = 13608.0,
+        .damage = 2592.0,
+        .radius = 13.0,
+        .reload = 4.2,
+        .count = 1,
+        .rarity = RarityID::kUnique,
+        .attributes = { .poison_damage = { .damage = 1296.0, .time = 3888.0 } }
+    },
+    {
+        .name = "Ancient Coin",
+        .description = "Heavy golden coins with a sharp edge",
+        .health = 30.0,
+        .damage = 48.0,
+        .radius = 13.0,
+        .reload = 3.5,
+        .count = 2,
+        .rarity = RarityID::kRare,
+        .attributes = {
+            .clump_radius = 10
+        }
+    },
+    {
+        .name = "Ancient Coin",
+        .description = "Heavy golden coins with a sharp edge",
+        .health = 90.0,
+        .damage = 144.0,
+        .radius = 13.0,
+        .reload = 3.5,
+        .count = 2,
+        .rarity = RarityID::kEpic,
+        .attributes = {
+            .clump_radius = 10
+        }
+    },
+    {
+        .name = "Ancient Coin",
+        .description = "Heavy golden coins with a sharp edge",
+        .health = 270.0,
+        .damage = 432.0,
+        .radius = 13.0,
+        .reload = 3.5,
+        .count = 2,
+        .rarity = RarityID::kLegendary,
+        .attributes = {
+            .clump_radius = 10
+        }
+    },
+    {
+        .name = "Ancient Coin",
+        .description = "Heavy golden coins with a sharp edge",
+        .health = 810.0,
+        .damage = 1296.0,
+        .radius = 13.0,
+        .reload = 3.5,
+        .count = 2,
+        .rarity = RarityID::kMythic,
+        .attributes = {
+            .clump_radius = 10
+        }
+    },
+    {
+        .name = "Ancient Coin",
+        .description = "Heavy golden coins with a sharp edge",
+        .health = 1620.0,
+        .damage = 2592.0,
+        .radius = 13.0,
+        .reload = 3.5,
+        .count = 2,
+        .rarity = RarityID::kUltra,
+        .attributes = {
+            .clump_radius = 10
+        }
+    },
+    {
+        .name = "Ancient Coin",
+        .description = "Heavy golden coins with a sharp edge",
+        .health = 3240.0,
+        .damage = 5184.0,
+        .radius = 13.0,
+        .reload = 3.5,
+        .count = 2,
+        .rarity = RarityID::kSuper,
+        .attributes = {
+            .clump_radius = 10
+        }
+    },
+    {
+        .name = "Ancient Coin",
+        .description = "Heavy golden coins with a sharp edge",
+        .health = 6480.0,
+        .damage = 10368.0,
+        .radius = 13.0,
+        .reload = 3.5,
+        .count = 2,
+        .rarity = RarityID::kUnique,
+        .attributes = {
+            .clump_radius = 10
+        }
+    },
+    {
+        .name = "Ancient Seed",
+        .description = "Hatches a vine bug from the deep jungle",
+        .health = 33.0,
+        .damage = 21.0,
+        .radius = 14.0,
+        .reload = 4.0,
+        .count = 1,
+        .rarity = RarityID::kLegendary,
+        .attributes = {
+            .secondary_reload = 2.5,
+            .defend_only = 1,
+            .rotation_style = PetalAttributes::kNoRot,
+            .spawns = MobID::kVineBug
+        }
+    },
+    {
+        .name = "Ancient Seed",
+        .description = "Hatches a vine bug from the deep jungle",
+        .health = 99.0,
+        .damage = 63.0,
+        .radius = 14.0,
+        .reload = 4.0,
+        .count = 1,
+        .rarity = RarityID::kMythic,
+        .attributes = {
+            .secondary_reload = 2.5,
+            .defend_only = 1,
+            .rotation_style = PetalAttributes::kNoRot,
+            .spawns = MobID::kVineBug
+        }
+    },
+    {
+        .name = "Ancient Seed",
+        .description = "Hatches a vine bug from the deep jungle",
+        .health = 198.0,
+        .damage = 126.0,
+        .radius = 14.0,
+        .reload = 4.0,
+        .count = 1,
+        .rarity = RarityID::kUltra,
+        .attributes = {
+            .secondary_reload = 2.5,
+            .defend_only = 1,
+            .rotation_style = PetalAttributes::kNoRot,
+            .spawns = MobID::kVineBug
+        }
+    },
+    {
+        .name = "Ancient Seed",
+        .description = "Hatches a vine bug from the deep jungle",
+        .health = 396.0,
+        .damage = 252.0,
+        .radius = 14.0,
+        .reload = 4.0,
+        .count = 1,
+        .rarity = RarityID::kSuper,
+        .attributes = {
+            .secondary_reload = 2.5,
+            .defend_only = 1,
+            .rotation_style = PetalAttributes::kNoRot,
+            .spawns = MobID::kVineBug
+        }
+    },
+    {
+        .name = "Ancient Seed",
+        .description = "Hatches a vine bug from the deep jungle",
+        .health = 792.0,
+        .damage = 504.0,
+        .radius = 14.0,
+        .reload = 4.0,
+        .count = 1,
+        .rarity = RarityID::kUnique,
+        .attributes = {
+            .secondary_reload = 2.5,
+            .defend_only = 1,
+            .rotation_style = PetalAttributes::kNoRot,
+            .spawns = MobID::kVineBug
+        }
+    },
+    {
+        .name = "Anemone Bloom",
+        .description = "Restores health and sips life on contact.",
+        .health = 132.0,
+        .damage = 18.0,
+        .radius = 19.0,
+        .reload = 5.0,
+        .count = 1,
+        .rarity = RarityID::kLegendary,
+        .attributes = { .constant_heal = 13.5, .on_hit_heal = 2.0 }
+    },
+    {
+        .name = "Anemone Bloom",
+        .description = "Restores health and sips life on contact.",
+        .health = 396.0,
+        .damage = 54.0,
+        .radius = 19.0,
+        .reload = 5.0,
+        .count = 1,
+        .rarity = RarityID::kMythic,
+        .attributes = { .constant_heal = 40.5, .on_hit_heal = 2.0 }
+    },
+    {
+        .name = "Anemone Bloom",
+        .description = "Restores health and sips life on contact.",
+        .health = 792.0,
+        .damage = 108.0,
+        .radius = 19.0,
+        .reload = 5.0,
+        .count = 1,
+        .rarity = RarityID::kUltra,
+        .attributes = { .constant_heal = 81.0, .on_hit_heal = 2.0 }
+    },
+    {
+        .name = "Anemone Bloom",
+        .description = "Restores health and sips life on contact.",
+        .health = 1584.0,
+        .damage = 216.0,
+        .radius = 19.0,
+        .reload = 5.0,
+        .count = 1,
+        .rarity = RarityID::kSuper,
+        .attributes = { .constant_heal = 162.0, .on_hit_heal = 2.0 }
+    },
+    {
+        .name = "Anemone Bloom",
+        .description = "Restores health and sips life on contact.",
+        .health = 3168.0,
+        .damage = 432.0,
+        .radius = 19.0,
+        .reload = 5.0,
+        .count = 1,
+        .rarity = RarityID::kUnique,
+        .attributes = { .constant_heal = 324.0, .on_hit_heal = 2.0 }
+    },
+    {
+        .name = "Ant Fang",
+        .description = "Bonus vs poisoned. Ant Hell local forge.",
+        .health = 57.0,
+        .damage = 63.0,
+        .radius = 10.0,
+        .reload = 2.4,
+        .count = 1,
+        .rarity = RarityID::kRare,
+        .attributes = { .bonus_vs_poisoned = 0.35f }
+    },
+    {
+        .name = "Ant Fang",
+        .description = "Bonus vs poisoned. Ant Hell local forge.",
+        .health = 171.0,
+        .damage = 189.0,
+        .radius = 10.0,
+        .reload = 2.4,
+        .count = 1,
+        .rarity = RarityID::kEpic,
+        .attributes = { .bonus_vs_poisoned = 0.35f }
+    },
+    {
+        .name = "Ant Fang",
+        .description = "Bonus vs poisoned. Ant Hell local forge.",
+        .health = 513.0,
+        .damage = 567.0,
+        .radius = 10.0,
+        .reload = 2.4,
+        .count = 1,
+        .rarity = RarityID::kLegendary,
+        .attributes = { .bonus_vs_poisoned = 0.35f }
+    },
+    {
+        .name = "Ant Fang",
+        .description = "Bonus vs poisoned. Ant Hell local forge.",
+        .health = 1539.0,
+        .damage = 1701.0,
+        .radius = 10.0,
+        .reload = 2.4,
+        .count = 1,
+        .rarity = RarityID::kMythic,
+        .attributes = { .bonus_vs_poisoned = 0.35f }
+    },
+    {
+        .name = "Ant Fang",
+        .description = "Bonus vs poisoned. Ant Hell local forge.",
+        .health = 3078.0,
+        .damage = 3402.0,
+        .radius = 10.0,
+        .reload = 2.4,
+        .count = 1,
+        .rarity = RarityID::kUltra,
+        .attributes = { .bonus_vs_poisoned = 0.35f }
+    },
+    {
+        .name = "Ant Fang",
+        .description = "Bonus vs poisoned. Ant Hell local forge.",
+        .health = 6156.0,
+        .damage = 6804.0,
+        .radius = 10.0,
+        .reload = 2.4,
+        .count = 1,
+        .rarity = RarityID::kSuper,
+        .attributes = { .bonus_vs_poisoned = 0.35f }
+    },
+    {
+        .name = "Ant Fang",
+        .description = "Bonus vs poisoned. Ant Hell local forge.",
+        .health = 12312.0,
+        .damage = 13608.0,
+        .radius = 10.0,
+        .reload = 2.4,
+        .count = 1,
+        .rarity = RarityID::kUnique,
+        .attributes = { .bonus_vs_poisoned = 0.35f }
+    },
+    {
+        .name = "Ant King",
+        .description = "Two soldier ants. Sovereign relic of Hive Heart and Royal Seal.",
+        .health = 345.0,
+        .damage = 0.0,
+        .radius = 24.0,
+        .reload = 14.0,
+        .count = 2,
+        .rarity = RarityID::kMythic,
+        .attributes = {
+            .secondary_reload = 3.0,
+            .defend_only = 1,
+            .rotation_style = PetalAttributes::kNoRot,
+            .spawns = MobID::kSoldierAnt
+        }
+    },
+    {
+        .name = "Ant King",
+        .description = "Two soldier ants. Sovereign relic of Hive Heart and Royal Seal.",
+        .health = 690.0,
+        .damage = 0.0,
+        .radius = 24.0,
+        .reload = 14.0,
+        .count = 2,
+        .rarity = RarityID::kUltra,
+        .attributes = {
+            .secondary_reload = 3.0,
+            .defend_only = 1,
+            .rotation_style = PetalAttributes::kNoRot,
+            .spawns = MobID::kSoldierAnt
+        }
+    },
+    {
+        .name = "Ant King",
+        .description = "Two soldier ants. Sovereign relic of Hive Heart and Royal Seal.",
+        .health = 1380.0,
+        .damage = 0.0,
+        .radius = 24.0,
+        .reload = 14.0,
+        .count = 2,
+        .rarity = RarityID::kSuper,
+        .attributes = {
+            .secondary_reload = 3.0,
+            .defend_only = 1,
+            .rotation_style = PetalAttributes::kNoRot,
+            .spawns = MobID::kSoldierAnt
+        }
+    },
+    {
+        .name = "Ant King",
+        .description = "Two soldier ants. Sovereign relic of Hive Heart and Royal Seal.",
+        .health = 2760.0,
+        .damage = 0.0,
+        .radius = 24.0,
+        .reload = 14.0,
+        .count = 2,
+        .rarity = RarityID::kUnique,
+        .attributes = {
+            .secondary_reload = 3.0,
+            .defend_only = 1,
+            .rotation_style = PetalAttributes::kNoRot,
+            .spawns = MobID::kSoldierAnt
+        }
+    },
+    {
+        .name = "Antennae",
+        .description = "Allows your flower to sense foes from farther away",
+        .health = 0.0,
+        .damage = 0.0,
+        .radius = 12.5,
+        .reload = 0.0,
+        .count = 0,
+        .rarity = RarityID::kMythic,
+        .attributes = {
+            .vision_factor = 0.6,
+            .equipment = EquipmentFlags::kAntennae 
+        }
+    },
+    {
+        .name = "Antennae",
+        .description = "Allows your flower to sense foes from farther away",
+        .health = 0.0,
+        .damage = 0.0,
+        .radius = 12.5,
+        .reload = 0.0,
+        .count = 0,
+        .rarity = RarityID::kUltra,
+        .attributes = {
+            .vision_factor = 0.6,
+            .equipment = EquipmentFlags::kAntennae 
+        }
+    },
+    {
+        .name = "Antennae",
+        .description = "Allows your flower to sense foes from farther away",
+        .health = 0.0,
+        .damage = 0.0,
+        .radius = 12.5,
+        .reload = 0.0,
+        .count = 0,
+        .rarity = RarityID::kSuper,
+        .attributes = {
+            .vision_factor = 0.6,
+            .equipment = EquipmentFlags::kAntennae 
+        }
+    },
+    {
+        .name = "Antennae",
+        .description = "Allows your flower to sense foes from farther away",
+        .health = 0.0,
+        .damage = 0.0,
+        .radius = 12.5,
+        .reload = 0.0,
+        .count = 0,
+        .rarity = RarityID::kUnique,
+        .attributes = {
+            .vision_factor = 0.6,
+            .equipment = EquipmentFlags::kAntennae 
+        }
+    },
+    {
+        .name = "Bee Sting",
+        .description = "Brief poison sting. Garden bee-rite weapon.",
+        .health = 54.0,
+        .damage = 30.0,
+        .radius = 9.0,
+        .reload = 1.8,
+        .count = 1,
+        .rarity = RarityID::kRare,
+        .attributes = { .poison_damage = { .damage = 9.0, .time = 6.0 } }
+    },
+    {
+        .name = "Bee Sting",
+        .description = "Brief poison sting. Garden bee-rite weapon.",
+        .health = 162.0,
+        .damage = 90.0,
+        .radius = 9.0,
+        .reload = 1.8,
+        .count = 1,
+        .rarity = RarityID::kEpic,
+        .attributes = { .poison_damage = { .damage = 27.0, .time = 18.0 } }
+    },
+    {
+        .name = "Bee Sting",
+        .description = "Brief poison sting. Garden bee-rite weapon.",
+        .health = 486.0,
+        .damage = 270.0,
+        .radius = 9.0,
+        .reload = 1.8,
+        .count = 1,
+        .rarity = RarityID::kLegendary,
+        .attributes = { .poison_damage = { .damage = 81.0, .time = 54.0 } }
+    },
+    {
+        .name = "Bee Sting",
+        .description = "Brief poison sting. Garden bee-rite weapon.",
+        .health = 1458.0,
+        .damage = 810.0,
+        .radius = 9.0,
+        .reload = 1.8,
+        .count = 1,
+        .rarity = RarityID::kMythic,
+        .attributes = { .poison_damage = { .damage = 243.0, .time = 162.0 } }
+    },
+    {
+        .name = "Bee Sting",
+        .description = "Brief poison sting. Garden bee-rite weapon.",
+        .health = 2916.0,
+        .damage = 1620.0,
+        .radius = 9.0,
+        .reload = 1.8,
+        .count = 1,
+        .rarity = RarityID::kUltra,
+        .attributes = { .poison_damage = { .damage = 486.0, .time = 324.0 } }
+    },
+    {
+        .name = "Bee Sting",
+        .description = "Brief poison sting. Garden bee-rite weapon.",
+        .health = 5832.0,
+        .damage = 3240.0,
+        .radius = 9.0,
+        .reload = 1.8,
+        .count = 1,
+        .rarity = RarityID::kSuper,
+        .attributes = { .poison_damage = { .damage = 972.0, .time = 648.0 } }
+    },
+    {
+        .name = "Bee Sting",
+        .description = "Brief poison sting. Garden bee-rite weapon.",
+        .health = 11664.0,
+        .damage = 6480.0,
+        .radius = 9.0,
+        .reload = 1.8,
+        .count = 1,
+        .rarity = RarityID::kUnique,
+        .attributes = { .poison_damage = { .damage = 1944.0, .time = 1296.0 } }
+    },
+    {
+        .name = "Bone",
+        .description = "A sturdy bone that adds petal armor",
+        .health = 36.0,
+        .damage = 45.0,
+        .radius = 12.0,
+        .reload = 2.5,
+        .count = 1,
+        .rarity = RarityID::kMythic,
+        .attributes = {
+            .armor = 8,
+            .icon_angle = 1
+        }
+    },
+    {
+        .name = "Bone",
+        .description = "A sturdy bone that adds petal armor",
+        .health = 72.0,
+        .damage = 90.0,
+        .radius = 12.0,
+        .reload = 2.5,
+        .count = 1,
+        .rarity = RarityID::kUltra,
+        .attributes = {
+            .armor = 8,
+            .icon_angle = 1
+        }
+    },
+    {
+        .name = "Bone",
+        .description = "A sturdy bone that adds petal armor",
+        .health = 144.0,
+        .damage = 180.0,
+        .radius = 12.0,
+        .reload = 2.5,
+        .count = 1,
+        .rarity = RarityID::kSuper,
+        .attributes = {
+            .armor = 8,
+            .icon_angle = 1
+        }
+    },
+    {
+        .name = "Bone",
+        .description = "A sturdy bone that adds petal armor",
+        .health = 288.0,
+        .damage = 360.0,
+        .radius = 12.0,
+        .reload = 2.5,
+        .count = 1,
+        .rarity = RarityID::kUnique,
+        .attributes = {
+            .armor = 8,
+            .icon_angle = 1
+        }
+    },
+    {
+        .name = "Brood Pearl",
+        .description = "A smooth brood egg that slowly restores your flower.",
+        .health = 105.0,
+        .damage = 12.0,
+        .radius = 11.0,
+        .reload = 4.0,
+        .count = 1,
+        .rarity = RarityID::kEpic,
+        .attributes = { .constant_heal = 7.5, .defend_only = 1 }
+    },
+    {
+        .name = "Brood Pearl",
+        .description = "A smooth brood egg that slowly restores your flower.",
+        .health = 315.0,
+        .damage = 36.0,
+        .radius = 11.0,
+        .reload = 4.0,
+        .count = 1,
+        .rarity = RarityID::kLegendary,
+        .attributes = { .constant_heal = 22.5, .defend_only = 1 }
+    },
+    {
+        .name = "Brood Pearl",
+        .description = "A smooth brood egg that slowly restores your flower.",
+        .health = 945.0,
+        .damage = 108.0,
+        .radius = 11.0,
+        .reload = 4.0,
+        .count = 1,
+        .rarity = RarityID::kMythic,
+        .attributes = { .constant_heal = 67.5, .defend_only = 1 }
+    },
+    {
+        .name = "Brood Pearl",
+        .description = "A smooth brood egg that slowly restores your flower.",
+        .health = 1890.0,
+        .damage = 216.0,
+        .radius = 11.0,
+        .reload = 4.0,
+        .count = 1,
+        .rarity = RarityID::kUltra,
+        .attributes = { .constant_heal = 135.0, .defend_only = 1 }
+    },
+    {
+        .name = "Brood Pearl",
+        .description = "A smooth brood egg that slowly restores your flower.",
+        .health = 3780.0,
+        .damage = 432.0,
+        .radius = 11.0,
+        .reload = 4.0,
+        .count = 1,
+        .rarity = RarityID::kSuper,
+        .attributes = { .constant_heal = 270.0, .defend_only = 1 }
+    },
+    {
+        .name = "Brood Pearl",
+        .description = "A smooth brood egg that slowly restores your flower.",
+        .health = 7560.0,
+        .damage = 864.0,
+        .radius = 11.0,
+        .reload = 4.0,
+        .count = 1,
+        .rarity = RarityID::kUnique,
+        .attributes = { .constant_heal = 540.0, .defend_only = 1 }
+    },
+    {
+        .name = "Cactus",
+        .description = "Not very strong, but somehow increases your maximum health",
+        .health = 45.0,
+        .damage = 15.0,
+        .radius = 10.0,
+        .reload = 1.0,
+        .count = 3,
+        .rarity = RarityID::kMythic,
+        .attributes = {
+            .clump_radius = 10,
+            .extra_health = 40,
+        }
+    },
+    {
+        .name = "Cactus",
+        .description = "Not very strong, but somehow increases your maximum health",
+        .health = 90.0,
+        .damage = 30.0,
+        .radius = 10.0,
+        .reload = 1.0,
+        .count = 3,
+        .rarity = RarityID::kUltra,
+        .attributes = {
+            .clump_radius = 10,
+            .extra_health = 40,
+        }
+    },
+    {
+        .name = "Cactus",
+        .description = "Not very strong, but somehow increases your maximum health",
+        .health = 180.0,
+        .damage = 60.0,
+        .radius = 10.0,
+        .reload = 1.0,
+        .count = 3,
+        .rarity = RarityID::kSuper,
+        .attributes = {
+            .clump_radius = 10,
+            .extra_health = 40,
+        }
+    },
+    {
+        .name = "Cactus",
+        .description = "Not very strong, but somehow increases your maximum health",
+        .health = 360.0,
+        .damage = 120.0,
+        .radius = 10.0,
+        .reload = 1.0,
+        .count = 3,
+        .rarity = RarityID::kUnique,
+        .attributes = {
+            .clump_radius = 10,
+            .extra_health = 40,
+        }
+    },
+    {
+        .name = "Chaos Prism",
+        .description = "Poison + slow. Prism of three sovereign relics.",
+        .health = 249.0,
+        .damage = 93.0,
+        .radius = 22.0,
+        .reload = 8.0,
+        .count = 1,
+        .rarity = RarityID::kMythic,
+        .attributes = {
+            .poison_damage = { .damage = 21.0, .time = 9.0 },
+            .slow_inflict_seconds = 0.75
+        }
+    },
+    {
+        .name = "Chaos Prism",
+        .description = "Poison + slow. Prism of three sovereign relics.",
+        .health = 498.0,
+        .damage = 186.0,
+        .radius = 22.0,
+        .reload = 8.0,
+        .count = 1,
+        .rarity = RarityID::kUltra,
+        .attributes = {
+            .poison_damage = { .damage = 42.0, .time = 18.0 },
+            .slow_inflict_seconds = 0.75
+        }
+    },
+    {
+        .name = "Chaos Prism",
+        .description = "Poison + slow. Prism of three sovereign relics.",
+        .health = 996.0,
+        .damage = 372.0,
+        .radius = 22.0,
+        .reload = 8.0,
+        .count = 1,
+        .rarity = RarityID::kSuper,
+        .attributes = {
+            .poison_damage = { .damage = 84.0, .time = 36.0 },
+            .slow_inflict_seconds = 0.75
+        }
+    },
+    {
+        .name = "Chaos Prism",
+        .description = "Poison + slow. Prism of three sovereign relics.",
+        .health = 1992.0,
+        .damage = 744.0,
+        .radius = 22.0,
+        .reload = 8.0,
+        .count = 1,
+        .rarity = RarityID::kUnique,
+        .attributes = {
+            .poison_damage = { .damage = 168.0, .time = 72.0 },
+            .slow_inflict_seconds = 0.75
+        }
+    },
+    {
+        .name = "Chitin Needle",
+        .description = "A straight chitin spike — thinner and longer than an ant fang.",
+        .health = 66.0,
+        .damage = 33.0,
+        .radius = 8.0,
+        .reload = 0.85,
+        .count = 1,
+        .rarity = RarityID::kRare,
+        .attributes = {}
+    },
+    {
+        .name = "Chitin Needle",
+        .description = "A straight chitin spike — thinner and longer than an ant fang.",
+        .health = 198.0,
+        .damage = 99.0,
+        .radius = 8.0,
+        .reload = 0.85,
+        .count = 1,
+        .rarity = RarityID::kEpic,
+        .attributes = {}
+    },
+    {
+        .name = "Chitin Needle",
+        .description = "A straight chitin spike — thinner and longer than an ant fang.",
+        .health = 594.0,
+        .damage = 297.0,
+        .radius = 8.0,
+        .reload = 0.85,
+        .count = 1,
+        .rarity = RarityID::kLegendary,
+        .attributes = {}
+    },
+    {
+        .name = "Chitin Needle",
+        .description = "A straight chitin spike — thinner and longer than an ant fang.",
+        .health = 1782.0,
+        .damage = 891.0,
+        .radius = 8.0,
+        .reload = 0.85,
+        .count = 1,
+        .rarity = RarityID::kMythic,
+        .attributes = {}
+    },
+    {
+        .name = "Chitin Needle",
+        .description = "A straight chitin spike — thinner and longer than an ant fang.",
+        .health = 3564.0,
+        .damage = 1782.0,
+        .radius = 8.0,
+        .reload = 0.85,
+        .count = 1,
+        .rarity = RarityID::kUltra,
+        .attributes = {}
+    },
+    {
+        .name = "Chitin Needle",
+        .description = "A straight chitin spike — thinner and longer than an ant fang.",
+        .health = 7128.0,
+        .damage = 3564.0,
+        .radius = 8.0,
+        .reload = 0.85,
+        .count = 1,
+        .rarity = RarityID::kSuper,
+        .attributes = {}
+    },
+    {
+        .name = "Chitin Needle",
+        .description = "A straight chitin spike — thinner and longer than an ant fang.",
+        .health = 14256.0,
+        .damage = 7128.0,
+        .radius = 8.0,
+        .reload = 0.85,
+        .count = 1,
+        .rarity = RarityID::kUnique,
+        .attributes = {}
+    },
+    {
+        .name = "Chrono Vortex",
+        .description = "Defend-throw slow aura. Relic binding Sandstorm Eye, Sovereign Core, Tide Core.",
+        .health = 240.0,
+        .damage = 42.0,
+        .radius = 23.0,
+        .reload = 8.0,
+        .count = 1,
+        .rarity = RarityID::kMythic,
+        .attributes = {
+            .secondary_reload = 0.5,
+            .slow_inflict_seconds = 2.0,
+            .aura_radius = 360.0,
+            .aura_duration = 6.0,
+            .aura_slow_seconds = 1.2,
+            .defend_only = 1
+        }
+    },
+    {
+        .name = "Chrono Vortex",
+        .description = "Defend-throw slow aura. Relic binding Sandstorm Eye, Sovereign Core, Tide Core.",
+        .health = 480.0,
+        .damage = 84.0,
+        .radius = 23.0,
+        .reload = 8.0,
+        .count = 1,
+        .rarity = RarityID::kUltra,
+        .attributes = {
+            .secondary_reload = 0.5,
+            .slow_inflict_seconds = 2.0,
+            .aura_radius = 720.0,
+            .aura_duration = 6.0,
+            .aura_slow_seconds = 1.2,
+            .defend_only = 1
+        }
+    },
+    {
+        .name = "Chrono Vortex",
+        .description = "Defend-throw slow aura. Relic binding Sandstorm Eye, Sovereign Core, Tide Core.",
+        .health = 960.0,
+        .damage = 168.0,
+        .radius = 23.0,
+        .reload = 8.0,
+        .count = 1,
+        .rarity = RarityID::kSuper,
+        .attributes = {
+            .secondary_reload = 0.5,
+            .slow_inflict_seconds = 2.0,
+            .aura_radius = 1440.0,
+            .aura_duration = 6.0,
+            .aura_slow_seconds = 1.2,
+            .defend_only = 1
+        }
+    },
+    {
+        .name = "Chrono Vortex",
+        .description = "Defend-throw slow aura. Relic binding Sandstorm Eye, Sovereign Core, Tide Core.",
+        .health = 1920.0,
+        .damage = 336.0,
+        .radius = 23.0,
+        .reload = 8.0,
+        .count = 1,
+        .rarity = RarityID::kUnique,
+        .attributes = {
+            .secondary_reload = 0.5,
+            .slow_inflict_seconds = 2.0,
+            .aura_radius = 2880.0,
+            .aura_duration = 6.0,
+            .aura_slow_seconds = 1.2,
+            .defend_only = 1
+        }
+    },
+    {
+        .name = "Colony Core",
+        .description = "Increases your movement speed while equipped",
+        .health = 174.0,
+        .damage = 27.0,
+        .radius = 19.0,
+        .reload = 5.5,
+        .count = 1,
+        .rarity = RarityID::kLegendary,
+        .attributes = { .move_speed_factor = 1.08f }
+    },
+    {
+        .name = "Colony Core",
+        .description = "Increases your movement speed while equipped",
+        .health = 522.0,
+        .damage = 81.0,
+        .radius = 19.0,
+        .reload = 5.5,
+        .count = 1,
+        .rarity = RarityID::kMythic,
+        .attributes = { .move_speed_factor = 1.08f }
+    },
+    {
+        .name = "Colony Core",
+        .description = "Increases your movement speed while equipped",
+        .health = 1044.0,
+        .damage = 162.0,
+        .radius = 19.0,
+        .reload = 5.5,
+        .count = 1,
+        .rarity = RarityID::kUltra,
+        .attributes = { .move_speed_factor = 1.08f }
+    },
+    {
+        .name = "Colony Core",
+        .description = "Increases your movement speed while equipped",
+        .health = 2088.0,
+        .damage = 324.0,
+        .radius = 19.0,
+        .reload = 5.5,
+        .count = 1,
+        .rarity = RarityID::kSuper,
+        .attributes = { .move_speed_factor = 1.08f }
+    },
+    {
+        .name = "Colony Core",
+        .description = "Increases your movement speed while equipped",
+        .health = 4176.0,
+        .damage = 648.0,
+        .radius = 19.0,
+        .reload = 5.5,
+        .count = 1,
+        .rarity = RarityID::kUnique,
+        .attributes = { .move_speed_factor = 1.08f }
+    },
+    {
+        .name = "Colony Heart",
+        .description = "Amber colony core that heals and spins petals faster",
+        .health = 360.0,
+        .damage = 48.0,
+        .radius = 14.0,
+        .reload = 14.0,
+        .count = 1,
+        .rarity = RarityID::kMythic,
+        .attributes = {
+            .secondary_reload = 1.0,
+            .constant_heal = 12.0,
+            .burst_heal = 12.0,
+            .extra_rotation_speed = 0.4
+        }
+    },
+    {
+        .name = "Colony Heart",
+        .description = "Amber colony core that heals and spins petals faster",
+        .health = 720.0,
+        .damage = 96.0,
+        .radius = 14.0,
+        .reload = 14.0,
+        .count = 1,
+        .rarity = RarityID::kUltra,
+        .attributes = {
+            .secondary_reload = 1.0,
+            .constant_heal = 24.0,
+            .burst_heal = 12.0,
+            .extra_rotation_speed = 0.4
+        }
+    },
+    {
+        .name = "Colony Heart",
+        .description = "Amber colony core that heals and spins petals faster",
+        .health = 1440.0,
+        .damage = 192.0,
+        .radius = 14.0,
+        .reload = 14.0,
+        .count = 1,
+        .rarity = RarityID::kSuper,
+        .attributes = {
+            .secondary_reload = 1.0,
+            .constant_heal = 48.0,
+            .burst_heal = 12.0,
+            .extra_rotation_speed = 0.4
+        }
+    },
+    {
+        .name = "Colony Heart",
+        .description = "Amber colony core that heals and spins petals faster",
+        .health = 2880.0,
+        .damage = 384.0,
+        .radius = 14.0,
+        .reload = 14.0,
+        .count = 1,
+        .rarity = RarityID::kUnique,
+        .attributes = {
+            .secondary_reload = 1.0,
+            .constant_heal = 96.0,
+            .burst_heal = 12.0,
+            .extra_rotation_speed = 0.4
+        }
+    },
+    {
+        .name = "Coral Hive",
+        .description = "A compact coral cluster with minor poison resistance",
+        .health = 147.0,
+        .damage = 42.0,
+        .radius = 17.0,
+        .reload = 4.8,
+        .count = 2,
+        .rarity = RarityID::kLegendary,
+        .attributes = { .clump_radius = 20, .poison_armor = 6 }
+    },
+    {
+        .name = "Coral Hive",
+        .description = "A compact coral cluster with minor poison resistance",
+        .health = 441.0,
+        .damage = 126.0,
+        .radius = 17.0,
+        .reload = 4.8,
+        .count = 2,
+        .rarity = RarityID::kMythic,
+        .attributes = { .clump_radius = 20, .poison_armor = 6 }
+    },
+    {
+        .name = "Coral Hive",
+        .description = "A compact coral cluster with minor poison resistance",
+        .health = 882.0,
+        .damage = 252.0,
+        .radius = 17.0,
+        .reload = 4.8,
+        .count = 2,
+        .rarity = RarityID::kUltra,
+        .attributes = { .clump_radius = 20, .poison_armor = 6 }
+    },
+    {
+        .name = "Coral Hive",
+        .description = "A compact coral cluster with minor poison resistance",
+        .health = 1764.0,
+        .damage = 504.0,
+        .radius = 17.0,
+        .reload = 4.8,
+        .count = 2,
+        .rarity = RarityID::kSuper,
+        .attributes = { .clump_radius = 20, .poison_armor = 6 }
+    },
+    {
+        .name = "Coral Hive",
+        .description = "A compact coral cluster with minor poison resistance",
+        .health = 3528.0,
+        .damage = 1008.0,
+        .radius = 17.0,
+        .reload = 4.8,
+        .count = 2,
+        .rarity = RarityID::kUnique,
+        .attributes = { .clump_radius = 20, .poison_armor = 6 }
+    },
+    {
+        .name = "Corn",
+        .description = "Takes a long time to spawn, but has a lot of health",
+        .health = 1500.0,
+        .damage = 7.5,
+        .radius = 16.0,
+        .reload = 10.0,
+        .count = 1,
+        .rarity = RarityID::kLegendary,
+        .attributes = {
+            .icon_angle = 0.5
+        }
+    },
+    {
+        .name = "Corn",
+        .description = "Takes a long time to spawn, but has a lot of health",
+        .health = 4500.0,
+        .damage = 22.5,
+        .radius = 16.0,
+        .reload = 10.0,
+        .count = 1,
+        .rarity = RarityID::kMythic,
+        .attributes = {
+            .icon_angle = 0.5
+        }
+    },
+    {
+        .name = "Corn",
+        .description = "Takes a long time to spawn, but has a lot of health",
+        .health = 9000.0,
+        .damage = 45.0,
+        .radius = 16.0,
+        .reload = 10.0,
+        .count = 1,
+        .rarity = RarityID::kUltra,
+        .attributes = {
+            .icon_angle = 0.5
+        }
+    },
+    {
+        .name = "Corn",
+        .description = "Takes a long time to spawn, but has a lot of health",
+        .health = 18000.0,
+        .damage = 90.0,
+        .radius = 16.0,
+        .reload = 10.0,
+        .count = 1,
+        .rarity = RarityID::kSuper,
+        .attributes = {
+            .icon_angle = 0.5
+        }
+    },
+    {
+        .name = "Corn",
+        .description = "Takes a long time to spawn, but has a lot of health",
+        .health = 36000.0,
+        .damage = 180.0,
+        .radius = 16.0,
+        .reload = 10.0,
+        .count = 1,
+        .rarity = RarityID::kUnique,
+        .attributes = {
+            .icon_angle = 0.5
+        }
+    },
+    {
+        .name = "Corrode Vine",
+        .description = "Inflicts strong, lingering poison on contact.",
+        .health = 138.0,
+        .damage = 27.0,
+        .radius = 18.0,
+        .reload = 5.0,
+        .count = 1,
+        .rarity = RarityID::kLegendary,
+        .attributes = { .poison_damage = { .damage = 18.0, .time = 15.0 } }
+    },
+    {
+        .name = "Corrode Vine",
+        .description = "Inflicts strong, lingering poison on contact.",
+        .health = 414.0,
+        .damage = 81.0,
+        .radius = 18.0,
+        .reload = 5.0,
+        .count = 1,
+        .rarity = RarityID::kMythic,
+        .attributes = { .poison_damage = { .damage = 54.0, .time = 45.0 } }
+    },
+    {
+        .name = "Corrode Vine",
+        .description = "Inflicts strong, lingering poison on contact.",
+        .health = 828.0,
+        .damage = 162.0,
+        .radius = 18.0,
+        .reload = 5.0,
+        .count = 1,
+        .rarity = RarityID::kUltra,
+        .attributes = { .poison_damage = { .damage = 108.0, .time = 90.0 } }
+    },
+    {
+        .name = "Corrode Vine",
+        .description = "Inflicts strong, lingering poison on contact.",
+        .health = 1656.0,
+        .damage = 324.0,
+        .radius = 18.0,
+        .reload = 5.0,
+        .count = 1,
+        .rarity = RarityID::kSuper,
+        .attributes = { .poison_damage = { .damage = 216.0, .time = 180.0 } }
+    },
+    {
+        .name = "Corrode Vine",
+        .description = "Inflicts strong, lingering poison on contact.",
+        .health = 3312.0,
+        .damage = 648.0,
+        .radius = 18.0,
+        .reload = 5.0,
+        .count = 1,
+        .rarity = RarityID::kUnique,
+        .attributes = { .poison_damage = { .damage = 432.0, .time = 360.0 } }
+    },
+    {
+        .name = "Craft Cactus",
+        .description = "Reflects a little damage. Desert carapace craft.",
+        .health = 165.0,
+        .damage = 15.0,
+        .radius = 17.0,
+        .reload = 5.0,
+        .count = 1,
+        .rarity = RarityID::kRare,
+        .attributes = { .damage_reflection = 0.08, .extra_health = 12 }
+    },
+    {
+        .name = "Craft Cactus",
+        .description = "Reflects a little damage. Desert carapace craft.",
+        .health = 495.0,
+        .damage = 45.0,
+        .radius = 17.0,
+        .reload = 5.0,
+        .count = 1,
+        .rarity = RarityID::kEpic,
+        .attributes = { .damage_reflection = 0.08, .extra_health = 12 }
+    },
+    {
+        .name = "Craft Cactus",
+        .description = "Reflects a little damage. Desert carapace craft.",
+        .health = 1485.0,
+        .damage = 135.0,
+        .radius = 17.0,
+        .reload = 5.0,
+        .count = 1,
+        .rarity = RarityID::kLegendary,
+        .attributes = { .damage_reflection = 0.08, .extra_health = 12 }
+    },
+    {
+        .name = "Craft Cactus",
+        .description = "Reflects a little damage. Desert carapace craft.",
+        .health = 4455.0,
+        .damage = 405.0,
+        .radius = 17.0,
+        .reload = 5.0,
+        .count = 1,
+        .rarity = RarityID::kMythic,
+        .attributes = { .damage_reflection = 0.08, .extra_health = 12 }
+    },
+    {
+        .name = "Craft Cactus",
+        .description = "Reflects a little damage. Desert carapace craft.",
+        .health = 8910.0,
+        .damage = 810.0,
+        .radius = 17.0,
+        .reload = 5.0,
+        .count = 1,
+        .rarity = RarityID::kUltra,
+        .attributes = { .damage_reflection = 0.08, .extra_health = 12 }
+    },
+    {
+        .name = "Craft Cactus",
+        .description = "Reflects a little damage. Desert carapace craft.",
+        .health = 17820.0,
+        .damage = 1620.0,
+        .radius = 17.0,
+        .reload = 5.0,
+        .count = 1,
+        .rarity = RarityID::kSuper,
+        .attributes = { .damage_reflection = 0.08, .extra_health = 12 }
+    },
+    {
+        .name = "Craft Cactus",
+        .description = "Reflects a little damage. Desert carapace craft.",
+        .health = 35640.0,
+        .damage = 3240.0,
+        .radius = 17.0,
+        .reload = 5.0,
+        .count = 1,
+        .rarity = RarityID::kUnique,
+        .attributes = { .damage_reflection = 0.08, .extra_health = 12 }
+    },
+    {
+        .name = "Cutter",
+        .description = "Increases the flower's body damage",
+        .health = 54.0,
+        .damage = 36.0,
+        .radius = 40.0,
+        .reload = 2.5,
+        .count = 1,
+        .rarity = RarityID::kLegendary,
+        .attributes = {
+            // Flat add on flattened body curve (~+28% at L100 body≈89).
+            .extra_body_damage = 25,
+            .equipment = EquipmentFlags::kCutter
+        }
+    },
+    {
+        .name = "Cutter",
+        .description = "Increases the flower's body damage",
+        .health = 162.0,
+        .damage = 108.0,
+        .radius = 40.0,
+        .reload = 2.5,
+        .count = 1,
+        .rarity = RarityID::kMythic,
+        .attributes = {
+            // Flat add on flattened body curve (~+28% at L100 body≈89).
+            .extra_body_damage = 25,
+            .equipment = EquipmentFlags::kCutter
+        }
+    },
+    {
+        .name = "Cutter",
+        .description = "Increases the flower's body damage",
+        .health = 324.0,
+        .damage = 216.0,
+        .radius = 40.0,
+        .reload = 2.5,
+        .count = 1,
+        .rarity = RarityID::kUltra,
+        .attributes = {
+            // Flat add on flattened body curve (~+28% at L100 body≈89).
+            .extra_body_damage = 25,
+            .equipment = EquipmentFlags::kCutter
+        }
+    },
+    {
+        .name = "Cutter",
+        .description = "Increases the flower's body damage",
+        .health = 648.0,
+        .damage = 432.0,
+        .radius = 40.0,
+        .reload = 2.5,
+        .count = 1,
+        .rarity = RarityID::kSuper,
+        .attributes = {
+            // Flat add on flattened body curve (~+28% at L100 body≈89).
+            .extra_body_damage = 25,
+            .equipment = EquipmentFlags::kCutter
+        }
+    },
+    {
+        .name = "Cutter",
+        .description = "Increases the flower's body damage",
+        .health = 1296.0,
+        .damage = 864.0,
+        .radius = 40.0,
+        .reload = 2.5,
+        .count = 1,
+        .rarity = RarityID::kUnique,
+        .attributes = {
+            // Flat add on flattened body curve (~+28% at L100 body≈89).
+            .extra_body_damage = 25,
+            .equipment = EquipmentFlags::kCutter
+        }
+    },
+    {
+        .name = "Dandelion",
+        .description = "Prevents healing on units it hits for a short time",
+        .health = 30.0,
+        .damage = 30.0,
+        .radius = 10.0,
+        .reload = 1.0,
+        .count = 1,
+        .rarity = RarityID::kEpic,
+        .attributes = {
+            .dandelion_inflict_seconds = 10.0f,
+            .icon_angle = 1,
+            .rotation_style = PetalAttributes::kFollowRot
+        }
+    },
+    {
+        .name = "Dandelion",
+        .description = "Prevents healing on units it hits for a short time",
+        .health = 90.0,
+        .damage = 90.0,
+        .radius = 10.0,
+        .reload = 1.0,
+        .count = 1,
+        .rarity = RarityID::kLegendary,
+        .attributes = {
+            .dandelion_inflict_seconds = 10.0f,
+            .icon_angle = 1,
+            .rotation_style = PetalAttributes::kFollowRot
+        }
+    },
+    {
+        .name = "Dandelion",
+        .description = "Prevents healing on units it hits for a short time",
+        .health = 270.0,
+        .damage = 270.0,
+        .radius = 10.0,
+        .reload = 1.0,
+        .count = 1,
+        .rarity = RarityID::kMythic,
+        .attributes = {
+            .dandelion_inflict_seconds = 10.0f,
+            .icon_angle = 1,
+            .rotation_style = PetalAttributes::kFollowRot
+        }
+    },
+    {
+        .name = "Dandelion",
+        .description = "Prevents healing on units it hits for a short time",
+        .health = 540.0,
+        .damage = 540.0,
+        .radius = 10.0,
+        .reload = 1.0,
+        .count = 1,
+        .rarity = RarityID::kUltra,
+        .attributes = {
+            .dandelion_inflict_seconds = 10.0f,
+            .icon_angle = 1,
+            .rotation_style = PetalAttributes::kFollowRot
+        }
+    },
+    {
+        .name = "Dandelion",
+        .description = "Prevents healing on units it hits for a short time",
+        .health = 1080.0,
+        .damage = 1080.0,
+        .radius = 10.0,
+        .reload = 1.0,
+        .count = 1,
+        .rarity = RarityID::kSuper,
+        .attributes = {
+            .dandelion_inflict_seconds = 10.0f,
+            .icon_angle = 1,
+            .rotation_style = PetalAttributes::kFollowRot
+        }
+    },
+    {
+        .name = "Dandelion",
+        .description = "Prevents healing on units it hits for a short time",
+        .health = 2160.0,
+        .damage = 2160.0,
+        .radius = 10.0,
+        .reload = 1.0,
+        .count = 1,
+        .rarity = RarityID::kUnique,
+        .attributes = {
+            .dandelion_inflict_seconds = 10.0f,
+            .icon_angle = 1,
+            .rotation_style = PetalAttributes::kFollowRot
+        }
+    },
+    {
+        .name = "Deep Frost Pearl",
+        .description = "A dense frost pearl that hits harder against slowed foes.",
+        .health = 117.0,
+        .damage = 87.0,
+        .radius = 16.0,
+        .reload = 4.8,
+        .count = 1,
+        .rarity = RarityID::kLegendary,
+        .attributes = { .extra_damage_factor = 1.12f, .bonus_vs_slowed = 0.25f }
+    },
+    {
+        .name = "Deep Frost Pearl",
+        .description = "A dense frost pearl that hits harder against slowed foes.",
+        .health = 351.0,
+        .damage = 261.0,
+        .radius = 16.0,
+        .reload = 4.8,
+        .count = 1,
+        .rarity = RarityID::kMythic,
+        .attributes = { .extra_damage_factor = 1.12f, .bonus_vs_slowed = 0.25f }
+    },
+    {
+        .name = "Deep Frost Pearl",
+        .description = "A dense frost pearl that hits harder against slowed foes.",
+        .health = 702.0,
+        .damage = 522.0,
+        .radius = 16.0,
+        .reload = 4.8,
+        .count = 1,
+        .rarity = RarityID::kUltra,
+        .attributes = { .extra_damage_factor = 1.12f, .bonus_vs_slowed = 0.25f }
+    },
+    {
+        .name = "Deep Frost Pearl",
+        .description = "A dense frost pearl that hits harder against slowed foes.",
+        .health = 1404.0,
+        .damage = 1044.0,
+        .radius = 16.0,
+        .reload = 4.8,
+        .count = 1,
+        .rarity = RarityID::kSuper,
+        .attributes = { .extra_damage_factor = 1.12f, .bonus_vs_slowed = 0.25f }
+    },
+    {
+        .name = "Deep Frost Pearl",
+        .description = "A dense frost pearl that hits harder against slowed foes.",
+        .health = 2808.0,
+        .damage = 2088.0,
+        .radius = 16.0,
+        .reload = 4.8,
+        .count = 1,
+        .rarity = RarityID::kUnique,
+        .attributes = { .extra_damage_factor = 1.12f, .bonus_vs_slowed = 0.25f }
+    },
+    {
+        .name = "Desert Root",
+        .description = "A tough root that slowly restores health.",
+        .health = 258.0,
+        .damage = 30.0,
+        .radius = 20.0,
+        .reload = 5.8,
+        .count = 1,
+        .rarity = RarityID::kLegendary,
+        .attributes = { .constant_heal = 4.5, .extra_health = 22 }
+    },
+    {
+        .name = "Desert Root",
+        .description = "A tough root that slowly restores health.",
+        .health = 774.0,
+        .damage = 90.0,
+        .radius = 20.0,
+        .reload = 5.8,
+        .count = 1,
+        .rarity = RarityID::kMythic,
+        .attributes = { .constant_heal = 13.5, .extra_health = 22 }
+    },
+    {
+        .name = "Desert Root",
+        .description = "A tough root that slowly restores health.",
+        .health = 1548.0,
+        .damage = 180.0,
+        .radius = 20.0,
+        .reload = 5.8,
+        .count = 1,
+        .rarity = RarityID::kUltra,
+        .attributes = { .constant_heal = 27.0, .extra_health = 22 }
+    },
+    {
+        .name = "Desert Root",
+        .description = "A tough root that slowly restores health.",
+        .health = 3096.0,
+        .damage = 360.0,
+        .radius = 20.0,
+        .reload = 5.8,
+        .count = 1,
+        .rarity = RarityID::kSuper,
+        .attributes = { .constant_heal = 54.0, .extra_health = 22 }
+    },
+    {
+        .name = "Desert Root",
+        .description = "A tough root that slowly restores health.",
+        .health = 6192.0,
+        .damage = 720.0,
+        .radius = 20.0,
+        .reload = 5.8,
+        .count = 1,
+        .rarity = RarityID::kUnique,
+        .attributes = { .constant_heal = 108.0, .extra_health = 22 }
+    },
+    {
+        .name = "Egg",
+        .description = "Something interesting might pop out of this",
+        .health = 150.0,
+        .damage = 3.0,
+        .radius = 15.0,
+        .reload = 1.0,
+        .count = 1,
+        .rarity = RarityID::kLegendary,
+        .attributes = { 
+            .secondary_reload = 2.5,
+            .defend_only = 1,
+            .rotation_style = PetalAttributes::kNoRot,
+            .spawns = MobID::kBeetle
+        }
+    },
+    {
+        .name = "Egg",
+        .description = "Something interesting might pop out of this",
+        .health = 450.0,
+        .damage = 9.0,
+        .radius = 15.0,
+        .reload = 1.0,
+        .count = 1,
+        .rarity = RarityID::kMythic,
+        .attributes = { 
+            .secondary_reload = 2.5,
+            .defend_only = 1,
+            .rotation_style = PetalAttributes::kNoRot,
+            .spawns = MobID::kBeetle
+        }
+    },
+    {
+        .name = "Egg",
+        .description = "Something interesting might pop out of this",
+        .health = 900.0,
+        .damage = 18.0,
+        .radius = 15.0,
+        .reload = 1.0,
+        .count = 1,
+        .rarity = RarityID::kUltra,
+        .attributes = { 
+            .secondary_reload = 2.5,
+            .defend_only = 1,
+            .rotation_style = PetalAttributes::kNoRot,
+            .spawns = MobID::kBeetle
+        }
+    },
+    {
+        .name = "Egg",
+        .description = "Something interesting might pop out of this",
+        .health = 1800.0,
+        .damage = 36.0,
+        .radius = 15.0,
+        .reload = 1.0,
+        .count = 1,
+        .rarity = RarityID::kSuper,
+        .attributes = { 
+            .secondary_reload = 2.5,
+            .defend_only = 1,
+            .rotation_style = PetalAttributes::kNoRot,
+            .spawns = MobID::kBeetle
+        }
+    },
+    {
+        .name = "Egg",
+        .description = "Something interesting might pop out of this",
+        .health = 3600.0,
+        .damage = 72.0,
+        .radius = 15.0,
+        .reload = 1.0,
+        .count = 1,
+        .rarity = RarityID::kUnique,
+        .attributes = { 
+            .secondary_reload = 2.5,
+            .defend_only = 1,
+            .rotation_style = PetalAttributes::kNoRot,
+            .spawns = MobID::kBeetle
+        }
+    },
+    {
+        .name = "Emerald Shell",
+        .description = "A sturdy emerald carapace",
+        .health = 120.0,
+        .damage = 15.0,
+        .radius = 17.0,
+        .reload = 4.0,
+        .count = 1,
+        .rarity = RarityID::kRare,
+        .attributes = { .armor = 5 }
+    },
+    {
+        .name = "Emerald Shell",
+        .description = "A sturdy emerald carapace",
+        .health = 360.0,
+        .damage = 45.0,
+        .radius = 17.0,
+        .reload = 4.0,
+        .count = 1,
+        .rarity = RarityID::kEpic,
+        .attributes = { .armor = 5 }
+    },
+    {
+        .name = "Emerald Shell",
+        .description = "A sturdy emerald carapace",
+        .health = 1080.0,
+        .damage = 135.0,
+        .radius = 17.0,
+        .reload = 4.0,
+        .count = 1,
+        .rarity = RarityID::kLegendary,
+        .attributes = { .armor = 5 }
+    },
+    {
+        .name = "Emerald Shell",
+        .description = "A sturdy emerald carapace",
+        .health = 3240.0,
+        .damage = 405.0,
+        .radius = 17.0,
+        .reload = 4.0,
+        .count = 1,
+        .rarity = RarityID::kMythic,
+        .attributes = { .armor = 5 }
+    },
+    {
+        .name = "Emerald Shell",
+        .description = "A sturdy emerald carapace",
+        .health = 6480.0,
+        .damage = 810.0,
+        .radius = 17.0,
+        .reload = 4.0,
+        .count = 1,
+        .rarity = RarityID::kUltra,
+        .attributes = { .armor = 5 }
+    },
+    {
+        .name = "Emerald Shell",
+        .description = "A sturdy emerald carapace",
+        .health = 12960.0,
+        .damage = 1620.0,
+        .radius = 17.0,
+        .reload = 4.0,
+        .count = 1,
+        .rarity = RarityID::kSuper,
+        .attributes = { .armor = 5 }
+    },
+    {
+        .name = "Emerald Shell",
+        .description = "A sturdy emerald carapace",
+        .health = 25920.0,
+        .damage = 3240.0,
+        .radius = 17.0,
+        .reload = 4.0,
+        .count = 1,
+        .rarity = RarityID::kUnique,
+        .attributes = { .armor = 5 }
+    },
+    {
+        .name = "Fireball",
+        .description = "Burns on contact. Volcano local forge.",
+        .health = 48.0,
+        .damage = 84.0,
+        .radius = 13.0,
+        .reload = 3.3,
+        .count = 1,
+        .rarity = RarityID::kRare,
+        .attributes = { .burn_damage = { .damage = 4.0, .time = 3.0 } }
+    },
+    {
+        .name = "Fireball",
+        .description = "Burns on contact. Volcano local forge.",
+        .health = 144.0,
+        .damage = 252.0,
+        .radius = 13.0,
+        .reload = 3.3,
+        .count = 1,
+        .rarity = RarityID::kEpic,
+        .attributes = { .burn_damage = { .damage = 4.0, .time = 3.0 } }
+    },
+    {
+        .name = "Fireball",
+        .description = "Burns on contact. Volcano local forge.",
+        .health = 432.0,
+        .damage = 756.0,
+        .radius = 13.0,
+        .reload = 3.3,
+        .count = 1,
+        .rarity = RarityID::kLegendary,
+        .attributes = { .burn_damage = { .damage = 4.0, .time = 3.0 } }
+    },
+    {
+        .name = "Fireball",
+        .description = "Burns on contact. Volcano local forge.",
+        .health = 1296.0,
+        .damage = 2268.0,
+        .radius = 13.0,
+        .reload = 3.3,
+        .count = 1,
+        .rarity = RarityID::kMythic,
+        .attributes = { .burn_damage = { .damage = 4.0, .time = 3.0 } }
+    },
+    {
+        .name = "Fireball",
+        .description = "Burns on contact. Volcano local forge.",
+        .health = 2592.0,
+        .damage = 4536.0,
+        .radius = 13.0,
+        .reload = 3.3,
+        .count = 1,
+        .rarity = RarityID::kUltra,
+        .attributes = { .burn_damage = { .damage = 4.0, .time = 3.0 } }
+    },
+    {
+        .name = "Fireball",
+        .description = "Burns on contact. Volcano local forge.",
+        .health = 5184.0,
+        .damage = 9072.0,
+        .radius = 13.0,
+        .reload = 3.3,
+        .count = 1,
+        .rarity = RarityID::kSuper,
+        .attributes = { .burn_damage = { .damage = 4.0, .time = 3.0 } }
+    },
+    {
+        .name = "Fireball",
+        .description = "Burns on contact. Volcano local forge.",
+        .health = 10368.0,
+        .damage = 18144.0,
+        .radius = 13.0,
+        .reload = 3.3,
+        .count = 1,
+        .rarity = RarityID::kUnique,
+        .attributes = { .burn_damage = { .damage = 4.0, .time = 3.0 } }
+    },
+    {
+        .name = "Flame Gear",
+        .description = "Speeds up petal rotation and slightly extends its reach.",
+        .health = 132.0,
+        .damage = 69.0,
+        .radius = 18.0,
+        .reload = 4.2,
+        .count = 1,
+        .rarity = RarityID::kLegendary,
+        .attributes = { .extra_rotation_speed = 0.25, .extra_range = 8 }
+    },
+    {
+        .name = "Flame Gear",
+        .description = "Speeds up petal rotation and slightly extends its reach.",
+        .health = 396.0,
+        .damage = 207.0,
+        .radius = 18.0,
+        .reload = 4.2,
+        .count = 1,
+        .rarity = RarityID::kMythic,
+        .attributes = { .extra_rotation_speed = 0.25, .extra_range = 8 }
+    },
+    {
+        .name = "Flame Gear",
+        .description = "Speeds up petal rotation and slightly extends its reach.",
+        .health = 792.0,
+        .damage = 414.0,
+        .radius = 18.0,
+        .reload = 4.2,
+        .count = 1,
+        .rarity = RarityID::kUltra,
+        .attributes = { .extra_rotation_speed = 0.25, .extra_range = 8 }
+    },
+    {
+        .name = "Flame Gear",
+        .description = "Speeds up petal rotation and slightly extends its reach.",
+        .health = 1584.0,
+        .damage = 828.0,
+        .radius = 18.0,
+        .reload = 4.2,
+        .count = 1,
+        .rarity = RarityID::kSuper,
+        .attributes = { .extra_rotation_speed = 0.25, .extra_range = 8 }
+    },
+    {
+        .name = "Flame Gear",
+        .description = "Speeds up petal rotation and slightly extends its reach.",
+        .health = 3168.0,
+        .damage = 1656.0,
+        .radius = 18.0,
+        .reload = 4.2,
+        .count = 1,
+        .rarity = RarityID::kUnique,
+        .attributes = { .extra_rotation_speed = 0.25, .extra_range = 8 }
+    },
+    {
+        .name = "Forged Holy Sword",
+        .description = "Strengthens attacks and partially ignores armor",
+        .health = 144.0,
+        .damage = 96.0,
+        .radius = 15.0,
+        .reload = 4.5,
+        .count = 1,
+        .rarity = RarityID::kLegendary,
+        .attributes = { .extra_damage_factor = 1.08f, .armor_penetration = 0.25f }
+    },
+    {
+        .name = "Forged Holy Sword",
+        .description = "Strengthens attacks and partially ignores armor",
+        .health = 432.0,
+        .damage = 288.0,
+        .radius = 15.0,
+        .reload = 4.5,
+        .count = 1,
+        .rarity = RarityID::kMythic,
+        .attributes = { .extra_damage_factor = 1.08f, .armor_penetration = 0.25f }
+    },
+    {
+        .name = "Forged Holy Sword",
+        .description = "Strengthens attacks and partially ignores armor",
+        .health = 864.0,
+        .damage = 576.0,
+        .radius = 15.0,
+        .reload = 4.5,
+        .count = 1,
+        .rarity = RarityID::kUltra,
+        .attributes = { .extra_damage_factor = 1.08f, .armor_penetration = 0.25f }
+    },
+    {
+        .name = "Forged Holy Sword",
+        .description = "Strengthens attacks and partially ignores armor",
+        .health = 1728.0,
+        .damage = 1152.0,
+        .radius = 15.0,
+        .reload = 4.5,
+        .count = 1,
+        .rarity = RarityID::kSuper,
+        .attributes = { .extra_damage_factor = 1.08f, .armor_penetration = 0.25f }
+    },
+    {
+        .name = "Forged Holy Sword",
+        .description = "Strengthens attacks and partially ignores armor",
+        .health = 3456.0,
+        .damage = 2304.0,
+        .radius = 15.0,
+        .reload = 4.5,
+        .count = 1,
+        .rarity = RarityID::kUnique,
+        .attributes = { .extra_damage_factor = 1.08f, .armor_penetration = 0.25f }
+    },
+    {
+        .name = "Frost Bubble",
+        .description = "A frosty armored barrier for defending",
+        .health = 216.0,
+        .damage = 15.0,
+        .radius = 21.0,
+        .reload = 4.6,
+        .count = 1,
+        .rarity = RarityID::kLegendary,
+        .attributes = { .armor = 8, .defend_only = 1 }
+    },
+    {
+        .name = "Frost Bubble",
+        .description = "A frosty armored barrier for defending",
+        .health = 648.0,
+        .damage = 45.0,
+        .radius = 21.0,
+        .reload = 4.6,
+        .count = 1,
+        .rarity = RarityID::kMythic,
+        .attributes = { .armor = 8, .defend_only = 1 }
+    },
+    {
+        .name = "Frost Bubble",
+        .description = "A frosty armored barrier for defending",
+        .health = 1296.0,
+        .damage = 90.0,
+        .radius = 21.0,
+        .reload = 4.6,
+        .count = 1,
+        .rarity = RarityID::kUltra,
+        .attributes = { .armor = 8, .defend_only = 1 }
+    },
+    {
+        .name = "Frost Bubble",
+        .description = "A frosty armored barrier for defending",
+        .health = 2592.0,
+        .damage = 180.0,
+        .radius = 21.0,
+        .reload = 4.6,
+        .count = 1,
+        .rarity = RarityID::kSuper,
+        .attributes = { .armor = 8, .defend_only = 1 }
+    },
+    {
+        .name = "Frost Bubble",
+        .description = "A frosty armored barrier for defending",
+        .health = 5184.0,
+        .damage = 360.0,
+        .radius = 21.0,
+        .reload = 4.6,
+        .count = 1,
+        .rarity = RarityID::kUnique,
+        .attributes = { .armor = 8, .defend_only = 1 }
+    },
+    {
+        .name = "Frost Crown",
+        .description = "Increases flower durability and poison resistance",
+        .health = 237.0,
+        .damage = 21.0,
+        .radius = 21.0,
+        .reload = 6.2,
+        .count = 1,
+        .rarity = RarityID::kLegendary,
+        .attributes = { .extra_health = 32, .poison_armor = 8 }
+    },
+    {
+        .name = "Frost Crown",
+        .description = "Increases flower durability and poison resistance",
+        .health = 711.0,
+        .damage = 63.0,
+        .radius = 21.0,
+        .reload = 6.2,
+        .count = 1,
+        .rarity = RarityID::kMythic,
+        .attributes = { .extra_health = 32, .poison_armor = 8 }
+    },
+    {
+        .name = "Frost Crown",
+        .description = "Increases flower durability and poison resistance",
+        .health = 1422.0,
+        .damage = 126.0,
+        .radius = 21.0,
+        .reload = 6.2,
+        .count = 1,
+        .rarity = RarityID::kUltra,
+        .attributes = { .extra_health = 32, .poison_armor = 8 }
+    },
+    {
+        .name = "Frost Crown",
+        .description = "Increases flower durability and poison resistance",
+        .health = 2844.0,
+        .damage = 252.0,
+        .radius = 21.0,
+        .reload = 6.2,
+        .count = 1,
+        .rarity = RarityID::kSuper,
+        .attributes = { .extra_health = 32, .poison_armor = 8 }
+    },
+    {
+        .name = "Frost Crown",
+        .description = "Increases flower durability and poison resistance",
+        .health = 5688.0,
+        .damage = 504.0,
+        .radius = 21.0,
+        .reload = 6.2,
+        .count = 1,
+        .rarity = RarityID::kUnique,
+        .attributes = { .extra_health = 32, .poison_armor = 8 }
+    },
+    {
+        .name = "Frost Knight Sword",
+        .description = "A durable frost sword that briefly slows enemies.",
+        .health = 198.0,
+        .damage = 84.0,
+        .radius = 15.0,
+        .reload = 4.2,
+        .count = 1,
+        .rarity = RarityID::kLegendary,
+        .attributes = { .extra_health = 12, .slow_inflict_seconds = 0.3 }
+    },
+    {
+        .name = "Frost Knight Sword",
+        .description = "A durable frost sword that briefly slows enemies.",
+        .health = 594.0,
+        .damage = 252.0,
+        .radius = 15.0,
+        .reload = 4.2,
+        .count = 1,
+        .rarity = RarityID::kMythic,
+        .attributes = { .extra_health = 12, .slow_inflict_seconds = 0.3 }
+    },
+    {
+        .name = "Frost Knight Sword",
+        .description = "A durable frost sword that briefly slows enemies.",
+        .health = 1188.0,
+        .damage = 504.0,
+        .radius = 15.0,
+        .reload = 4.2,
+        .count = 1,
+        .rarity = RarityID::kUltra,
+        .attributes = { .extra_health = 12, .slow_inflict_seconds = 0.3 }
+    },
+    {
+        .name = "Frost Knight Sword",
+        .description = "A durable frost sword that briefly slows enemies.",
+        .health = 2376.0,
+        .damage = 1008.0,
+        .radius = 15.0,
+        .reload = 4.2,
+        .count = 1,
+        .rarity = RarityID::kSuper,
+        .attributes = { .extra_health = 12, .slow_inflict_seconds = 0.3 }
+    },
+    {
+        .name = "Frost Knight Sword",
+        .description = "A durable frost sword that briefly slows enemies.",
+        .health = 4752.0,
+        .damage = 2016.0,
+        .radius = 15.0,
+        .reload = 4.2,
+        .count = 1,
+        .rarity = RarityID::kUnique,
+        .attributes = { .extra_health = 12, .slow_inflict_seconds = 0.3 }
+    },
+    {
+        .name = "Frost Starfish",
+        .description = "Three frost starfish provide sustained contact pressure.",
+        .health = 84.0,
+        .damage = 45.0,
+        .radius = 13.0,
+        .reload = 2.6,
+        .count = 3,
+        .rarity = RarityID::kLegendary,
+        .attributes = {}
+    },
+    {
+        .name = "Frost Starfish",
+        .description = "Three frost starfish provide sustained contact pressure.",
+        .health = 252.0,
+        .damage = 135.0,
+        .radius = 13.0,
+        .reload = 2.6,
+        .count = 3,
+        .rarity = RarityID::kMythic,
+        .attributes = {}
+    },
+    {
+        .name = "Frost Starfish",
+        .description = "Three frost starfish provide sustained contact pressure.",
+        .health = 504.0,
+        .damage = 270.0,
+        .radius = 13.0,
+        .reload = 2.6,
+        .count = 3,
+        .rarity = RarityID::kUltra,
+        .attributes = {}
+    },
+    {
+        .name = "Frost Starfish",
+        .description = "Three frost starfish provide sustained contact pressure.",
+        .health = 1008.0,
+        .damage = 540.0,
+        .radius = 13.0,
+        .reload = 2.6,
+        .count = 3,
+        .rarity = RarityID::kSuper,
+        .attributes = {}
+    },
+    {
+        .name = "Frost Starfish",
+        .description = "Three frost starfish provide sustained contact pressure.",
+        .health = 2016.0,
+        .damage = 1080.0,
+        .radius = 13.0,
+        .reload = 2.6,
+        .count = 3,
+        .rarity = RarityID::kUnique,
+        .attributes = {}
+    },
+    {
+        .name = "Glass Storm",
+        .description = "Launches a projectile that splits into glass shards.",
+        .health = 72.0,
+        .damage = 60.0,
+        .radius = 13.0,
+        .reload = 5.2,
+        .count = 3,
+        .rarity = RarityID::kLegendary,
+        .attributes = {
+            .clump_radius = 8,
+            .secondary_reload = 0.5,
+            .defend_only = 1,
+            .split_projectile = 1
+        }
+    },
+    {
+        .name = "Glass Storm",
+        .description = "Launches a projectile that splits into glass shards.",
+        .health = 216.0,
+        .damage = 180.0,
+        .radius = 13.0,
+        .reload = 5.2,
+        .count = 3,
+        .rarity = RarityID::kMythic,
+        .attributes = {
+            .clump_radius = 8,
+            .secondary_reload = 0.5,
+            .defend_only = 1,
+            .split_projectile = 1
+        }
+    },
+    {
+        .name = "Glass Storm",
+        .description = "Launches a projectile that splits into glass shards.",
+        .health = 432.0,
+        .damage = 360.0,
+        .radius = 13.0,
+        .reload = 5.2,
+        .count = 3,
+        .rarity = RarityID::kUltra,
+        .attributes = {
+            .clump_radius = 8,
+            .secondary_reload = 0.5,
+            .defend_only = 1,
+            .split_projectile = 1
+        }
+    },
+    {
+        .name = "Glass Storm",
+        .description = "Launches a projectile that splits into glass shards.",
+        .health = 864.0,
+        .damage = 720.0,
+        .radius = 13.0,
+        .reload = 5.2,
+        .count = 3,
+        .rarity = RarityID::kSuper,
+        .attributes = {
+            .clump_radius = 8,
+            .secondary_reload = 0.5,
+            .defend_only = 1,
+            .split_projectile = 1
+        }
+    },
+    {
+        .name = "Glass Storm",
+        .description = "Launches a projectile that splits into glass shards.",
+        .health = 1728.0,
+        .damage = 1440.0,
+        .radius = 13.0,
+        .reload = 5.2,
+        .count = 3,
+        .rarity = RarityID::kUnique,
+        .attributes = {
+            .clump_radius = 8,
+            .secondary_reload = 0.5,
+            .defend_only = 1,
+            .split_projectile = 1
+        }
+    },
+    {
+        .name = "Guard Egg",
+        .description = "Hatches a wandering royal guard",
+        .health = 33.0,
+        .damage = 19.5,
+        .radius = 14.0,
+        .reload = 3.75,
+        .count = 1,
+        .rarity = RarityID::kLegendary,
+        .attributes = {
+            .secondary_reload = 2.5,
+            .defend_only = 1,
+            .rotation_style = PetalAttributes::kNoRot,
+            .spawns = MobID::kWanderingGuard
+        }
+    },
+    {
+        .name = "Guard Egg",
+        .description = "Hatches a wandering royal guard",
+        .health = 99.0,
+        .damage = 58.5,
+        .radius = 14.0,
+        .reload = 3.75,
+        .count = 1,
+        .rarity = RarityID::kMythic,
+        .attributes = {
+            .secondary_reload = 2.5,
+            .defend_only = 1,
+            .rotation_style = PetalAttributes::kNoRot,
+            .spawns = MobID::kWanderingGuard
+        }
+    },
+    {
+        .name = "Guard Egg",
+        .description = "Hatches a wandering royal guard",
+        .health = 198.0,
+        .damage = 117.0,
+        .radius = 14.0,
+        .reload = 3.75,
+        .count = 1,
+        .rarity = RarityID::kUltra,
+        .attributes = {
+            .secondary_reload = 2.5,
+            .defend_only = 1,
+            .rotation_style = PetalAttributes::kNoRot,
+            .spawns = MobID::kWanderingGuard
+        }
+    },
+    {
+        .name = "Guard Egg",
+        .description = "Hatches a wandering royal guard",
+        .health = 396.0,
+        .damage = 234.0,
+        .radius = 14.0,
+        .reload = 3.75,
+        .count = 1,
+        .rarity = RarityID::kSuper,
+        .attributes = {
+            .secondary_reload = 2.5,
+            .defend_only = 1,
+            .rotation_style = PetalAttributes::kNoRot,
+            .spawns = MobID::kWanderingGuard
+        }
+    },
+    {
+        .name = "Guard Egg",
+        .description = "Hatches a wandering royal guard",
+        .health = 792.0,
+        .damage = 468.0,
+        .radius = 14.0,
+        .reload = 3.75,
+        .count = 1,
+        .rarity = RarityID::kUnique,
+        .attributes = {
+            .secondary_reload = 2.5,
+            .defend_only = 1,
+            .rotation_style = PetalAttributes::kNoRot,
+            .spawns = MobID::kWanderingGuard
+        }
+    },
+    {
+        .name = "Healing Bloom",
+        .description = "Gentle heal while equipped. Garden bloom rite.",
+        .health = 72.0,
+        .damage = 0.0,
+        .radius = 13.0,
+        .reload = 3.0,
+        .count = 1,
+        .rarity = RarityID::kRare,
+        .attributes = { .constant_heal = 6.0, .defend_only = 1 }
+    },
+    {
+        .name = "Healing Bloom",
+        .description = "Gentle heal while equipped. Garden bloom rite.",
+        .health = 216.0,
+        .damage = 0.0,
+        .radius = 13.0,
+        .reload = 3.0,
+        .count = 1,
+        .rarity = RarityID::kEpic,
+        .attributes = { .constant_heal = 18.0, .defend_only = 1 }
+    },
+    {
+        .name = "Healing Bloom",
+        .description = "Gentle heal while equipped. Garden bloom rite.",
+        .health = 648.0,
+        .damage = 0.0,
+        .radius = 13.0,
+        .reload = 3.0,
+        .count = 1,
+        .rarity = RarityID::kLegendary,
+        .attributes = { .constant_heal = 54.0, .defend_only = 1 }
+    },
+    {
+        .name = "Healing Bloom",
+        .description = "Gentle heal while equipped. Garden bloom rite.",
+        .health = 1944.0,
+        .damage = 0.0,
+        .radius = 13.0,
+        .reload = 3.0,
+        .count = 1,
+        .rarity = RarityID::kMythic,
+        .attributes = { .constant_heal = 162.0, .defend_only = 1 }
+    },
+    {
+        .name = "Healing Bloom",
+        .description = "Gentle heal while equipped. Garden bloom rite.",
+        .health = 3888.0,
+        .damage = 0.0,
+        .radius = 13.0,
+        .reload = 3.0,
+        .count = 1,
+        .rarity = RarityID::kUltra,
+        .attributes = { .constant_heal = 324.0, .defend_only = 1 }
+    },
+    {
+        .name = "Healing Bloom",
+        .description = "Gentle heal while equipped. Garden bloom rite.",
+        .health = 7776.0,
+        .damage = 0.0,
+        .radius = 13.0,
+        .reload = 3.0,
+        .count = 1,
+        .rarity = RarityID::kSuper,
+        .attributes = { .constant_heal = 648.0, .defend_only = 1 }
+    },
+    {
+        .name = "Healing Bloom",
+        .description = "Gentle heal while equipped. Garden bloom rite.",
+        .health = 15552.0,
+        .damage = 0.0,
+        .radius = 13.0,
+        .reload = 3.0,
+        .count = 1,
+        .rarity = RarityID::kUnique,
+        .attributes = { .constant_heal = 1296.0, .defend_only = 1 }
+    },
+    {
+        .name = "Heart of Nature",
+        .description = "Durable + heal. Sovereign relic of Ancient Heart and Heartwood.",
+        .health = 285.0,
+        .damage = 0.0,
+        .radius = 23.0,
+        .reload = 9.0,
+        .count = 1,
+        .rarity = RarityID::kMythic,
+        .attributes = { .constant_heal = 21.0, .extra_health = 35, .defend_only = 1 }
+    },
+    {
+        .name = "Heart of Nature",
+        .description = "Durable + heal. Sovereign relic of Ancient Heart and Heartwood.",
+        .health = 570.0,
+        .damage = 0.0,
+        .radius = 23.0,
+        .reload = 9.0,
+        .count = 1,
+        .rarity = RarityID::kUltra,
+        .attributes = { .constant_heal = 42.0, .extra_health = 35, .defend_only = 1 }
+    },
+    {
+        .name = "Heart of Nature",
+        .description = "Durable + heal. Sovereign relic of Ancient Heart and Heartwood.",
+        .health = 1140.0,
+        .damage = 0.0,
+        .radius = 23.0,
+        .reload = 9.0,
+        .count = 1,
+        .rarity = RarityID::kSuper,
+        .attributes = { .constant_heal = 84.0, .extra_health = 35, .defend_only = 1 }
+    },
+    {
+        .name = "Heart of Nature",
+        .description = "Durable + heal. Sovereign relic of Ancient Heart and Heartwood.",
+        .health = 2280.0,
+        .damage = 0.0,
+        .radius = 23.0,
+        .reload = 9.0,
+        .count = 1,
+        .rarity = RarityID::kUnique,
+        .attributes = { .constant_heal = 168.0, .extra_health = 35, .defend_only = 1 }
+    },
+    {
+        .name = "Heaviest",
+        .description = "This thing is so heavy that nothing gets in the way",
+        .health = 600.0,
+        .damage = 30.0,
+        .radius = 12.0,
+        .reload = 15.0,
+        .count = 1,
+        .rarity = RarityID::kLegendary,
+        .attributes = {}
+    },
+    {
+        .name = "Heaviest",
+        .description = "This thing is so heavy that nothing gets in the way",
+        .health = 1800.0,
+        .damage = 90.0,
+        .radius = 12.0,
+        .reload = 15.0,
+        .count = 1,
+        .rarity = RarityID::kMythic,
+        .attributes = {}
+    },
+    {
+        .name = "Heaviest",
+        .description = "This thing is so heavy that nothing gets in the way",
+        .health = 3600.0,
+        .damage = 180.0,
+        .radius = 12.0,
+        .reload = 15.0,
+        .count = 1,
+        .rarity = RarityID::kUltra,
+        .attributes = {}
+    },
+    {
+        .name = "Heaviest",
+        .description = "This thing is so heavy that nothing gets in the way",
+        .health = 7200.0,
+        .damage = 360.0,
+        .radius = 12.0,
+        .reload = 15.0,
+        .count = 1,
+        .rarity = RarityID::kSuper,
+        .attributes = {}
+    },
+    {
+        .name = "Heaviest",
+        .description = "This thing is so heavy that nothing gets in the way",
+        .health = 14400.0,
+        .damage = 720.0,
+        .radius = 12.0,
+        .reload = 15.0,
+        .count = 1,
+        .rarity = RarityID::kUnique,
+        .attributes = {}
+    },
+    {
+        .name = "Hive Disc",
+        .description = "A thick armored hive disc that also spins petals faster",
+        .health = 420.0,
+        .damage = 42.0,
+        .radius = 13.0,
+        .reload = 4.5,
+        .count = 1,
+        .rarity = RarityID::kLegendary,
+        .attributes = { .armor = 6, .extra_rotation_speed = 0.25 }
+    },
+    {
+        .name = "Hive Disc",
+        .description = "A thick armored hive disc that also spins petals faster",
+        .health = 1260.0,
+        .damage = 126.0,
+        .radius = 13.0,
+        .reload = 4.5,
+        .count = 1,
+        .rarity = RarityID::kMythic,
+        .attributes = { .armor = 6, .extra_rotation_speed = 0.25 }
+    },
+    {
+        .name = "Hive Disc",
+        .description = "A thick armored hive disc that also spins petals faster",
+        .health = 2520.0,
+        .damage = 252.0,
+        .radius = 13.0,
+        .reload = 4.5,
+        .count = 1,
+        .rarity = RarityID::kUltra,
+        .attributes = { .armor = 6, .extra_rotation_speed = 0.25 }
+    },
+    {
+        .name = "Hive Disc",
+        .description = "A thick armored hive disc that also spins petals faster",
+        .health = 5040.0,
+        .damage = 504.0,
+        .radius = 13.0,
+        .reload = 4.5,
+        .count = 1,
+        .rarity = RarityID::kSuper,
+        .attributes = { .armor = 6, .extra_rotation_speed = 0.25 }
+    },
+    {
+        .name = "Hive Disc",
+        .description = "A thick armored hive disc that also spins petals faster",
+        .health = 10080.0,
+        .damage = 1008.0,
+        .radius = 13.0,
+        .reload = 4.5,
+        .count = 1,
+        .rarity = RarityID::kUnique,
+        .attributes = { .armor = 6, .extra_rotation_speed = 0.25 }
+    },
+    {
+        .name = "Holy Flame Core",
+        .description = "Releases a powerful burst of healing.",
+        .health = 138.0,
+        .damage = 0.0,
+        .radius = 18.0,
+        .reload = 8.0,
+        .count = 1,
+        .rarity = RarityID::kLegendary,
+        .attributes = { .secondary_reload = 1.0, .burst_heal = 36.0, .defend_only = 1 }
+    },
+    {
+        .name = "Holy Flame Core",
+        .description = "Releases a powerful burst of healing.",
+        .health = 414.0,
+        .damage = 0.0,
+        .radius = 18.0,
+        .reload = 8.0,
+        .count = 1,
+        .rarity = RarityID::kMythic,
+        .attributes = { .secondary_reload = 1.0, .burst_heal = 36.0, .defend_only = 1 }
+    },
+    {
+        .name = "Holy Flame Core",
+        .description = "Releases a powerful burst of healing.",
+        .health = 828.0,
+        .damage = 0.0,
+        .radius = 18.0,
+        .reload = 8.0,
+        .count = 1,
+        .rarity = RarityID::kUltra,
+        .attributes = { .secondary_reload = 1.0, .burst_heal = 36.0, .defend_only = 1 }
+    },
+    {
+        .name = "Holy Flame Core",
+        .description = "Releases a powerful burst of healing.",
+        .health = 1656.0,
+        .damage = 0.0,
+        .radius = 18.0,
+        .reload = 8.0,
+        .count = 1,
+        .rarity = RarityID::kSuper,
+        .attributes = { .secondary_reload = 1.0, .burst_heal = 36.0, .defend_only = 1 }
+    },
+    {
+        .name = "Holy Flame Core",
+        .description = "Releases a powerful burst of healing.",
+        .health = 3312.0,
+        .damage = 0.0,
+        .radius = 18.0,
+        .reload = 8.0,
+        .count = 1,
+        .rarity = RarityID::kUnique,
+        .attributes = { .secondary_reload = 1.0, .burst_heal = 36.0, .defend_only = 1 }
+    },
+    {
+        .name = "Holy Orb",
+        .description = "Burst heal on defend. Capital holy craft.",
+        .health = 90.0,
+        .damage = 0.0,
+        .radius = 15.0,
+        .reload = 6.0,
+        .count = 1,
+        .rarity = RarityID::kEpic,
+        .attributes = { .secondary_reload = 1.0, .burst_heal = 20.0, .defend_only = 1 }
+    },
+    {
+        .name = "Holy Orb",
+        .description = "Burst heal on defend. Capital holy craft.",
+        .health = 270.0,
+        .damage = 0.0,
+        .radius = 15.0,
+        .reload = 6.0,
+        .count = 1,
+        .rarity = RarityID::kLegendary,
+        .attributes = { .secondary_reload = 1.0, .burst_heal = 20.0, .defend_only = 1 }
+    },
+    {
+        .name = "Holy Orb",
+        .description = "Burst heal on defend. Capital holy craft.",
+        .health = 810.0,
+        .damage = 0.0,
+        .radius = 15.0,
+        .reload = 6.0,
+        .count = 1,
+        .rarity = RarityID::kMythic,
+        .attributes = { .secondary_reload = 1.0, .burst_heal = 20.0, .defend_only = 1 }
+    },
+    {
+        .name = "Holy Orb",
+        .description = "Burst heal on defend. Capital holy craft.",
+        .health = 1620.0,
+        .damage = 0.0,
+        .radius = 15.0,
+        .reload = 6.0,
+        .count = 1,
+        .rarity = RarityID::kUltra,
+        .attributes = { .secondary_reload = 1.0, .burst_heal = 20.0, .defend_only = 1 }
+    },
+    {
+        .name = "Holy Orb",
+        .description = "Burst heal on defend. Capital holy craft.",
+        .health = 3240.0,
+        .damage = 0.0,
+        .radius = 15.0,
+        .reload = 6.0,
+        .count = 1,
+        .rarity = RarityID::kSuper,
+        .attributes = { .secondary_reload = 1.0, .burst_heal = 20.0, .defend_only = 1 }
+    },
+    {
+        .name = "Holy Orb",
+        .description = "Burst heal on defend. Capital holy craft.",
+        .health = 6480.0,
+        .damage = 0.0,
+        .radius = 15.0,
+        .reload = 6.0,
+        .count = 1,
+        .rarity = RarityID::kUnique,
+        .attributes = { .secondary_reload = 1.0, .burst_heal = 20.0, .defend_only = 1 }
+    },
+    {
+        .name = "Holy Snowflake",
+        .description = "Two fragile snowflakes provide bursts of healing.",
+        .health = 63.0,
+        .damage = 0.0,
+        .radius = 15.0,
+        .reload = 3.0,
+        .count = 2,
+        .rarity = RarityID::kLegendary,
+        .attributes = { .secondary_reload = 1.0, .burst_heal = 16.0, .defend_only = 1 }
+    },
+    {
+        .name = "Holy Snowflake",
+        .description = "Two fragile snowflakes provide bursts of healing.",
+        .health = 189.0,
+        .damage = 0.0,
+        .radius = 15.0,
+        .reload = 3.0,
+        .count = 2,
+        .rarity = RarityID::kMythic,
+        .attributes = { .secondary_reload = 1.0, .burst_heal = 16.0, .defend_only = 1 }
+    },
+    {
+        .name = "Holy Snowflake",
+        .description = "Two fragile snowflakes provide bursts of healing.",
+        .health = 378.0,
+        .damage = 0.0,
+        .radius = 15.0,
+        .reload = 3.0,
+        .count = 2,
+        .rarity = RarityID::kUltra,
+        .attributes = { .secondary_reload = 1.0, .burst_heal = 16.0, .defend_only = 1 }
+    },
+    {
+        .name = "Holy Snowflake",
+        .description = "Two fragile snowflakes provide bursts of healing.",
+        .health = 756.0,
+        .damage = 0.0,
+        .radius = 15.0,
+        .reload = 3.0,
+        .count = 2,
+        .rarity = RarityID::kSuper,
+        .attributes = { .secondary_reload = 1.0, .burst_heal = 16.0, .defend_only = 1 }
+    },
+    {
+        .name = "Holy Snowflake",
+        .description = "Two fragile snowflakes provide bursts of healing.",
+        .health = 1512.0,
+        .damage = 0.0,
+        .radius = 15.0,
+        .reload = 3.0,
+        .count = 2,
+        .rarity = RarityID::kUnique,
+        .attributes = { .secondary_reload = 1.0, .burst_heal = 16.0, .defend_only = 1 }
+    },
+    {
+        .name = "Holy Spore",
+        .description = "Inflicts poison while slowly restoring your health.",
+        .health = 135.0,
+        .damage = 36.0,
+        .radius = 17.0,
+        .reload = 5.0,
+        .count = 1,
+        .rarity = RarityID::kLegendary,
+        .attributes = {
+            .constant_heal = 4.5,
+            .poison_damage = { .damage = 9.0, .time = 9.0 }
+        }
+    },
+    {
+        .name = "Holy Spore",
+        .description = "Inflicts poison while slowly restoring your health.",
+        .health = 405.0,
+        .damage = 108.0,
+        .radius = 17.0,
+        .reload = 5.0,
+        .count = 1,
+        .rarity = RarityID::kMythic,
+        .attributes = {
+            .constant_heal = 13.5,
+            .poison_damage = { .damage = 27.0, .time = 27.0 }
+        }
+    },
+    {
+        .name = "Holy Spore",
+        .description = "Inflicts poison while slowly restoring your health.",
+        .health = 810.0,
+        .damage = 216.0,
+        .radius = 17.0,
+        .reload = 5.0,
+        .count = 1,
+        .rarity = RarityID::kUltra,
+        .attributes = {
+            .constant_heal = 27.0,
+            .poison_damage = { .damage = 54.0, .time = 54.0 }
+        }
+    },
+    {
+        .name = "Holy Spore",
+        .description = "Inflicts poison while slowly restoring your health.",
+        .health = 1620.0,
+        .damage = 432.0,
+        .radius = 17.0,
+        .reload = 5.0,
+        .count = 1,
+        .rarity = RarityID::kSuper,
+        .attributes = {
+            .constant_heal = 54.0,
+            .poison_damage = { .damage = 108.0, .time = 108.0 }
+        }
+    },
+    {
+        .name = "Holy Spore",
+        .description = "Inflicts poison while slowly restoring your health.",
+        .health = 3240.0,
+        .damage = 864.0,
+        .radius = 17.0,
+        .reload = 5.0,
+        .count = 1,
+        .rarity = RarityID::kUnique,
+        .attributes = {
+            .constant_heal = 108.0,
+            .poison_damage = { .damage = 216.0, .time = 216.0 }
+        }
+    },
+    {
+        .name = "Ice Shield",
+        .description = "High petal armor. Snow local forge.",
+        .health = 186.0,
+        .damage = 6.0,
+        .radius = 19.0,
+        .reload = 5.5,
+        .count = 1,
+        .rarity = RarityID::kEpic,
+        .attributes = { .armor = 10, .defend_only = 1 }
+    },
+    {
+        .name = "Ice Shield",
+        .description = "High petal armor. Snow local forge.",
+        .health = 558.0,
+        .damage = 18.0,
+        .radius = 19.0,
+        .reload = 5.5,
+        .count = 1,
+        .rarity = RarityID::kLegendary,
+        .attributes = { .armor = 10, .defend_only = 1 }
+    },
+    {
+        .name = "Ice Shield",
+        .description = "High petal armor. Snow local forge.",
+        .health = 1674.0,
+        .damage = 54.0,
+        .radius = 19.0,
+        .reload = 5.5,
+        .count = 1,
+        .rarity = RarityID::kMythic,
+        .attributes = { .armor = 10, .defend_only = 1 }
+    },
+    {
+        .name = "Ice Shield",
+        .description = "High petal armor. Snow local forge.",
+        .health = 3348.0,
+        .damage = 108.0,
+        .radius = 19.0,
+        .reload = 5.5,
+        .count = 1,
+        .rarity = RarityID::kUltra,
+        .attributes = { .armor = 10, .defend_only = 1 }
+    },
+    {
+        .name = "Ice Shield",
+        .description = "High petal armor. Snow local forge.",
+        .health = 6696.0,
+        .damage = 216.0,
+        .radius = 19.0,
+        .reload = 5.5,
+        .count = 1,
+        .rarity = RarityID::kSuper,
+        .attributes = { .armor = 10, .defend_only = 1 }
+    },
+    {
+        .name = "Ice Shield",
+        .description = "High petal armor. Snow local forge.",
+        .health = 13392.0,
+        .damage = 432.0,
+        .radius = 19.0,
+        .reload = 5.5,
+        .count = 1,
+        .rarity = RarityID::kUnique,
+        .attributes = { .armor = 10, .defend_only = 1 }
+    },
+    {
+        .name = "Ice Spike",
+        .description = "Slows on hit. Snow traveler's spike.",
+        .health = 60.0,
+        .damage = 57.0,
+        .radius = 9.0,
+        .reload = 2.8,
+        .count = 1,
+        .rarity = RarityID::kRare,
+        .attributes = { .slow_inflict_seconds = 0.35 }
+    },
+    {
+        .name = "Ice Spike",
+        .description = "Slows on hit. Snow traveler's spike.",
+        .health = 180.0,
+        .damage = 171.0,
+        .radius = 9.0,
+        .reload = 2.8,
+        .count = 1,
+        .rarity = RarityID::kEpic,
+        .attributes = { .slow_inflict_seconds = 0.35 }
+    },
+    {
+        .name = "Ice Spike",
+        .description = "Slows on hit. Snow traveler's spike.",
+        .health = 540.0,
+        .damage = 513.0,
+        .radius = 9.0,
+        .reload = 2.8,
+        .count = 1,
+        .rarity = RarityID::kLegendary,
+        .attributes = { .slow_inflict_seconds = 0.35 }
+    },
+    {
+        .name = "Ice Spike",
+        .description = "Slows on hit. Snow traveler's spike.",
+        .health = 1620.0,
+        .damage = 1539.0,
+        .radius = 9.0,
+        .reload = 2.8,
+        .count = 1,
+        .rarity = RarityID::kMythic,
+        .attributes = { .slow_inflict_seconds = 0.35 }
+    },
+    {
+        .name = "Ice Spike",
+        .description = "Slows on hit. Snow traveler's spike.",
+        .health = 3240.0,
+        .damage = 3078.0,
+        .radius = 9.0,
+        .reload = 2.8,
+        .count = 1,
+        .rarity = RarityID::kUltra,
+        .attributes = { .slow_inflict_seconds = 0.35 }
+    },
+    {
+        .name = "Ice Spike",
+        .description = "Slows on hit. Snow traveler's spike.",
+        .health = 6480.0,
+        .damage = 6156.0,
+        .radius = 9.0,
+        .reload = 2.8,
+        .count = 1,
+        .rarity = RarityID::kSuper,
+        .attributes = { .slow_inflict_seconds = 0.35 }
+    },
+    {
+        .name = "Ice Spike",
+        .description = "Slows on hit. Snow traveler's spike.",
+        .health = 12960.0,
+        .damage = 12312.0,
+        .radius = 9.0,
+        .reload = 2.8,
+        .count = 1,
+        .rarity = RarityID::kUnique,
+        .attributes = { .slow_inflict_seconds = 0.35 }
+    },
+    {
+        .name = "Ice Tide Ring",
+        .description = "Extends orbit, slows on contact, and pulses an icy ring when attacking.",
+        .health = 144.0,
+        .damage = 48.0,
+        .radius = 18.0,
+        .reload = 4.0,
+        .count = 1,
+        .rarity = RarityID::kLegendary,
+        .attributes = {
+            .secondary_reload = 3.0,
+            .slow_inflict_seconds = 0.45,
+            .extra_range = 25,
+            .radial_pulse_damage = 18.0,
+            .radial_pulse_radius = 110.0
+        }
+    },
+    {
+        .name = "Ice Tide Ring",
+        .description = "Extends orbit, slows on contact, and pulses an icy ring when attacking.",
+        .health = 432.0,
+        .damage = 144.0,
+        .radius = 18.0,
+        .reload = 4.0,
+        .count = 1,
+        .rarity = RarityID::kMythic,
+        .attributes = {
+            .secondary_reload = 3.0,
+            .slow_inflict_seconds = 0.45,
+            .extra_range = 25,
+            .radial_pulse_damage = 18.0,
+            .radial_pulse_radius = 110.0
+        }
+    },
+    {
+        .name = "Ice Tide Ring",
+        .description = "Extends orbit, slows on contact, and pulses an icy ring when attacking.",
+        .health = 864.0,
+        .damage = 288.0,
+        .radius = 18.0,
+        .reload = 4.0,
+        .count = 1,
+        .rarity = RarityID::kUltra,
+        .attributes = {
+            .secondary_reload = 3.0,
+            .slow_inflict_seconds = 0.45,
+            .extra_range = 25,
+            .radial_pulse_damage = 18.0,
+            .radial_pulse_radius = 110.0
+        }
+    },
+    {
+        .name = "Ice Tide Ring",
+        .description = "Extends orbit, slows on contact, and pulses an icy ring when attacking.",
+        .health = 1728.0,
+        .damage = 576.0,
+        .radius = 18.0,
+        .reload = 4.0,
+        .count = 1,
+        .rarity = RarityID::kSuper,
+        .attributes = {
+            .secondary_reload = 3.0,
+            .slow_inflict_seconds = 0.45,
+            .extra_range = 25,
+            .radial_pulse_damage = 18.0,
+            .radial_pulse_radius = 110.0
+        }
+    },
+    {
+        .name = "Ice Tide Ring",
+        .description = "Extends orbit, slows on contact, and pulses an icy ring when attacking.",
+        .health = 3456.0,
+        .damage = 1152.0,
+        .radius = 18.0,
+        .reload = 4.0,
+        .count = 1,
+        .rarity = RarityID::kUnique,
+        .attributes = {
+            .secondary_reload = 3.0,
+            .slow_inflict_seconds = 0.45,
+            .extra_range = 25,
+            .radial_pulse_damage = 18.0,
+            .radial_pulse_radius = 110.0
+        }
+    },
+    {
+        .name = "Infernal Core",
+        .description = "Burns on contact. Sovereign relic of Leyline Core.",
+        .health = 336.0,
+        .damage = 171.0,
+        .radius = 24.0,
+        .reload = 9.5,
+        .count = 1,
+        .rarity = RarityID::kMythic,
+        .attributes = {
+            .extra_health = 25,
+            .burn_damage = { .damage = 8.0, .time = 4.0 }
+        }
+    },
+    {
+        .name = "Infernal Core",
+        .description = "Burns on contact. Sovereign relic of Leyline Core.",
+        .health = 672.0,
+        .damage = 342.0,
+        .radius = 24.0,
+        .reload = 9.5,
+        .count = 1,
+        .rarity = RarityID::kUltra,
+        .attributes = {
+            .extra_health = 25,
+            .burn_damage = { .damage = 8.0, .time = 4.0 }
+        }
+    },
+    {
+        .name = "Infernal Core",
+        .description = "Burns on contact. Sovereign relic of Leyline Core.",
+        .health = 1344.0,
+        .damage = 684.0,
+        .radius = 24.0,
+        .reload = 9.5,
+        .count = 1,
+        .rarity = RarityID::kSuper,
+        .attributes = {
+            .extra_health = 25,
+            .burn_damage = { .damage = 8.0, .time = 4.0 }
+        }
+    },
+    {
+        .name = "Infernal Core",
+        .description = "Burns on contact. Sovereign relic of Leyline Core.",
+        .health = 2688.0,
+        .damage = 1368.0,
+        .radius = 24.0,
+        .reload = 9.5,
+        .count = 1,
+        .rarity = RarityID::kUnique,
+        .attributes = {
+            .extra_health = 25,
+            .burn_damage = { .damage = 8.0, .time = 4.0 }
+        }
+    },
+    {
+        .name = "Iron Guard",
+        .description = "A sturdy armored shield petal that can intercept missiles",
+        .health = 108.0,
+        .damage = 16.5,
+        .radius = 17.0,
+        .reload = 3.75,
+        .count = 1,
+        .rarity = RarityID::kUnusual,
+        .attributes = { .armor = 3 }
+    },
+    {
+        .name = "Iron Guard",
+        .description = "A sturdy armored shield petal that can intercept missiles",
+        .health = 324.0,
+        .damage = 49.5,
+        .radius = 17.0,
+        .reload = 3.75,
+        .count = 1,
+        .rarity = RarityID::kRare,
+        .attributes = { .armor = 3 }
+    },
+    {
+        .name = "Iron Guard",
+        .description = "A sturdy armored shield petal that can intercept missiles",
+        .health = 972.0,
+        .damage = 148.5,
+        .radius = 17.0,
+        .reload = 3.75,
+        .count = 1,
+        .rarity = RarityID::kEpic,
+        .attributes = { .armor = 3 }
+    },
+    {
+        .name = "Iron Guard",
+        .description = "A sturdy armored shield petal that can intercept missiles",
+        .health = 2916.0,
+        .damage = 445.5,
+        .radius = 17.0,
+        .reload = 3.75,
+        .count = 1,
+        .rarity = RarityID::kLegendary,
+        .attributes = { .armor = 3 }
+    },
+    {
+        .name = "Iron Guard",
+        .description = "A sturdy armored shield petal that can intercept missiles",
+        .health = 8748.0,
+        .damage = 1336.5,
+        .radius = 17.0,
+        .reload = 3.75,
+        .count = 1,
+        .rarity = RarityID::kMythic,
+        .attributes = { .armor = 3 }
+    },
+    {
+        .name = "Iron Guard",
+        .description = "A sturdy armored shield petal that can intercept missiles",
+        .health = 17496.0,
+        .damage = 2673.0,
+        .radius = 17.0,
+        .reload = 3.75,
+        .count = 1,
+        .rarity = RarityID::kUltra,
+        .attributes = { .armor = 3 }
+    },
+    {
+        .name = "Iron Guard",
+        .description = "A sturdy armored shield petal that can intercept missiles",
+        .health = 34992.0,
+        .damage = 5346.0,
+        .radius = 17.0,
+        .reload = 3.75,
+        .count = 1,
+        .rarity = RarityID::kSuper,
+        .attributes = { .armor = 3 }
+    },
+    {
+        .name = "Iron Guard",
+        .description = "A sturdy armored shield petal that can intercept missiles",
+        .health = 69984.0,
+        .damage = 10692.0,
+        .radius = 17.0,
+        .reload = 3.75,
+        .count = 1,
+        .rarity = RarityID::kUnique,
+        .attributes = { .armor = 3 }
+    },
+    {
+        .name = "Iron Mandible",
+        .description = "Hardened mandible that amplifies your petal damage",
+        .health = 120.0,
+        .damage = 54.0,
+        .radius = 10.0,
+        .reload = 1.1,
+        .count = 1,
+        .rarity = RarityID::kEpic,
+        .attributes = { .extra_damage_factor = 1.15f }
+    },
+    {
+        .name = "Iron Mandible",
+        .description = "Hardened mandible that amplifies your petal damage",
+        .health = 360.0,
+        .damage = 162.0,
+        .radius = 10.0,
+        .reload = 1.1,
+        .count = 1,
+        .rarity = RarityID::kLegendary,
+        .attributes = { .extra_damage_factor = 1.15f }
+    },
+    {
+        .name = "Iron Mandible",
+        .description = "Hardened mandible that amplifies your petal damage",
+        .health = 1080.0,
+        .damage = 486.0,
+        .radius = 10.0,
+        .reload = 1.1,
+        .count = 1,
+        .rarity = RarityID::kMythic,
+        .attributes = { .extra_damage_factor = 1.15f }
+    },
+    {
+        .name = "Iron Mandible",
+        .description = "Hardened mandible that amplifies your petal damage",
+        .health = 2160.0,
+        .damage = 972.0,
+        .radius = 10.0,
+        .reload = 1.1,
+        .count = 1,
+        .rarity = RarityID::kUltra,
+        .attributes = { .extra_damage_factor = 1.15f }
+    },
+    {
+        .name = "Iron Mandible",
+        .description = "Hardened mandible that amplifies your petal damage",
+        .health = 4320.0,
+        .damage = 1944.0,
+        .radius = 10.0,
+        .reload = 1.1,
+        .count = 1,
+        .rarity = RarityID::kSuper,
+        .attributes = { .extra_damage_factor = 1.15f }
+    },
+    {
+        .name = "Iron Mandible",
+        .description = "Hardened mandible that amplifies your petal damage",
+        .health = 8640.0,
+        .damage = 3888.0,
+        .radius = 10.0,
+        .reload = 1.1,
+        .count = 1,
+        .rarity = RarityID::kUnique,
+        .attributes = { .extra_damage_factor = 1.15f }
+    },
+    {
+        .name = "Jungle Needle",
+        .description = "A thin canopy needle that strikes in a clump",
+        .health = 16.5,
+        .damage = 21.0,
+        .radius = 10.0,
+        .reload = 1.625,
+        .count = 3,
+        .rarity = RarityID::kUnusual,
+        .attributes = { .clump_radius = 8 }
+    },
+    {
+        .name = "Jungle Needle",
+        .description = "A thin canopy needle that strikes in a clump",
+        .health = 49.5,
+        .damage = 63.0,
+        .radius = 10.0,
+        .reload = 1.625,
+        .count = 3,
+        .rarity = RarityID::kRare,
+        .attributes = { .clump_radius = 8 }
+    },
+    {
+        .name = "Jungle Needle",
+        .description = "A thin canopy needle that strikes in a clump",
+        .health = 148.5,
+        .damage = 189.0,
+        .radius = 10.0,
+        .reload = 1.625,
+        .count = 3,
+        .rarity = RarityID::kEpic,
+        .attributes = { .clump_radius = 8 }
+    },
+    {
+        .name = "Jungle Needle",
+        .description = "A thin canopy needle that strikes in a clump",
+        .health = 445.5,
+        .damage = 567.0,
+        .radius = 10.0,
+        .reload = 1.625,
+        .count = 3,
+        .rarity = RarityID::kLegendary,
+        .attributes = { .clump_radius = 8 }
+    },
+    {
+        .name = "Jungle Needle",
+        .description = "A thin canopy needle that strikes in a clump",
+        .health = 1336.5,
+        .damage = 1701.0,
+        .radius = 10.0,
+        .reload = 1.625,
+        .count = 3,
+        .rarity = RarityID::kMythic,
+        .attributes = { .clump_radius = 8 }
+    },
+    {
+        .name = "Jungle Needle",
+        .description = "A thin canopy needle that strikes in a clump",
+        .health = 2673.0,
+        .damage = 3402.0,
+        .radius = 10.0,
+        .reload = 1.625,
+        .count = 3,
+        .rarity = RarityID::kUltra,
+        .attributes = { .clump_radius = 8 }
+    },
+    {
+        .name = "Jungle Needle",
+        .description = "A thin canopy needle that strikes in a clump",
+        .health = 5346.0,
+        .damage = 6804.0,
+        .radius = 10.0,
+        .reload = 1.625,
+        .count = 3,
+        .rarity = RarityID::kSuper,
+        .attributes = { .clump_radius = 8 }
+    },
+    {
+        .name = "Jungle Needle",
+        .description = "A thin canopy needle that strikes in a clump",
+        .health = 10692.0,
+        .damage = 13608.0,
+        .radius = 10.0,
+        .reload = 1.625,
+        .count = 3,
+        .rarity = RarityID::kUnique,
+        .attributes = { .clump_radius = 8 }
+    },
+    {
+        .name = "King's Oath",
+        .description = "Amplifies petal damage; surges harder when your flower is low on health",
+        .health = 39.0,
+        .damage = 78.0,
+        .radius = 16.0,
+        .reload = 4.0,
+        .count = 1,
+        .rarity = RarityID::kMythic,
+        .attributes = {
+            .extra_damage_factor = 1.15f
+        }
+    },
+    {
+        .name = "King's Oath",
+        .description = "Amplifies petal damage; surges harder when your flower is low on health",
+        .health = 78.0,
+        .damage = 156.0,
+        .radius = 16.0,
+        .reload = 4.0,
+        .count = 1,
+        .rarity = RarityID::kUltra,
+        .attributes = {
+            .extra_damage_factor = 1.15f
+        }
+    },
+    {
+        .name = "King's Oath",
+        .description = "Amplifies petal damage; surges harder when your flower is low on health",
+        .health = 156.0,
+        .damage = 312.0,
+        .radius = 16.0,
+        .reload = 4.0,
+        .count = 1,
+        .rarity = RarityID::kSuper,
+        .attributes = {
+            .extra_damage_factor = 1.15f
+        }
+    },
+    {
+        .name = "King's Oath",
+        .description = "Amplifies petal damage; surges harder when your flower is low on health",
+        .health = 312.0,
+        .damage = 624.0,
+        .radius = 16.0,
+        .reload = 4.0,
+        .count = 1,
+        .rarity = RarityID::kUnique,
+        .attributes = {
+            .extra_damage_factor = 1.15f
+        }
+    },
+    {
+        .name = "Leaf Blade",
+        .description = "Cuts quickly. Pathblade of Garden travelers.",
+        .health = 22.5,
+        .damage = 27.0,
+        .radius = 12.0,
+        .reload = 1.875,
+        .count = 3,
+        .rarity = RarityID::kUnusual,
+        .attributes = { .clump_radius = 10 }
+    },
+    {
+        .name = "Leaf Blade",
+        .description = "Cuts quickly. Pathblade of Garden travelers.",
+        .health = 67.5,
+        .damage = 81.0,
+        .radius = 12.0,
+        .reload = 1.875,
+        .count = 3,
+        .rarity = RarityID::kRare,
+        .attributes = { .clump_radius = 10 }
+    },
+    {
+        .name = "Leaf Blade",
+        .description = "Cuts quickly. Pathblade of Garden travelers.",
+        .health = 202.5,
+        .damage = 243.0,
+        .radius = 12.0,
+        .reload = 1.875,
+        .count = 3,
+        .rarity = RarityID::kEpic,
+        .attributes = { .clump_radius = 10 }
+    },
+    {
+        .name = "Leaf Blade",
+        .description = "Cuts quickly. Pathblade of Garden travelers.",
+        .health = 607.5,
+        .damage = 729.0,
+        .radius = 12.0,
+        .reload = 1.875,
+        .count = 3,
+        .rarity = RarityID::kLegendary,
+        .attributes = { .clump_radius = 10 }
+    },
+    {
+        .name = "Leaf Blade",
+        .description = "Cuts quickly. Pathblade of Garden travelers.",
+        .health = 1822.5,
+        .damage = 2187.0,
+        .radius = 12.0,
+        .reload = 1.875,
+        .count = 3,
+        .rarity = RarityID::kMythic,
+        .attributes = { .clump_radius = 10 }
+    },
+    {
+        .name = "Leaf Blade",
+        .description = "Cuts quickly. Pathblade of Garden travelers.",
+        .health = 3645.0,
+        .damage = 4374.0,
+        .radius = 12.0,
+        .reload = 1.875,
+        .count = 3,
+        .rarity = RarityID::kUltra,
+        .attributes = { .clump_radius = 10 }
+    },
+    {
+        .name = "Leaf Blade",
+        .description = "Cuts quickly. Pathblade of Garden travelers.",
+        .health = 7290.0,
+        .damage = 8748.0,
+        .radius = 12.0,
+        .reload = 1.875,
+        .count = 3,
+        .rarity = RarityID::kSuper,
+        .attributes = { .clump_radius = 10 }
+    },
+    {
+        .name = "Leaf Blade",
+        .description = "Cuts quickly. Pathblade of Garden travelers.",
+        .health = 14580.0,
+        .damage = 17496.0,
+        .radius = 12.0,
+        .reload = 1.875,
+        .count = 3,
+        .rarity = RarityID::kUnique,
+        .attributes = { .clump_radius = 10 }
+    },
+    {
+        .name = "Life Lotus",
+        .description = "Gradually heals you and increases petal durability.",
+        .health = 165.0,
+        .damage = 0.0,
+        .radius = 20.0,
+        .reload = 6.0,
+        .count = 1,
+        .rarity = RarityID::kLegendary,
+        .attributes = { .constant_heal = 9.0, .extra_health = 15, .defend_only = 1 }
+    },
+    {
+        .name = "Life Lotus",
+        .description = "Gradually heals you and increases petal durability.",
+        .health = 495.0,
+        .damage = 0.0,
+        .radius = 20.0,
+        .reload = 6.0,
+        .count = 1,
+        .rarity = RarityID::kMythic,
+        .attributes = { .constant_heal = 27.0, .extra_health = 15, .defend_only = 1 }
+    },
+    {
+        .name = "Life Lotus",
+        .description = "Gradually heals you and increases petal durability.",
+        .health = 990.0,
+        .damage = 0.0,
+        .radius = 20.0,
+        .reload = 6.0,
+        .count = 1,
+        .rarity = RarityID::kUltra,
+        .attributes = { .constant_heal = 54.0, .extra_health = 15, .defend_only = 1 }
+    },
+    {
+        .name = "Life Lotus",
+        .description = "Gradually heals you and increases petal durability.",
+        .health = 1980.0,
+        .damage = 0.0,
+        .radius = 20.0,
+        .reload = 6.0,
+        .count = 1,
+        .rarity = RarityID::kSuper,
+        .attributes = { .constant_heal = 108.0, .extra_health = 15, .defend_only = 1 }
+    },
+    {
+        .name = "Life Lotus",
+        .description = "Gradually heals you and increases petal durability.",
+        .health = 3960.0,
+        .damage = 0.0,
+        .radius = 20.0,
+        .reload = 6.0,
+        .count = 1,
+        .rarity = RarityID::kUnique,
+        .attributes = { .constant_heal = 216.0, .extra_health = 15, .defend_only = 1 }
+    },
+    {
+        .name = "Lotus",
+        .description = "Absorbs some poison damage taken by the flower",
+        .health = 66.0,
+        .damage = 15.0,
+        .radius = 12.0,
+        .reload = 2.0,
+        .count = 1,
+        .rarity = RarityID::kLegendary,
+        .attributes = {
+            .poison_armor = 12,
+            .icon_angle = 0.1
+        }
+    },
+    {
+        .name = "Lotus",
+        .description = "Absorbs some poison damage taken by the flower",
+        .health = 198.0,
+        .damage = 45.0,
+        .radius = 12.0,
+        .reload = 2.0,
+        .count = 1,
+        .rarity = RarityID::kMythic,
+        .attributes = {
+            .poison_armor = 12,
+            .icon_angle = 0.1
+        }
+    },
+    {
+        .name = "Lotus",
+        .description = "Absorbs some poison damage taken by the flower",
+        .health = 396.0,
+        .damage = 90.0,
+        .radius = 12.0,
+        .reload = 2.0,
+        .count = 1,
+        .rarity = RarityID::kUltra,
+        .attributes = {
+            .poison_armor = 12,
+            .icon_angle = 0.1
+        }
+    },
+    {
+        .name = "Lotus",
+        .description = "Absorbs some poison damage taken by the flower",
+        .health = 792.0,
+        .damage = 180.0,
+        .radius = 12.0,
+        .reload = 2.0,
+        .count = 1,
+        .rarity = RarityID::kSuper,
+        .attributes = {
+            .poison_armor = 12,
+            .icon_angle = 0.1
+        }
+    },
+    {
+        .name = "Lotus",
+        .description = "Absorbs some poison damage taken by the flower",
+        .health = 1584.0,
+        .damage = 360.0,
+        .radius = 12.0,
+        .reload = 2.0,
+        .count = 1,
+        .rarity = RarityID::kUnique,
+        .attributes = {
+            .poison_armor = 12,
+            .icon_angle = 0.1
+        }
+    },
+    {
+        .name = "Magma Core",
+        .description = "Molten splash. Volcano local forge.",
+        .health = 177.0,
+        .damage = 72.0,
+        .radius = 18.0,
+        .reload = 6.5,
+        .count = 1,
+        .rarity = RarityID::kEpic,
+        .attributes = { .extra_health = 10, .splash_damage = 12.0, .splash_radius = 70.0 }
+    },
+    {
+        .name = "Magma Core",
+        .description = "Molten splash. Volcano local forge.",
+        .health = 531.0,
+        .damage = 216.0,
+        .radius = 18.0,
+        .reload = 6.5,
+        .count = 1,
+        .rarity = RarityID::kLegendary,
+        .attributes = { .extra_health = 10, .splash_damage = 12.0, .splash_radius = 70.0 }
+    },
+    {
+        .name = "Magma Core",
+        .description = "Molten splash. Volcano local forge.",
+        .health = 1593.0,
+        .damage = 648.0,
+        .radius = 18.0,
+        .reload = 6.5,
+        .count = 1,
+        .rarity = RarityID::kMythic,
+        .attributes = { .extra_health = 10, .splash_damage = 12.0, .splash_radius = 70.0 }
+    },
+    {
+        .name = "Magma Core",
+        .description = "Molten splash. Volcano local forge.",
+        .health = 3186.0,
+        .damage = 1296.0,
+        .radius = 18.0,
+        .reload = 6.5,
+        .count = 1,
+        .rarity = RarityID::kUltra,
+        .attributes = { .extra_health = 10, .splash_damage = 12.0, .splash_radius = 70.0 }
+    },
+    {
+        .name = "Magma Core",
+        .description = "Molten splash. Volcano local forge.",
+        .health = 6372.0,
+        .damage = 2592.0,
+        .radius = 18.0,
+        .reload = 6.5,
+        .count = 1,
+        .rarity = RarityID::kSuper,
+        .attributes = { .extra_health = 10, .splash_damage = 12.0, .splash_radius = 70.0 }
+    },
+    {
+        .name = "Magma Core",
+        .description = "Molten splash. Volcano local forge.",
+        .health = 12744.0,
+        .damage = 5184.0,
+        .radius = 18.0,
+        .reload = 6.5,
+        .count = 1,
+        .rarity = RarityID::kUnique,
+        .attributes = { .extra_health = 10, .splash_damage = 12.0, .splash_radius = 70.0 }
+    },
+    {
+        .name = "Magnet",
+        .description = "Pulls nearby petal drops toward your flower",
+        .health = 24.0,
+        .damage = 15.0,
+        .radius = 12.0,
+        .reload = 2.5,
+        .count = 1,
+        .rarity = RarityID::kRare,
+        .attributes = {
+            .magnet_radius = 1800.f,
+            .equipment = EquipmentFlags::kMagnet
+        }
+    },
+    {
+        .name = "Magnet",
+        .description = "Pulls nearby petal drops toward your flower",
+        .health = 72.0,
+        .damage = 45.0,
+        .radius = 12.0,
+        .reload = 2.5,
+        .count = 1,
+        .rarity = RarityID::kEpic,
+        .attributes = {
+            .magnet_radius = 1800.f,
+            .equipment = EquipmentFlags::kMagnet
+        }
+    },
+    {
+        .name = "Magnet",
+        .description = "Pulls nearby petal drops toward your flower",
+        .health = 216.0,
+        .damage = 135.0,
+        .radius = 12.0,
+        .reload = 2.5,
+        .count = 1,
+        .rarity = RarityID::kLegendary,
+        .attributes = {
+            .magnet_radius = 1800.f,
+            .equipment = EquipmentFlags::kMagnet
+        }
+    },
+    {
+        .name = "Magnet",
+        .description = "Pulls nearby petal drops toward your flower",
+        .health = 648.0,
+        .damage = 405.0,
+        .radius = 12.0,
+        .reload = 2.5,
+        .count = 1,
+        .rarity = RarityID::kMythic,
+        .attributes = {
+            .magnet_radius = 1800.f,
+            .equipment = EquipmentFlags::kMagnet
+        }
+    },
+    {
+        .name = "Magnet",
+        .description = "Pulls nearby petal drops toward your flower",
+        .health = 1296.0,
+        .damage = 810.0,
+        .radius = 12.0,
+        .reload = 2.5,
+        .count = 1,
+        .rarity = RarityID::kUltra,
+        .attributes = {
+            .magnet_radius = 1800.f,
+            .equipment = EquipmentFlags::kMagnet
+        }
+    },
+    {
+        .name = "Magnet",
+        .description = "Pulls nearby petal drops toward your flower",
+        .health = 2592.0,
+        .damage = 1620.0,
+        .radius = 12.0,
+        .reload = 2.5,
+        .count = 1,
+        .rarity = RarityID::kSuper,
+        .attributes = {
+            .magnet_radius = 1800.f,
+            .equipment = EquipmentFlags::kMagnet
+        }
+    },
+    {
+        .name = "Magnet",
+        .description = "Pulls nearby petal drops toward your flower",
+        .health = 5184.0,
+        .damage = 3240.0,
+        .radius = 12.0,
+        .reload = 2.5,
+        .count = 1,
+        .rarity = RarityID::kUnique,
+        .attributes = {
+            .magnet_radius = 1800.f,
+            .equipment = EquipmentFlags::kMagnet
+        }
+    },
+    {
+        .name = "Mantis Claw",
+        .description = "A scythe-like claw for heavy strikes",
+        .health = 27.0,
+        .damage = 63.0,
+        .radius = 17.0,
+        .reload = 4.75,
+        .count = 1,
+        .rarity = RarityID::kLegendary,
+        .attributes = {}
+    },
+    {
+        .name = "Mantis Claw",
+        .description = "A scythe-like claw for heavy strikes",
+        .health = 81.0,
+        .damage = 189.0,
+        .radius = 17.0,
+        .reload = 4.75,
+        .count = 1,
+        .rarity = RarityID::kMythic,
+        .attributes = {}
+    },
+    {
+        .name = "Mantis Claw",
+        .description = "A scythe-like claw for heavy strikes",
+        .health = 162.0,
+        .damage = 378.0,
+        .radius = 17.0,
+        .reload = 4.75,
+        .count = 1,
+        .rarity = RarityID::kUltra,
+        .attributes = {}
+    },
+    {
+        .name = "Mantis Claw",
+        .description = "A scythe-like claw for heavy strikes",
+        .health = 324.0,
+        .damage = 756.0,
+        .radius = 17.0,
+        .reload = 4.75,
+        .count = 1,
+        .rarity = RarityID::kSuper,
+        .attributes = {}
+    },
+    {
+        .name = "Mantis Claw",
+        .description = "A scythe-like claw for heavy strikes",
+        .health = 648.0,
+        .damage = 1512.0,
+        .radius = 17.0,
+        .reload = 4.75,
+        .count = 1,
+        .rarity = RarityID::kUnique,
+        .attributes = {}
+    },
+    {
+        .name = "Mech Gear",
+        .description = "Faster petal spin. Capital gear craft.",
+        .health = 120.0,
+        .damage = 57.0,
+        .radius = 16.0,
+        .reload = 3.8,
+        .count = 1,
+        .rarity = RarityID::kEpic,
+        .attributes = { .extra_rotation_speed = 0.18 }
+    },
+    {
+        .name = "Mech Gear",
+        .description = "Faster petal spin. Capital gear craft.",
+        .health = 360.0,
+        .damage = 171.0,
+        .radius = 16.0,
+        .reload = 3.8,
+        .count = 1,
+        .rarity = RarityID::kLegendary,
+        .attributes = { .extra_rotation_speed = 0.18 }
+    },
+    {
+        .name = "Mech Gear",
+        .description = "Faster petal spin. Capital gear craft.",
+        .health = 1080.0,
+        .damage = 513.0,
+        .radius = 16.0,
+        .reload = 3.8,
+        .count = 1,
+        .rarity = RarityID::kMythic,
+        .attributes = { .extra_rotation_speed = 0.18 }
+    },
+    {
+        .name = "Mech Gear",
+        .description = "Faster petal spin. Capital gear craft.",
+        .health = 2160.0,
+        .damage = 1026.0,
+        .radius = 16.0,
+        .reload = 3.8,
+        .count = 1,
+        .rarity = RarityID::kUltra,
+        .attributes = { .extra_rotation_speed = 0.18 }
+    },
+    {
+        .name = "Mech Gear",
+        .description = "Faster petal spin. Capital gear craft.",
+        .health = 4320.0,
+        .damage = 2052.0,
+        .radius = 16.0,
+        .reload = 3.8,
+        .count = 1,
+        .rarity = RarityID::kSuper,
+        .attributes = { .extra_rotation_speed = 0.18 }
+    },
+    {
+        .name = "Mech Gear",
+        .description = "Faster petal spin. Capital gear craft.",
+        .health = 8640.0,
+        .damage = 4104.0,
+        .radius = 16.0,
+        .reload = 3.8,
+        .count = 1,
+        .rarity = RarityID::kUnique,
+        .attributes = { .extra_rotation_speed = 0.18 }
+    },
+    {
+        .name = "Mech Poison Bee",
+        .description = "Fast-spinning mechanical bees inflict short poison.",
+        .health = 102.0,
+        .damage = 51.0,
+        .radius = 14.0,
+        .reload = 3.4,
+        .count = 2,
+        .rarity = RarityID::kLegendary,
+        .attributes = {
+            .extra_rotation_speed = 0.14,
+            .poison_damage = { .damage = 9.0, .time = 6.0 }
+        }
+    },
+    {
+        .name = "Mech Poison Bee",
+        .description = "Fast-spinning mechanical bees inflict short poison.",
+        .health = 306.0,
+        .damage = 153.0,
+        .radius = 14.0,
+        .reload = 3.4,
+        .count = 2,
+        .rarity = RarityID::kMythic,
+        .attributes = {
+            .extra_rotation_speed = 0.14,
+            .poison_damage = { .damage = 27.0, .time = 18.0 }
+        }
+    },
+    {
+        .name = "Mech Poison Bee",
+        .description = "Fast-spinning mechanical bees inflict short poison.",
+        .health = 612.0,
+        .damage = 306.0,
+        .radius = 14.0,
+        .reload = 3.4,
+        .count = 2,
+        .rarity = RarityID::kUltra,
+        .attributes = {
+            .extra_rotation_speed = 0.14,
+            .poison_damage = { .damage = 54.0, .time = 36.0 }
+        }
+    },
+    {
+        .name = "Mech Poison Bee",
+        .description = "Fast-spinning mechanical bees inflict short poison.",
+        .health = 1224.0,
+        .damage = 612.0,
+        .radius = 14.0,
+        .reload = 3.4,
+        .count = 2,
+        .rarity = RarityID::kSuper,
+        .attributes = {
+            .extra_rotation_speed = 0.14,
+            .poison_damage = { .damage = 108.0, .time = 72.0 }
+        }
+    },
+    {
+        .name = "Mech Poison Bee",
+        .description = "Fast-spinning mechanical bees inflict short poison.",
+        .health = 2448.0,
+        .damage = 1224.0,
+        .radius = 14.0,
+        .reload = 3.4,
+        .count = 2,
+        .rarity = RarityID::kUnique,
+        .attributes = {
+            .extra_rotation_speed = 0.14,
+            .poison_damage = { .damage = 216.0, .time = 144.0 }
+        }
+    },
+    {
+        .name = "Molten Sand Blade",
+        .description = "A fragile molten blade that delivers heavy strikes.",
+        .health = 78.0,
+        .damage = 126.0,
+        .radius = 14.0,
+        .reload = 5.0,
+        .count = 1,
+        .rarity = RarityID::kLegendary,
+        .attributes = {}
+    },
+    {
+        .name = "Molten Sand Blade",
+        .description = "A fragile molten blade that delivers heavy strikes.",
+        .health = 234.0,
+        .damage = 378.0,
+        .radius = 14.0,
+        .reload = 5.0,
+        .count = 1,
+        .rarity = RarityID::kMythic,
+        .attributes = {}
+    },
+    {
+        .name = "Molten Sand Blade",
+        .description = "A fragile molten blade that delivers heavy strikes.",
+        .health = 468.0,
+        .damage = 756.0,
+        .radius = 14.0,
+        .reload = 5.0,
+        .count = 1,
+        .rarity = RarityID::kUltra,
+        .attributes = {}
+    },
+    {
+        .name = "Molten Sand Blade",
+        .description = "A fragile molten blade that delivers heavy strikes.",
+        .health = 936.0,
+        .damage = 1512.0,
+        .radius = 14.0,
+        .reload = 5.0,
+        .count = 1,
+        .rarity = RarityID::kSuper,
+        .attributes = {}
+    },
+    {
+        .name = "Molten Sand Blade",
+        .description = "A fragile molten blade that delivers heavy strikes.",
+        .health = 1872.0,
+        .damage = 3024.0,
+        .radius = 14.0,
+        .reload = 5.0,
+        .count = 1,
+        .rarity = RarityID::kUnique,
+        .attributes = {}
+    },
+    {
+        .name = "Observer",
+        .description = "The one who sees all",
+        .health = 0.0,
+        .damage = 0.0,
+        .radius = 12.5,
+        .reload = 0.0,
+        .count = 0,
+        .rarity = RarityID::kUltra,
+        .attributes = {
+            .vision_factor = 0.25,
+            .equipment = EquipmentFlags::kObserver
+        }
+    },
+    {
+        .name = "Observer",
+        .description = "The one who sees all",
+        .health = 0.0,
+        .damage = 0.0,
+        .radius = 12.5,
+        .reload = 0.0,
+        .count = 0,
+        .rarity = RarityID::kSuper,
+        .attributes = {
+            .vision_factor = 0.25,
+            .equipment = EquipmentFlags::kObserver
+        }
+    },
+    {
+        .name = "Observer",
+        .description = "The one who sees all",
+        .health = 0.0,
+        .damage = 0.0,
+        .radius = 12.5,
+        .reload = 0.0,
+        .count = 0,
+        .rarity = RarityID::kUnique,
+        .attributes = {
+            .vision_factor = 0.25,
+            .equipment = EquipmentFlags::kObserver
+        }
+    },
+    {
+        .name = "Obsidian Blade",
+        .description = "Cuts armor. Volcano local forge.",
+        .health = 54.0,
+        .damage = 105.0,
+        .radius = 12.0,
+        .reload = 3.2,
+        .count = 1,
+        .rarity = RarityID::kEpic,
+        .attributes = { .armor_penetration = 0.5f }
+    },
+    {
+        .name = "Obsidian Blade",
+        .description = "Cuts armor. Volcano local forge.",
+        .health = 162.0,
+        .damage = 315.0,
+        .radius = 12.0,
+        .reload = 3.2,
+        .count = 1,
+        .rarity = RarityID::kLegendary,
+        .attributes = { .armor_penetration = 0.5f }
+    },
+    {
+        .name = "Obsidian Blade",
+        .description = "Cuts armor. Volcano local forge.",
+        .health = 486.0,
+        .damage = 945.0,
+        .radius = 12.0,
+        .reload = 3.2,
+        .count = 1,
+        .rarity = RarityID::kMythic,
+        .attributes = { .armor_penetration = 0.5f }
+    },
+    {
+        .name = "Obsidian Blade",
+        .description = "Cuts armor. Volcano local forge.",
+        .health = 972.0,
+        .damage = 1890.0,
+        .radius = 12.0,
+        .reload = 3.2,
+        .count = 1,
+        .rarity = RarityID::kUltra,
+        .attributes = { .armor_penetration = 0.5f }
+    },
+    {
+        .name = "Obsidian Blade",
+        .description = "Cuts armor. Volcano local forge.",
+        .health = 1944.0,
+        .damage = 3780.0,
+        .radius = 12.0,
+        .reload = 3.2,
+        .count = 1,
+        .rarity = RarityID::kSuper,
+        .attributes = { .armor_penetration = 0.5f }
+    },
+    {
+        .name = "Obsidian Blade",
+        .description = "Cuts armor. Volcano local forge.",
+        .health = 3888.0,
+        .damage = 7560.0,
+        .radius = 12.0,
+        .reload = 3.2,
+        .count = 1,
+        .rarity = RarityID::kUnique,
+        .attributes = { .armor_penetration = 0.5f }
+    },
+    {
+        .name = "Obsidian King Shield",
+        .description = "A massive shield that reflects damage when struck.",
+        .health = 336.0,
+        .damage = 9.0,
+        .radius = 24.0,
+        .reload = 7.5,
+        .count = 1,
+        .rarity = RarityID::kLegendary,
+        .attributes = { .damage_reflection = 0.28, .defend_only = 1 }
+    },
+    {
+        .name = "Obsidian King Shield",
+        .description = "A massive shield that reflects damage when struck.",
+        .health = 1008.0,
+        .damage = 27.0,
+        .radius = 24.0,
+        .reload = 7.5,
+        .count = 1,
+        .rarity = RarityID::kMythic,
+        .attributes = { .damage_reflection = 0.28, .defend_only = 1 }
+    },
+    {
+        .name = "Obsidian King Shield",
+        .description = "A massive shield that reflects damage when struck.",
+        .health = 2016.0,
+        .damage = 54.0,
+        .radius = 24.0,
+        .reload = 7.5,
+        .count = 1,
+        .rarity = RarityID::kUltra,
+        .attributes = { .damage_reflection = 0.28, .defend_only = 1 }
+    },
+    {
+        .name = "Obsidian King Shield",
+        .description = "A massive shield that reflects damage when struck.",
+        .health = 4032.0,
+        .damage = 108.0,
+        .radius = 24.0,
+        .reload = 7.5,
+        .count = 1,
+        .rarity = RarityID::kSuper,
+        .attributes = { .damage_reflection = 0.28, .defend_only = 1 }
+    },
+    {
+        .name = "Obsidian King Shield",
+        .description = "A massive shield that reflects damage when struck.",
+        .health = 8064.0,
+        .damage = 216.0,
+        .radius = 24.0,
+        .reload = 7.5,
+        .count = 1,
+        .rarity = RarityID::kUnique,
+        .attributes = { .damage_reflection = 0.28, .defend_only = 1 }
+    },
+    {
+        .name = "Peas",
+        .description = "4 in 1 deal, now with a secret ingredient: poison",
+        .health = 15.0,
+        .damage = 6.0,
+        .radius = 7.0,
+        .reload = 1.5,
+        .count = 4,
+        .rarity = RarityID::kLegendary,
+        .attributes = {
+            .clump_radius = 8,
+            .secondary_reload = 0.5,
+            .poison_damage = {
+                .damage = 60.0,
+                .time = 1.5
+            },
+            .defend_only = 1,
+            .split_projectile = 1,
+        }
+    },
+    {
+        .name = "Peas",
+        .description = "4 in 1 deal, now with a secret ingredient: poison",
+        .health = 45.0,
+        .damage = 18.0,
+        .radius = 7.0,
+        .reload = 1.5,
+        .count = 4,
+        .rarity = RarityID::kMythic,
+        .attributes = {
+            .clump_radius = 8,
+            .secondary_reload = 0.5,
+            .poison_damage = {
+                .damage = 180.0,
+                .time = 4.5
+            },
+            .defend_only = 1,
+            .split_projectile = 1,
+        }
+    },
+    {
+        .name = "Peas",
+        .description = "4 in 1 deal, now with a secret ingredient: poison",
+        .health = 90.0,
+        .damage = 36.0,
+        .radius = 7.0,
+        .reload = 1.5,
+        .count = 4,
+        .rarity = RarityID::kUltra,
+        .attributes = {
+            .clump_radius = 8,
+            .secondary_reload = 0.5,
+            .poison_damage = {
+                .damage = 360.0,
+                .time = 9.0
+            },
+            .defend_only = 1,
+            .split_projectile = 1,
+        }
+    },
+    {
+        .name = "Peas",
+        .description = "4 in 1 deal, now with a secret ingredient: poison",
+        .health = 180.0,
+        .damage = 72.0,
+        .radius = 7.0,
+        .reload = 1.5,
+        .count = 4,
+        .rarity = RarityID::kSuper,
+        .attributes = {
+            .clump_radius = 8,
+            .secondary_reload = 0.5,
+            .poison_damage = {
+                .damage = 720.0,
+                .time = 18.0
+            },
+            .defend_only = 1,
+            .split_projectile = 1,
+        }
+    },
+    {
+        .name = "Peas",
+        .description = "4 in 1 deal, now with a secret ingredient: poison",
+        .health = 360.0,
+        .damage = 144.0,
+        .radius = 7.0,
+        .reload = 1.5,
+        .count = 4,
+        .rarity = RarityID::kUnique,
+        .attributes = {
+            .clump_radius = 8,
+            .secondary_reload = 0.5,
+            .poison_damage = {
+                .damage = 1440.0,
+                .time = 36.0
+            },
+            .defend_only = 1,
+            .split_projectile = 1,
+        }
+    },
+    {
+        .name = "Permafrost Gear",
+        .description = "Extends petal orbit range and adds minor armor.",
+        .health = 159.0,
+        .damage = 51.0,
+        .radius = 18.0,
+        .reload = 5.0,
+        .count = 1,
+        .rarity = RarityID::kLegendary,
+        .attributes = { .armor = 4, .extra_range = 30 }
+    },
+    {
+        .name = "Permafrost Gear",
+        .description = "Extends petal orbit range and adds minor armor.",
+        .health = 477.0,
+        .damage = 153.0,
+        .radius = 18.0,
+        .reload = 5.0,
+        .count = 1,
+        .rarity = RarityID::kMythic,
+        .attributes = { .armor = 4, .extra_range = 30 }
+    },
+    {
+        .name = "Permafrost Gear",
+        .description = "Extends petal orbit range and adds minor armor.",
+        .health = 954.0,
+        .damage = 306.0,
+        .radius = 18.0,
+        .reload = 5.0,
+        .count = 1,
+        .rarity = RarityID::kUltra,
+        .attributes = { .armor = 4, .extra_range = 30 }
+    },
+    {
+        .name = "Permafrost Gear",
+        .description = "Extends petal orbit range and adds minor armor.",
+        .health = 1908.0,
+        .damage = 612.0,
+        .radius = 18.0,
+        .reload = 5.0,
+        .count = 1,
+        .rarity = RarityID::kSuper,
+        .attributes = { .armor = 4, .extra_range = 30 }
+    },
+    {
+        .name = "Permafrost Gear",
+        .description = "Extends petal orbit range and adds minor armor.",
+        .health = 3816.0,
+        .damage = 1224.0,
+        .radius = 18.0,
+        .reload = 5.0,
+        .count = 1,
+        .rarity = RarityID::kUnique,
+        .attributes = { .armor = 4, .extra_range = 30 }
+    },
+    {
+        .name = "Phantom Eye",
+        .description = "Amplifies your petal damage while equipped",
+        .health = 21.0,
+        .damage = 40.5,
+        .radius = 12.0,
+        .reload = 2.25,
+        .count = 2,
+        .rarity = RarityID::kEpic,
+        .attributes = {
+            .clump_radius = 9,
+            .extra_damage_factor = 1.12f
+        }
+    },
+    {
+        .name = "Phantom Eye",
+        .description = "Amplifies your petal damage while equipped",
+        .health = 63.0,
+        .damage = 121.5,
+        .radius = 12.0,
+        .reload = 2.25,
+        .count = 2,
+        .rarity = RarityID::kLegendary,
+        .attributes = {
+            .clump_radius = 9,
+            .extra_damage_factor = 1.12f
+        }
+    },
+    {
+        .name = "Phantom Eye",
+        .description = "Amplifies your petal damage while equipped",
+        .health = 189.0,
+        .damage = 364.5,
+        .radius = 12.0,
+        .reload = 2.25,
+        .count = 2,
+        .rarity = RarityID::kMythic,
+        .attributes = {
+            .clump_radius = 9,
+            .extra_damage_factor = 1.12f
+        }
+    },
+    {
+        .name = "Phantom Eye",
+        .description = "Amplifies your petal damage while equipped",
+        .health = 378.0,
+        .damage = 729.0,
+        .radius = 12.0,
+        .reload = 2.25,
+        .count = 2,
+        .rarity = RarityID::kUltra,
+        .attributes = {
+            .clump_radius = 9,
+            .extra_damage_factor = 1.12f
+        }
+    },
+    {
+        .name = "Phantom Eye",
+        .description = "Amplifies your petal damage while equipped",
+        .health = 756.0,
+        .damage = 1458.0,
+        .radius = 12.0,
+        .reload = 2.25,
+        .count = 2,
+        .rarity = RarityID::kSuper,
+        .attributes = {
+            .clump_radius = 9,
+            .extra_damage_factor = 1.12f
+        }
+    },
+    {
+        .name = "Phantom Eye",
+        .description = "Amplifies your petal damage while equipped",
+        .health = 1512.0,
+        .damage = 2916.0,
+        .radius = 12.0,
+        .reload = 2.25,
+        .count = 2,
+        .rarity = RarityID::kUnique,
+        .attributes = {
+            .clump_radius = 9,
+            .extra_damage_factor = 1.12f
+        }
+    },
+    {
+        .name = "Pheromone Star",
+        .description = "Colony pheromones that spin your petals faster.",
+        .health = 84.0,
+        .damage = 30.0,
+        .radius = 10.0,
+        .reload = 2.0,
+        .count = 1,
+        .rarity = RarityID::kEpic,
+        .attributes = { .extra_rotation_speed = 0.32 }
+    },
+    {
+        .name = "Pheromone Star",
+        .description = "Colony pheromones that spin your petals faster.",
+        .health = 252.0,
+        .damage = 90.0,
+        .radius = 10.0,
+        .reload = 2.0,
+        .count = 1,
+        .rarity = RarityID::kLegendary,
+        .attributes = { .extra_rotation_speed = 0.32 }
+    },
+    {
+        .name = "Pheromone Star",
+        .description = "Colony pheromones that spin your petals faster.",
+        .health = 756.0,
+        .damage = 270.0,
+        .radius = 10.0,
+        .reload = 2.0,
+        .count = 1,
+        .rarity = RarityID::kMythic,
+        .attributes = { .extra_rotation_speed = 0.32 }
+    },
+    {
+        .name = "Pheromone Star",
+        .description = "Colony pheromones that spin your petals faster.",
+        .health = 1512.0,
+        .damage = 540.0,
+        .radius = 10.0,
+        .reload = 2.0,
+        .count = 1,
+        .rarity = RarityID::kUltra,
+        .attributes = { .extra_rotation_speed = 0.32 }
+    },
+    {
+        .name = "Pheromone Star",
+        .description = "Colony pheromones that spin your petals faster.",
+        .health = 3024.0,
+        .damage = 1080.0,
+        .radius = 10.0,
+        .reload = 2.0,
+        .count = 1,
+        .rarity = RarityID::kSuper,
+        .attributes = { .extra_rotation_speed = 0.32 }
+    },
+    {
+        .name = "Pheromone Star",
+        .description = "Colony pheromones that spin your petals faster.",
+        .health = 6048.0,
+        .damage = 2160.0,
+        .radius = 10.0,
+        .reload = 2.0,
+        .count = 1,
+        .rarity = RarityID::kUnique,
+        .attributes = { .extra_rotation_speed = 0.32 }
+    },
+    {
+        .name = "Pincer",
+        .description = "Poisons and slows targets for a short duration",
+        .health = 30.0,
+        .damage = 30.0,
+        .radius = 10.0,
+        .reload = 2.5,
+        .count = 1,
+        .rarity = RarityID::kEpic,
+        .attributes = {
+            .slow_inflict_seconds = 2,
+            .poison_damage = {
+                .damage = 15.0,
+                .time = 3.0
+            },
+            .icon_angle = 0.7
+        }
+    },
+    {
+        .name = "Pincer",
+        .description = "Poisons and slows targets for a short duration",
+        .health = 90.0,
+        .damage = 90.0,
+        .radius = 10.0,
+        .reload = 2.5,
+        .count = 1,
+        .rarity = RarityID::kLegendary,
+        .attributes = {
+            .slow_inflict_seconds = 2,
+            .poison_damage = {
+                .damage = 45.0,
+                .time = 9.0
+            },
+            .icon_angle = 0.7
+        }
+    },
+    {
+        .name = "Pincer",
+        .description = "Poisons and slows targets for a short duration",
+        .health = 270.0,
+        .damage = 270.0,
+        .radius = 10.0,
+        .reload = 2.5,
+        .count = 1,
+        .rarity = RarityID::kMythic,
+        .attributes = {
+            .slow_inflict_seconds = 2,
+            .poison_damage = {
+                .damage = 135.0,
+                .time = 27.0
+            },
+            .icon_angle = 0.7
+        }
+    },
+    {
+        .name = "Pincer",
+        .description = "Poisons and slows targets for a short duration",
+        .health = 540.0,
+        .damage = 540.0,
+        .radius = 10.0,
+        .reload = 2.5,
+        .count = 1,
+        .rarity = RarityID::kUltra,
+        .attributes = {
+            .slow_inflict_seconds = 2,
+            .poison_damage = {
+                .damage = 270.0,
+                .time = 54.0
+            },
+            .icon_angle = 0.7
+        }
+    },
+    {
+        .name = "Pincer",
+        .description = "Poisons and slows targets for a short duration",
+        .health = 1080.0,
+        .damage = 1080.0,
+        .radius = 10.0,
+        .reload = 2.5,
+        .count = 1,
+        .rarity = RarityID::kSuper,
+        .attributes = {
+            .slow_inflict_seconds = 2,
+            .poison_damage = {
+                .damage = 540.0,
+                .time = 108.0
+            },
+            .icon_angle = 0.7
+        }
+    },
+    {
+        .name = "Pincer",
+        .description = "Poisons and slows targets for a short duration",
+        .health = 2160.0,
+        .damage = 2160.0,
+        .radius = 10.0,
+        .reload = 2.5,
+        .count = 1,
+        .rarity = RarityID::kUnique,
+        .attributes = {
+            .slow_inflict_seconds = 2,
+            .poison_damage = {
+                .damage = 1080.0,
+                .time = 216.0
+            },
+            .icon_angle = 0.7
+        }
+    },
+    {
+        .name = "Poison Ant Nest",
+        .description = "Hatches a spore ant to fight for you",
+        .health = 168.0,
+        .damage = 0.0,
+        .radius = 20.0,
+        .reload = 14.0,
+        .count = 1,
+        .rarity = RarityID::kLegendary,
+        .attributes = {
+            .secondary_reload = 3.0,
+            .defend_only = 1,
+            .rotation_style = PetalAttributes::kNoRot,
+            .spawns = MobID::kSporeAnt
+        }
+    },
+    {
+        .name = "Poison Ant Nest",
+        .description = "Hatches a spore ant to fight for you",
+        .health = 504.0,
+        .damage = 0.0,
+        .radius = 20.0,
+        .reload = 14.0,
+        .count = 1,
+        .rarity = RarityID::kMythic,
+        .attributes = {
+            .secondary_reload = 3.0,
+            .defend_only = 1,
+            .rotation_style = PetalAttributes::kNoRot,
+            .spawns = MobID::kSporeAnt
+        }
+    },
+    {
+        .name = "Poison Ant Nest",
+        .description = "Hatches a spore ant to fight for you",
+        .health = 1008.0,
+        .damage = 0.0,
+        .radius = 20.0,
+        .reload = 14.0,
+        .count = 1,
+        .rarity = RarityID::kUltra,
+        .attributes = {
+            .secondary_reload = 3.0,
+            .defend_only = 1,
+            .rotation_style = PetalAttributes::kNoRot,
+            .spawns = MobID::kSporeAnt
+        }
+    },
+    {
+        .name = "Poison Ant Nest",
+        .description = "Hatches a spore ant to fight for you",
+        .health = 2016.0,
+        .damage = 0.0,
+        .radius = 20.0,
+        .reload = 14.0,
+        .count = 1,
+        .rarity = RarityID::kSuper,
+        .attributes = {
+            .secondary_reload = 3.0,
+            .defend_only = 1,
+            .rotation_style = PetalAttributes::kNoRot,
+            .spawns = MobID::kSporeAnt
+        }
+    },
+    {
+        .name = "Poison Ant Nest",
+        .description = "Hatches a spore ant to fight for you",
+        .health = 4032.0,
+        .damage = 0.0,
+        .radius = 20.0,
+        .reload = 14.0,
+        .count = 1,
+        .rarity = RarityID::kUnique,
+        .attributes = {
+            .secondary_reload = 3.0,
+            .defend_only = 1,
+            .rotation_style = PetalAttributes::kNoRot,
+            .spawns = MobID::kSporeAnt
+        }
+    },
+    {
+        .name = "Poison Spore",
+        .description = "A purple spore that poisons on contact",
+        .health = 27.0,
+        .damage = 24.0,
+        .radius = 12.0,
+        .reload = 2.5,
+        .count = 2,
+        .rarity = RarityID::kRare,
+        .attributes = { .clump_radius = 9, .poison_damage = { .damage = 18.0, .time = 9.0 } }
+    },
+    {
+        .name = "Poison Spore",
+        .description = "A purple spore that poisons on contact",
+        .health = 81.0,
+        .damage = 72.0,
+        .radius = 12.0,
+        .reload = 2.5,
+        .count = 2,
+        .rarity = RarityID::kEpic,
+        .attributes = { .clump_radius = 9, .poison_damage = { .damage = 54.0, .time = 27.0 } }
+    },
+    {
+        .name = "Poison Spore",
+        .description = "A purple spore that poisons on contact",
+        .health = 243.0,
+        .damage = 216.0,
+        .radius = 12.0,
+        .reload = 2.5,
+        .count = 2,
+        .rarity = RarityID::kLegendary,
+        .attributes = { .clump_radius = 9, .poison_damage = { .damage = 162.0, .time = 81.0 } }
+    },
+    {
+        .name = "Poison Spore",
+        .description = "A purple spore that poisons on contact",
+        .health = 729.0,
+        .damage = 648.0,
+        .radius = 12.0,
+        .reload = 2.5,
+        .count = 2,
+        .rarity = RarityID::kMythic,
+        .attributes = { .clump_radius = 9, .poison_damage = { .damage = 486.0, .time = 243.0 } }
+    },
+    {
+        .name = "Poison Spore",
+        .description = "A purple spore that poisons on contact",
+        .health = 1458.0,
+        .damage = 1296.0,
+        .radius = 12.0,
+        .reload = 2.5,
+        .count = 2,
+        .rarity = RarityID::kUltra,
+        .attributes = { .clump_radius = 9, .poison_damage = { .damage = 972.0, .time = 486.0 } }
+    },
+    {
+        .name = "Poison Spore",
+        .description = "A purple spore that poisons on contact",
+        .health = 2916.0,
+        .damage = 2592.0,
+        .radius = 12.0,
+        .reload = 2.5,
+        .count = 2,
+        .rarity = RarityID::kSuper,
+        .attributes = { .clump_radius = 9, .poison_damage = { .damage = 1944.0, .time = 972.0 } }
+    },
+    {
+        .name = "Poison Spore",
+        .description = "A purple spore that poisons on contact",
+        .health = 5832.0,
+        .damage = 5184.0,
+        .radius = 12.0,
+        .reload = 2.5,
+        .count = 2,
+        .rarity = RarityID::kUnique,
+        .attributes = { .clump_radius = 9, .poison_damage = { .damage = 3888.0, .time = 1944.0 } }
+    },
+    {
+        .name = "Pollen",
+        .description = "Scatter pollen shots when defending",
+        .health = 21.0,
+        .damage = 24.0,
+        .radius = 7.0,
+        .reload = 1.5,
+        .count = 3,
+        .rarity = RarityID::kLegendary,
+        .attributes = {
+            .secondary_reload = 0.5,
+            .defend_only = 1
+        }
+    },
+    {
+        .name = "Pollen",
+        .description = "Scatter pollen shots when defending",
+        .health = 63.0,
+        .damage = 72.0,
+        .radius = 7.0,
+        .reload = 1.5,
+        .count = 3,
+        .rarity = RarityID::kMythic,
+        .attributes = {
+            .secondary_reload = 0.5,
+            .defend_only = 1
+        }
+    },
+    {
+        .name = "Pollen",
+        .description = "Scatter pollen shots when defending",
+        .health = 126.0,
+        .damage = 144.0,
+        .radius = 7.0,
+        .reload = 1.5,
+        .count = 3,
+        .rarity = RarityID::kUltra,
+        .attributes = {
+            .secondary_reload = 0.5,
+            .defend_only = 1
+        }
+    },
+    {
+        .name = "Pollen",
+        .description = "Scatter pollen shots when defending",
+        .health = 252.0,
+        .damage = 288.0,
+        .radius = 7.0,
+        .reload = 1.5,
+        .count = 3,
+        .rarity = RarityID::kSuper,
+        .attributes = {
+            .secondary_reload = 0.5,
+            .defend_only = 1
+        }
+    },
+    {
+        .name = "Pollen",
+        .description = "Scatter pollen shots when defending",
+        .health = 504.0,
+        .damage = 576.0,
+        .radius = 7.0,
+        .reload = 1.5,
+        .count = 3,
+        .rarity = RarityID::kUnique,
+        .attributes = {
+            .secondary_reload = 0.5,
+            .defend_only = 1
+        }
+    },
+    {
+        .name = "Pollen Sandstorm",
+        .description = "Healing aura. Garden x Desert border rite.",
+        .health = 126.0,
+        .damage = 0.0,
+        .radius = 18.0,
+        .reload = 7.0,
+        .count = 1,
+        .rarity = RarityID::kLegendary,
+        .attributes = {
+            .secondary_reload = 0.5,
+            .aura_heal = 9.0,
+            .aura_radius = 285.0,
+            .aura_duration = 4.0,
+            .defend_only = 1
+        }
+    },
+    {
+        .name = "Pollen Sandstorm",
+        .description = "Healing aura. Garden x Desert border rite.",
+        .health = 378.0,
+        .damage = 0.0,
+        .radius = 18.0,
+        .reload = 7.0,
+        .count = 1,
+        .rarity = RarityID::kMythic,
+        .attributes = {
+            .secondary_reload = 0.5,
+            .aura_heal = 27.0,
+            .aura_radius = 855.0,
+            .aura_duration = 4.0,
+            .defend_only = 1
+        }
+    },
+    {
+        .name = "Pollen Sandstorm",
+        .description = "Healing aura. Garden x Desert border rite.",
+        .health = 756.0,
+        .damage = 0.0,
+        .radius = 18.0,
+        .reload = 7.0,
+        .count = 1,
+        .rarity = RarityID::kUltra,
+        .attributes = {
+            .secondary_reload = 0.5,
+            .aura_heal = 54.0,
+            .aura_radius = 1710.0,
+            .aura_duration = 4.0,
+            .defend_only = 1
+        }
+    },
+    {
+        .name = "Pollen Sandstorm",
+        .description = "Healing aura. Garden x Desert border rite.",
+        .health = 1512.0,
+        .damage = 0.0,
+        .radius = 18.0,
+        .reload = 7.0,
+        .count = 1,
+        .rarity = RarityID::kSuper,
+        .attributes = {
+            .secondary_reload = 0.5,
+            .aura_heal = 108.0,
+            .aura_radius = 3420.0,
+            .aura_duration = 4.0,
+            .defend_only = 1
+        }
+    },
+    {
+        .name = "Pollen Sandstorm",
+        .description = "Healing aura. Garden x Desert border rite.",
+        .health = 3024.0,
+        .damage = 0.0,
+        .radius = 18.0,
+        .reload = 7.0,
+        .count = 1,
+        .rarity = RarityID::kUnique,
+        .attributes = {
+            .secondary_reload = 0.5,
+            .aura_heal = 216.0,
+            .aura_radius = 6840.0,
+            .aura_duration = 4.0,
+            .defend_only = 1
+        }
+    },
+    {
+        .name = "Queen's Emblem",
+        .description = "A royal badge that periodically summons a soldier ant.",
+        .health = 165.0,
+        .damage = 0.0,
+        .radius = 12.0,
+        .reload = 12.0,
+        .count = 1,
+        .rarity = RarityID::kMythic,
+        .attributes = {
+            .secondary_reload = 5.0,
+            .defend_only = 1,
+            .rotation_style = PetalAttributes::kNoRot,
+            .spawns = MobID::kSoldierAnt,
+            .spawn_count = 2
+        }
+    },
+    {
+        .name = "Queen's Emblem",
+        .description = "A royal badge that periodically summons a soldier ant.",
+        .health = 330.0,
+        .damage = 0.0,
+        .radius = 12.0,
+        .reload = 12.0,
+        .count = 1,
+        .rarity = RarityID::kUltra,
+        .attributes = {
+            .secondary_reload = 5.0,
+            .defend_only = 1,
+            .rotation_style = PetalAttributes::kNoRot,
+            .spawns = MobID::kSoldierAnt,
+            .spawn_count = 2
+        }
+    },
+    {
+        .name = "Queen's Emblem",
+        .description = "A royal badge that periodically summons a soldier ant.",
+        .health = 660.0,
+        .damage = 0.0,
+        .radius = 12.0,
+        .reload = 12.0,
+        .count = 1,
+        .rarity = RarityID::kSuper,
+        .attributes = {
+            .secondary_reload = 5.0,
+            .defend_only = 1,
+            .rotation_style = PetalAttributes::kNoRot,
+            .spawns = MobID::kSoldierAnt,
+            .spawn_count = 2
+        }
+    },
+    {
+        .name = "Queen's Emblem",
+        .description = "A royal badge that periodically summons a soldier ant.",
+        .health = 1320.0,
+        .damage = 0.0,
+        .radius = 12.0,
+        .reload = 12.0,
+        .count = 1,
+        .rarity = RarityID::kUnique,
+        .attributes = {
+            .secondary_reload = 5.0,
+            .defend_only = 1,
+            .rotation_style = PetalAttributes::kNoRot,
+            .spawns = MobID::kSoldierAnt,
+            .spawn_count = 2
+        }
+    },
+    {
+        .name = "Quicksand Orb",
+        .description = "Slows on contact. Sealed with a sandstorm eye.",
+        .health = 87.0,
+        .damage = 24.0,
+        .radius = 14.0,
+        .reload = 3.0,
+        .count = 1,
+        .rarity = RarityID::kEpic,
+        .attributes = { .slow_inflict_seconds = 0.65 }
+    },
+    {
+        .name = "Quicksand Orb",
+        .description = "Slows on contact. Sealed with a sandstorm eye.",
+        .health = 261.0,
+        .damage = 72.0,
+        .radius = 14.0,
+        .reload = 3.0,
+        .count = 1,
+        .rarity = RarityID::kLegendary,
+        .attributes = { .slow_inflict_seconds = 0.65 }
+    },
+    {
+        .name = "Quicksand Orb",
+        .description = "Slows on contact. Sealed with a sandstorm eye.",
+        .health = 783.0,
+        .damage = 216.0,
+        .radius = 14.0,
+        .reload = 3.0,
+        .count = 1,
+        .rarity = RarityID::kMythic,
+        .attributes = { .slow_inflict_seconds = 0.65 }
+    },
+    {
+        .name = "Quicksand Orb",
+        .description = "Slows on contact. Sealed with a sandstorm eye.",
+        .health = 1566.0,
+        .damage = 432.0,
+        .radius = 14.0,
+        .reload = 3.0,
+        .count = 1,
+        .rarity = RarityID::kUltra,
+        .attributes = { .slow_inflict_seconds = 0.65 }
+    },
+    {
+        .name = "Quicksand Orb",
+        .description = "Slows on contact. Sealed with a sandstorm eye.",
+        .health = 3132.0,
+        .damage = 864.0,
+        .radius = 14.0,
+        .reload = 3.0,
+        .count = 1,
+        .rarity = RarityID::kSuper,
+        .attributes = { .slow_inflict_seconds = 0.65 }
+    },
+    {
+        .name = "Quicksand Orb",
+        .description = "Slows on contact. Sealed with a sandstorm eye.",
+        .health = 6264.0,
+        .damage = 1728.0,
+        .radius = 14.0,
+        .reload = 3.0,
+        .count = 1,
+        .rarity = RarityID::kUnique,
+        .attributes = { .slow_inflict_seconds = 0.65 }
+    },
+    {
+        .name = "Rice",
+        .description = "Spawns instantly, but not very strong",
+        .health = 3.0,
+        .damage = 12.0,
+        .radius = 13.0,
+        .reload = 0.12,
+        .count = 1,
+        .rarity = RarityID::kLegendary,
+        .attributes = {
+            .icon_angle = 0.7
+        }
+    },
+    {
+        .name = "Rice",
+        .description = "Spawns instantly, but not very strong",
+        .health = 9.0,
+        .damage = 36.0,
+        .radius = 13.0,
+        .reload = 0.12,
+        .count = 1,
+        .rarity = RarityID::kMythic,
+        .attributes = {
+            .icon_angle = 0.7
+        }
+    },
+    {
+        .name = "Rice",
+        .description = "Spawns instantly, but not very strong",
+        .health = 18.0,
+        .damage = 72.0,
+        .radius = 13.0,
+        .reload = 0.12,
+        .count = 1,
+        .rarity = RarityID::kUltra,
+        .attributes = {
+            .icon_angle = 0.7
+        }
+    },
+    {
+        .name = "Rice",
+        .description = "Spawns instantly, but not very strong",
+        .health = 36.0,
+        .damage = 144.0,
+        .radius = 13.0,
+        .reload = 0.12,
+        .count = 1,
+        .rarity = RarityID::kSuper,
+        .attributes = {
+            .icon_angle = 0.7
+        }
+    },
+    {
+        .name = "Rice",
+        .description = "Spawns instantly, but not very strong",
+        .health = 72.0,
+        .damage = 288.0,
+        .radius = 13.0,
+        .reload = 0.12,
+        .count = 1,
+        .rarity = RarityID::kUnique,
+        .attributes = {
+            .icon_angle = 0.7
+        }
+    },
+    {
+        .name = "Rotwood",
+        .description = "Lingering poison. Jungle rotwood craft.",
+        .health = 111.0,
+        .damage = 24.0,
+        .radius = 16.0,
+        .reload = 4.2,
+        .count = 1,
+        .rarity = RarityID::kEpic,
+        .attributes = { .poison_damage = { .damage = 12.0, .time = 15.0 } }
+    },
+    {
+        .name = "Rotwood",
+        .description = "Lingering poison. Jungle rotwood craft.",
+        .health = 333.0,
+        .damage = 72.0,
+        .radius = 16.0,
+        .reload = 4.2,
+        .count = 1,
+        .rarity = RarityID::kLegendary,
+        .attributes = { .poison_damage = { .damage = 36.0, .time = 45.0 } }
+    },
+    {
+        .name = "Rotwood",
+        .description = "Lingering poison. Jungle rotwood craft.",
+        .health = 999.0,
+        .damage = 216.0,
+        .radius = 16.0,
+        .reload = 4.2,
+        .count = 1,
+        .rarity = RarityID::kMythic,
+        .attributes = { .poison_damage = { .damage = 108.0, .time = 135.0 } }
+    },
+    {
+        .name = "Rotwood",
+        .description = "Lingering poison. Jungle rotwood craft.",
+        .health = 1998.0,
+        .damage = 432.0,
+        .radius = 16.0,
+        .reload = 4.2,
+        .count = 1,
+        .rarity = RarityID::kUltra,
+        .attributes = { .poison_damage = { .damage = 216.0, .time = 270.0 } }
+    },
+    {
+        .name = "Rotwood",
+        .description = "Lingering poison. Jungle rotwood craft.",
+        .health = 3996.0,
+        .damage = 864.0,
+        .radius = 16.0,
+        .reload = 4.2,
+        .count = 1,
+        .rarity = RarityID::kSuper,
+        .attributes = { .poison_damage = { .damage = 432.0, .time = 540.0 } }
+    },
+    {
+        .name = "Rotwood",
+        .description = "Lingering poison. Jungle rotwood craft.",
+        .health = 7992.0,
+        .damage = 1728.0,
+        .radius = 16.0,
+        .reload = 4.2,
+        .count = 1,
+        .rarity = RarityID::kUnique,
+        .attributes = { .poison_damage = { .damage = 864.0, .time = 1080.0 } }
+    },
+    {
+        .name = "Royal Banner",
+        .description = "Inspires faster petal spin while equipped",
+        .health = 42.0,
+        .damage = 16.5,
+        .radius = 15.0,
+        .reload = 3.0,
+        .count = 1,
+        .rarity = RarityID::kRare,
+        .attributes = {
+            .extra_rotation_speed = 0.35f
+        }
+    },
+    {
+        .name = "Royal Banner",
+        .description = "Inspires faster petal spin while equipped",
+        .health = 126.0,
+        .damage = 49.5,
+        .radius = 15.0,
+        .reload = 3.0,
+        .count = 1,
+        .rarity = RarityID::kEpic,
+        .attributes = {
+            .extra_rotation_speed = 0.35f
+        }
+    },
+    {
+        .name = "Royal Banner",
+        .description = "Inspires faster petal spin while equipped",
+        .health = 378.0,
+        .damage = 148.5,
+        .radius = 15.0,
+        .reload = 3.0,
+        .count = 1,
+        .rarity = RarityID::kLegendary,
+        .attributes = {
+            .extra_rotation_speed = 0.35f
+        }
+    },
+    {
+        .name = "Royal Banner",
+        .description = "Inspires faster petal spin while equipped",
+        .health = 1134.0,
+        .damage = 445.5,
+        .radius = 15.0,
+        .reload = 3.0,
+        .count = 1,
+        .rarity = RarityID::kMythic,
+        .attributes = {
+            .extra_rotation_speed = 0.35f
+        }
+    },
+    {
+        .name = "Royal Banner",
+        .description = "Inspires faster petal spin while equipped",
+        .health = 2268.0,
+        .damage = 891.0,
+        .radius = 15.0,
+        .reload = 3.0,
+        .count = 1,
+        .rarity = RarityID::kUltra,
+        .attributes = {
+            .extra_rotation_speed = 0.35f
+        }
+    },
+    {
+        .name = "Royal Banner",
+        .description = "Inspires faster petal spin while equipped",
+        .health = 4536.0,
+        .damage = 1782.0,
+        .radius = 15.0,
+        .reload = 3.0,
+        .count = 1,
+        .rarity = RarityID::kSuper,
+        .attributes = {
+            .extra_rotation_speed = 0.35f
+        }
+    },
+    {
+        .name = "Royal Banner",
+        .description = "Inspires faster petal spin while equipped",
+        .health = 9072.0,
+        .damage = 3564.0,
+        .radius = 15.0,
+        .reload = 3.0,
+        .count = 1,
+        .rarity = RarityID::kUnique,
+        .attributes = {
+            .extra_rotation_speed = 0.35f
+        }
+    },
+    {
+        .name = "Royal Carapace",
+        .description = "Gold-lined royal plate with heavy protection.",
+        .health = 540.0,
+        .damage = 36.0,
+        .radius = 13.0,
+        .reload = 5.0,
+        .count = 1,
+        .rarity = RarityID::kLegendary,
+        .attributes = { .armor = 10, .extra_health = 25 }
+    },
+    {
+        .name = "Royal Carapace",
+        .description = "Gold-lined royal plate with heavy protection.",
+        .health = 1620.0,
+        .damage = 108.0,
+        .radius = 13.0,
+        .reload = 5.0,
+        .count = 1,
+        .rarity = RarityID::kMythic,
+        .attributes = { .armor = 10, .extra_health = 25 }
+    },
+    {
+        .name = "Royal Carapace",
+        .description = "Gold-lined royal plate with heavy protection.",
+        .health = 3240.0,
+        .damage = 216.0,
+        .radius = 13.0,
+        .reload = 5.0,
+        .count = 1,
+        .rarity = RarityID::kUltra,
+        .attributes = { .armor = 10, .extra_health = 25 }
+    },
+    {
+        .name = "Royal Carapace",
+        .description = "Gold-lined royal plate with heavy protection.",
+        .health = 6480.0,
+        .damage = 432.0,
+        .radius = 13.0,
+        .reload = 5.0,
+        .count = 1,
+        .rarity = RarityID::kSuper,
+        .attributes = { .armor = 10, .extra_health = 25 }
+    },
+    {
+        .name = "Royal Carapace",
+        .description = "Gold-lined royal plate with heavy protection.",
+        .health = 12960.0,
+        .damage = 864.0,
+        .radius = 13.0,
+        .reload = 5.0,
+        .count = 1,
+        .rarity = RarityID::kUnique,
+        .attributes = { .armor = 10, .extra_health = 25 }
+    },
+    {
+        .name = "Royal Rose",
+        .description = "A regal rose that leaves lingering poison",
+        .health = 27.0,
+        .damage = 25.5,
+        .radius = 14.0,
+        .reload = 2.5,
+        .count = 2,
+        .rarity = RarityID::kEpic,
+        .attributes = {
+            .clump_radius = 10,
+            .poison_damage = { .damage = 24.0, .time = 9.0 }
+        }
+    },
+    {
+        .name = "Royal Rose",
+        .description = "A regal rose that leaves lingering poison",
+        .health = 81.0,
+        .damage = 76.5,
+        .radius = 14.0,
+        .reload = 2.5,
+        .count = 2,
+        .rarity = RarityID::kLegendary,
+        .attributes = {
+            .clump_radius = 10,
+            .poison_damage = { .damage = 72.0, .time = 27.0 }
+        }
+    },
+    {
+        .name = "Royal Rose",
+        .description = "A regal rose that leaves lingering poison",
+        .health = 243.0,
+        .damage = 229.5,
+        .radius = 14.0,
+        .reload = 2.5,
+        .count = 2,
+        .rarity = RarityID::kMythic,
+        .attributes = {
+            .clump_radius = 10,
+            .poison_damage = { .damage = 216.0, .time = 81.0 }
+        }
+    },
+    {
+        .name = "Royal Rose",
+        .description = "A regal rose that leaves lingering poison",
+        .health = 486.0,
+        .damage = 459.0,
+        .radius = 14.0,
+        .reload = 2.5,
+        .count = 2,
+        .rarity = RarityID::kUltra,
+        .attributes = {
+            .clump_radius = 10,
+            .poison_damage = { .damage = 432.0, .time = 162.0 }
+        }
+    },
+    {
+        .name = "Royal Rose",
+        .description = "A regal rose that leaves lingering poison",
+        .health = 972.0,
+        .damage = 918.0,
+        .radius = 14.0,
+        .reload = 2.5,
+        .count = 2,
+        .rarity = RarityID::kSuper,
+        .attributes = {
+            .clump_radius = 10,
+            .poison_damage = { .damage = 864.0, .time = 324.0 }
+        }
+    },
+    {
+        .name = "Royal Rose",
+        .description = "A regal rose that leaves lingering poison",
+        .health = 1944.0,
+        .damage = 1836.0,
+        .radius = 14.0,
+        .reload = 2.5,
+        .count = 2,
+        .rarity = RarityID::kUnique,
+        .attributes = {
+            .clump_radius = 10,
+            .poison_damage = { .damage = 1728.0, .time = 648.0 }
+        }
+    },
+    {
+        .name = "Royal Spear",
+        .description = "A long royal spear with extended reach",
+        .health = 25.5,
+        .damage = 60.0,
+        .radius = 17.0,
+        .reload = 4.5,
+        .count = 1,
+        .rarity = RarityID::kEpic,
+        .attributes = {
+            .extra_range = 45.f,
+            .icon_angle = 0.5
+        }
+    },
+    {
+        .name = "Royal Spear",
+        .description = "A long royal spear with extended reach",
+        .health = 76.5,
+        .damage = 180.0,
+        .radius = 17.0,
+        .reload = 4.5,
+        .count = 1,
+        .rarity = RarityID::kLegendary,
+        .attributes = {
+            .extra_range = 45.f,
+            .icon_angle = 0.5
+        }
+    },
+    {
+        .name = "Royal Spear",
+        .description = "A long royal spear with extended reach",
+        .health = 229.5,
+        .damage = 540.0,
+        .radius = 17.0,
+        .reload = 4.5,
+        .count = 1,
+        .rarity = RarityID::kMythic,
+        .attributes = {
+            .extra_range = 45.f,
+            .icon_angle = 0.5
+        }
+    },
+    {
+        .name = "Royal Spear",
+        .description = "A long royal spear with extended reach",
+        .health = 459.0,
+        .damage = 1080.0,
+        .radius = 17.0,
+        .reload = 4.5,
+        .count = 1,
+        .rarity = RarityID::kUltra,
+        .attributes = {
+            .extra_range = 45.f,
+            .icon_angle = 0.5
+        }
+    },
+    {
+        .name = "Royal Spear",
+        .description = "A long royal spear with extended reach",
+        .health = 918.0,
+        .damage = 2160.0,
+        .radius = 17.0,
+        .reload = 4.5,
+        .count = 1,
+        .rarity = RarityID::kSuper,
+        .attributes = {
+            .extra_range = 45.f,
+            .icon_angle = 0.5
+        }
+    },
+    {
+        .name = "Royal Spear",
+        .description = "A long royal spear with extended reach",
+        .health = 1836.0,
+        .damage = 4320.0,
+        .radius = 17.0,
+        .reload = 4.5,
+        .count = 1,
+        .rarity = RarityID::kUnique,
+        .attributes = {
+            .extra_range = 45.f,
+            .icon_angle = 0.5
+        }
+    },
+    {
+        .name = "Royal Thorn",
+        .description = "A royal thorn that executes low-health foes with amplified damage",
+        .health = 108.0,
+        .damage = 99.0,
+        .radius = 14.0,
+        .reload = 4.4,
+        .count = 1,
+        .rarity = RarityID::kLegendary,
+        .attributes = {
+            .extra_damage_factor = 1.16f,
+            .execute_threshold = 0.25f,
+            .execute_factor = 1.6f
+        }
+    },
+    {
+        .name = "Royal Thorn",
+        .description = "A royal thorn that executes low-health foes with amplified damage",
+        .health = 324.0,
+        .damage = 297.0,
+        .radius = 14.0,
+        .reload = 4.4,
+        .count = 1,
+        .rarity = RarityID::kMythic,
+        .attributes = {
+            .extra_damage_factor = 1.16f,
+            .execute_threshold = 0.25f,
+            .execute_factor = 1.6f
+        }
+    },
+    {
+        .name = "Royal Thorn",
+        .description = "A royal thorn that executes low-health foes with amplified damage",
+        .health = 648.0,
+        .damage = 594.0,
+        .radius = 14.0,
+        .reload = 4.4,
+        .count = 1,
+        .rarity = RarityID::kUltra,
+        .attributes = {
+            .extra_damage_factor = 1.16f,
+            .execute_threshold = 0.25f,
+            .execute_factor = 1.6f
+        }
+    },
+    {
+        .name = "Royal Thorn",
+        .description = "A royal thorn that executes low-health foes with amplified damage",
+        .health = 1296.0,
+        .damage = 1188.0,
+        .radius = 14.0,
+        .reload = 4.4,
+        .count = 1,
+        .rarity = RarityID::kSuper,
+        .attributes = {
+            .extra_damage_factor = 1.16f,
+            .execute_threshold = 0.25f,
+            .execute_factor = 1.6f
+        }
+    },
+    {
+        .name = "Royal Thorn",
+        .description = "A royal thorn that executes low-health foes with amplified damage",
+        .health = 2592.0,
+        .damage = 2376.0,
+        .radius = 14.0,
+        .reload = 4.4,
+        .count = 1,
+        .rarity = RarityID::kUnique,
+        .attributes = {
+            .extra_damage_factor = 1.16f,
+            .execute_threshold = 0.25f,
+            .execute_factor = 1.6f
+        }
+    },
+    {
+        .name = "Rust Needle",
+        .description = "Fast rusty needles that poke often",
+        .health = 16.5,
+        .damage = 19.5,
+        .radius = 10.0,
+        .reload = 1.6,
+        .count = 3,
+        .rarity = RarityID::kUnusual,
+        .attributes = {
+            .clump_radius = 8
+        }
+    },
+    {
+        .name = "Rust Needle",
+        .description = "Fast rusty needles that poke often",
+        .health = 49.5,
+        .damage = 58.5,
+        .radius = 10.0,
+        .reload = 1.6,
+        .count = 3,
+        .rarity = RarityID::kRare,
+        .attributes = {
+            .clump_radius = 8
+        }
+    },
+    {
+        .name = "Rust Needle",
+        .description = "Fast rusty needles that poke often",
+        .health = 148.5,
+        .damage = 175.5,
+        .radius = 10.0,
+        .reload = 1.6,
+        .count = 3,
+        .rarity = RarityID::kEpic,
+        .attributes = {
+            .clump_radius = 8
+        }
+    },
+    {
+        .name = "Rust Needle",
+        .description = "Fast rusty needles that poke often",
+        .health = 445.5,
+        .damage = 526.5,
+        .radius = 10.0,
+        .reload = 1.6,
+        .count = 3,
+        .rarity = RarityID::kLegendary,
+        .attributes = {
+            .clump_radius = 8
+        }
+    },
+    {
+        .name = "Rust Needle",
+        .description = "Fast rusty needles that poke often",
+        .health = 1336.5,
+        .damage = 1579.5,
+        .radius = 10.0,
+        .reload = 1.6,
+        .count = 3,
+        .rarity = RarityID::kMythic,
+        .attributes = {
+            .clump_radius = 8
+        }
+    },
+    {
+        .name = "Rust Needle",
+        .description = "Fast rusty needles that poke often",
+        .health = 2673.0,
+        .damage = 3159.0,
+        .radius = 10.0,
+        .reload = 1.6,
+        .count = 3,
+        .rarity = RarityID::kUltra,
+        .attributes = {
+            .clump_radius = 8
+        }
+    },
+    {
+        .name = "Rust Needle",
+        .description = "Fast rusty needles that poke often",
+        .health = 5346.0,
+        .damage = 6318.0,
+        .radius = 10.0,
+        .reload = 1.6,
+        .count = 3,
+        .rarity = RarityID::kSuper,
+        .attributes = {
+            .clump_radius = 8
+        }
+    },
+    {
+        .name = "Rust Needle",
+        .description = "Fast rusty needles that poke often",
+        .health = 10692.0,
+        .damage = 12636.0,
+        .radius = 10.0,
+        .reload = 1.6,
+        .count = 3,
+        .rarity = RarityID::kUnique,
+        .attributes = {
+            .clump_radius = 8
+        }
+    },
+    {
+        .name = "Salt",
+        .description = "Reflects some damage dealt to the flower. Does not stack with itself",
+        .health = 30.0,
+        .damage = 30.0,
+        .radius = 10.0,
+        .reload = 2.5,
+        .count = 1,
+        .rarity = RarityID::kEpic,
+        .attributes = {
+            .damage_reflection = 0.25
+        }
+    },
+    {
+        .name = "Salt",
+        .description = "Reflects some damage dealt to the flower. Does not stack with itself",
+        .health = 90.0,
+        .damage = 90.0,
+        .radius = 10.0,
+        .reload = 2.5,
+        .count = 1,
+        .rarity = RarityID::kLegendary,
+        .attributes = {
+            .damage_reflection = 0.25
+        }
+    },
+    {
+        .name = "Salt",
+        .description = "Reflects some damage dealt to the flower. Does not stack with itself",
+        .health = 270.0,
+        .damage = 270.0,
+        .radius = 10.0,
+        .reload = 2.5,
+        .count = 1,
+        .rarity = RarityID::kMythic,
+        .attributes = {
+            .damage_reflection = 0.25
+        }
+    },
+    {
+        .name = "Salt",
+        .description = "Reflects some damage dealt to the flower. Does not stack with itself",
+        .health = 540.0,
+        .damage = 540.0,
+        .radius = 10.0,
+        .reload = 2.5,
+        .count = 1,
+        .rarity = RarityID::kUltra,
+        .attributes = {
+            .damage_reflection = 0.25
+        }
+    },
+    {
+        .name = "Salt",
+        .description = "Reflects some damage dealt to the flower. Does not stack with itself",
+        .health = 1080.0,
+        .damage = 1080.0,
+        .radius = 10.0,
+        .reload = 2.5,
+        .count = 1,
+        .rarity = RarityID::kSuper,
+        .attributes = {
+            .damage_reflection = 0.25
+        }
+    },
+    {
+        .name = "Salt",
+        .description = "Reflects some damage dealt to the flower. Does not stack with itself",
+        .health = 2160.0,
+        .damage = 2160.0,
+        .radius = 10.0,
+        .reload = 2.5,
+        .count = 1,
+        .rarity = RarityID::kUnique,
+        .attributes = {
+            .damage_reflection = 0.25
+        }
+    },
+    {
+        .name = "Sand",
+        .description = "It's coarse, rough, and gets everywhere",
+        .health = 30.0,
+        .damage = 12.0,
+        .radius = 7.0,
+        .reload = 1.5,
+        .count = 4,
+        .rarity = RarityID::kEpic,
+        .attributes = {
+            .clump_radius = 10,
+        }
+    },
+    {
+        .name = "Sand",
+        .description = "It's coarse, rough, and gets everywhere",
+        .health = 90.0,
+        .damage = 36.0,
+        .radius = 7.0,
+        .reload = 1.5,
+        .count = 4,
+        .rarity = RarityID::kLegendary,
+        .attributes = {
+            .clump_radius = 10,
+        }
+    },
+    {
+        .name = "Sand",
+        .description = "It's coarse, rough, and gets everywhere",
+        .health = 270.0,
+        .damage = 108.0,
+        .radius = 7.0,
+        .reload = 1.5,
+        .count = 4,
+        .rarity = RarityID::kMythic,
+        .attributes = {
+            .clump_radius = 10,
+        }
+    },
+    {
+        .name = "Sand",
+        .description = "It's coarse, rough, and gets everywhere",
+        .health = 540.0,
+        .damage = 216.0,
+        .radius = 7.0,
+        .reload = 1.5,
+        .count = 4,
+        .rarity = RarityID::kUltra,
+        .attributes = {
+            .clump_radius = 10,
+        }
+    },
+    {
+        .name = "Sand",
+        .description = "It's coarse, rough, and gets everywhere",
+        .health = 1080.0,
+        .damage = 432.0,
+        .radius = 7.0,
+        .reload = 1.5,
+        .count = 4,
+        .rarity = RarityID::kSuper,
+        .attributes = {
+            .clump_radius = 10,
+        }
+    },
+    {
+        .name = "Sand",
+        .description = "It's coarse, rough, and gets everywhere",
+        .health = 2160.0,
+        .damage = 864.0,
+        .radius = 7.0,
+        .reload = 1.5,
+        .count = 4,
+        .rarity = RarityID::kUnique,
+        .attributes = {
+            .clump_radius = 10,
+        }
+    },
+    {
+        .name = "Sand Leaf Dart",
+        .description = "Launches a projectile at regular intervals.",
+        .health = 90.0,
+        .damage = 66.0,
+        .radius = 10.0,
+        .reload = 4.0,
+        .count = 1,
+        .rarity = RarityID::kLegendary,
+        .attributes = {
+            .secondary_reload = 2.0,
+            .defend_only = 1,
+            .icon_angle = 1,
+            .rotation_style = PetalAttributes::kFollowRot
+        }
+    },
+    {
+        .name = "Sand Leaf Dart",
+        .description = "Launches a projectile at regular intervals.",
+        .health = 270.0,
+        .damage = 198.0,
+        .radius = 10.0,
+        .reload = 4.0,
+        .count = 1,
+        .rarity = RarityID::kMythic,
+        .attributes = {
+            .secondary_reload = 2.0,
+            .defend_only = 1,
+            .icon_angle = 1,
+            .rotation_style = PetalAttributes::kFollowRot
+        }
+    },
+    {
+        .name = "Sand Leaf Dart",
+        .description = "Launches a projectile at regular intervals.",
+        .health = 540.0,
+        .damage = 396.0,
+        .radius = 10.0,
+        .reload = 4.0,
+        .count = 1,
+        .rarity = RarityID::kUltra,
+        .attributes = {
+            .secondary_reload = 2.0,
+            .defend_only = 1,
+            .icon_angle = 1,
+            .rotation_style = PetalAttributes::kFollowRot
+        }
+    },
+    {
+        .name = "Sand Leaf Dart",
+        .description = "Launches a projectile at regular intervals.",
+        .health = 1080.0,
+        .damage = 792.0,
+        .radius = 10.0,
+        .reload = 4.0,
+        .count = 1,
+        .rarity = RarityID::kSuper,
+        .attributes = {
+            .secondary_reload = 2.0,
+            .defend_only = 1,
+            .icon_angle = 1,
+            .rotation_style = PetalAttributes::kFollowRot
+        }
+    },
+    {
+        .name = "Sand Leaf Dart",
+        .description = "Launches a projectile at regular intervals.",
+        .health = 2160.0,
+        .damage = 1584.0,
+        .radius = 10.0,
+        .reload = 4.0,
+        .count = 1,
+        .rarity = RarityID::kUnique,
+        .attributes = {
+            .secondary_reload = 2.0,
+            .defend_only = 1,
+            .icon_angle = 1,
+            .rotation_style = PetalAttributes::kFollowRot
+        }
+    },
+    {
+        .name = "Sand Spike",
+        .description = "Brittle hard spike. Desert traveler's dart.",
+        .health = 42.0,
+        .damage = 69.0,
+        .radius = 8.0,
+        .reload = 2.7,
+        .count = 1,
+        .rarity = RarityID::kRare,
+        .attributes = {}
+    },
+    {
+        .name = "Sand Spike",
+        .description = "Brittle hard spike. Desert traveler's dart.",
+        .health = 126.0,
+        .damage = 207.0,
+        .radius = 8.0,
+        .reload = 2.7,
+        .count = 1,
+        .rarity = RarityID::kEpic,
+        .attributes = {}
+    },
+    {
+        .name = "Sand Spike",
+        .description = "Brittle hard spike. Desert traveler's dart.",
+        .health = 378.0,
+        .damage = 621.0,
+        .radius = 8.0,
+        .reload = 2.7,
+        .count = 1,
+        .rarity = RarityID::kLegendary,
+        .attributes = {}
+    },
+    {
+        .name = "Sand Spike",
+        .description = "Brittle hard spike. Desert traveler's dart.",
+        .health = 1134.0,
+        .damage = 1863.0,
+        .radius = 8.0,
+        .reload = 2.7,
+        .count = 1,
+        .rarity = RarityID::kMythic,
+        .attributes = {}
+    },
+    {
+        .name = "Sand Spike",
+        .description = "Brittle hard spike. Desert traveler's dart.",
+        .health = 2268.0,
+        .damage = 3726.0,
+        .radius = 8.0,
+        .reload = 2.7,
+        .count = 1,
+        .rarity = RarityID::kUltra,
+        .attributes = {}
+    },
+    {
+        .name = "Sand Spike",
+        .description = "Brittle hard spike. Desert traveler's dart.",
+        .health = 4536.0,
+        .damage = 7452.0,
+        .radius = 8.0,
+        .reload = 2.7,
+        .count = 1,
+        .rarity = RarityID::kSuper,
+        .attributes = {}
+    },
+    {
+        .name = "Sand Spike",
+        .description = "Brittle hard spike. Desert traveler's dart.",
+        .health = 9072.0,
+        .damage = 14904.0,
+        .radius = 8.0,
+        .reload = 2.7,
+        .count = 1,
+        .rarity = RarityID::kUnique,
+        .attributes = {}
+    },
+    {
+        .name = "Scorch Palm",
+        .description = "A scorching palm that burns and reflects some damage.",
+        .health = 210.0,
+        .damage = 90.0,
+        .radius = 21.0,
+        .reload = 5.5,
+        .count = 1,
+        .rarity = RarityID::kLegendary,
+        .attributes = {
+            .damage_reflection = 0.10,
+            .burn_damage = { .damage = 5.0, .time = 3.0 }
+        }
+    },
+    {
+        .name = "Scorch Palm",
+        .description = "A scorching palm that burns and reflects some damage.",
+        .health = 630.0,
+        .damage = 270.0,
+        .radius = 21.0,
+        .reload = 5.5,
+        .count = 1,
+        .rarity = RarityID::kMythic,
+        .attributes = {
+            .damage_reflection = 0.10,
+            .burn_damage = { .damage = 5.0, .time = 3.0 }
+        }
+    },
+    {
+        .name = "Scorch Palm",
+        .description = "A scorching palm that burns and reflects some damage.",
+        .health = 1260.0,
+        .damage = 540.0,
+        .radius = 21.0,
+        .reload = 5.5,
+        .count = 1,
+        .rarity = RarityID::kUltra,
+        .attributes = {
+            .damage_reflection = 0.10,
+            .burn_damage = { .damage = 5.0, .time = 3.0 }
+        }
+    },
+    {
+        .name = "Scorch Palm",
+        .description = "A scorching palm that burns and reflects some damage.",
+        .health = 2520.0,
+        .damage = 1080.0,
+        .radius = 21.0,
+        .reload = 5.5,
+        .count = 1,
+        .rarity = RarityID::kSuper,
+        .attributes = {
+            .damage_reflection = 0.10,
+            .burn_damage = { .damage = 5.0, .time = 3.0 }
+        }
+    },
+    {
+        .name = "Scorch Palm",
+        .description = "A scorching palm that burns and reflects some damage.",
+        .health = 5040.0,
+        .damage = 2160.0,
+        .radius = 21.0,
+        .reload = 5.5,
+        .count = 1,
+        .rarity = RarityID::kUnique,
+        .attributes = {
+            .damage_reflection = 0.10,
+            .burn_damage = { .damage = 5.0, .time = 3.0 }
+        }
+    },
+    {
+        .name = "Shell Plate",
+        .description = "A single hexagonal carapace plate that shrugs off hits.",
+        .health = 156.0,
+        .damage = 24.0,
+        .radius = 12.0,
+        .reload = 3.5,
+        .count = 1,
+        .rarity = RarityID::kRare,
+        .attributes = { .armor = 4 }
+    },
+    {
+        .name = "Shell Plate",
+        .description = "A single hexagonal carapace plate that shrugs off hits.",
+        .health = 468.0,
+        .damage = 72.0,
+        .radius = 12.0,
+        .reload = 3.5,
+        .count = 1,
+        .rarity = RarityID::kEpic,
+        .attributes = { .armor = 4 }
+    },
+    {
+        .name = "Shell Plate",
+        .description = "A single hexagonal carapace plate that shrugs off hits.",
+        .health = 1404.0,
+        .damage = 216.0,
+        .radius = 12.0,
+        .reload = 3.5,
+        .count = 1,
+        .rarity = RarityID::kLegendary,
+        .attributes = { .armor = 4 }
+    },
+    {
+        .name = "Shell Plate",
+        .description = "A single hexagonal carapace plate that shrugs off hits.",
+        .health = 4212.0,
+        .damage = 648.0,
+        .radius = 12.0,
+        .reload = 3.5,
+        .count = 1,
+        .rarity = RarityID::kMythic,
+        .attributes = { .armor = 4 }
+    },
+    {
+        .name = "Shell Plate",
+        .description = "A single hexagonal carapace plate that shrugs off hits.",
+        .health = 8424.0,
+        .damage = 1296.0,
+        .radius = 12.0,
+        .reload = 3.5,
+        .count = 1,
+        .rarity = RarityID::kUltra,
+        .attributes = { .armor = 4 }
+    },
+    {
+        .name = "Shell Plate",
+        .description = "A single hexagonal carapace plate that shrugs off hits.",
+        .health = 16848.0,
+        .damage = 2592.0,
+        .radius = 12.0,
+        .reload = 3.5,
+        .count = 1,
+        .rarity = RarityID::kSuper,
+        .attributes = { .armor = 4 }
+    },
+    {
+        .name = "Shell Plate",
+        .description = "A single hexagonal carapace plate that shrugs off hits.",
+        .health = 33696.0,
+        .damage = 5184.0,
+        .radius = 12.0,
+        .reload = 3.5,
+        .count = 1,
+        .rarity = RarityID::kUnique,
+        .attributes = { .armor = 4 }
+    },
+    {
+        .name = "Skyblade",
+        .description = "Amplifies petal damage. Relic sealed with twin Royal Seals.",
+        .health = 204.0,
+        .damage = 189.0,
+        .radius = 18.0,
+        .reload = 8.5,
+        .count = 1,
+        .rarity = RarityID::kMythic,
+        .attributes = { .extra_damage_factor = 1.20f }
+    },
+    {
+        .name = "Skyblade",
+        .description = "Amplifies petal damage. Relic sealed with twin Royal Seals.",
+        .health = 408.0,
+        .damage = 378.0,
+        .radius = 18.0,
+        .reload = 8.5,
+        .count = 1,
+        .rarity = RarityID::kUltra,
+        .attributes = { .extra_damage_factor = 1.20f }
+    },
+    {
+        .name = "Skyblade",
+        .description = "Amplifies petal damage. Relic sealed with twin Royal Seals.",
+        .health = 816.0,
+        .damage = 756.0,
+        .radius = 18.0,
+        .reload = 8.5,
+        .count = 1,
+        .rarity = RarityID::kSuper,
+        .attributes = { .extra_damage_factor = 1.20f }
+    },
+    {
+        .name = "Skyblade",
+        .description = "Amplifies petal damage. Relic sealed with twin Royal Seals.",
+        .health = 1632.0,
+        .damage = 1512.0,
+        .radius = 18.0,
+        .reload = 8.5,
+        .count = 1,
+        .rarity = RarityID::kUnique,
+        .attributes = { .extra_damage_factor = 1.20f }
+    },
+    {
+        .name = "Snowball",
+        .description = "Fast-returning snowballs. Snow local forge.",
+        .health = 54.0,
+        .damage = 24.0,
+        .radius = 16.0,
+        .reload = 1.1,
+        .count = 2,
+        .rarity = RarityID::kRare,
+        .attributes = {}
+    },
+    {
+        .name = "Snowball",
+        .description = "Fast-returning snowballs. Snow local forge.",
+        .health = 162.0,
+        .damage = 72.0,
+        .radius = 16.0,
+        .reload = 1.1,
+        .count = 2,
+        .rarity = RarityID::kEpic,
+        .attributes = {}
+    },
+    {
+        .name = "Snowball",
+        .description = "Fast-returning snowballs. Snow local forge.",
+        .health = 486.0,
+        .damage = 216.0,
+        .radius = 16.0,
+        .reload = 1.1,
+        .count = 2,
+        .rarity = RarityID::kLegendary,
+        .attributes = {}
+    },
+    {
+        .name = "Snowball",
+        .description = "Fast-returning snowballs. Snow local forge.",
+        .health = 1458.0,
+        .damage = 648.0,
+        .radius = 16.0,
+        .reload = 1.1,
+        .count = 2,
+        .rarity = RarityID::kMythic,
+        .attributes = {}
+    },
+    {
+        .name = "Snowball",
+        .description = "Fast-returning snowballs. Snow local forge.",
+        .health = 2916.0,
+        .damage = 1296.0,
+        .radius = 16.0,
+        .reload = 1.1,
+        .count = 2,
+        .rarity = RarityID::kUltra,
+        .attributes = {}
+    },
+    {
+        .name = "Snowball",
+        .description = "Fast-returning snowballs. Snow local forge.",
+        .health = 5832.0,
+        .damage = 2592.0,
+        .radius = 16.0,
+        .reload = 1.1,
+        .count = 2,
+        .rarity = RarityID::kSuper,
+        .attributes = {}
+    },
+    {
+        .name = "Snowball",
+        .description = "Fast-returning snowballs. Snow local forge.",
+        .health = 11664.0,
+        .damage = 5184.0,
+        .radius = 16.0,
+        .reload = 1.1,
+        .count = 2,
+        .rarity = RarityID::kUnique,
+        .attributes = {}
+    },
+    {
+        .name = "Soldier Egg",
+        .description = "Hatches a soldier ant. Colony egg rite.",
+        .health = 144.0,
+        .damage = 0.0,
+        .radius = 17.0,
+        .reload = 12.0,
+        .count = 1,
+        .rarity = RarityID::kLegendary,
+        .attributes = {
+            .secondary_reload = 2.5,
+            .defend_only = 1,
+            .rotation_style = PetalAttributes::kNoRot,
+            .spawns = MobID::kSoldierAnt
+        }
+    },
+    {
+        .name = "Soldier Egg",
+        .description = "Hatches a soldier ant. Colony egg rite.",
+        .health = 432.0,
+        .damage = 0.0,
+        .radius = 17.0,
+        .reload = 12.0,
+        .count = 1,
+        .rarity = RarityID::kMythic,
+        .attributes = {
+            .secondary_reload = 2.5,
+            .defend_only = 1,
+            .rotation_style = PetalAttributes::kNoRot,
+            .spawns = MobID::kSoldierAnt
+        }
+    },
+    {
+        .name = "Soldier Egg",
+        .description = "Hatches a soldier ant. Colony egg rite.",
+        .health = 864.0,
+        .damage = 0.0,
+        .radius = 17.0,
+        .reload = 12.0,
+        .count = 1,
+        .rarity = RarityID::kUltra,
+        .attributes = {
+            .secondary_reload = 2.5,
+            .defend_only = 1,
+            .rotation_style = PetalAttributes::kNoRot,
+            .spawns = MobID::kSoldierAnt
+        }
+    },
+    {
+        .name = "Soldier Egg",
+        .description = "Hatches a soldier ant. Colony egg rite.",
+        .health = 1728.0,
+        .damage = 0.0,
+        .radius = 17.0,
+        .reload = 12.0,
+        .count = 1,
+        .rarity = RarityID::kSuper,
+        .attributes = {
+            .secondary_reload = 2.5,
+            .defend_only = 1,
+            .rotation_style = PetalAttributes::kNoRot,
+            .spawns = MobID::kSoldierAnt
+        }
+    },
+    {
+        .name = "Soldier Egg",
+        .description = "Hatches a soldier ant. Colony egg rite.",
+        .health = 3456.0,
+        .damage = 0.0,
+        .radius = 17.0,
+        .reload = 12.0,
+        .count = 1,
+        .rarity = RarityID::kUnique,
+        .attributes = {
+            .secondary_reload = 2.5,
+            .defend_only = 1,
+            .rotation_style = PetalAttributes::kNoRot,
+            .spawns = MobID::kSoldierAnt
+        }
+    },
+    {
+        .name = "Spider Fang",
+        .description = "A curved fang that bites hard",
+        .health = 21.0,
+        .damage = 51.0,
+        .radius = 13.0,
+        .reload = 3.75,
+        .count = 2,
+        .rarity = RarityID::kEpic,
+        .attributes = { .clump_radius = 10 }
+    },
+    {
+        .name = "Spider Fang",
+        .description = "A curved fang that bites hard",
+        .health = 63.0,
+        .damage = 153.0,
+        .radius = 13.0,
+        .reload = 3.75,
+        .count = 2,
+        .rarity = RarityID::kLegendary,
+        .attributes = { .clump_radius = 10 }
+    },
+    {
+        .name = "Spider Fang",
+        .description = "A curved fang that bites hard",
+        .health = 189.0,
+        .damage = 459.0,
+        .radius = 13.0,
+        .reload = 3.75,
+        .count = 2,
+        .rarity = RarityID::kMythic,
+        .attributes = { .clump_radius = 10 }
+    },
+    {
+        .name = "Spider Fang",
+        .description = "A curved fang that bites hard",
+        .health = 378.0,
+        .damage = 918.0,
+        .radius = 13.0,
+        .reload = 3.75,
+        .count = 2,
+        .rarity = RarityID::kUltra,
+        .attributes = { .clump_radius = 10 }
+    },
+    {
+        .name = "Spider Fang",
+        .description = "A curved fang that bites hard",
+        .health = 756.0,
+        .damage = 1836.0,
+        .radius = 13.0,
+        .reload = 3.75,
+        .count = 2,
+        .rarity = RarityID::kSuper,
+        .attributes = { .clump_radius = 10 }
+    },
+    {
+        .name = "Spider Fang",
+        .description = "A curved fang that bites hard",
+        .health = 1512.0,
+        .damage = 3672.0,
+        .radius = 13.0,
+        .reload = 3.75,
+        .count = 2,
+        .rarity = RarityID::kUnique,
+        .attributes = { .clump_radius = 10 }
+    },
+    {
+        .name = "Spore Cloud",
+        .description = "A drifting cloud of poisonous spores",
+        .health = 24.0,
+        .damage = 42.0,
+        .radius = 16.0,
+        .reload = 4.0,
+        .count = 1,
+        .rarity = RarityID::kLegendary,
+        .attributes = { .poison_damage = { .damage = 18.0, .time = 9.0 } }
+    },
+    {
+        .name = "Spore Cloud",
+        .description = "A drifting cloud of poisonous spores",
+        .health = 72.0,
+        .damage = 126.0,
+        .radius = 16.0,
+        .reload = 4.0,
+        .count = 1,
+        .rarity = RarityID::kMythic,
+        .attributes = { .poison_damage = { .damage = 54.0, .time = 27.0 } }
+    },
+    {
+        .name = "Spore Cloud",
+        .description = "A drifting cloud of poisonous spores",
+        .health = 144.0,
+        .damage = 252.0,
+        .radius = 16.0,
+        .reload = 4.0,
+        .count = 1,
+        .rarity = RarityID::kUltra,
+        .attributes = { .poison_damage = { .damage = 108.0, .time = 54.0 } }
+    },
+    {
+        .name = "Spore Cloud",
+        .description = "A drifting cloud of poisonous spores",
+        .health = 288.0,
+        .damage = 504.0,
+        .radius = 16.0,
+        .reload = 4.0,
+        .count = 1,
+        .rarity = RarityID::kSuper,
+        .attributes = { .poison_damage = { .damage = 216.0, .time = 108.0 } }
+    },
+    {
+        .name = "Spore Cloud",
+        .description = "A drifting cloud of poisonous spores",
+        .health = 576.0,
+        .damage = 1008.0,
+        .radius = 16.0,
+        .reload = 4.0,
+        .count = 1,
+        .rarity = RarityID::kUnique,
+        .attributes = { .poison_damage = { .damage = 432.0, .time = 216.0 } }
+    },
+    {
+        .name = "Starfish",
+        .description = "Third hit hits harder. Reef local forge.",
+        .health = 102.0,
+        .damage = 51.0,
+        .radius = 15.0,
+        .reload = 2.5,
+        .count = 1,
+        .rarity = RarityID::kEpic,
+        .attributes = { .hit_cycle = 3, .hit_cycle_factor = 1.75f }
+    },
+    {
+        .name = "Starfish",
+        .description = "Third hit hits harder. Reef local forge.",
+        .health = 306.0,
+        .damage = 153.0,
+        .radius = 15.0,
+        .reload = 2.5,
+        .count = 1,
+        .rarity = RarityID::kLegendary,
+        .attributes = { .hit_cycle = 3, .hit_cycle_factor = 1.75f }
+    },
+    {
+        .name = "Starfish",
+        .description = "Third hit hits harder. Reef local forge.",
+        .health = 918.0,
+        .damage = 459.0,
+        .radius = 15.0,
+        .reload = 2.5,
+        .count = 1,
+        .rarity = RarityID::kMythic,
+        .attributes = { .hit_cycle = 3, .hit_cycle_factor = 1.75f }
+    },
+    {
+        .name = "Starfish",
+        .description = "Third hit hits harder. Reef local forge.",
+        .health = 1836.0,
+        .damage = 918.0,
+        .radius = 15.0,
+        .reload = 2.5,
+        .count = 1,
+        .rarity = RarityID::kUltra,
+        .attributes = { .hit_cycle = 3, .hit_cycle_factor = 1.75f }
+    },
+    {
+        .name = "Starfish",
+        .description = "Third hit hits harder. Reef local forge.",
+        .health = 3672.0,
+        .damage = 1836.0,
+        .radius = 15.0,
+        .reload = 2.5,
+        .count = 1,
+        .rarity = RarityID::kSuper,
+        .attributes = { .hit_cycle = 3, .hit_cycle_factor = 1.75f }
+    },
+    {
+        .name = "Starfish",
+        .description = "Third hit hits harder. Reef local forge.",
+        .health = 7344.0,
+        .damage = 3672.0,
+        .radius = 15.0,
+        .reload = 2.5,
+        .count = 1,
+        .rarity = RarityID::kUnique,
+        .attributes = { .hit_cycle = 3, .hit_cycle_factor = 1.75f }
+    },
+    {
+        .name = "Steel Sword",
+        .description = "Solid steel. Capital local forge.",
+        .health = 114.0,
+        .damage = 75.0,
+        .radius = 12.0,
+        .reload = 3.0,
+        .count = 1,
+        .rarity = RarityID::kEpic,
+        .attributes = { .extra_health = 6 }
+    },
+    {
+        .name = "Steel Sword",
+        .description = "Solid steel. Capital local forge.",
+        .health = 342.0,
+        .damage = 225.0,
+        .radius = 12.0,
+        .reload = 3.0,
+        .count = 1,
+        .rarity = RarityID::kLegendary,
+        .attributes = { .extra_health = 6 }
+    },
+    {
+        .name = "Steel Sword",
+        .description = "Solid steel. Capital local forge.",
+        .health = 1026.0,
+        .damage = 675.0,
+        .radius = 12.0,
+        .reload = 3.0,
+        .count = 1,
+        .rarity = RarityID::kMythic,
+        .attributes = { .extra_health = 6 }
+    },
+    {
+        .name = "Steel Sword",
+        .description = "Solid steel. Capital local forge.",
+        .health = 2052.0,
+        .damage = 1350.0,
+        .radius = 12.0,
+        .reload = 3.0,
+        .count = 1,
+        .rarity = RarityID::kUltra,
+        .attributes = { .extra_health = 6 }
+    },
+    {
+        .name = "Steel Sword",
+        .description = "Solid steel. Capital local forge.",
+        .health = 4104.0,
+        .damage = 2700.0,
+        .radius = 12.0,
+        .reload = 3.0,
+        .count = 1,
+        .rarity = RarityID::kSuper,
+        .attributes = { .extra_health = 6 }
+    },
+    {
+        .name = "Steel Sword",
+        .description = "Solid steel. Capital local forge.",
+        .health = 8208.0,
+        .damage = 5400.0,
+        .radius = 12.0,
+        .reload = 3.0,
+        .count = 1,
+        .rarity = RarityID::kUnique,
+        .attributes = { .extra_health = 6 }
+    },
+    {
+        .name = "Stick",
+        .description = "Periodically summons sandstorms to fight for you",
+        .health = 30.0,
+        .damage = 3.0,
+        .radius = 15.0,
+        .reload = 3.0,
+        .count = 1,
+        .rarity = RarityID::kMythic,
+        .attributes = { 
+            .secondary_reload = 4.0,
+            .defend_only = 1,
+            .icon_angle = 1,
+            .spawns = MobID::kSandstorm,
+            .spawn_count = 2
+        }
+    },
+    {
+        .name = "Stick",
+        .description = "Periodically summons sandstorms to fight for you",
+        .health = 60.0,
+        .damage = 6.0,
+        .radius = 15.0,
+        .reload = 3.0,
+        .count = 1,
+        .rarity = RarityID::kUltra,
+        .attributes = { 
+            .secondary_reload = 4.0,
+            .defend_only = 1,
+            .icon_angle = 1,
+            .spawns = MobID::kSandstorm,
+            .spawn_count = 2
+        }
+    },
+    {
+        .name = "Stick",
+        .description = "Periodically summons sandstorms to fight for you",
+        .health = 120.0,
+        .damage = 12.0,
+        .radius = 15.0,
+        .reload = 3.0,
+        .count = 1,
+        .rarity = RarityID::kSuper,
+        .attributes = { 
+            .secondary_reload = 4.0,
+            .defend_only = 1,
+            .icon_angle = 1,
+            .spawns = MobID::kSandstorm,
+            .spawn_count = 2
+        }
+    },
+    {
+        .name = "Stick",
+        .description = "Periodically summons sandstorms to fight for you",
+        .health = 240.0,
+        .damage = 24.0,
+        .radius = 15.0,
+        .reload = 3.0,
+        .count = 1,
+        .rarity = RarityID::kUnique,
+        .attributes = { 
+            .secondary_reload = 4.0,
+            .defend_only = 1,
+            .icon_angle = 1,
+            .spawns = MobID::kSandstorm,
+            .spawn_count = 2
+        }
+    },
+    {
+        .name = "Stone Heart",
+        .description = "A heavy stone heart that hardens your flower",
+        .health = 72.0,
+        .damage = 10.5,
+        .radius = 15.0,
+        .reload = 4.5,
+        .count = 1,
+        .rarity = RarityID::kRare,
+        .attributes = {
+            .armor = 10
+        }
+    },
+    {
+        .name = "Stone Heart",
+        .description = "A heavy stone heart that hardens your flower",
+        .health = 216.0,
+        .damage = 31.5,
+        .radius = 15.0,
+        .reload = 4.5,
+        .count = 1,
+        .rarity = RarityID::kEpic,
+        .attributes = {
+            .armor = 10
+        }
+    },
+    {
+        .name = "Stone Heart",
+        .description = "A heavy stone heart that hardens your flower",
+        .health = 648.0,
+        .damage = 94.5,
+        .radius = 15.0,
+        .reload = 4.5,
+        .count = 1,
+        .rarity = RarityID::kLegendary,
+        .attributes = {
+            .armor = 10
+        }
+    },
+    {
+        .name = "Stone Heart",
+        .description = "A heavy stone heart that hardens your flower",
+        .health = 1944.0,
+        .damage = 283.5,
+        .radius = 15.0,
+        .reload = 4.5,
+        .count = 1,
+        .rarity = RarityID::kMythic,
+        .attributes = {
+            .armor = 10
+        }
+    },
+    {
+        .name = "Stone Heart",
+        .description = "A heavy stone heart that hardens your flower",
+        .health = 3888.0,
+        .damage = 567.0,
+        .radius = 15.0,
+        .reload = 4.5,
+        .count = 1,
+        .rarity = RarityID::kUltra,
+        .attributes = {
+            .armor = 10
+        }
+    },
+    {
+        .name = "Stone Heart",
+        .description = "A heavy stone heart that hardens your flower",
+        .health = 7776.0,
+        .damage = 1134.0,
+        .radius = 15.0,
+        .reload = 4.5,
+        .count = 1,
+        .rarity = RarityID::kSuper,
+        .attributes = {
+            .armor = 10
+        }
+    },
+    {
+        .name = "Stone Heart",
+        .description = "A heavy stone heart that hardens your flower",
+        .health = 15552.0,
+        .damage = 2268.0,
+        .radius = 15.0,
+        .reload = 4.5,
+        .count = 1,
+        .rarity = RarityID::kUnique,
+        .attributes = {
+            .armor = 10
+        }
+    },
+    {
+        .name = "Symbiote Shell",
+        .description = "A protective shell with armor and strong poison resistance",
+        .health = 246.0,
+        .damage = 18.0,
+        .radius = 22.0,
+        .reload = 6.0,
+        .count = 1,
+        .rarity = RarityID::kLegendary,
+        .attributes = { .armor = 5, .poison_armor = 18 }
+    },
+    {
+        .name = "Symbiote Shell",
+        .description = "A protective shell with armor and strong poison resistance",
+        .health = 738.0,
+        .damage = 54.0,
+        .radius = 22.0,
+        .reload = 6.0,
+        .count = 1,
+        .rarity = RarityID::kMythic,
+        .attributes = { .armor = 5, .poison_armor = 18 }
+    },
+    {
+        .name = "Symbiote Shell",
+        .description = "A protective shell with armor and strong poison resistance",
+        .health = 1476.0,
+        .damage = 108.0,
+        .radius = 22.0,
+        .reload = 6.0,
+        .count = 1,
+        .rarity = RarityID::kUltra,
+        .attributes = { .armor = 5, .poison_armor = 18 }
+    },
+    {
+        .name = "Symbiote Shell",
+        .description = "A protective shell with armor and strong poison resistance",
+        .health = 2952.0,
+        .damage = 216.0,
+        .radius = 22.0,
+        .reload = 6.0,
+        .count = 1,
+        .rarity = RarityID::kSuper,
+        .attributes = { .armor = 5, .poison_armor = 18 }
+    },
+    {
+        .name = "Symbiote Shell",
+        .description = "A protective shell with armor and strong poison resistance",
+        .health = 5904.0,
+        .damage = 432.0,
+        .radius = 22.0,
+        .reload = 6.0,
+        .count = 1,
+        .rarity = RarityID::kUnique,
+        .attributes = { .armor = 5, .poison_armor = 18 }
+    },
+    {
+        .name = "Third Eye",
+        .description = "Allows your flower to extend petals further out",
+        .health = 80.0,
+        .damage = 52.0,
+        .radius = 10.0,
+        .reload = 2.5,
+        .count = 1,
+        .rarity = RarityID::kUltra,
+        .attributes = {
+            .extra_range = 75,
+            .equipment = EquipmentFlags::kThirdEye
+        }
+    },
+    {
+        .name = "Third Eye",
+        .description = "Allows your flower to extend petals further out",
+        .health = 160.0,
+        .damage = 104.0,
+        .radius = 10.0,
+        .reload = 2.5,
+        .count = 1,
+        .rarity = RarityID::kSuper,
+        .attributes = {
+            .extra_range = 75,
+            .equipment = EquipmentFlags::kThirdEye
+        }
+    },
+    {
+        .name = "Third Eye",
+        .description = "Allows your flower to extend petals further out",
+        .health = 320.0,
+        .damage = 208.0,
+        .radius = 10.0,
+        .reload = 2.5,
+        .count = 1,
+        .rarity = RarityID::kUnique,
+        .attributes = {
+            .extra_range = 75,
+            .equipment = EquipmentFlags::kThirdEye
+        }
+    },
+    {
+        .name = "Thorn Palm",
+        .description = "Reflects damage. Garden x Desert border rite.",
+        .health = 234.0,
+        .damage = 60.0,
+        .radius = 21.0,
+        .reload = 5.2,
+        .count = 1,
+        .rarity = RarityID::kLegendary,
+        .attributes = { .damage_reflection = 0.18 }
+    },
+    {
+        .name = "Thorn Palm",
+        .description = "Reflects damage. Garden x Desert border rite.",
+        .health = 702.0,
+        .damage = 180.0,
+        .radius = 21.0,
+        .reload = 5.2,
+        .count = 1,
+        .rarity = RarityID::kMythic,
+        .attributes = { .damage_reflection = 0.18 }
+    },
+    {
+        .name = "Thorn Palm",
+        .description = "Reflects damage. Garden x Desert border rite.",
+        .health = 1404.0,
+        .damage = 360.0,
+        .radius = 21.0,
+        .reload = 5.2,
+        .count = 1,
+        .rarity = RarityID::kUltra,
+        .attributes = { .damage_reflection = 0.18 }
+    },
+    {
+        .name = "Thorn Palm",
+        .description = "Reflects damage. Garden x Desert border rite.",
+        .health = 2808.0,
+        .damage = 720.0,
+        .radius = 21.0,
+        .reload = 5.2,
+        .count = 1,
+        .rarity = RarityID::kSuper,
+        .attributes = { .damage_reflection = 0.18 }
+    },
+    {
+        .name = "Thorn Palm",
+        .description = "Reflects damage. Garden x Desert border rite.",
+        .health = 5616.0,
+        .damage = 1440.0,
+        .radius = 21.0,
+        .reload = 5.2,
+        .count = 1,
+        .rarity = RarityID::kUnique,
+        .attributes = { .damage_reflection = 0.18 }
+    },
+    {
+        .name = "Thorn Ring",
+        .description = "A thorny green ring of spikes",
+        .health = 45.0,
+        .damage = 33.0,
+        .radius = 15.0,
+        .reload = 3.5,
+        .count = 2,
+        .rarity = RarityID::kEpic,
+        .attributes = { .clump_radius = 11 }
+    },
+    {
+        .name = "Thorn Ring",
+        .description = "A thorny green ring of spikes",
+        .health = 135.0,
+        .damage = 99.0,
+        .radius = 15.0,
+        .reload = 3.5,
+        .count = 2,
+        .rarity = RarityID::kLegendary,
+        .attributes = { .clump_radius = 11 }
+    },
+    {
+        .name = "Thorn Ring",
+        .description = "A thorny green ring of spikes",
+        .health = 405.0,
+        .damage = 297.0,
+        .radius = 15.0,
+        .reload = 3.5,
+        .count = 2,
+        .rarity = RarityID::kMythic,
+        .attributes = { .clump_radius = 11 }
+    },
+    {
+        .name = "Thorn Ring",
+        .description = "A thorny green ring of spikes",
+        .health = 810.0,
+        .damage = 594.0,
+        .radius = 15.0,
+        .reload = 3.5,
+        .count = 2,
+        .rarity = RarityID::kUltra,
+        .attributes = { .clump_radius = 11 }
+    },
+    {
+        .name = "Thorn Ring",
+        .description = "A thorny green ring of spikes",
+        .health = 1620.0,
+        .damage = 1188.0,
+        .radius = 15.0,
+        .reload = 3.5,
+        .count = 2,
+        .rarity = RarityID::kSuper,
+        .attributes = { .clump_radius = 11 }
+    },
+    {
+        .name = "Thorn Ring",
+        .description = "A thorny green ring of spikes",
+        .health = 3240.0,
+        .damage = 2376.0,
+        .radius = 15.0,
+        .reload = 3.5,
+        .count = 2,
+        .rarity = RarityID::kUnique,
+        .attributes = { .clump_radius = 11 }
+    },
+    {
+        .name = "Thorn Trap",
+        .description = "Thorny ring that poisons and slows on contact",
+        .health = 30.0,
+        .damage = 34.5,
+        .radius = 14.0,
+        .reload = 3.0,
+        .count = 2,
+        .rarity = RarityID::kEpic,
+        .attributes = {
+            .clump_radius = 10,
+            .slow_inflict_seconds = 1.5f,
+            .poison_damage = { .damage = 12.0, .time = 6.0 }
+        }
+    },
+    {
+        .name = "Thorn Trap",
+        .description = "Thorny ring that poisons and slows on contact",
+        .health = 90.0,
+        .damage = 103.5,
+        .radius = 14.0,
+        .reload = 3.0,
+        .count = 2,
+        .rarity = RarityID::kLegendary,
+        .attributes = {
+            .clump_radius = 10,
+            .slow_inflict_seconds = 1.5f,
+            .poison_damage = { .damage = 36.0, .time = 18.0 }
+        }
+    },
+    {
+        .name = "Thorn Trap",
+        .description = "Thorny ring that poisons and slows on contact",
+        .health = 270.0,
+        .damage = 310.5,
+        .radius = 14.0,
+        .reload = 3.0,
+        .count = 2,
+        .rarity = RarityID::kMythic,
+        .attributes = {
+            .clump_radius = 10,
+            .slow_inflict_seconds = 1.5f,
+            .poison_damage = { .damage = 108.0, .time = 54.0 }
+        }
+    },
+    {
+        .name = "Thorn Trap",
+        .description = "Thorny ring that poisons and slows on contact",
+        .health = 540.0,
+        .damage = 621.0,
+        .radius = 14.0,
+        .reload = 3.0,
+        .count = 2,
+        .rarity = RarityID::kUltra,
+        .attributes = {
+            .clump_radius = 10,
+            .slow_inflict_seconds = 1.5f,
+            .poison_damage = { .damage = 216.0, .time = 108.0 }
+        }
+    },
+    {
+        .name = "Thorn Trap",
+        .description = "Thorny ring that poisons and slows on contact",
+        .health = 1080.0,
+        .damage = 1242.0,
+        .radius = 14.0,
+        .reload = 3.0,
+        .count = 2,
+        .rarity = RarityID::kSuper,
+        .attributes = {
+            .clump_radius = 10,
+            .slow_inflict_seconds = 1.5f,
+            .poison_damage = { .damage = 432.0, .time = 216.0 }
+        }
+    },
+    {
+        .name = "Thorn Trap",
+        .description = "Thorny ring that poisons and slows on contact",
+        .health = 2160.0,
+        .damage = 2484.0,
+        .radius = 14.0,
+        .reload = 3.0,
+        .count = 2,
+        .rarity = RarityID::kUnique,
+        .attributes = {
+            .clump_radius = 10,
+            .slow_inflict_seconds = 1.5f,
+            .poison_damage = { .damage = 864.0, .time = 432.0 }
+        }
+    },
+    {
+        .name = "Thorn Vine",
+        .description = "Snares and slows. Jungle local forge.",
+        .health = 87.0,
+        .damage = 21.0,
+        .radius = 15.0,
+        .reload = 3.6,
+        .count = 1,
+        .rarity = RarityID::kRare,
+        .attributes = { .slow_inflict_seconds = 1.1, .snare_seconds = 0.8 }
+    },
+    {
+        .name = "Thorn Vine",
+        .description = "Snares and slows. Jungle local forge.",
+        .health = 261.0,
+        .damage = 63.0,
+        .radius = 15.0,
+        .reload = 3.6,
+        .count = 1,
+        .rarity = RarityID::kEpic,
+        .attributes = { .slow_inflict_seconds = 1.1, .snare_seconds = 0.8 }
+    },
+    {
+        .name = "Thorn Vine",
+        .description = "Snares and slows. Jungle local forge.",
+        .health = 783.0,
+        .damage = 189.0,
+        .radius = 15.0,
+        .reload = 3.6,
+        .count = 1,
+        .rarity = RarityID::kLegendary,
+        .attributes = { .slow_inflict_seconds = 1.1, .snare_seconds = 0.8 }
+    },
+    {
+        .name = "Thorn Vine",
+        .description = "Snares and slows. Jungle local forge.",
+        .health = 2349.0,
+        .damage = 567.0,
+        .radius = 15.0,
+        .reload = 3.6,
+        .count = 1,
+        .rarity = RarityID::kMythic,
+        .attributes = { .slow_inflict_seconds = 1.1, .snare_seconds = 0.8 }
+    },
+    {
+        .name = "Thorn Vine",
+        .description = "Snares and slows. Jungle local forge.",
+        .health = 4698.0,
+        .damage = 1134.0,
+        .radius = 15.0,
+        .reload = 3.6,
+        .count = 1,
+        .rarity = RarityID::kUltra,
+        .attributes = { .slow_inflict_seconds = 1.1, .snare_seconds = 0.8 }
+    },
+    {
+        .name = "Thorn Vine",
+        .description = "Snares and slows. Jungle local forge.",
+        .health = 9396.0,
+        .damage = 2268.0,
+        .radius = 15.0,
+        .reload = 3.6,
+        .count = 1,
+        .rarity = RarityID::kSuper,
+        .attributes = { .slow_inflict_seconds = 1.1, .snare_seconds = 0.8 }
+    },
+    {
+        .name = "Thorn Vine",
+        .description = "Snares and slows. Jungle local forge.",
+        .health = 18792.0,
+        .damage = 4536.0,
+        .radius = 15.0,
+        .reload = 3.6,
+        .count = 1,
+        .rarity = RarityID::kUnique,
+        .attributes = { .slow_inflict_seconds = 1.1, .snare_seconds = 0.8 }
+    },
+    {
+        .name = "Tide Pearl",
+        .description = "Orbit + water ring. Ocean tide craft.",
+        .health = 90.0,
+        .damage = 36.0,
+        .radius = 13.0,
+        .reload = 3.5,
+        .count = 1,
+        .rarity = RarityID::kEpic,
+        .attributes = {
+            .secondary_reload = 2.5,
+            .extra_range = 18,
+            .radial_pulse_damage = 14.0,
+            .radial_pulse_radius = 90.0
+        }
+    },
+    {
+        .name = "Tide Pearl",
+        .description = "Orbit + water ring. Ocean tide craft.",
+        .health = 270.0,
+        .damage = 108.0,
+        .radius = 13.0,
+        .reload = 3.5,
+        .count = 1,
+        .rarity = RarityID::kLegendary,
+        .attributes = {
+            .secondary_reload = 2.5,
+            .extra_range = 18,
+            .radial_pulse_damage = 14.0,
+            .radial_pulse_radius = 90.0
+        }
+    },
+    {
+        .name = "Tide Pearl",
+        .description = "Orbit + water ring. Ocean tide craft.",
+        .health = 810.0,
+        .damage = 324.0,
+        .radius = 13.0,
+        .reload = 3.5,
+        .count = 1,
+        .rarity = RarityID::kMythic,
+        .attributes = {
+            .secondary_reload = 2.5,
+            .extra_range = 18,
+            .radial_pulse_damage = 14.0,
+            .radial_pulse_radius = 90.0
+        }
+    },
+    {
+        .name = "Tide Pearl",
+        .description = "Orbit + water ring. Ocean tide craft.",
+        .health = 1620.0,
+        .damage = 648.0,
+        .radius = 13.0,
+        .reload = 3.5,
+        .count = 1,
+        .rarity = RarityID::kUltra,
+        .attributes = {
+            .secondary_reload = 2.5,
+            .extra_range = 18,
+            .radial_pulse_damage = 14.0,
+            .radial_pulse_radius = 90.0
+        }
+    },
+    {
+        .name = "Tide Pearl",
+        .description = "Orbit + water ring. Ocean tide craft.",
+        .health = 3240.0,
+        .damage = 1296.0,
+        .radius = 13.0,
+        .reload = 3.5,
+        .count = 1,
+        .rarity = RarityID::kSuper,
+        .attributes = {
+            .secondary_reload = 2.5,
+            .extra_range = 18,
+            .radial_pulse_damage = 14.0,
+            .radial_pulse_radius = 90.0
+        }
+    },
+    {
+        .name = "Tide Pearl",
+        .description = "Orbit + water ring. Ocean tide craft.",
+        .health = 6480.0,
+        .damage = 2592.0,
+        .radius = 13.0,
+        .reload = 3.5,
+        .count = 1,
+        .rarity = RarityID::kUnique,
+        .attributes = {
+            .secondary_reload = 2.5,
+            .extra_range = 18,
+            .radial_pulse_damage = 14.0,
+            .radial_pulse_radius = 90.0
+        }
+    },
+    {
+        .name = "Toxic Heart",
+        .description = "A hardened heart that armor-plates your petals",
+        .health = 54.0,
+        .damage = 18.0,
+        .radius = 15.0,
+        .reload = 3.75,
+        .count = 1,
+        .rarity = RarityID::kEpic,
+        .attributes = { .armor = 8 }
+    },
+    {
+        .name = "Toxic Heart",
+        .description = "A hardened heart that armor-plates your petals",
+        .health = 162.0,
+        .damage = 54.0,
+        .radius = 15.0,
+        .reload = 3.75,
+        .count = 1,
+        .rarity = RarityID::kLegendary,
+        .attributes = { .armor = 8 }
+    },
+    {
+        .name = "Toxic Heart",
+        .description = "A hardened heart that armor-plates your petals",
+        .health = 486.0,
+        .damage = 162.0,
+        .radius = 15.0,
+        .reload = 3.75,
+        .count = 1,
+        .rarity = RarityID::kMythic,
+        .attributes = { .armor = 8 }
+    },
+    {
+        .name = "Toxic Heart",
+        .description = "A hardened heart that armor-plates your petals",
+        .health = 972.0,
+        .damage = 324.0,
+        .radius = 15.0,
+        .reload = 3.75,
+        .count = 1,
+        .rarity = RarityID::kUltra,
+        .attributes = { .armor = 8 }
+    },
+    {
+        .name = "Toxic Heart",
+        .description = "A hardened heart that armor-plates your petals",
+        .health = 1944.0,
+        .damage = 648.0,
+        .radius = 15.0,
+        .reload = 3.75,
+        .count = 1,
+        .rarity = RarityID::kSuper,
+        .attributes = { .armor = 8 }
+    },
+    {
+        .name = "Toxic Heart",
+        .description = "A hardened heart that armor-plates your petals",
+        .health = 3888.0,
+        .damage = 1296.0,
+        .radius = 15.0,
+        .reload = 3.75,
+        .count = 1,
+        .rarity = RarityID::kUnique,
+        .attributes = { .armor = 8 }
+    },
+    {
+        .name = "Treant Guard",
+        .description = "A heavily armored woodguard that taunts nearby foes.",
+        .health = 330.0,
+        .damage = 24.0,
+        .radius = 24.0,
+        .reload = 8.0,
+        .count = 1,
+        .rarity = RarityID::kLegendary,
+        .attributes = { .armor = 16, .extra_health = 18, .taunt_radius = 200.0 }
+    },
+    {
+        .name = "Treant Guard",
+        .description = "A heavily armored woodguard that taunts nearby foes.",
+        .health = 990.0,
+        .damage = 72.0,
+        .radius = 24.0,
+        .reload = 8.0,
+        .count = 1,
+        .rarity = RarityID::kMythic,
+        .attributes = { .armor = 16, .extra_health = 18, .taunt_radius = 200.0 }
+    },
+    {
+        .name = "Treant Guard",
+        .description = "A heavily armored woodguard that taunts nearby foes.",
+        .health = 1980.0,
+        .damage = 144.0,
+        .radius = 24.0,
+        .reload = 8.0,
+        .count = 1,
+        .rarity = RarityID::kUltra,
+        .attributes = { .armor = 16, .extra_health = 18, .taunt_radius = 200.0 }
+    },
+    {
+        .name = "Treant Guard",
+        .description = "A heavily armored woodguard that taunts nearby foes.",
+        .health = 3960.0,
+        .damage = 288.0,
+        .radius = 24.0,
+        .reload = 8.0,
+        .count = 1,
+        .rarity = RarityID::kSuper,
+        .attributes = { .armor = 16, .extra_health = 18, .taunt_radius = 200.0 }
+    },
+    {
+        .name = "Treant Guard",
+        .description = "A heavily armored woodguard that taunts nearby foes.",
+        .health = 7920.0,
+        .damage = 576.0,
+        .radius = 24.0,
+        .reload = 8.0,
+        .count = 1,
+        .rarity = RarityID::kUnique,
+        .attributes = { .armor = 16, .extra_health = 18, .taunt_radius = 200.0 }
+    },
+    {
+        .name = "Triplet",
+        .description = "Three light petals in one slot",
+        .health = 15.0,
+        .damage = 24.0,
+        .radius = 7.0,
+        .reload = 1.0,
+        .count = 3,
+        .rarity = RarityID::kLegendary,
+        .attributes = {}
+    },
+    {
+        .name = "Triplet",
+        .description = "Three light petals in one slot",
+        .health = 45.0,
+        .damage = 72.0,
+        .radius = 7.0,
+        .reload = 1.0,
+        .count = 3,
+        .rarity = RarityID::kMythic,
+        .attributes = {}
+    },
+    {
+        .name = "Triplet",
+        .description = "Three light petals in one slot",
+        .health = 90.0,
+        .damage = 144.0,
+        .radius = 7.0,
+        .reload = 1.0,
+        .count = 3,
+        .rarity = RarityID::kUltra,
+        .attributes = {}
+    },
+    {
+        .name = "Triplet",
+        .description = "Three light petals in one slot",
+        .health = 180.0,
+        .damage = 288.0,
+        .radius = 7.0,
+        .reload = 1.0,
+        .count = 3,
+        .rarity = RarityID::kSuper,
+        .attributes = {}
+    },
+    {
+        .name = "Triplet",
+        .description = "Three light petals in one slot",
+        .health = 360.0,
+        .damage = 576.0,
+        .radius = 7.0,
+        .reload = 1.0,
+        .count = 3,
+        .rarity = RarityID::kUnique,
+        .attributes = {}
+    },
+    {
+        .name = "Tunnel Stone",
+        .description = "A packed nest stone with armor that resists knockback",
+        .health = 285.0,
+        .damage = 36.0,
+        .radius = 13.0,
+        .reload = 5.0,
+        .count = 1,
+        .rarity = RarityID::kEpic,
+        .attributes = { .mass = 80.0, .armor = 3 }
+    },
+    {
+        .name = "Tunnel Stone",
+        .description = "A packed nest stone with armor that resists knockback",
+        .health = 855.0,
+        .damage = 108.0,
+        .radius = 13.0,
+        .reload = 5.0,
+        .count = 1,
+        .rarity = RarityID::kLegendary,
+        .attributes = { .mass = 80.0, .armor = 3 }
+    },
+    {
+        .name = "Tunnel Stone",
+        .description = "A packed nest stone with armor that resists knockback",
+        .health = 2565.0,
+        .damage = 324.0,
+        .radius = 13.0,
+        .reload = 5.0,
+        .count = 1,
+        .rarity = RarityID::kMythic,
+        .attributes = { .mass = 80.0, .armor = 3 }
+    },
+    {
+        .name = "Tunnel Stone",
+        .description = "A packed nest stone with armor that resists knockback",
+        .health = 5130.0,
+        .damage = 648.0,
+        .radius = 13.0,
+        .reload = 5.0,
+        .count = 1,
+        .rarity = RarityID::kUltra,
+        .attributes = { .mass = 80.0, .armor = 3 }
+    },
+    {
+        .name = "Tunnel Stone",
+        .description = "A packed nest stone with armor that resists knockback",
+        .health = 10260.0,
+        .damage = 1296.0,
+        .radius = 13.0,
+        .reload = 5.0,
+        .count = 1,
+        .rarity = RarityID::kSuper,
+        .attributes = { .mass = 80.0, .armor = 3 }
+    },
+    {
+        .name = "Tunnel Stone",
+        .description = "A packed nest stone with armor that resists knockback",
+        .health = 20520.0,
+        .damage = 2592.0,
+        .radius = 13.0,
+        .reload = 5.0,
+        .count = 1,
+        .rarity = RarityID::kUnique,
+        .attributes = { .mass = 80.0, .armor = 3 }
+    },
+    {
+        .name = "Venom Cocoon",
+        .description = "A sealed purple cocoon — tough shell, leaking venom.",
+        .health = 270.0,
+        .damage = 42.0,
+        .radius = 12.0,
+        .reload = 5.5,
+        .count = 1,
+        .rarity = RarityID::kLegendary,
+        .attributes = { .armor = 4, .poison_damage = { .damage = 27.0, .time = 13.5 } }
+    },
+    {
+        .name = "Venom Cocoon",
+        .description = "A sealed purple cocoon — tough shell, leaking venom.",
+        .health = 810.0,
+        .damage = 126.0,
+        .radius = 12.0,
+        .reload = 5.5,
+        .count = 1,
+        .rarity = RarityID::kMythic,
+        .attributes = { .armor = 4, .poison_damage = { .damage = 81.0, .time = 40.5 } }
+    },
+    {
+        .name = "Venom Cocoon",
+        .description = "A sealed purple cocoon — tough shell, leaking venom.",
+        .health = 1620.0,
+        .damage = 252.0,
+        .radius = 12.0,
+        .reload = 5.5,
+        .count = 1,
+        .rarity = RarityID::kUltra,
+        .attributes = { .armor = 4, .poison_damage = { .damage = 162.0, .time = 81.0 } }
+    },
+    {
+        .name = "Venom Cocoon",
+        .description = "A sealed purple cocoon — tough shell, leaking venom.",
+        .health = 3240.0,
+        .damage = 504.0,
+        .radius = 12.0,
+        .reload = 5.5,
+        .count = 1,
+        .rarity = RarityID::kSuper,
+        .attributes = { .armor = 4, .poison_damage = { .damage = 324.0, .time = 162.0 } }
+    },
+    {
+        .name = "Venom Cocoon",
+        .description = "A sealed purple cocoon — tough shell, leaking venom.",
+        .health = 6480.0,
+        .damage = 1008.0,
+        .radius = 12.0,
+        .reload = 5.5,
+        .count = 1,
+        .rarity = RarityID::kUnique,
+        .attributes = { .armor = 4, .poison_damage = { .damage = 648.0, .time = 324.0 } }
+    },
+    {
+        .name = "Vine Whip",
+        .description = "A long vine that lashes farther out",
+        .health = 25.5,
+        .damage = 45.0,
+        .radius = 16.0,
+        .reload = 3.25,
+        .count = 2,
+        .rarity = RarityID::kEpic,
+        .attributes = { .clump_radius = 12, .extra_range = 40.f }
+    },
+    {
+        .name = "Vine Whip",
+        .description = "A long vine that lashes farther out",
+        .health = 76.5,
+        .damage = 135.0,
+        .radius = 16.0,
+        .reload = 3.25,
+        .count = 2,
+        .rarity = RarityID::kLegendary,
+        .attributes = { .clump_radius = 12, .extra_range = 40.f }
+    },
+    {
+        .name = "Vine Whip",
+        .description = "A long vine that lashes farther out",
+        .health = 229.5,
+        .damage = 405.0,
+        .radius = 16.0,
+        .reload = 3.25,
+        .count = 2,
+        .rarity = RarityID::kMythic,
+        .attributes = { .clump_radius = 12, .extra_range = 40.f }
+    },
+    {
+        .name = "Vine Whip",
+        .description = "A long vine that lashes farther out",
+        .health = 459.0,
+        .damage = 810.0,
+        .radius = 16.0,
+        .reload = 3.25,
+        .count = 2,
+        .rarity = RarityID::kUltra,
+        .attributes = { .clump_radius = 12, .extra_range = 40.f }
+    },
+    {
+        .name = "Vine Whip",
+        .description = "A long vine that lashes farther out",
+        .health = 918.0,
+        .damage = 1620.0,
+        .radius = 16.0,
+        .reload = 3.25,
+        .count = 2,
+        .rarity = RarityID::kSuper,
+        .attributes = { .clump_radius = 12, .extra_range = 40.f }
+    },
+    {
+        .name = "Vine Whip",
+        .description = "A long vine that lashes farther out",
+        .health = 1836.0,
+        .damage = 3240.0,
+        .radius = 16.0,
+        .reload = 3.25,
+        .count = 2,
+        .rarity = RarityID::kUnique,
+        .attributes = { .clump_radius = 12, .extra_range = 40.f }
+    },
+    {
+        .name = "Volcano Worm",
+        .description = "Hatches a magma centipede to fight for you.",
+        .health = 195.0,
+        .damage = 0.0,
+        .radius = 21.0,
+        .reload = 16.0,
+        .count = 1,
+        .rarity = RarityID::kLegendary,
+        .attributes = {
+            .secondary_reload = 3.5,
+            .defend_only = 1,
+            .rotation_style = PetalAttributes::kNoRot,
+            .spawns = MobID::kMagmaCentipede
+        }
+    },
+    {
+        .name = "Volcano Worm",
+        .description = "Hatches a magma centipede to fight for you.",
+        .health = 585.0,
+        .damage = 0.0,
+        .radius = 21.0,
+        .reload = 16.0,
+        .count = 1,
+        .rarity = RarityID::kMythic,
+        .attributes = {
+            .secondary_reload = 3.5,
+            .defend_only = 1,
+            .rotation_style = PetalAttributes::kNoRot,
+            .spawns = MobID::kMagmaCentipede
+        }
+    },
+    {
+        .name = "Volcano Worm",
+        .description = "Hatches a magma centipede to fight for you.",
+        .health = 1170.0,
+        .damage = 0.0,
+        .radius = 21.0,
+        .reload = 16.0,
+        .count = 1,
+        .rarity = RarityID::kUltra,
+        .attributes = {
+            .secondary_reload = 3.5,
+            .defend_only = 1,
+            .rotation_style = PetalAttributes::kNoRot,
+            .spawns = MobID::kMagmaCentipede
+        }
+    },
+    {
+        .name = "Volcano Worm",
+        .description = "Hatches a magma centipede to fight for you.",
+        .health = 2340.0,
+        .damage = 0.0,
+        .radius = 21.0,
+        .reload = 16.0,
+        .count = 1,
+        .rarity = RarityID::kSuper,
+        .attributes = {
+            .secondary_reload = 3.5,
+            .defend_only = 1,
+            .rotation_style = PetalAttributes::kNoRot,
+            .spawns = MobID::kMagmaCentipede
+        }
+    },
+    {
+        .name = "Volcano Worm",
+        .description = "Hatches a magma centipede to fight for you.",
+        .health = 4680.0,
+        .damage = 0.0,
+        .radius = 21.0,
+        .reload = 16.0,
+        .count = 1,
+        .rarity = RarityID::kUnique,
+        .attributes = {
+            .secondary_reload = 3.5,
+            .defend_only = 1,
+            .rotation_style = PetalAttributes::kNoRot,
+            .spawns = MobID::kMagmaCentipede
+        }
+    },
+    {
+        .name = "Water Bubble",
+        .description = "Absorbs and splashes. Ocean local forge.",
+        .health = 120.0,
+        .damage = 9.0,
+        .radius = 18.0,
+        .reload = 2.8,
+        .count = 1,
+        .rarity = RarityID::kEpic,
+        .attributes = { .extra_health = 8, .splash_damage = 8.0, .splash_radius = 55.0, .defend_only = 1 }
+    },
+    {
+        .name = "Water Bubble",
+        .description = "Absorbs and splashes. Ocean local forge.",
+        .health = 360.0,
+        .damage = 27.0,
+        .radius = 18.0,
+        .reload = 2.8,
+        .count = 1,
+        .rarity = RarityID::kLegendary,
+        .attributes = { .extra_health = 8, .splash_damage = 8.0, .splash_radius = 55.0, .defend_only = 1 }
+    },
+    {
+        .name = "Water Bubble",
+        .description = "Absorbs and splashes. Ocean local forge.",
+        .health = 1080.0,
+        .damage = 81.0,
+        .radius = 18.0,
+        .reload = 2.8,
+        .count = 1,
+        .rarity = RarityID::kMythic,
+        .attributes = { .extra_health = 8, .splash_damage = 8.0, .splash_radius = 55.0, .defend_only = 1 }
+    },
+    {
+        .name = "Water Bubble",
+        .description = "Absorbs and splashes. Ocean local forge.",
+        .health = 2160.0,
+        .damage = 162.0,
+        .radius = 18.0,
+        .reload = 2.8,
+        .count = 1,
+        .rarity = RarityID::kUltra,
+        .attributes = { .extra_health = 8, .splash_damage = 8.0, .splash_radius = 55.0, .defend_only = 1 }
+    },
+    {
+        .name = "Water Bubble",
+        .description = "Absorbs and splashes. Ocean local forge.",
+        .health = 4320.0,
+        .damage = 324.0,
+        .radius = 18.0,
+        .reload = 2.8,
+        .count = 1,
+        .rarity = RarityID::kSuper,
+        .attributes = { .extra_health = 8, .splash_damage = 8.0, .splash_radius = 55.0, .defend_only = 1 }
+    },
+    {
+        .name = "Water Bubble",
+        .description = "Absorbs and splashes. Ocean local forge.",
+        .health = 8640.0,
+        .damage = 648.0,
+        .radius = 18.0,
+        .reload = 2.8,
+        .count = 1,
+        .rarity = RarityID::kUnique,
+        .attributes = { .extra_health = 8, .splash_damage = 8.0, .splash_radius = 55.0, .defend_only = 1 }
+    },
+    {
+        .name = "Wet Leaf",
+        .description = "A light leaf that improves movement speed.",
+        .health = 66.0,
+        .damage = 39.0,
+        .radius = 14.0,
+        .reload = 2.0,
+        .count = 1,
+        .rarity = RarityID::kLegendary,
+        .attributes = { .move_speed_factor = 1.11f }
+    },
+    {
+        .name = "Wet Leaf",
+        .description = "A light leaf that improves movement speed.",
+        .health = 198.0,
+        .damage = 117.0,
+        .radius = 14.0,
+        .reload = 2.0,
+        .count = 1,
+        .rarity = RarityID::kMythic,
+        .attributes = { .move_speed_factor = 1.11f }
+    },
+    {
+        .name = "Wet Leaf",
+        .description = "A light leaf that improves movement speed.",
+        .health = 396.0,
+        .damage = 234.0,
+        .radius = 14.0,
+        .reload = 2.0,
+        .count = 1,
+        .rarity = RarityID::kUltra,
+        .attributes = { .move_speed_factor = 1.11f }
+    },
+    {
+        .name = "Wet Leaf",
+        .description = "A light leaf that improves movement speed.",
+        .health = 792.0,
+        .damage = 468.0,
+        .radius = 14.0,
+        .reload = 2.0,
+        .count = 1,
+        .rarity = RarityID::kSuper,
+        .attributes = { .move_speed_factor = 1.11f }
+    },
+    {
+        .name = "Wet Leaf",
+        .description = "A light leaf that improves movement speed.",
+        .health = 1584.0,
+        .damage = 936.0,
+        .radius = 14.0,
+        .reload = 2.0,
+        .count = 1,
+        .rarity = RarityID::kUnique,
+        .attributes = { .move_speed_factor = 1.11f }
+    },
+    {
+        .name = "World Tree Seed",
+        .description = "Large heal aura. World-tree relic grown from Heart of Nature.",
+        .health = 255.0,
+        .damage = 0.0,
+        .radius = 22.0,
+        .reload = 13.0,
+        .count = 1,
+        .rarity = RarityID::kMythic,
+        .attributes = {
+            .secondary_reload = 0.5,
+            .aura_heal = 21.0,
+            .aura_radius = 465.0,
+            .aura_duration = 8.0,
+            .defend_only = 1
+        }
+    },
+    {
+        .name = "World Tree Seed",
+        .description = "Large heal aura. World-tree relic grown from Heart of Nature.",
+        .health = 510.0,
+        .damage = 0.0,
+        .radius = 22.0,
+        .reload = 13.0,
+        .count = 1,
+        .rarity = RarityID::kUltra,
+        .attributes = {
+            .secondary_reload = 0.5,
+            .aura_heal = 42.0,
+            .aura_radius = 930.0,
+            .aura_duration = 8.0,
+            .defend_only = 1
+        }
+    },
+    {
+        .name = "World Tree Seed",
+        .description = "Large heal aura. World-tree relic grown from Heart of Nature.",
+        .health = 1020.0,
+        .damage = 0.0,
+        .radius = 22.0,
+        .reload = 13.0,
+        .count = 1,
+        .rarity = RarityID::kSuper,
+        .attributes = {
+            .secondary_reload = 0.5,
+            .aura_heal = 84.0,
+            .aura_radius = 1860.0,
+            .aura_duration = 8.0,
+            .defend_only = 1
+        }
+    },
+    {
+        .name = "World Tree Seed",
+        .description = "Large heal aura. World-tree relic grown from Heart of Nature.",
+        .health = 2040.0,
+        .damage = 0.0,
+        .radius = 22.0,
+        .reload = 13.0,
+        .count = 1,
+        .rarity = RarityID::kUnique,
+        .attributes = {
+            .secondary_reload = 0.5,
+            .aura_heal = 168.0,
+            .aura_radius = 3720.0,
+            .aura_duration = 8.0,
+            .defend_only = 1
+        }
+    },
+    {
+        .name = "Yin Yang",
+        .description = "Alters the flower's petal rotation in interesting ways",
+        .health = 45.0,
+        .damage = 45.0,
+        .radius = 10.0,
+        .reload = 2.5,
+        .count = 1,
+        .rarity = RarityID::kLegendary,
+        .attributes = {}
+    },
+    {
+        .name = "Yin Yang",
+        .description = "Alters the flower's petal rotation in interesting ways",
+        .health = 135.0,
+        .damage = 135.0,
+        .radius = 10.0,
+        .reload = 2.5,
+        .count = 1,
+        .rarity = RarityID::kMythic,
+        .attributes = {}
+    },
+    {
+        .name = "Yin Yang",
+        .description = "Alters the flower's petal rotation in interesting ways",
+        .health = 270.0,
+        .damage = 270.0,
+        .radius = 10.0,
+        .reload = 2.5,
+        .count = 1,
+        .rarity = RarityID::kUltra,
+        .attributes = {}
+    },
+    {
+        .name = "Yin Yang",
+        .description = "Alters the flower's petal rotation in interesting ways",
+        .health = 540.0,
+        .damage = 540.0,
+        .radius = 10.0,
+        .reload = 2.5,
+        .count = 1,
+        .rarity = RarityID::kSuper,
+        .attributes = {}
+    },
+    {
+        .name = "Yin Yang",
+        .description = "Alters the flower's petal rotation in interesting ways",
+        .health = 1080.0,
+        .damage = 1080.0,
+        .radius = 10.0,
+        .reload = 2.5,
+        .count = 1,
+        .rarity = RarityID::kUnique,
+        .attributes = {}
+    },
+    {
+        .name = "Yucca",
+        .description = "Heals the flower, but only while in the defensive position",
+        .health = 30.0,
+        .damage = 15.0,
+        .radius = 10.0,
+        .reload = 1.0,
+        .count = 1,
+        .rarity = RarityID::kRare,
+        .attributes = {
+            .constant_heal = 4.5,
+            .icon_angle = -1
+        }
+    },
+    {
+        .name = "Yucca",
+        .description = "Heals the flower, but only while in the defensive position",
+        .health = 90.0,
+        .damage = 45.0,
+        .radius = 10.0,
+        .reload = 1.0,
+        .count = 1,
+        .rarity = RarityID::kEpic,
+        .attributes = {
+            .constant_heal = 13.5,
+            .icon_angle = -1
+        }
+    },
+    {
+        .name = "Yucca",
+        .description = "Heals the flower, but only while in the defensive position",
+        .health = 270.0,
+        .damage = 135.0,
+        .radius = 10.0,
+        .reload = 1.0,
+        .count = 1,
+        .rarity = RarityID::kLegendary,
+        .attributes = {
+            .constant_heal = 40.5,
+            .icon_angle = -1
+        }
+    },
+    {
+        .name = "Yucca",
+        .description = "Heals the flower, but only while in the defensive position",
+        .health = 810.0,
+        .damage = 405.0,
+        .radius = 10.0,
+        .reload = 1.0,
+        .count = 1,
+        .rarity = RarityID::kMythic,
+        .attributes = {
+            .constant_heal = 121.5,
+            .icon_angle = -1
+        }
+    },
+    {
+        .name = "Yucca",
+        .description = "Heals the flower, but only while in the defensive position",
+        .health = 1620.0,
+        .damage = 810.0,
+        .radius = 10.0,
+        .reload = 1.0,
+        .count = 1,
+        .rarity = RarityID::kUltra,
+        .attributes = {
+            .constant_heal = 243.0,
+            .icon_angle = -1
+        }
+    },
+    {
+        .name = "Yucca",
+        .description = "Heals the flower, but only while in the defensive position",
+        .health = 3240.0,
+        .damage = 1620.0,
+        .radius = 10.0,
+        .reload = 1.0,
+        .count = 1,
+        .rarity = RarityID::kSuper,
+        .attributes = {
+            .constant_heal = 486.0,
+            .icon_angle = -1
+        }
+    },
+    {
+        .name = "Yucca",
+        .description = "Heals the flower, but only while in the defensive position",
+        .health = 6480.0,
+        .damage = 3240.0,
+        .radius = 10.0,
+        .reload = 1.0,
+        .count = 1,
+        .rarity = RarityID::kUnique,
+        .attributes = {
+            .constant_heal = 972.0,
+            .icon_angle = -1
+        }
     }
 }};
 

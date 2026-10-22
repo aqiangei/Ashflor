@@ -109,9 +109,8 @@ void HFlexContainer::refactor() {
 }
 
 float HFlexContainer::stretched_width() const {
-    // Never flush title / close to the plate rim — stroke + round_rect clip
-    // was eating "背包" and the X when outer_pad was 0.
-    float const inset = fmax(outer_pad, 16.f);
+    // Keep title / close inside the plate face (rim ~7px + text stroke).
+    float const inset = fmax(outer_pad, 20.f) + 8.f;
     float w = width;
     if (parent != nullptr)
         w = fmax(w, parent->width - 2.f * inset);

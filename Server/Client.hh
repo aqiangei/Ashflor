@@ -35,6 +35,8 @@ public:
     std::array<uint32_t, PetalID::kNumPetals> craft_bank = {};
     uint32_t coins = 0;
     uint32_t craft_attempts = 0;
+    // Infinite petal levels (top-rung families only); 0 = base stats.
+    std::array<uint32_t, PetalID::kNumPetals> petal_levels = {};
     // Leaderboard board counters, flushed into LeaderboardStore periodically
     uint32_t stat_playtime = 0; // seconds online
     uint32_t stat_messages = 0; // chat messages sent

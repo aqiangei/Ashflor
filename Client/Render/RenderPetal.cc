@@ -27,13 +27,11 @@ static void refresh_tier_overlay_state() {
     g_tier_on = Input::keys_held.contains('G') ? 1 : 0;
     g_player_flower_ids.clear();
     if (!g_tier_on) return;
-    // Only the local flower — painting every nearby player's petals with
-    // rarity discs + draw_text made Hold-G hitch hard.
-    if (Game::alive() && Game::simulation.ent_alive(Game::player_id)) {
-        Entity const &me = Game::simulation.get_ent(Game::player_id);
-        if (!me.has_component(kMob))
-            g_player_flower_ids.insert(me.id);
-    }
+    // All player flowers in the local sim (AOI ≈ nearby), including self.
+    Game::simulation.for_each<kFlower>([](Simulation *, Entity &ent){
+        if (ent.has_component(kMob)) return;
+        g_player_flower_ids.insert(ent.id);
+    });
 }
 
 static uint8_t player_owned_petal(Entity const &ent) {
@@ -100,11 +98,14 @@ void render_petal(Renderer &ctx, Entity const &ent) {
         if (s > 1e-3f) ctx.scale(1.f / s);
         ctx.rotate(-ent.get_angle());
         ctx.translate(0, ent.get_radius() + 11.f);
+        // Unique charcoal needs a light rim so "唯一" stays readable in the field.
+        uint32_t const col = RARITY_COLORS[rarity] | 0xff000000;
+        uint8_t const unique = (rarity == RarityID::kUnique) ? 1 : 0;
         ctx.draw_text(I18n::rarity_name(rarity), {
-            .fill = RARITY_COLORS[rarity] | 0xff000000,
-            .stroke = 0,
+            .fill = col,
+            .stroke = unique ? 0xffe8eaee : 0,
             .size = 11,
-            .stroke_scale = 0
+            .stroke_scale = unique ? 0.16f : 0
         });
     }
 }

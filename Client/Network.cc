@@ -126,6 +126,18 @@ void Game::on_message(uint8_t *ptr, uint32_t len) {
             uint8_t result = reader.read<uint8_t>();
             if (result == SpawnResultCode::kSpawnNameTaken)
                 account_status = I18n::tr(I18n::kSpawnNameTaken);
+            else if (result == SpawnResultCode::kSpawnGuestIdAssigned) {
+                // Server reminted G#… after collision — keep localStorage in sync.
+                std::string id;
+                reader.read(id);
+                if (id.size() == 8 && id[0] == 'G' && id[1] == '#') {
+                    guest_id = id;
+                    if (!account_logged_in)
+                        nickname = id;
+                    account_status.clear();
+                    Storage::set();
+                }
+            }
             break;
         }
         case Clientbound::kCraftUpdate: {
@@ -135,6 +147,15 @@ void Game::on_message(uint8_t *ptr, uint32_t len) {
             for (uint32_t i = 0; i < PetalID::kNumPetals; ++i)
                 craft_bank[i] = reader.read<uint32_t>();
             coins = reader.read<uint32_t>();
+            {
+                petal_levels = {};
+                uint16_t n_levels = reader.read<uint16_t>();
+                for (uint16_t i = 0; i < n_levels; ++i) {
+                    PetalID::T lid = reader.read<PetalID::T>();
+                    uint32_t lv = reader.read<uint32_t>();
+                    if (lid < PetalID::kNumPetals) petal_levels[lid] = lv;
+                }
+            }
             // Tray is updated optimistically on craft click; only clamp to owned
             if (craft_tray_id != PetalID::kNone) {
                 uint32_t owned = craft_owned(craft_tray_id);
@@ -155,18 +176,24 @@ void Game::on_message(uint8_t *ptr, uint32_t len) {
                     : std::format("Craft failed — lost {}", lost);
             }
             else if (result == CraftResultCode::kCraftWin) {
+                // Synthesis: park product on tray until player taps center.
                 uint32_t n = amount > 0 ? amount : 1u;
                 craft_result_set(petal, n);
                 craft_status = I18n::use_chinese
                     ? std::format("成功！{} ×{} — 点击托盘中央取下", I18n::petal_name(petal), n)
                     : std::format("Success! {} ×{} — tap center to take", I18n::petal_name(petal), n);
             }
-            else if (result == CraftResultCode::kCraftExchanged) {
-                uint32_t n = amount > 0 ? amount : 1u;
-                craft_result_set(petal, n);
+            else if (result == CraftResultCode::kCraftLevelWin) {
                 craft_status = I18n::use_chinese
-                    ? std::format("直兑获得 {} ×{} — 点击中央取下", I18n::petal_name(petal), n)
-                    : std::format("Exchanged {} ×{} — tap center", I18n::petal_name(petal), n);
+                    ? std::format("升级成功！{} 达到 Lv.{}", I18n::petal_name(petal), amount)
+                    : std::format("Level up! {} is now Lv.{}", I18n::petal_name(petal), amount);
+            }
+            else if (result == CraftResultCode::kCraftExchanged) {
+                // Exchange / shop / assemble: already in bank — no tray claim.
+                uint32_t n = amount > 0 ? amount : 1u;
+                craft_status = I18n::use_chinese
+                    ? std::format("直兑获得 {} ×{}", I18n::petal_name(petal), n)
+                    : std::format("Exchanged {} ×{}", I18n::petal_name(petal), n);
             }
             else if (result == CraftResultCode::kCraftBought) {
                 if (petal == PetalID::kNone)
@@ -174,10 +201,9 @@ void Game::on_message(uint8_t *ptr, uint32_t len) {
                         ? "全服广播已发送" : "Server announce sent";
                 else {
                     uint32_t n = amount > 0 ? amount : 1u;
-                    craft_result_set(petal, n);
                     craft_status = I18n::use_chinese
-                        ? std::format("购买成功！{} ×{} — 点击中央取下", I18n::petal_name(petal), n)
-                        : std::format("Bought {} ×{} — tap center", I18n::petal_name(petal), n);
+                        ? std::format("购买成功！{} ×{}", I18n::petal_name(petal), n)
+                        : std::format("Bought {} ×{}", I18n::petal_name(petal), n);
                 }
             } else if (result == CraftResultCode::kCraftInvFull)
                 craft_status = I18n::use_chinese
@@ -188,9 +214,10 @@ void Game::on_message(uint8_t *ptr, uint32_t len) {
             if ((result == CraftResultCode::kCraftWin
                 || result == CraftResultCode::kCraftMiss
                 || result == CraftResultCode::kCraftExchanged
-                || result == CraftResultCode::kCraftBought)
+                || result == CraftResultCode::kCraftBought
+                || result == CraftResultCode::kCraftLevelWin)
                 && petal != PetalID::kNone)
-                Ui::craft_play_result(result, petal);
+                Ui::craft_play_result(result, petal, amount > 0 ? amount : 1u);
             break;
         }
         case Clientbound::kBoostUpdate: {
@@ -951,7 +978,7 @@ void Game::craft_tray_remove(uint32_t amount) {
 
 void Game::craft_tray_add(PetalID::T id, uint32_t amount) {
     if (id == PetalID::kNone || id >= PetalID::kNumPetals || amount == 0) return;
-    if (!Craft::can_upgrade_petal(id)) return;
+    if (!Craft::can_craft_petal(id)) return;
     if (craft_tray_id != id) {
         craft_tray_id = id;
         craft_tray_count = 0;

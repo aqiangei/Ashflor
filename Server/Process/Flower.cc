@@ -6,6 +6,7 @@
 #include <Server/Party.hh>
 #include <Server/Server.hh>
 #include <Server/Spawn.hh>
+#include <Shared/Craft.hh>
 #include <Shared/Entity.hh>
 #include <Shared/Map.hh>
 #include <Shared/Simulation.hh>
@@ -14,6 +15,7 @@
 
 #include <Helpers/Bits.hh>
 
+#include <array>
 #include <cmath>
 
 struct PlayerBuffs {
@@ -38,7 +40,16 @@ struct RotationCenter {
     float r;
 };
 
-static struct PlayerBuffs _get_petal_passive_buffs(Simulation *sim, Entity &player) {
+static float _owner_level_mult(std::array<uint32_t, PetalID::kNumPetals> const *levels,
+                               PetalID::T id) {
+    if (levels == nullptr || id == PetalID::kNone || id >= PetalID::kNumPetals)
+        return 1.f;
+    return Craft::level_stat_mult((*levels)[id]);
+}
+
+static struct PlayerBuffs _get_petal_passive_buffs(
+    Simulation *sim, Entity &player,
+    std::array<uint32_t, PetalID::kNumPetals> const *petal_levels) {
     struct PlayerBuffs buffs = {0};
     if (player.has_component(kMob)) return buffs;
     player.set_equip_flags(0);
@@ -49,6 +60,7 @@ static struct PlayerBuffs _get_petal_passive_buffs(Simulation *sim, Entity &play
         PetalID::T slot_petal_id = slot.get_petal_id();
         struct PetalData const &petal_data = PETAL_DATA[slot_petal_id];
         struct PetalAttributes const &attrs = petal_data.attributes;
+        float lv_mult = _owner_level_mult(petal_levels, slot_petal_id);
         if (attrs.equipment != EquipmentFlags::kNone)
             player.set_equip_flags(player.get_equip_flags() | (1 << attrs.equipment));
         buffs.vision_factor = std::min(buffs.vision_factor, attrs.vision_factor);
@@ -60,20 +72,20 @@ static struct PlayerBuffs _get_petal_passive_buffs(Simulation *sim, Entity &play
             buffs.move_speed_factor *= attrs.move_speed_factor;
         buffs.magnet_radius = std::fmax(buffs.magnet_radius, attrs.magnet_radius);
         buffs.extra_range = std::fmax(attrs.extra_range, buffs.extra_range);
-        buffs.extra_damage = std::fmax(buffs.extra_damage, attrs.extra_body_damage);
+        buffs.extra_damage = std::fmax(buffs.extra_damage, attrs.extra_body_damage * lv_mult);
         buffs.damage_factor *= attrs.extra_damage_factor;
         buffs.reload_factor *= attrs.extra_reload_factor;
         if (slot_petal_id == PetalID::kYinYang)
             ++buffs.yinyang_count;
         if (!player.loadout[i].already_spawned) continue;
-        if (petal_name_is(slot_petal_id, "Leaf")) 
-            buffs.heal += attrs.constant_heal / TPS;
-        else if (slot_petal_id == PetalID::kYucca && BitMath::at(player.input, InputFlags::kDefending) && !BitMath::at(player.input, InputFlags::kAttacking)) 
-            buffs.heal += attrs.constant_heal / TPS;
+        if (petal_name_is(slot_petal_id, "Leaf"))
+            buffs.heal += attrs.constant_heal * lv_mult / TPS;
+        else if (slot_petal_id == PetalID::kYucca && BitMath::at(player.input, InputFlags::kDefending) && !BitMath::at(player.input, InputFlags::kAttacking))
+            buffs.heal += attrs.constant_heal * lv_mult / TPS;
         buffs.extra_rot += attrs.extra_rotation_speed;
-        buffs.extra_health += attrs.extra_health;
+        buffs.extra_health += attrs.extra_health * lv_mult;
         player.damage_reflection = std::fmax(player.damage_reflection, attrs.damage_reflection);
-        player.poison_armor = std::fmax(player.poison_armor, attrs.poison_armor / TPS);
+        player.poison_armor = std::fmax(player.poison_armor, attrs.poison_armor * lv_mult / TPS);
         if (slot_petal_id == PetalID::kPoisonCactus)
             buffs.is_poisonous = 1;
         // King's Oath: low-HP damage surge (on top of petal extra_damage_factor)
@@ -131,22 +143,29 @@ static RotationCenter const _get_petal_rotation_center(Simulation *sim, Entity c
 void tick_player_behavior(Simulation *sim, Entity &player) {
     if (player.pending_delete) return;
     DEBUG_ONLY(assert(player.max_health > 0);)
-    PlayerBuffs buffs = _get_petal_passive_buffs(sim, player);
     float talent_hp = 0;
     float talent_rot = 0;
     float talent_reload = 1.f;
     float talent_petal_hp = 1.f;
     float rot_mult = Talent::rot_setting_mult(Talent::kRotSettingDefault);
+    std::array<uint32_t, PetalID::kNumPetals> const *petal_levels = nullptr;
     if (!player.has_component(kMob)) {
         if (Client *owner = Server::client_by_camera(sim, player.get_parent())) {
+            petal_levels = &owner->petal_levels;
             uint8_t const *r = owner->talent_ranks;
             talent_hp = Talent::health_bonus(r[TalentID::kHealth]);
             talent_rot = Talent::rot_bonus(r[TalentID::kRotSpeed]);
-            buffs.extra_range += Talent::range_bonus(r[TalentID::kAttackRange]);
             talent_reload = Talent::reload_mult(r[TalentID::kCooldown]);
-            buffs.magnet_radius += Talent::magnet_bonus(r[TalentID::kMagnet]);
             talent_petal_hp = Talent::petal_health_mult(r[TalentID::kPetalArmor]);
             rot_mult = Talent::rot_setting_mult(owner->rot_speed_setting);
+        }
+    }
+    PlayerBuffs buffs = _get_petal_passive_buffs(sim, player, petal_levels);
+    if (!player.has_component(kMob)) {
+        if (Client *owner = Server::client_by_camera(sim, player.get_parent())) {
+            uint8_t const *r = owner->talent_ranks;
+            buffs.extra_range += Talent::range_bonus(r[TalentID::kAttackRange]);
+            buffs.magnet_radius += Talent::magnet_bonus(r[TalentID::kMagnet]);
         }
     }
     buffs.reload_factor *= talent_reload;
@@ -256,8 +275,18 @@ void tick_player_behavior(Simulation *sim, Entity &player) {
                     petal_slot.ent_id = alloc_petal(sim, slot_petal_id, player).id;
                     Entity &spawned = sim->get_ent(petal_slot.ent_id);
                     spawned.damage *= buffs.damage_factor;
-                    if (talent_petal_hp != 1.f) {
-                        spawned.max_health *= talent_petal_hp;
+                    float hp_mult = talent_petal_hp;
+                    // Infinite craft level (Unique): scale contact + DoT + armor.
+                    float lv_mult = _owner_level_mult(petal_levels, slot_petal_id);
+                    if (lv_mult != 1.f) {
+                        spawned.damage *= lv_mult;
+                        spawned.poison_damage.damage *= lv_mult;
+                        spawned.burn_damage.damage *= lv_mult;
+                        spawned.armor *= lv_mult;
+                        hp_mult *= lv_mult;
+                    }
+                    if (hp_mult != 1.f) {
+                        spawned.max_health *= hp_mult;
                         spawned.health = spawned.max_health;
                     }
                     spawned.set_x(rotation_center.x);

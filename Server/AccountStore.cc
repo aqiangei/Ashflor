@@ -32,6 +32,9 @@ static std::unordered_set<std::string> ACTIVE_SESSIONS;
 static std::unordered_map<std::string, uint64_t> SESSION_TOKENS;
 static std::chrono::steady_clock::time_point LAST_SNAPSHOT =
     std::chrono::steady_clock::now() - std::chrono::hours(1);
+// Skip rewrite+fsync when nothing mutated since the last successful save.
+// Hot-path capture_nosave used to force a 150KB sync write every few seconds.
+static uint8_t ACCOUNTS_DIRTY = 1;
 
 static uint64_t wall_seconds() {
     return (uint64_t) std::chrono::duration_cast<std::chrono::seconds>(
@@ -52,6 +55,7 @@ static uint64_t issue_session_token(std::string const &username) {
     SESSION_TOKENS[username] = t;
     if (Account *acc = AccountStore::find(username)) {
         acc->session_hash = AccountStore::hash_password(username, "session:" + std::to_string(t));
+        ACCOUNTS_DIRTY = 1;
         AccountStore::save();
     }
     return t;
@@ -125,6 +129,7 @@ static uint8_t bind_session(Client *client, std::string const &username, Account
     client->craft_bank = acc->craft_bank;
     client->coins = acc->coins;
     client->craft_attempts = acc->craft_attempts;
+    client->petal_levels = acc->petal_levels;
     for (uint8_t i = 0; i < TalentID::kNum; ++i)
         client->talent_ranks[i] = acc->talent_ranks[i];
     Talent::clamp_ranks(client->talent_ranks, acc->level);
@@ -145,7 +150,10 @@ static uint8_t bind_session(Client *client, std::string const &username, Account
     ACTIVE_SESSIONS.insert(username);
     if (client->game != nullptr && client->game->simulation.ent_exists(client->camera) && !client->alive())
         AccountStore::apply_to_camera(&client->game->simulation, client->game->simulation.get_ent(client->camera), *acc);
-    if (migrated) AccountStore::save();
+    if (migrated) {
+        ACCOUNTS_DIRTY = 1;
+        AccountStore::save();
+    }
     Guild::on_login(client);
     return AccountResultCode::kAccountOk;
 }
@@ -274,6 +282,7 @@ void AccountStore::load() {
         acc.craft_bank.fill(0);
         acc.coins = 0;
         acc.craft_attempts = 0;
+        acc.petal_levels.fill(0);
         for (uint8_t i = 0; i < TalentID::kNum; ++i)
             acc.talent_ranks[i] = 0;
         // Read remaining numbers first, then split petals vs craft_bank.
@@ -289,61 +298,35 @@ void AccountStore::load() {
             constexpr uint32_t kPresetNew = 1 + MAX_SLOT_COUNT;
             constexpr uint32_t kPresetLegacy8 = 1 + 8;
             uint32_t const n = (uint32_t) PetalID::kNumPetals;
-            // Subtract append-only waves newest→oldest so old craft_bank lengths still match.
-            constexpr uint32_t kHoneyMeteorLadderAdded = 16;
-            constexpr uint32_t kHoneyMeteorAdded = 2;
-            constexpr uint32_t kMonsteraLadderAdded = 6;
-            constexpr uint32_t kAntHellAdded = 12;
-            constexpr uint32_t kSuperUltraAdded = 42;
-            constexpr uint32_t kCrossLegendAdded = 40;
-            constexpr uint32_t kBaseCraftAdded = 22;
-            constexpr uint32_t kMatsAdded = 48;
-            constexpr uint32_t kMonsteraAdded = 1;
-            constexpr uint32_t kCoinAdded = 1;
-            constexpr uint32_t kCommonLadderAdded = 14;
-            constexpr uint32_t kStingerLegAdded = 1;
-            constexpr uint32_t kJungleAdded = 12;
-            constexpr uint32_t kLadderAdded = 43;
-            constexpr uint32_t kRoyalAdded = 12;
-            auto sub = [](uint32_t cur, uint32_t amt) -> uint32_t {
-                return cur > amt ? cur - amt : cur;
+            // Derive craft_bank length from the trailing layout instead of a
+            // brittle "subtract each petal wave" table. Missing one append
+            // (e.g. Yucca ladder) made rem match nothing → bank load skipped →
+            // craft_bank + offline_bonus wiped on the boot-time save().
+            auto rem_layout_ok = [&](size_t rem, uint32_t bank_n, uint32_t preset_w) -> bool {
+                for (uint32_t mid : {10u, 5u}) {
+                    size_t const presets = (size_t) bank_n + mid
+                        + (size_t) LOADOUT_PRESET_COUNT * preset_w;
+                    size_t const full = presets + 4;   // bonus block
+                    size_t const full_ap = full + 1;    // + active_preset
+                    if (rem == full || rem == full_ap || rem == presets) return true;
+                    if (rem >= bank_n && rem <= (size_t) bank_n + mid) return true;
+                }
+                return false;
             };
-            uint32_t const prev_honey_meteor_ladder = sub(n, kHoneyMeteorLadderAdded);
-            uint32_t const prev_honey_meteor = sub(prev_honey_meteor_ladder, kHoneyMeteorAdded);
-            uint32_t const prev_monstera_ladder = sub(prev_honey_meteor, kMonsteraLadderAdded);
-            uint32_t const prev_anthell = sub(prev_monstera_ladder, kAntHellAdded);
-            uint32_t const prev_super = sub(prev_anthell, kSuperUltraAdded);
-            uint32_t const prev_cross = sub(prev_super, kCrossLegendAdded);
-            uint32_t const prev_basecraft = sub(prev_cross, kBaseCraftAdded);
-            uint32_t const prev_mats = sub(prev_basecraft, kMatsAdded);
-            uint32_t const prev_monstera = sub(prev_mats, kMonsteraAdded);
-            uint32_t const prev_coin = sub(prev_monstera, kCoinAdded);
-            uint32_t const prev_common = sub(prev_coin, kCommonLadderAdded);
-            uint32_t const prev_stinger = sub(prev_common, kStingerLegAdded);
-            uint32_t const prev_jungle = sub(prev_stinger, kJungleAdded);
-            uint32_t const prev_ladder = sub(prev_jungle, kLadderAdded);
-            uint32_t const prev_royal = sub(prev_ladder, kRoyalAdded);
-            uint32_t const bank_candidates[] = {
-                n, prev_honey_meteor_ladder, prev_honey_meteor, prev_monstera_ladder, prev_anthell, prev_super,
-                prev_cross, prev_basecraft, prev_mats, prev_monstera, prev_coin,
-                prev_common, prev_stinger, prev_jungle, prev_ladder, prev_royal
-            };
-
             auto layout_ok = [&](uint32_t petal_n, uint32_t preset_w) -> bool {
                 if (fields.size() < petal_n) return false;
                 size_t rem = fields.size() - petal_n;
-                // Mid block: coins + craft_attempts + talents + session.
-                // Old saves: 2 talents → mid 5. New saves: 7 talents → mid 10.
-                for (uint32_t bank_n : bank_candidates) {
-                    for (uint32_t mid : {5u, 10u}) {
-                        size_t const presets = bank_n + mid + LOADOUT_PRESET_COUNT * preset_w;
-                        size_t const full = presets + 4;      // + bonus block
-                        size_t const full_ap = full + 1;       // + active_preset
-                        if (rem == full || rem == full_ap || rem == presets) return true;
-                        if (rem >= bank_n && rem <= bank_n + mid) return true;
+                // Prefer exact modern/legacy trailing sizes for any bank ≤ n.
+                for (uint32_t mid : {10u, 5u}) {
+                    for (uint32_t extra : {5u, 4u, 0u}) {
+                        size_t need = (size_t) mid
+                            + (size_t) LOADOUT_PRESET_COUNT * preset_w + extra;
+                        if (rem < need) continue;
+                        uint32_t bank_n = (uint32_t) (rem - need);
+                        if (bank_n == 0 || bank_n > n) continue;
+                        if (rem_layout_ok(rem, bank_n, preset_w)) return true;
                     }
                 }
-                // True pre-per-petal banks: exactly 7 rarity buckets (+ optional coins).
                 if (petal_n == kPetalsLegacy8 && (rem == 7 || rem == 8))
                     return true;
                 return false;
@@ -371,38 +354,38 @@ void AccountStore::load() {
             std::vector<uint64_t> rest(
                 fields.begin() + (std::ptrdiff_t) petal_n, fields.end());
 
-            // Pick bank_n by matching trailing layout (mid + presets + bonus), NOT
-            // "largest cand that fits". Otherwise coins/session_hash land in newly
-            // appended petal slots (honey/meteor) as multi-million fake stacks.
-            auto bank_layout_ok = [&](uint32_t cand) -> bool {
-                size_t const rem = rest.size();
-                if (rem < cand) return false;
-                for (uint32_t mid : {5u, 10u}) {
-                    size_t const presets = cand + mid + (size_t) LOADOUT_PRESET_COUNT * preset_w;
-                    size_t const full = presets + 4;
-                    size_t const full_ap = full + 1;
-                    if (rem == full || rem == full_ap || rem == presets) return true;
-                    if (rem >= cand && rem <= cand + mid) return true;
-                }
-                return false;
-            };
+            // Derive bank_n from rem = bank + mid + presets + optional bonus/ap.
+            // Prefer exact modern layout (mid=10, talents=7, +bonus+ap).
             uint32_t bank_n = 0;
-            for (uint32_t cand : bank_candidates) {
-                if (bank_layout_ok(cand)) {
+            {
+                size_t const rem = rest.size();
+                size_t const preset_block = (size_t) LOADOUT_PRESET_COUNT * preset_w;
+                auto consider = [&](uint32_t mid, uint32_t extra) {
+                    if (bank_n != 0) return;
+                    size_t need = (size_t) mid + preset_block + extra;
+                    if (rem < need) return;
+                    uint32_t cand = (uint32_t) (rem - need);
+                    if (cand == 0 || cand > n) return;
+                    if (!rem_layout_ok(rem, cand, preset_w)) return;
                     bank_n = cand;
-                    break;
+                };
+                // Exact trailing sizes first (full save rows).
+                consider(10, 5); // mid10 + bonus4 + active_preset
+                consider(10, 4);
+                consider(10, 0);
+                consider(5, 5);
+                consider(5, 4);
+                consider(5, 0);
+                // Last resort: never leave bank unloaded (that zeros craft + bonuses).
+                if (bank_n == 0 && rem > preset_block + 10) {
+                    uint32_t cand = (uint32_t) (rem - preset_block - 10 - 5);
+                    if (cand >= 1 && cand <= n) bank_n = cand;
                 }
+                if (bank_n == 0 && rem > 0 && rem <= n)
+                    bank_n = (uint32_t) rem; // truncated bank-only row
             }
-            if (bank_n == 0) {
-                for (uint32_t cand : bank_candidates) {
-                    if (rest.size() >= cand) {
-                        bank_n = cand;
-                        break;
-                    }
-                }
-                if (bank_n == 0) bank_n = PetalID::kNumPetals;
-            }
-            if (rest.size() >= bank_n && !(rest.size() == 7 || rest.size() == 8)) {
+            if (rest.size() >= bank_n && bank_n > 0
+                && !(rest.size() == 7 || rest.size() == 8)) {
                 for (uint32_t i = 0; i < bank_n; ++i) {
                     uint32_t v = (uint32_t) rest[i];
                     // Petals hard-cap at 1e6; kCoin allows up to 1e9.
@@ -513,6 +496,21 @@ void AccountStore::load() {
                     } catch (...) {
                         acc.score = 0;
                     }
+                } else if (tok.size() >= 2 && tok[0] == 'l' && tok[1] == ':') {
+                    // l:id=lv,id=lv  (or l:- when empty)
+                    std::istringstream ts(tok.substr(2));
+                    std::string pair;
+                    while (std::getline(ts, pair, ',')) {
+                        size_t eq = pair.find('=');
+                        if (eq == std::string::npos) continue;
+                        try {
+                            unsigned long id = std::stoul(pair.substr(0, eq));
+                            unsigned long lv = std::stoul(pair.substr(eq + 1));
+                            if (id == 0 || id >= PetalID::kNumPetals) continue;
+                            if (lv > Craft::kMaxPetalLevel) lv = Craft::kMaxPetalLevel;
+                            acc.petal_levels[id] = (uint32_t) lv;
+                        } catch (...) {}
+                    }
                 }
             }
         }
@@ -534,6 +532,7 @@ void AccountStore::load() {
 }
 
 void AccountStore::save() {
+    if (!ACCOUNTS_DIRTY) return;
     std::ostringstream out;
     out << "# ashflor accounts  fields: user hash level petals[20] craft_bank[N] coins craft_attempts talent_ranks[7] session_hash presets[20][slots+10 petals] bonus_day daily_bonus offline_bonus last_seen active_preset g:guild leader s:score\n";
     for (auto const &kv : ACCOUNTS) {
@@ -561,9 +560,19 @@ void AccountStore::save() {
         uint32_t floor = level_to_score(acc.level < 1 ? 1 : acc.level);
         if (sc < floor) sc = floor;
         out << " s:" << sc;
+        {
+            std::string lv;
+            for (uint32_t i = 1; i < PetalID::kNumPetals; ++i) {
+                if (acc.petal_levels[i] == 0) continue;
+                if (!lv.empty()) lv += ',';
+                lv += std::to_string(i) + '=' + std::to_string(acc.petal_levels[i]);
+            }
+            if (!lv.empty()) out << " l:" << lv;
+        }
         out << '\n';
     }
     write_file_atomic(ACCOUNT_FILE, out.str());
+    ACCOUNTS_DIRTY = 0;
     maybe_write_snapshot(ACCOUNT_FILE);
 }
 
@@ -641,10 +650,11 @@ static void restore_primary_from_active_preset(Account &acc) {
     }
 }
 
-static void copy_progress(Account &acc, Client *client) {
-    if (client == nullptr || client->game == nullptr) return;
+// Returns 1 when the in-memory Account row changed (caller should mark dirty).
+static uint8_t copy_progress(Account &acc, Client *client) {
+    if (client == nullptr || client->game == nullptr) return 0;
     Simulation *sim = &client->game->simulation;
-    if (!sim->ent_exists(client->camera)) return;
+    if (!sim->ent_exists(client->camera)) return 0;
     Entity &camera = sim->get_ent(client->camera);
     std::array<PetalID::T, 2 * MAX_SLOT_COUNT> next = {};
     next.fill(PetalID::kNone);
@@ -717,6 +727,7 @@ static void copy_progress(Account &acc, Client *client) {
     acc.craft_bank = client->craft_bank;
     acc.coins = client->coins;
     acc.craft_attempts = client->craft_attempts;
+    acc.petal_levels = client->petal_levels;
     for (uint8_t i = 0; i < TalentID::kNum; ++i)
         acc.talent_ranks[i] = client->talent_ranks[i];
     Talent::clamp_ranks(acc.talent_ranks, acc.level);
@@ -725,9 +736,18 @@ static void copy_progress(Account &acc, Client *client) {
     acc.bonus_day = client->bonus_day;
     acc.daily_bonus_seconds = client->daily_bonus_seconds;
     acc.offline_bonus_seconds = client->offline_bonus_seconds;
-    acc.last_seen_epoch = wall_seconds();
+    // Throttle last_seen so periodic flushes do not dirty the whole file
+    // every few seconds when loadout/score are unchanged.
+    {
+        uint64_t now = wall_seconds();
+        if (now >= acc.last_seen_epoch + 60)
+            acc.last_seen_epoch = now;
+    }
     acc.guild_name = client->guild_name;
     acc.guild_leader = client->guild_leader ? 1 : 0;
+    // Conservative: every field above is rewritten unconditionally. Falling off
+    // a non-void function is UB → wasm `unreachable` trap (killed the server).
+    return 1;
 }
 
 uint8_t AccountStore::register_account(Client *client, std::string const &username, std::string const &password) {
@@ -745,9 +765,11 @@ uint8_t AccountStore::register_account(Client *client, std::string const &userna
     acc.craft_bank.fill(0);
     acc.coins = 0;
     acc.craft_attempts = 0;
+    acc.petal_levels.fill(0);
     normalize_petals(acc);
     copy_progress(acc, client);
     ACCOUNTS[username] = acc;
+    ACCOUNTS_DIRTY = 1;
     save();
     return AccountResultCode::kAccountOk;
 }
@@ -809,6 +831,7 @@ void AccountStore::logout(Client *client, uint8_t revoke_session) {
             SESSION_TOKENS.erase(client->account_name);
             if (Account *acc = find(client->account_name)) {
                 acc->session_hash = 0;
+                ACCOUNTS_DIRTY = 1;
                 save();
             }
         }
@@ -840,6 +863,7 @@ void AccountStore::capture_nosave(Client *client) {
     acc->guild_leader = client->guild_leader ? 1 : 0;
     if (client->game != nullptr)
         copy_progress(*acc, client);
+    ACCOUNTS_DIRTY = 1;
 }
 
 void AccountStore::capture(Client *client) {
@@ -855,7 +879,10 @@ void AccountStore::note_score(Client *client, uint32_t score) {
     if (client->account_name.empty()) return;
     Account *acc = find(client->account_name);
     if (acc == nullptr) return;
-    if (score > acc->score) acc->score = score;
+    if (score > acc->score) {
+        acc->score = score;
+        ACCOUNTS_DIRTY = 1;
+    }
     acc->level = score_to_level(acc->score);
     if (acc->level < 1) acc->level = 1;
 }

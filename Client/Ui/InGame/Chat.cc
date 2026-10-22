@@ -19,10 +19,12 @@
 
 #include <Helpers/Bits.hh>
 #include <Helpers/Math.hh>
+#include <Helpers/UTF8.hh>
 
 #include <algorithm>
 #include <cmath>
 #include <string>
+#include <vector>
 
 using namespace Ui;
 
@@ -163,8 +165,40 @@ public:
     }
 };
 
+static float chat_line_max_w() {
+    // Match ChatScroll floor; stay clear of bottom-right loadout chrome.
+    return Input::is_mobile ? 300.f : 460.f;
+}
+
+// UTF-8 wrap (CJK-safe). No ellipsis — chat should show the full message.
+static void wrap_chat_text(float size, std::string const &text, float max_w,
+                           std::vector<std::string> &out) {
+    out.clear();
+    if (text.empty()) return;
+    Game::renderer.set_text_size(size);
+    UTF8Parser p(text);
+    std::string cur;
+    while (!p.at_end()) {
+        uint32_t start = p.offset();
+        if (p.next_symbol() == 0) break;
+        uint32_t end = p.offset();
+        std::string next = cur;
+        next.append(text, start, end - start);
+        if (!cur.empty() && Game::renderer.get_text_size(next.c_str()) > max_w) {
+            out.push_back(std::move(cur));
+            cur.assign(text, start, end - start);
+        } else {
+            cur = std::move(next);
+        }
+    }
+    if (!cur.empty()) out.push_back(std::move(cur));
+}
+
 class ChatLineElement : public Element {
     uint32_t index;
+    std::vector<std::string> wrap_lines;
+    float prefix_w = 0.f; // tag+lead+name+tail on first visual row
+    float line_h = 17.f;
 public:
     ChatLineElement(uint32_t i) : Element(0, 16, {
         .should_render = [i](){ return line_visible_now(i); },
@@ -176,21 +210,49 @@ public:
         if (!line_visible_now(index)) {
             width = 0;
             height = 0;
+            wrap_lines.clear();
             // So VContainer skips padding this frame (visible is normally
             // refreshed in render(), which runs after layout).
             visible = 0;
             return;
         }
         visible = 1;
-        height = 17;
+        line_h = 17.f;
+        float const max_w = chat_line_max_w();
         Game::ChatLine const &line = Game::chat_lines[index];
-        Game::renderer.set_text_size(height);
-        ChatLineParts p = chat_line_parts(line);
-        std::string full = line.channel == ChatChannel::kChatSystem || line.sender.empty()
-            ? line.text : p.tag + p.lead + p.name + p.tail + p.message;
-        width = std::min(Game::renderer.get_text_size(full.c_str()),
-                         Input::is_mobile ? 350.f : 500.f);
+        Game::renderer.set_text_size(line_h);
+        if (line.channel == ChatChannel::kChatSystem || line.sender.empty()) {
+            prefix_w = 0.f;
+            wrap_chat_text(line_h, line.text, max_w, wrap_lines);
+            if (wrap_lines.empty()) wrap_lines.push_back({});
+            width = 0.f;
+            for (auto const &ln : wrap_lines)
+                width = fmax(width, Game::renderer.get_text_size(ln.c_str()));
+        } else {
+            ChatLineParts p = chat_line_parts(line);
+            prefix_w = Game::renderer.get_text_size((p.tag + p.lead + p.name + p.tail).c_str());
+            float msg_budget = fmax(40.f, max_w - prefix_w);
+            // If prefix alone is huge, wrap the whole string as one block.
+            if (prefix_w > max_w * 0.85f) {
+                prefix_w = 0.f;
+                wrap_chat_text(line_h, p.tag + p.lead + p.name + p.tail + p.message,
+                               max_w, wrap_lines);
+            } else {
+                wrap_chat_text(line_h, p.message, msg_budget, wrap_lines);
+                if (wrap_lines.empty()) wrap_lines.push_back({});
+            }
+            width = prefix_w;
+            for (size_t i = 0; i < wrap_lines.size(); ++i) {
+                float w = Game::renderer.get_text_size(wrap_lines[i].c_str());
+                if (i == 0 && prefix_w > 0.f) w += prefix_w;
+                if (w > width) width = w;
+            }
+        }
         if (width < 40.f) width = 40.f;
+        if (width > max_w) width = max_w;
+        uint32_t rows = (uint32_t) wrap_lines.size();
+        if (rows < 1) rows = 1;
+        height = line_h * (float) rows + 2.f * (float) (rows - 1);
     }
 
     void on_render(Renderer &ctx) override {
@@ -202,65 +264,75 @@ public:
         uint32_t color = channel_color(line.channel);
         uint32_t craft_col = craft_line_color(line);
         if (craft_col != 0) color = craft_col;
-        ctx.set_text_size(height);
+        ctx.set_text_size(line_h);
         ctx.center_text_baseline();
         float left = -width / 2;
-        if (line.channel == ChatChannel::kChatSystem || line.sender.empty()) {
+        float top = -height / 2 + line_h * 0.5f;
+
+        if (line.channel == ChatChannel::kChatSystem || line.sender.empty()
+            || prefix_w <= 0.f) {
             ctx.set_fill(color);
-            ctx.translate(left + ctx.get_text_size(line.text.c_str()) / 2, 0);
-            ctx.fill_text(line.text.c_str());
+            for (size_t i = 0; i < wrap_lines.size(); ++i) {
+                RenderContext c(&ctx);
+                float tw = ctx.get_text_size(wrap_lines[i].c_str());
+                ctx.translate(left + tw * 0.5f, top + (float) i * (line_h + 2.f));
+                ctx.fill_text(wrap_lines[i].c_str());
+            }
         } else {
             ChatLineParts p = chat_line_parts(line);
             float tag_w = ctx.get_text_size(p.tag.c_str());
             float lead_w = ctx.get_text_size(p.lead.c_str());
             float name_w = ctx.get_text_size(p.name.c_str());
             float tail_w = ctx.get_text_size(p.tail.c_str());
-            float msg_w = ctx.get_text_size(p.message.c_str());
             float pos = left;
+            float y0 = top;
             if (!p.tag.empty()) {
                 RenderContext c(&ctx);
                 ctx.set_fill(craft_col != 0 ? craft_col : kWhisperAccent);
-                ctx.translate(pos + tag_w / 2, 0);
+                ctx.translate(pos + tag_w / 2, y0);
                 ctx.fill_text(p.tag.c_str());
             }
             pos += tag_w;
             if (!p.lead.empty()) {
                 RenderContext c(&ctx);
                 ctx.set_fill(0xffffffff);
-                ctx.translate(pos + lead_w / 2, 0);
+                ctx.translate(pos + lead_w / 2, y0);
                 ctx.fill_text(p.lead.c_str());
             }
             pos += lead_w;
             {
                 RenderContext c(&ctx);
                 ctx.set_fill(line.channel == ChatChannel::kChatWhisper ? 0xffffffff : color);
-                ctx.translate(pos + name_w / 2, 0);
+                ctx.translate(pos + name_w / 2, y0);
                 ctx.fill_text(p.name.c_str());
             }
             pos += name_w;
             if (!p.tail.empty()) {
                 RenderContext c(&ctx);
                 ctx.set_fill(craft_col != 0 ? craft_col : 0xffffffff);
-                ctx.translate(pos + tail_w / 2, 0);
+                ctx.translate(pos + tail_w / 2, y0);
                 ctx.fill_text(p.tail.c_str());
             }
             pos += tail_w;
-            {
+            for (size_t i = 0; i < wrap_lines.size(); ++i) {
                 RenderContext c(&ctx);
+                float x = (i == 0) ? pos : left;
+                float y = top + (float) i * (line_h + 2.f);
+                float tw = ctx.get_text_size(wrap_lines[i].c_str());
                 ctx.set_fill(craft_col != 0 ? craft_col : 0xffffffff);
-                ctx.translate(pos + msg_w / 2, 0);
-                ctx.fill_text(p.message.c_str());
+                ctx.translate(x + tw * 0.5f, y);
+                ctx.fill_text(wrap_lines[i].c_str());
             }
             if (Game::chat_open
                 && BitMath::at(Input::mouse_buttons_pressed, Input::RightMouse)) {
                 float mx = Input::mouse_x;
                 float my = Input::mouse_y;
                 float name_left = screen_x - width * Ui::scale / 2;
-                float top = screen_y - height * Ui::scale / 2;
-                float bot = screen_y + height * Ui::scale / 2;
+                float row_top = screen_y - height * Ui::scale / 2;
+                float row_bot = row_top + line_h * Ui::scale;
                 float sender_left = name_left + (tag_w + lead_w) * Ui::scale;
                 float sender_right = sender_left + name_w * Ui::scale;
-                if (my >= top && my <= bot) {
+                if (my >= row_top && my <= row_bot) {
                     if (mx >= sender_left && mx <= sender_right)
                         Game::open_chat_menu(p.name, mx, my);
                 }
@@ -317,7 +389,7 @@ public:
         // ScrollContainer width followed the longest line, so the thumb sat mid
         // panel. Stretch to the input-row width floor — content stays Left,
         // bar stays Right → thumb flush with the chat panel edge.
-        float const want = Input::is_mobile ? 280.f : 470.f;
+        float const want = chat_line_max_w() + (Input::is_mobile ? 36.f : 24.f);
         if (want > width) width = want;
 
         if (!Game::chat_scroll_to_end) return;

@@ -1,4 +1,5 @@
 #include <Server/Client.hh>
+#include <Server/DevCheats.hh>
 
 #include <Server/AccountStore.hh>
 #include <Server/Chat.hh>
@@ -89,6 +90,16 @@ static void send_craft_update(Client *client, uint8_t result, PetalID::T petal,
     for (uint32_t i = 0; i < PetalID::kNumPetals; ++i)
         writer.write<uint32_t>(client->craft_bank[i]);
     writer.write<uint32_t>(client->coins);
+    // Sparse petal levels: count + (id, level) pairs.
+    uint16_t n_levels = 0;
+    for (uint32_t i = 1; i < PetalID::kNumPetals; ++i)
+        if (client->petal_levels[i] > 0) ++n_levels;
+    writer.write<uint16_t>(n_levels);
+    for (uint32_t i = 1; i < PetalID::kNumPetals; ++i) {
+        if (client->petal_levels[i] == 0) continue;
+        writer.write<PetalID::T>((PetalID::T) i);
+        writer.write<uint32_t>(client->petal_levels[i]);
+    }
     client->send_packet(writer.packet, writer.at - writer.packet);
 }
 
@@ -151,7 +162,7 @@ static constexpr uint8_t kHighCraftRarity = RarityID::kSuper;
 
 static char const *rarity_zh(uint8_t rarity) {
     static char const *const names[RarityID::kNumRarities] = {
-        "普通", "罕见", "稀有", "史诗", "传奇", "神话", "究极", "超凡", "独特"
+        "普通", "罕见", "稀有", "史诗", "传奇", "神话", "究极", "超凡", "唯一"
     };
     if (rarity >= RarityID::kNumRarities) return "?";
     return names[rarity];
@@ -610,7 +621,7 @@ void Client::on_message(WebSocket *ws, std::string_view message, uint64_t code) 
                 Entity &stale_cam = stale_sim->get_ent(client->camera);
                 Entity &stale_player = stale_sim->get_ent(stale_cam.get_player());
                 flush_flower_loadout_to_camera(stale_sim, stale_cam, stale_player);
-                AccountStore::capture(client);
+                AccountStore::capture_nosave(client);
                 BitMath::set(stale_player.flags, EntityFlags::kNoDrops);
                 stale_sim->request_delete(stale_player.id);
                 stale_cam.set_player(NULL_ENTITY);
@@ -626,10 +637,13 @@ void Client::on_message(WebSocket *ws, std::string_view message, uint64_t code) 
             if (client->check_invalid(UTF8Parser::is_valid_utf8(name))) return;
             uint8_t map_id = reader.read<uint8_t>();
             if (map_id >= MapID::kNumMaps) map_id = MapID::kGarden;
+            uint8_t guest_id_reassigned = 0;
             if (!client->account_name.empty()) {
                 name = client->account_name;
             } else {
-                // Guests: fixed G#XXXXXX only ??ignore free-form names
+                // Guests: fixed G#XXXXXX only — ignore free-form names.
+                // Collisions (same localStorage id in two tabs, ghost socket still
+                // holding play_name) must remint — never reject with NameTaken.
                 auto guest_tag_ok = [](std::string const &s) -> uint8_t {
                     if (s.size() != 8 || s[0] != 'G' || s[1] != '#') return 0;
                     for (size_t i = 2; i < s.size(); ++i) {
@@ -640,11 +654,11 @@ void Client::on_message(WebSocket *ws, std::string_view message, uint64_t code) 
                     }
                     return 1;
                 };
-                if (!guest_tag_ok(name)) {
-                    // Assign a unique server guest id (does not occupy account names)
+                auto mint_unique_guest = [client]() -> std::string {
                     static uint32_t next_guest = 100000;
                     char buf[16];
                     static char const alphabet[] = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+                    std::string out;
                     do {
                         uint32_t n = next_guest++;
                         buf[0] = 'G'; buf[1] = '#';
@@ -653,19 +667,24 @@ void Client::on_message(WebSocket *ws, std::string_view message, uint64_t code) 
                             n /= 32;
                         }
                         buf[8] = 0;
-                        name = buf;
-                    } while (LeaderboardStore::name_taken(name, client));
+                        out = buf;
+                    } while (LeaderboardStore::name_taken(out, client)
+                        || AccountStore::name_reserved_for_guest(out));
+                    return out;
+                };
+                if (!guest_tag_ok(name)
+                    || AccountStore::name_reserved_for_guest(name)
+                    || LeaderboardStore::name_taken(name, client)) {
+                    std::string const prev = name;
+                    name = mint_unique_guest();
+                    guest_id_reassigned = 1;
+                    if (!prev.empty() && prev != name)
+                        std::cout << "[spawn] guest id " << prev << " → " << name << std::endl;
                 }
             }
-            if (client->account_name.empty() && AccountStore::name_reserved_for_guest(name)) {
-                Writer writer(Server::OUTGOING_PACKET);
-                writer.write<uint8_t>(Clientbound::kSpawnResult);
-                writer.write<uint8_t>(SpawnResultCode::kSpawnNameTaken);
-                client->send_packet(writer.packet, writer.at - writer.packet);
-                break;
-            }
-            // Unique play names across all maps
-            if (!name.empty() && LeaderboardStore::name_taken(name, client)) {
+            // Accounts only: unique play names (guests already reminted above).
+            if (!client->account_name.empty() && !name.empty()
+                && LeaderboardStore::name_taken(name, client)) {
                 std::cout << "[spawn] name taken: " << name << std::endl;
                 Writer writer(Server::OUTGOING_PACKET);
                 writer.write<uint8_t>(Clientbound::kSpawnResult);
@@ -708,6 +727,13 @@ void Client::on_message(WebSocket *ws, std::string_view message, uint64_t code) 
             client_clear_life_stats(client);
             if (!name.empty())
                 LeaderboardStore::record(name, player.get_score(), player.get_color());
+            if (guest_id_reassigned) {
+                Writer writer(Server::OUTGOING_PACKET);
+                writer.write<uint8_t>(Clientbound::kSpawnResult);
+                writer.write<uint8_t>(SpawnResultCode::kSpawnGuestIdAssigned);
+                writer.write<std::string>(name);
+                client->send_packet(writer.packet, writer.at - writer.packet);
+            }
             Party::apply_team(client);
             Party::send_update(client);
             Guild::send_update(client);
@@ -747,6 +773,9 @@ void Client::on_message(WebSocket *ws, std::string_view message, uint64_t code) 
                 RateLimit::note_auth_ok(client->remote_ip, username);
             else
                 RateLimit::note_auth_fail(client->remote_ip, username, mode);
+            // Local QA kit must land before AccountResult so the client snapshot is full.
+            if (result == AccountResultCode::kAccountOk)
+                DevCheats::apply_kit(client);
             Writer writer(Server::OUTGOING_PACKET);
             writer.write<uint8_t>(Clientbound::kAccountResult);
             writer.write<uint8_t>(result);
@@ -969,8 +998,67 @@ void Client::on_message(WebSocket *ws, std::string_view message, uint64_t code) 
             }
             PetalID::T from = (PetalID::T) arg;
             if (from == PetalID::kNone || from >= PetalID::kNumPetals
-                || !Craft::can_upgrade_petal(from)) {
+                || !Craft::can_craft_petal(from)) {
                 send_craft_update(client, CraftResultCode::kCraftNoMats, PetalID::kNone);
+                break;
+            }
+            if (Craft::can_level_petal(from)) {
+                // Unique: infinite level ladder instead of a rarity rung.
+                uint32_t &lv = client->petal_levels[from];
+                if (mode == CraftMode::kCraftExchange) {
+                    uint32_t cost = Craft::level_exchange_cost(lv);
+                    if (lv >= Craft::kMaxPetalLevel || !consume_craft_mats(client, from, cost)) {
+                        send_craft_update(client, CraftResultCode::kCraftNoMats, PetalID::kNone);
+                        break;
+                    }
+                    if (client->craft_attempts < 4000000000u)
+                        ++client->craft_attempts;
+                    ++lv;
+                    persist_account(client);
+                    send_craft_update(client, CraftResultCode::kCraftLevelWin, from,
+                        (uint16_t) lv);
+                    break;
+                }
+                uint32_t max_batches = 1u;
+                if (mode == CraftMode::kCraftGamble || mode == CraftMode::kCraftGambleAll) {
+                    if (client->check_invalid(validator.validate_uint16())) return;
+                    uint16_t n = reader.read<uint16_t>();
+                    if (n > 0) max_batches = n;
+                }
+                if (mode == CraftMode::kCraftGambleAll || max_batches > 1u) {
+                    uint32_t owned0 = craft_owned(client, from);
+                    if (owned0 > max_batches) max_batches = owned0;
+                    if (max_batches > 65535u) max_batches = 65535u;
+                }
+                uint32_t done = 0, wins = 0, last_lost = 0;
+                while (done < max_batches && lv < Craft::kMaxPetalLevel
+                    && craft_owned(client, from) >= Craft::kCraftBatch) {
+                    if (!consume_craft_mats(client, from, Craft::kCraftBatch)) break;
+                    ++done;
+                    if (client->craft_attempts < 4000000000u)
+                        ++client->craft_attempts;
+                    if (frand() < Craft::level_success_chance(lv)) {
+                        ++lv;
+                        ++wins;
+                    } else {
+                        uint32_t lost = Craft::craft_fail_loss();
+                        if (lost > Craft::kCraftBatch) lost = Craft::kCraftBatch;
+                        last_lost = lost;
+                        for (uint32_t i = lost; i < Craft::kCraftBatch; ++i)
+                            try_give_petal(client, from);
+                    }
+                }
+                persist_account(client);
+                if (done == 0)
+                    send_craft_update(client, CraftResultCode::kCraftNoMats, PetalID::kNone);
+                else if (wins > 0)
+                    send_craft_update(client, CraftResultCode::kCraftLevelWin, from,
+                        (uint16_t) (lv > 65535u ? 65535u : lv));
+                else {
+                    uint16_t lost = (uint16_t) (last_lost > 0 ? last_lost : Craft::kCraftFailLossMin);
+                    send_craft_update(client, CraftResultCode::kCraftMiss,
+                        (PetalID::T) lost, lost);
+                }
                 break;
             }
             uint8_t rarity = PETAL_DATA[from].rarity;
@@ -1394,11 +1482,13 @@ void Client::on_message(WebSocket *ws, std::string_view message, uint64_t code) 
             // accounts because camera inventory is empty mid-life.
             if (simulation->ent_alive(camera.get_player())) {
                 Entity &player = simulation->get_ent(camera.get_player());
-                AccountStore::capture(client);
+                // Title return is not a disconnect — keep memory dirty; ~15s
+                // flush / WS close still sync-write. Avoids hitch on every leave.
+                AccountStore::capture_nosave(client);
                 BitMath::set(player.flags, EntityFlags::kNoDrops);
                 simulation->request_delete(player.id);
             } else {
-                AccountStore::capture(client);
+                AccountStore::capture_nosave(client);
             }
             // Leaving the match always turns drop-bonus off (must re-enable next spawn).
             if (client->bonus_enabled) {
@@ -1429,6 +1519,7 @@ void Client::on_message(WebSocket *ws, std::string_view message, uint64_t code) 
             client->craft_bank = {};
             client->coins = 0;
             client->craft_attempts = 0;
+            client->petal_levels = {};
             for (uint8_t i = 0; i < TalentID::kNum; ++i)
                 client->talent_ranks[i] = 0;
             client->loadout_presets = {};
@@ -1476,6 +1567,7 @@ void Client::on_message(WebSocket *ws, std::string_view message, uint64_t code) 
                 }
                 client->craft_bank.fill(0);
                 client->coins = 0;
+                client->petal_levels = {};
                 for (uint8_t i = 0; i < TalentID::kNum; ++i)
                     client->talent_ranks[i] = 0;
                 send_craft_update(client, CraftResultCode::kCraftBankSync, PetalID::kNone);

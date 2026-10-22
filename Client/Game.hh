@@ -211,6 +211,8 @@ namespace Game {
     extern uint8_t guild_panel_open;
     extern std::string guild_create_draft;
     extern std::array<uint32_t, PetalID::kNumPetals> craft_bank;
+    // Infinite petal levels (Unique), synced with every craft update.
+    extern std::array<uint32_t, PetalID::kNumPetals> petal_levels;
     extern uint32_t coins;
     extern uint8_t craft_selected_rarity; // shop / specials
     extern PetalID::T craft_tray_id;
