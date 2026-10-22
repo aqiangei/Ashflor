@@ -51,24 +51,71 @@ void render_health(Renderer &ctx, Entity const &ent) {
     float const bar_alpha = label_alpha * (is_loot_chest ? 1.f
         : (show_bar ? ent.healthbar_opacity : 1.f));
 
+    // Mob name / rarity:
+    // - No HP bar: name + rarity on one horizontal line under the mob.
+    // - HP bar shown: name above the bar; rarity at bottom-right of the bar.
+    char const *mob_name = nullptr;
+    char const *rarity_label = nullptr;
+    uint8_t rarity = RarityID::kNumRarities;
     if (is_mob) {
         MobID::T mid = ent.get_mob_id();
         if (mid < MobID::kNumMobs) {
-            char const *name = I18n::mob_name(mid);
-            if (name != nullptr && name[0] != '\0') {
-                RenderContext nm(&ctx);
-                ctx.set_global_alpha(label_alpha);
-                ctx.set_text_size(12);
-                float tw = ctx.get_text_size(name);
-                ctx.translate(tw * 0.5f, -11.f);
-                ctx.draw_text(name, {
-                    .fill = 0xffffffff,
-                    .stroke = 0xff000000,
-                    .size = 12,
-                    .stroke_scale = 0.14f
-                });
+            mob_name = I18n::mob_name(mid);
+            if (mob_name != nullptr && mob_name[0] == '\0') mob_name = nullptr;
+            if (!is_loot_chest) {
+                rarity = ent.get_rarity();
+                if (rarity >= RarityID::kNumRarities)
+                    rarity = MOB_DATA[mid].rarity;
+                if (rarity < RarityID::kNumRarities)
+                    rarity_label = I18n::rarity_name(rarity);
             }
         }
+    }
+
+    if (is_mob && !show_bar && (mob_name != nullptr || rarity_label != nullptr)) {
+        RenderContext row(&ctx);
+        ctx.set_global_alpha(label_alpha);
+        ctx.set_text_size(12);
+        float name_w = mob_name != nullptr ? ctx.get_text_size(mob_name) : 0.f;
+        float rare_w = rarity_label != nullptr ? ctx.get_text_size(rarity_label) : 0.f;
+        float gap = (name_w > 0.f && rare_w > 0.f) ? 8.f : 0.f;
+        float total = name_w + gap + rare_w;
+        float x = w - total * 0.5f;
+        if (mob_name != nullptr) {
+            RenderContext nm(&ctx);
+            ctx.translate(x + name_w * 0.5f, 0.f);
+            ctx.draw_text(mob_name, {
+                .fill = 0xffffffff,
+                .stroke = 0xff000000,
+                .size = 12,
+                .stroke_scale = 0.14f
+            });
+            x += name_w + gap;
+        }
+        if (rarity_label != nullptr) {
+            RenderContext rare(&ctx);
+            ctx.translate(x + rare_w * 0.5f, 0.f);
+            ctx.draw_text(rarity_label, {
+                .fill = RARITY_COLORS[rarity] | 0xff000000,
+                .stroke = 0xff000000,
+                .size = 12,
+                .stroke_scale = 0.14f
+            });
+        }
+    }
+
+    if (show_bar && mob_name != nullptr) {
+        RenderContext nm(&ctx);
+        ctx.set_global_alpha(label_alpha);
+        ctx.set_text_size(12);
+        float tw = ctx.get_text_size(mob_name);
+        ctx.translate(tw * 0.5f, -11.f);
+        ctx.draw_text(mob_name, {
+            .fill = 0xffffffff,
+            .stroke = 0xff000000,
+            .size = 12,
+            .stroke_scale = 0.14f
+        });
     }
 
     if (show_bar) {
@@ -96,28 +143,18 @@ void render_health(Renderer &ctx, Entity const &ent) {
         ctx.stroke();
     }
 
-    if (is_mob && !is_loot_chest) {
-        MobID::T mid = ent.get_mob_id();
-        if (mid < MobID::kNumMobs) {
-            uint8_t rarity = ent.get_rarity();
-            if (rarity >= RarityID::kNumRarities)
-                rarity = MOB_DATA[mid].rarity;
-            if (rarity < RarityID::kNumRarities) {
-                char const *label = I18n::rarity_name(rarity);
-                RenderContext rare(&ctx);
-                ctx.set_global_alpha(label_alpha);
-                ctx.set_text_size(12);
-                float tw = ctx.get_text_size(label);
-                // Always bottom-right of the HP bar slot (even if bar is hidden).
-                ctx.translate(bar_w - tw * 0.5f, 12.f);
-                ctx.draw_text(label, {
-                    .fill = RARITY_COLORS[rarity] | 0xff000000,
-                    .stroke = 0xff000000,
-                    .size = 12,
-                    .stroke_scale = 0.14f
-                });
-            }
-        }
+    if (show_bar && rarity_label != nullptr) {
+        RenderContext rare(&ctx);
+        ctx.set_global_alpha(label_alpha);
+        ctx.set_text_size(12);
+        float tw = ctx.get_text_size(rarity_label);
+        ctx.translate(bar_w - tw * 0.5f, 12.f);
+        ctx.draw_text(rarity_label, {
+            .fill = RARITY_COLORS[rarity] | 0xff000000,
+            .stroke = 0xff000000,
+            .size = 12,
+            .stroke_scale = 0.14f
+        });
     }
 
     if (!show_identity) return;

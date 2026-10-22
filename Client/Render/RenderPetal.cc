@@ -86,6 +86,7 @@ void render_petal(Renderer &ctx, Entity const &ent) {
         draw_static_petal(id, ctx);
     else
         draw_static_petal_single(id, ctx);
+    // Highest rarity is Unique — sparkle only for Unique petals (not Super/Ultra).
     if (data.rarity == RarityID::kUnique && frand() < fclamp(0.25 * Ui::dt/16.67, 0, 1))
         Particle::add_unique_particle(ent.get_x(), ent.get_y());
 

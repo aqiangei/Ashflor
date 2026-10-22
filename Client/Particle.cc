@@ -5,6 +5,7 @@
 
 #include <Client/Assets/Assets.hh>
 
+#include <Shared/RarityScale.hh>
 #include <Shared/StaticData.hh>
 #include <Shared/StaticDefinitions.hh>
 
@@ -188,7 +189,7 @@ void Particle::tick_game(Renderer &ctx, double dt) {
         part.y += part.y_velocity * dt / 1000;
         part.opacity = fclamp(part.opacity - dt / 1000, 0, 1);
         ctx.set_global_alpha(part.opacity);
-        ctx.set_fill(0x80ffffff);
+        ctx.set_fill(part.fill);
         ctx.begin_path();
         ctx.arc(part.x, part.y, part.radius);
         ctx.fill();
@@ -231,11 +232,13 @@ void Particle::tick_game(Renderer &ctx, double dt) {
 }
 
 void Particle::add_unique_particle(float x, float y) {
+    // Top-of-ladder Unique petal sparkle (not Super mint — Unique pink-red).
     GameParticleEntity part;
     part.x = x;
     part.y = y;
     part.radius = 4;
     part.opacity = 1;
+    part.fill = (RARITY_COLORS[RarityID::kUnique] & 0x00ffffff) | 0xb0000000;
     Vector rand = Vector::rand(50);
     part.x_velocity = rand.x;
     part.y_velocity = rand.y;

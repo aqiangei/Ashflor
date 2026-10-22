@@ -43,6 +43,22 @@ static Element *make_entries(std::initializer_list<std::pair<char const *, char 
 
 static Element *make_changelog_contents() {
     Element *elt = new Ui::VContainer({
+        make_date("2026年10月22日", "October 22nd 2026"),
+        make_entries({
+            {"服务端稳定性：空间格 NaN/半径钳制与 ent_exists 守卫（防碰撞整图扫描卡死）；空图跳过刷怪/碰撞并缓清野怪；tick 异常退出以便拉起",
+             "Server stability: spatial NaN/radius clamps + ent_exists guards; empty maps skip spawn/collide and thin mobs; tick faults exit for restart"},
+        }),
+        make_divider(),
+        make_date("2026年10月22日", "October 22nd 2026"),
+        make_entries({
+            {"怪物名牌：无血条时名字与稀有度同一行；出伤出血条后稀有度改到血条右下角",
+             "Mob labels: name+rarity one line without HP bar; rarity moves to bar BR once damaged"},
+            {"125 级以上组队不再受等级差 ≤25 限制（队内最低 ≥125 即可）",
+             "Party level-gap ≤25 waived when whole party is Lv125+"},
+            {"独特花瓣粒子改用独特色（粉红），仅 Unique 触发，不再像超凡薄荷绿",
+             "Unique petal sparkles use Unique pink; Unique-only (not Super mint)"},
+        }),
+        make_divider(),
         make_date("2026年10月21日", "October 21st 2026"),
         make_entries({
             {"经验与等级：去掉 150 硬顶；等级由累计 score 换算；≤100 缓升、其后立方加陡；击杀经验 ×25；图鉴 XP 同步实发",

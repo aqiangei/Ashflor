@@ -303,6 +303,8 @@ static uint8_t party_level_gap_ok(Client *host, Client *candidate) {
                 absorb(c);
         }
     }
+    // 125+: no gap cap among high-level players (lo is party+candidate min).
+    if (lo >= Party::LEVEL_GAP_FREE_FROM) return 1;
     return (hi - lo) <= Party::MAX_LEVEL_GAP ? 1 : 0;
 }
 
@@ -355,7 +357,8 @@ uint8_t Party::invite(Client *from, std::string const &target_name) {
     if (!party_level_gap_ok(from, target)) {
         notify(from, "[队伍] 等级差超过 " + std::to_string(MAX_LEVEL_GAP)
             + " 级，无法组队（队内最高与最低相差须 ≤ "
-            + std::to_string(MAX_LEVEL_GAP) + "）。");
+            + std::to_string(MAX_LEVEL_GAP) + "；"
+            + std::to_string(LEVEL_GAP_FREE_FROM) + " 级以上无此限制）。");
         return 0;
     }
     // Ensure inviter has a party shell so accept can join
@@ -410,7 +413,8 @@ uint8_t Party::respond(Client *target, std::string const &from_name, uint8_t acc
     }
     if (!party_level_gap_ok(from, target)) {
         notify(target, "[队伍] 等级差超过 " + std::to_string(MAX_LEVEL_GAP)
-            + " 级，无法加入。");
+            + " 级，无法加入（" + std::to_string(LEVEL_GAP_FREE_FROM)
+            + " 级以上无此限制）。");
         notify(from, "[队伍] " + player_name(target) + " 因等级差过大未能入队。");
         return 0;
     }

@@ -445,7 +445,25 @@ void Server::run() {
             console.log("SIGUSR2: draining...");
             _sigusr2();
         });
-        Module.tickInterval = setInterval(_tick, $0);
+        // florr_clone-style: never let an uncaught wasm fault leave Node wedged
+        // with a full listen backlog ("连接中" forever). Exit → systemd restarts.
+        let tickFaults = 0;
+        Module.tickInterval = setInterval(function () {
+            try {
+                _tick();
+                tickFaults = 0;
+            } catch (e) {
+                tickFaults++;
+                console.error("[tick] wasm fault:", e && e.message ? e.message : e);
+                if (tickFaults >= 2) {
+                    console.error("[tick] repeated faults — exiting for systemd restart");
+                    try {
+                        if (Module.tickInterval) clearInterval(Module.tickInterval);
+                    } catch (_) {}
+                    process.exit(1);
+                }
+            }
+        }, $0);
     }, 1000 / TPS);
 }
 

@@ -13,6 +13,8 @@ namespace Party {
     constexpr uint32_t MAX_SIZE = 4;
     // Party members' levels must stay within this span (max - min).
     constexpr uint32_t MAX_LEVEL_GAP = 25;
+    // At/above this level the gap rule is waived (high-level free party).
+    constexpr uint32_t LEVEL_GAP_FREE_FROM = 125;
     constexpr float REVIVE_RADIUS = 150.0f;
     constexpr float INVITE_RADIUS = 500.0f;
     // Nearby auto-squad (florr-style): join within this, leave beyond leave radius.

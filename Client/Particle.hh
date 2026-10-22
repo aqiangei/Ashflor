@@ -25,6 +25,7 @@ namespace Particle {
         float y_velocity;
         float radius;
         float opacity;
+        uint32_t fill = 0x80ffffff;
     };
 
     void tick_title(Renderer &, double);

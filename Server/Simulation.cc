@@ -111,16 +111,34 @@ static void ensure_boss(Simulation *sim) {
 
 void Simulation::on_tick() {
     ++tick_index;
+    // florr_clone / rrolf: no humans → no spawn pressure; skip heavy collide/AI.
+    uint32_t flowers = 0;
+    for_each<kFlower>([&](Simulation *, Entity &ent) {
+        if (!ent.has_component(kMob)) ++flowers;
+    });
+    uint8_t const occupied = flowers > 0;
+
     spatial_hash.refresh(ARENA_WIDTH, ARENA_HEIGHT);
-    ensure_boss(this);
-    // Double the spawn attempts so the doubled zone population fills at the old pace.
-    if (frand() < 1.0f / TPS) {
-        uint32_t players = 0;
-        for_each<kFlower>([&](Simulation *, Entity &ent) {
-            if (!ent.has_component(kMob)) ++players;
+    if (occupied) ensure_boss(this);
+
+    // Idle map (Server already ~1 Hz): thin wild mobs slowly, skip collide/AI.
+    if (!occupied) {
+        for_each_entity([](Simulation *sim, Entity &ent) {
+            if (!ent.has_component(kMob)) return;
+            if (ent.zone == 0xFF) return; // boss / special
+            if (BitMath::at(ent.flags, EntityFlags::kIsDespawning)) return;
+            // ~1.5% per idle tick → density drops without a stampede of deletes
+            if (frand() < 0.015f)
+                sim->request_delete(ent.id);
         });
-        uint32_t batches = 2u * (4u + players);
-        if (batches > 24u) batches = 24u;
+        for_each_entity(entity_clear_references);
+        return;
+    }
+
+    // Occupied: modest refill (was up to 24 batches → tick hog with dense biomes).
+    if (frand() < 1.0f / TPS) {
+        uint32_t batches = 2u + flowers;
+        if (batches > 8u) batches = 8u;
         for (uint32_t i = 0; i < batches; ++i)
             Map::spawn_zone_mob(this);
     }
