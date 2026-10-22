@@ -3,13 +3,30 @@
 #include <Client/Render/Renderer.hh>
 
 #include <Client/Assets/Assets.hh>
+#include <Client/Assets/ThemeArt.hh>
+#include <Client/Particle.hh>
+#include <Client/Ui/Extern.hh>
 
 #include <Shared/Entity.hh>
+#include <Shared/EntityDef.hh>
 #include <Shared/StaticData.hh>
 
 #include <Client/Game.hh>
 
+#include <Helpers/Math.hh>
+
 #include <cmath>
+#include <string_view>
+#include <unordered_map>
+
+namespace {
+struct SpiritTrailPrev {
+    float x = 0;
+    float y = 0;
+    uint8_t ok = 0;
+};
+std::unordered_map<uint32_t, SpiritTrailPrev> spirit_trail_prev;
+}
 
 void render_mob(Renderer &ctx, Entity const &ent) {
     uint32_t flags = 0;
@@ -28,7 +45,63 @@ void render_mob(Renderer &ctx, Entity const &ent) {
             .color = ent.get_color()
         };
     }
-    draw_static_mob(ent.get_mob_id(), ctx, attrs);
+    uint8_t const map_id = Game::simulation.arena_info.map_id;
+    std::string_view const nm = (ent.has_component(kName) && !ent.get_name().empty())
+        ? std::string_view(ent.get_name()) : std::string_view{};
+    ThemeArt::Visual const theme = ThemeArt::resolve(ent.get_mob_id(), nm, map_id);
+    if (theme != ThemeArt::Visual::None) {
+        ThemeArt::draw(ctx, theme, map_id, attrs.radius, attrs.animation, attrs.seed, nm);
+    } else {
+        draw_static_mob(ent.get_mob_id(), ctx, attrs);
+        // E: lightweight sleep overlay (no new AI) — Z marks above sleeping event mobs.
+        if (!nm.empty() && (nm.find("睡觉") != std::string_view::npos
+                || nm.find("Sleep") != std::string_view::npos
+                || nm.find("Asleep") != std::string_view::npos)) {
+            float r = attrs.radius;
+            ctx.set_global_alpha(0.55f + 0.2f * sinf(attrs.animation * 0.7f));
+            ctx.set_stroke(0xffffffff);
+            ctx.set_line_width(2.5f);
+            float ox = r * 0.55f, oy = -r * 0.85f;
+            for (int i = 0; i < 3; ++i) {
+                float s = 0.55f + i * 0.25f;
+                ctx.begin_path();
+                ctx.move_to(ox + i * 6.f, oy - i * 8.f);
+                ctx.line_to(ox + i * 6.f + 7.f * s, oy - i * 8.f);
+                ctx.line_to(ox + i * 6.f, oy - i * 8.f + 7.f * s);
+                ctx.line_to(ox + i * 6.f + 7.f * s, oy - i * 8.f + 7.f * s);
+                ctx.stroke();
+            }
+            ctx.set_global_alpha(1.f);
+        }
+    }
+    // Guide-spirit trail (ThemeArt Escort, or name fallback).
+    uint8_t const is_spirit = (theme == ThemeArt::Visual::Escort)
+        || (!nm.empty() && (nm.find("迷路") != std::string_view::npos
+            || nm.find("掉队") != std::string_view::npos
+            || nm.find("Lost") != std::string_view::npos
+            || nm.find("Stray") != std::string_view::npos));
+    if (is_spirit) {
+        float const x = ent.get_x();
+        float const y = ent.get_y();
+        uint32_t const key = EntityID::make_hash(ent.id);
+        SpiritTrailPrev &prev = spirit_trail_prev[key];
+        uint8_t had_prev = prev.ok;
+        float bdx = 0.f, bdy = 0.f;
+        if (had_prev) {
+            bdx = prev.x - x;
+            bdy = prev.y - y;
+        }
+        prev.x = x;
+        prev.y = y;
+        prev.ok = 1;
+        float moved2 = bdx * bdx + bdy * bdy;
+        // Unique-petal density while on screen; denser ribbon when moving.
+        Particle::add_spirit_trail(x, y, had_prev ? bdx : 0.f, had_prev ? bdy : 0.f);
+        if (had_prev && moved2 > 0.5f * 0.5f) {
+            Particle::add_spirit_trail(x + bdx * 0.35f, y + bdy * 0.35f, bdx, bdy);
+            Particle::add_spirit_trail(x + bdx * 0.7f, y + bdy * 0.7f, bdx, bdy);
+        }
+    }
     if (ent.deletion_animation > 0)
         Game::seen_mobs[ent.get_mob_id()] = 1;
     /*

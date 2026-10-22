@@ -7,6 +7,8 @@
 #include <Server/Guild.hh>
 #include <Server/Party.hh>
 #include <Server/Treasure.hh>
+#include <Server/WorldEvent.hh>
+#include <Server/WorldExplore.hh>
 #include <Server/PetalTracker.hh>
 #include <Server/Server.hh>
 #include <Server/Spawn.hh>
@@ -16,6 +18,7 @@
 #include <Shared/Map.hh>
 #include <Shared/StaticData.hh>
 
+#include <algorithm>
 #include <array>
 #include <chrono>
 #include <iostream>
@@ -45,12 +48,15 @@ static void _update_client(Simulation *sim, Client *client) {
         _park_player_still(sim, client);
         return;
     }
-    std::set<EntityID> in_view;
+    // A temporary tree allocated one node per visible entity on every tick.
+    // Collect contiguously, then keep the same sorted, unique wire order.
+    std::vector<EntityID> in_view;
+    in_view.reserve(client->in_view.size() + 16);
     std::vector<EntityID> deletes;
-    in_view.insert(client->camera);
+    in_view.push_back(client->camera);
     Entity &camera = sim->get_ent(client->camera);
     if (sim->ent_exists(camera.get_player())) 
-        in_view.insert(camera.get_player());
+        in_view.push_back(camera.get_player());
     Writer writer(Server::OUTGOING_PACKET);
     writer.write<uint8_t>(Clientbound::kClientUpdate);
     writer.write<EntityID>(client->camera);
@@ -70,11 +76,13 @@ static void _update_client(Simulation *sim, Client *client) {
                     && !Party::can_take_drop(client, sim, ent.get_team()))
                     return;
             }
-            in_view.insert(ent.id);
+            in_view.push_back(ent.id);
         });
+    std::sort(in_view.begin(), in_view.end());
+    in_view.erase(std::unique(in_view.begin(), in_view.end()), in_view.end());
 
     for (EntityID const &i: client->in_view) {
-        if (!in_view.contains(i)) {
+        if (!std::binary_search(in_view.begin(), in_view.end(), i)) {
             writer.write<EntityID>(i);
             deletes.push_back(i);
         }
@@ -92,7 +100,7 @@ static void _update_client(Simulation *sim, Client *client) {
         writer.write<EntityID>(id);
         writer.write<uint8_t>(create | (ent.pending_delete << 1));
         ent.write(&writer, BitMath::at(create, 0));
-        client->in_view.insert(id);
+        if (create) client->in_view.insert(id);
     }
     writer.write<EntityID>(NULL_ENTITY);
     //write arena stuff
@@ -162,6 +170,8 @@ void GameInstance::init(uint8_t id) {
     team_manager.add_team(ColorID::kRed);
     #endif
     Treasure::spawn_for_map(this);
+    WorldExplore::spawn_for_map(this);
+    WorldEvent::spawn_for_map(this);
 }
 
 static void process_map_portals(GameInstance *game) {
@@ -213,6 +223,8 @@ void GameInstance::tick() {
     Party::tick(this);
     Guild::tick(this);
     Treasure::tick(this);
+    WorldExplore::tick(this);
+    WorldEvent::tick(this);
     for (Client *client : clients)
         _update_client(&simulation, client);
     simulation.post_tick();
@@ -262,6 +274,8 @@ void GameInstance::add_client(Client *client) {
     client->camera = ent.id;
     client->seen_arena = 0;
     client->in_view.clear();
+    WorldExplore::on_player_spawned(client);
+    WorldEvent::clear_client(client);
 }
 
 Client *GameInstance::client_by_camera(EntityID const &id) {
@@ -297,6 +311,8 @@ void GameInstance::remove_client(Client *client) {
                 Guild::send_update(c);
         }
     }
+    WorldExplore::clear_client(client);
+    WorldEvent::clear_client(client);
     _teardown_camera(this, client);
     client->game = nullptr;
     client->in_view.clear();
@@ -306,6 +322,9 @@ void GameInstance::remove_client(Client *client) {
 void GameInstance::transfer_client(Client *client, GameInstance *dest) {
     if (client == nullptr || dest == nullptr || client->game == dest) return;
     DEBUG_ONLY(assert(client->game == this);)
+
+    WorldExplore::clear_client(client);
+    WorldEvent::clear_client(client);
 
     // Snapshot from the live flower (camera inventory is empty while alive).
     uint32_t snap_level = 1;

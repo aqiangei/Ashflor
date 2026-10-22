@@ -71,6 +71,8 @@ void Ui::ui_swap_petals(uint8_t static_pos1, uint8_t static_pos2) {
     PetalID::T id2 = Game::cached_loadout[static_pos2];
     if (id1 == id2) return;
     uint8_t primary = Game::loadout_count;
+    // Coins (and invalid ids) cannot land on primary. kNone must be allowed so
+    // primary ↔ empty secondary (and the reverse) can clear / fill a main slot.
     if ((static_pos1 < primary && Recipe::is_bag_only(id2))
         || (static_pos2 < primary && Recipe::is_bag_only(id1)))
         return;
@@ -83,6 +85,12 @@ void Ui::ui_swap_petals(uint8_t static_pos1, uint8_t static_pos2) {
         w->petal_id = id;
         w->last_id = id;
         w->no_change_ticks = 100;
+        // Empty primaries never rendered (animation stuck near 0). Snap visible
+        // so a petal arriving from secondary shows on the main slot immediately.
+        if (id != PetalID::kNone) {
+            w->showed = 1;
+            w->animation = 1.f;
+        }
     };
     paint(Ui::UiLoadout::petal_slots[static_pos1], id2);
     paint(Ui::UiLoadout::petal_slots[static_pos2], id1);

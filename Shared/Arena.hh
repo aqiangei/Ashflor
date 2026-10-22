@@ -51,6 +51,9 @@ public:
     void reset_protocol();
 #ifdef SERVERSIDE
     void write(Writer *, uint8_t);
+    // Re-dirty every minimap slot (pos + name + color), including empties so
+    // dropped clear-to-(-1) packets cannot leave ghost dots/names on Hold-G.
+    void force_sync_minimap_slots();
     #define SINGLE(name, type) void set_##name(type const);
     #define MULTIPLE(name, type, amt) void set_##name(uint32_t, type const);
     FIELDS_Arena

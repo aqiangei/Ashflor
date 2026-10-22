@@ -6,6 +6,8 @@
 #include <Server/Guild.hh>
 #include <Server/Server.hh>
 #include <Server/Spawn.hh>
+#include <Server/WorldEvent.hh>
+#include <Server/WorldExplore.hh>
 
 #include <Shared/Binary.hh>
 #include <Shared/Config.hh>
@@ -303,7 +305,7 @@ static uint8_t party_level_gap_ok(Client *host, Client *candidate) {
                 absorb(c);
         }
     }
-    // 125+: no gap cap among high-level players (lo is party+candidate min).
+    // 100+: no gap cap among high-level players (lo is party+candidate min).
     if (lo >= Party::LEVEL_GAP_FREE_FROM) return 1;
     return (hi - lo) <= Party::MAX_LEVEL_GAP ? 1 : 0;
 }
@@ -437,6 +439,8 @@ uint8_t Party::respond(Client *target, std::string const &from_name, uint8_t acc
 
 void Party::on_death(Client *client, float x, float y) {
     if (client == nullptr || client->game == nullptr) return;
+    // Keep explore escort alive — spirit walks to treasure even if the player dies.
+    WorldEvent::clear_client(client);
     clear_corpse(client);
     client->has_death_pos = 1;
     client->death_x = x;
@@ -482,9 +486,16 @@ static void do_revive(Client *dead) {
     }
     Entity &player = alloc_player(sim, camera.get_team());
     player_spawn_at(sim, camera, player, x, y);
+    {
+        std::string n = !dead->play_name.empty() ? dead->play_name : dead->account_name;
+        if (!n.empty()) player.set_name(n);
+    }
+    player.set_guild(dead->guild_name);
     client_clear_life_stats(dead);
     Guild::sync_nametag(dead);
     Party::apply_team(dead);
+    WorldExplore::on_player_spawned(dead);
+    WorldEvent::clear_client(dead);
     std::string msg = "[队伍] " + player_name(dead) + " 已被复活！";
     for (Client *c : dead->game->clients) {
         if (c != nullptr && c->party_id == dead->party_id) {

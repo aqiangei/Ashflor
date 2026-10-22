@@ -23,17 +23,18 @@ namespace Craft {
     };
 
     // Expected seconds to meaningfully progress a rarity via kill→drop→craft.
+    // 2026-10 balance: stretched with slower XP / fewer multi-drops.
     static float const FARM_SEC[RarityID::kNumRarities] = {
-        8.f, 28.f, 140.f, 700.f, 2800.f, 9000.f, 28000.f, 70000.f, 160000.f
+        12.f, 40.f, 200.f, 1000.f, 4000.f, 13000.f, 40000.f, 100000.f, 220000.f
     };
 
-    // Coin per kill (before zone_coin_mult). Tuned so ~3–6 min hard-zone grind
-    // buys a mid special; Unique chase petals stay long sinks.
+    // Coin per kill (before zone_coin_mult). ~0.7× prior so ~8–15 min hard-zone
+    // buys a mid special; shop list prices left as the convenience tax.
     static uint32_t const COIN_BASE[RarityID::kNumRarities] = {
-        2, 6, 18, 48, 120, 280, 700, 1800, 4500
+        1, 4, 12, 34, 85, 200, 500, 1250, 3200
     };
     static uint32_t const COIN_SPREAD[RarityID::kNumRarities] = {
-        3, 6, 14, 32, 80, 160, 400, 900, 2200
+        2, 4, 10, 22, 55, 110, 280, 630, 1500
     };
 
     // Random-rarity packs: intentionally worse EV than focused farming (~1.6–2×).
@@ -112,7 +113,8 @@ namespace Craft {
         static uint8_t inited = 0;
         if (!inited) {
             for (uint32_t id = 1; id < (uint32_t) PetalID::kNumPetals; ++id) {
-                // Coin only — mats/combos are normal petals.
+                // Currency is not a craft gamble result.
+                if ((PetalID::T) id == PetalID::kCoin) continue;
                 if (Recipe::is_bag_only((PetalID::T) id)) continue;
                 uint8_t r = PETAL_DATA[id].rarity;
                 if (r < RarityID::kNumRarities)
@@ -167,7 +169,8 @@ namespace Craft {
 
     uint8_t can_upgrade_petal(PetalID::T id) {
         if (id == PetalID::kNone || id >= PetalID::kNumPetals) return 0;
-        if (Recipe::is_bag_only(id)) return 0; // coin only
+        if (id == PetalID::kCoin) return 0; // currency — not a 5-merge ladder
+        if (Recipe::is_bag_only(id)) return 0;
         uint8_t r = PETAL_DATA[id].rarity;
         return r < RarityID::kNumRarities - 1 ? 1 : 0;
     }
@@ -258,7 +261,7 @@ namespace Craft {
             case PetalID::kAntennae: return 1800;
             case PetalID::kHeaviest: return 2400;
             case PetalID::kMoon: return 3200;
-            case PetalID::kGoldenLeaf: return 4000;
+            case PetalID::kGoldenLeaf: return 48000; // rare CD utility — shop Rare only; Ultra from boss
             case PetalID::kLotus: return 4800;
             case PetalID::kThirdEye: return 5600;
             case PetalID::kYggdrasil: return 7200;
@@ -285,14 +288,14 @@ namespace Craft {
         if (is_craftable_special(id)) {
             // Chase petals: rarer → rarer in the wild (shop is the clean sink)
             uint8_t r = PETAL_DATA[id].rarity;
-            if (r >= RarityID::kLegendary) return 0.22f;
-            if (r >= RarityID::kEpic) return 0.35f;
-            if (r >= RarityID::kRare) return 0.50f;
-            return 0.70f;
+            if (r >= RarityID::kLegendary) return 0.18f;
+            if (r >= RarityID::kEpic) return 0.28f;
+            if (r >= RarityID::kRare) return 0.42f;
+            return 0.60f;
         }
         // Filler combat petals that clog bags after long grinds
         if (id == PetalID::kBasic || id == PetalID::kLight || id == PetalID::kHeavy)
-            return 0.55f;
+            return 0.45f;
         return 1.f;
     }
 

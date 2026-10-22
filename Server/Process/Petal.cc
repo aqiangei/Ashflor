@@ -151,9 +151,21 @@ void tick_petal_behavior(Simulation *sim, Entity &petal) {
                 entity_set_despawn_tick(petal, 0.6 * TPS);
     } else if (petal_name_is(pid, "Bubble")) {
             if (BitMath::at(player.input, InputFlags::kDefending)) {
+                // All ready bubbles still pop, but impulse is capped to ~1 pop.
+                // Without a cap, 3–5 bubbles + defend (combat) stacked into a
+                // silent long-range rocket with no telegraph.
+                float const kBubbleImpulse = PLAYER_ACCELERATION * 20.f;
+                float const kBubbleVelCap = PLAYER_ACCELERATION * 24.f;
                 Vector v(player.get_x() - petal.get_x(), player.get_y() - petal.get_y());
-                v.set_magnitude(PLAYER_ACCELERATION * 20);
-                player.velocity += v;
+                float sep = v.magnitude();
+                if (sep > 1.f && std::isfinite(sep)
+                    && player.velocity.magnitude() < kBubbleVelCap) {
+                    v.set_magnitude(kBubbleImpulse);
+                    player.velocity += v;
+                    float nm = player.velocity.magnitude();
+                    if (nm > kBubbleVelCap && std::isfinite(nm))
+                        player.velocity.set_magnitude(kBubbleVelCap);
+                }
                 sim->request_delete(petal.id);
             }
     } else switch (pid) {

@@ -477,10 +477,11 @@ void build_zones(MapZones &zones, uint8_t map_id, uint32_t &rng,
     float hub_hw = rng_range(rng, 2800.f, 3400.f);
     float hub_hh = rng_range(rng, 2100.f, 2600.f);
 
-    // Outer → inner insets (fraction of arena). Index 0 = Ultra (full map).
+    // Outer → inner insets (fraction of arena). Index 0 = Unique (full map).
     // Nine bands align with RarityID / petal colours on the G-key minimap.
+    // Unusual belt thickened further so hub periphery reads packed.
     static float const kInset[9] = {
-        0.00f, 0.045f, 0.095f, 0.150f, 0.210f, 0.280f, 0.360f, 0.450f, 0.55f
+        0.00f, 0.065f, 0.140f, 0.220f, 0.300f, 0.350f, 0.400f, 0.445f, 0.55f
     };
     auto pool_for = [&](uint32_t diff) -> ZoneDefinition {
         if (diff == 0) return hub;
@@ -489,8 +490,9 @@ void build_zones(MapZones &zones, uint8_t map_id, uint32_t &rng,
         return hard;
     };
     auto dens_for = [](uint32_t diff) -> float {
+        // Common/Unusual: pack the hub + adjacent belt full of low-tier mobs.
         static float const k[] = {
-            0.18f, 2.4f, 2.55f, 2.7f, 2.85f, 3.0f, 3.15f, 3.25f, 3.35f
+            3.90f, 4.20f, 3.00f, 2.80f, 2.85f, 3.35f, 3.55f, 3.70f, 3.85f
         };
         return k[diff > MAX_DIFFICULTY ? MAX_DIFFICULTY : diff];
     };

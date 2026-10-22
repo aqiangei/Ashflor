@@ -150,14 +150,17 @@ void render_name(Renderer &ctx, Entity const &ent) {
         }
     }
 
-    // Treasure guide NPCs (named mobs, not flowers)
-    if (ent.has_component(kMob) && ent.get_mob_id() == MobID::kTreasureNpc
-        && ent.has_component(kName) && !ent.get_name().empty()) {
+    // Treasure / explore escort NPCs (named prop or themed mob, not flowers)
+    if (ent.has_component(kMob) && ent.has_component(kName)
+        && ent.get_nametag_visible() && !ent.get_name().empty()
+        && ent.get_mob_id() != MobID::kYahahaPad
+        && ent.get_mob_id() != MobID::kLootChest
+        && ent.get_mob_id() != MobID::kPushCrate) {
         RenderContext label(&ctx);
         ctx.set_text_size(14);
         ctx.translate(0, -rad - 18.f);
         draw_label(ctx, ent.get_name().c_str(), 14, 0xffffe08a);
     }
 
-    // Mob name / rarity layout lives in render_health (horizontal when no HP bar).
+    // Mob name / rarity live in render_health (under HP bar: name L, rarity R).
 }

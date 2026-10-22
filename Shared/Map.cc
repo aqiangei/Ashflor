@@ -960,16 +960,26 @@ static float zone_exclusive_area(uint8_t map_id, uint32_t zone_id) {
     return area > 0.f ? area : 0.f;
 }
 
+// Zone spawn rarity: primary/adjacent tilt, never below the mob's baked base.
+static uint8_t resolve_zone_spawn_rarity(uint8_t base_r, uint32_t zone_difficulty) {
+    if (base_r >= RarityID::kUnique) return base_r;
+    uint8_t spawn_r = pick_zone_spawn_rarity(zone_difficulty);
+    if (spawn_r < base_r) spawn_r = base_r;
+    return spawn_r;
+}
+
 void Map::spawn_random_mob(Simulation *sim, float x, float y) {
     uint32_t zone_id = Map::get_zone_from_pos(sim->map_id, x, y);
     struct ZoneDefinition const &zone = map_zones(sim->map_id)[zone_id];
-    // Respawn plaza: only the difficulty-0 hub table, and only a handful.
+    // Respawn plaza: only difficulty-0 table; raised cap so pad edge isn't barren.
     if (in_spawn_plaza(x, y)) {
         if (zone.difficulty != 0) return;
-        if (sim->plaza_mob_count >= 8) return;
+        if (sim->plaza_mob_count >= 56) return;
     }
-    // Mild combat denser fill; hub (diff 0) stays sparse.
-    float dens = zone.density * (zone.difficulty == 0 ? 1.f : 1.25f);
+    // Hub + Unusual belt: heavy fill so periphery looks packed.
+    float dens_mul = 1.25f;
+    if (zone.difficulty <= RarityID::kUnusual) dens_mul = 1.75f;
+    float dens = zone.density * dens_mul;
     if (dens * zone_exclusive_area(sim->map_id, zone_id) / (500 * 500) < sim->zone_mob_counts[zone_id]) return;
     float sum = 0;
     for (SpawnChance const &s : zone.spawns)
@@ -978,34 +988,40 @@ void Map::spawn_random_mob(Simulation *sim, float x, float y) {
     for (SpawnChance const &s : zone.spawns) {
         sum -= s.chance;
         if (sum <= 0) {
-            float radius = MOB_DATA[s.id].radius.get_single(1.f) * MOB_RADIUS_MULTIPLIER;
+            uint8_t base_r = MOB_DATA[s.id].rarity;
+            uint8_t spawn_r = resolve_zone_spawn_rarity(base_r, zone.difficulty);
+            float radius = MOB_DATA[s.id].radius.get_single(1.f) * MOB_RADIUS_MULTIPLIER
+                * mob_rarity_radius_mult(spawn_r);
             if (Map::circle_hits_impassable(sim->map_id, x, y, radius + 8.f)) return;
-            _spawn_mob_at(sim, zone_id, s.id, x, y);
+            _spawn_mob_at(sim, zone_id, s.id, x, y, spawn_r);
             return;
         }
     }
 }
 
-// 生成一只怪并套用 Zone 难度倍率 / 记账。
-void Map::_spawn_mob_at(Simulation *sim, uint32_t zone_id, MobID::T mob_id, float x, float y) {
+// 生成一只怪并套用 Zone 难度倍率 / 记账。spawn_rarity 须与采样 clearance 一致。
+void Map::_spawn_mob_at(Simulation *sim, uint32_t zone_id, MobID::T mob_id, float x, float y, uint8_t spawn_rarity) {
     struct ZoneDefinition const &zone = map_zones(sim->map_id)[zone_id];
-    alloc_mob(sim, mob_id, x, y, NULL_ENTITY, [&](Entity &mob){
+    uint32_t diff = zone.difficulty;
+    uint8_t base_r = MOB_DATA[mob_id].rarity;
+    uint8_t spawn_r = spawn_rarity;
+    if (spawn_r >= RarityID::kNumRarities) spawn_r = base_r;
+    if (spawn_r < base_r) spawn_r = base_r;
+    float const rs = mob_rarity_radius_mult(spawn_r);
+    // Zone/plaza count once per spawn call — alloc_mob runs on_spawn for every
+    // centipede segment, which would otherwise inflate density caps.
+    sim->zone_mob_counts[zone_id]++;
+    if (in_spawn_plaza(x, y)) sim->plaza_mob_count++;
+
+    Entity &head = alloc_mob(sim, mob_id, x, y, NULL_ENTITY, [&](Entity &mob){
         mob.zone = zone_id;
         mob.home_x = x;
         mob.home_y = y;
         mob.immunity_ticks = TPS;
-        BitMath::set(mob.flags, EntityFlags::kSpawnedFromZone);
+        // Do NOT set kSpawnedFromZone here: alloc_mob runs on_spawn before
+        // adding kSegmented to body segments, so a has_component check would
+        // still mark every segment and over-decrement zone_mob_counts on death.
         BitMath::set(mob.flags, EntityFlags::kHasCulling);
-        sim->zone_mob_counts[zone_id]++;
-        if (in_spawn_plaza(x, y)) sim->plaza_mob_count++;
-        uint32_t diff = zone.difficulty;
-        uint8_t base_r = MOB_DATA[mob_id].rarity;
-        // Boss / Unique+ keep baked floor; everyone else rolls zone tier ± adjacent.
-        uint8_t spawn_r = base_r;
-        if (base_r < RarityID::kUnique) {
-            spawn_r = pick_zone_spawn_rarity(diff);
-            if (spawn_r < base_r) spawn_r = base_r; // never weaker than species floor
-        }
         mob.set_rarity(spawn_r);
         float th = mob_spawn_threat_mult(base_r, spawn_r);
         mob.max_health *= th;
@@ -1015,7 +1031,26 @@ void Map::_spawn_mob_at(Simulation *sim, uint32_t zone_id, MobID::T mob_id, floa
             MOB_DATA[mob_id].xp * zone_xp_mult(diff)
             * mob_spawn_xp_mult(base_r, spawn_r) + 0.5f
         );
+        // Rarity body scale (see mob_rarity_radius_mult; Unique≈2×). Every segment
+        // so Segment.cc spacing (r_self+r_parent) stays consistent.
+        if (rs != 1.f) {
+            float nr = mob.get_radius() * rs;
+            mob.set_radius(nr);
+            mob.mass = (1 + nr / BASE_FLOWER_RADIUS)
+                * (MOB_DATA[mob_id].attributes.stationary ? 10000.f : 1.f);
+        }
     });
+    // Count/despawn bookkeeping only on the returned head (single-body or worm).
+    BitMath::set(head.flags, EntityFlags::kSpawnedFromZone);
+    // Safety net if terrain shifted between sample and alloc.
+    {
+        float hx = head.get_x(), hy = head.get_y();
+        Map::eject_from_impassable(sim->map_id, hx, hy, head.get_radius() + 8.f);
+        head.set_x(hx);
+        head.set_y(hy);
+        head.home_x = hx;
+        head.home_y = hy;
+    }
 }
 
 // 沿 (dx,dy) 方向的最长连续可通行距离。
@@ -1077,14 +1112,15 @@ uint32_t Map::pick_spawn_zone(uint8_t map_id) {
     return n - 1;
 }
 
-// 在指定 Zone 内按落点类别采样合法落点。
-uint8_t Map::sample_spawn_point(Simulation *sim, uint32_t zone_id, uint8_t mob_id, float &ox, float &oy) {
+// 在指定 Zone 内按落点类别采样合法落点（clearance 含稀有度体型）。
+uint8_t Map::sample_spawn_point(Simulation *sim, uint32_t zone_id, uint8_t mob_id, float &ox, float &oy, uint8_t spawn_rarity) {
     MapZones const &zones = map_zones(sim->map_id);
     if (zone_id >= zones.size()) return 0;
     ZoneDefinition const &zone = zones[zone_id];
     SpawnRule const &rule = spawn_rules()[mob_id];
     uint8_t cls = spawn_class(mob_id);
-    float radius = MOB_DATA[mob_id].radius.get_single(frand()) * MOB_RADIUS_MULTIPLIER;
+    float radius = MOB_DATA[mob_id].radius.get_single(frand()) * MOB_RADIUS_MULTIPLIER
+        * mob_rarity_radius_mult(spawn_rarity);
     float clearance = radius + 8.f;
     float const margin = 60.f;
     float zw = zone.right - zone.left - 2.f * margin;
@@ -1195,11 +1231,41 @@ void Map::spawn_zone_mob(Simulation *sim) {
 }
 
 uint8_t Map::_spawn_zone_mob_once(Simulation *sim) {
-    uint32_t zone_id = Map::pick_spawn_zone(sim->map_id);
     MapZones const &zones = map_zones(sim->map_id);
+    if (zones.size() == 0) return 0;
+
+    // Match network AOI (Game.cc): spawn inside the box the player can actually see.
+    // Wider than AI cull so mobs near the edge are visible but might be culled for
+    // 1-2 ticks; unseenDespawn will clean them up ~30s later if they stay outside.
+    // This keeps refill aligned with what the client renders, not just AI behavior.
+    constexpr float kMinClientZoom = 0.55f;
+    float const near_hw = 960.f / (BASE_FOV * kMinClientZoom) + 280.f;
+    float const near_hh = 540.f / (BASE_FOV * kMinClientZoom) + 280.f;
+
+    // Prefer a zone that already contains a flower (human or bot) so random
+    // global pick_spawn_zone isn't mostly wasted on far biomes.
+    uint32_t zone_id = zones.size(); // invalid sentinel
+    {
+        StaticArray<uint32_t, MAX_ZONES_PER_MAP> near_zones;
+        sim->for_each<kFlower>([&](Simulation *, Entity &f) {
+            if (f.has_component(kMob)) return;
+            uint32_t z = Map::get_zone_from_pos(sim->map_id, f.get_x(), f.get_y());
+            if (z >= zones.size()) return;
+            for (uint32_t i = 0; i < near_zones.size(); ++i)
+                if (near_zones[i] == z) return;
+            if (near_zones.size() < MAX_ZONES_PER_MAP)
+                near_zones.push(z);
+        });
+        if (near_zones.size() > 0)
+            zone_id = near_zones[(uint32_t)(frand() * (float)near_zones.size()) % near_zones.size()];
+        else
+            zone_id = Map::pick_spawn_zone(sim->map_id);
+    }
     if (zone_id >= zones.size()) return 0;
     ZoneDefinition const &zone = zones[zone_id];
-    float dens = zone.density * (zone.difficulty == 0 ? 1.f : 1.25f);
+    float dens_mul = 1.25f;
+    if (zone.difficulty <= RarityID::kUnusual) dens_mul = 1.75f;
+    float dens = zone.density * dens_mul;
     if (dens * zone_exclusive_area(sim->map_id, zone_id) / (500 * 500) < sim->zone_mob_counts[zone_id]) return 0;
 
     float total = 0.f;
@@ -1216,8 +1282,22 @@ uint8_t Map::_spawn_zone_mob_once(Simulation *sim) {
     uint8_t cls = spawn_class(mob_id);
     if (cls == SpawnClass::kBoss) return 0;   // Boss 由 ensure_boss 驱动
 
+    uint8_t base_r = MOB_DATA[mob_id].rarity;
+    uint8_t spawn_r = resolve_zone_spawn_rarity(base_r, zone.difficulty);
+
     float x = 0.f, y = 0.f;
-    if (!Map::sample_spawn_point(sim, zone_id, mob_id, x, y)) return 0;
+    if (!Map::sample_spawn_point(sim, zone_id, mob_id, x, y, spawn_r)) return 0;
+    // Only accept points inside at least one flower's network-AOI box.
+    {
+        bool near_player = false;
+        sim->for_each<kFlower>([&](Simulation *, Entity &f) {
+            if (near_player || f.has_component(kMob)) return;
+            float dx = f.get_x() - x, dy = f.get_y() - y;
+            if (std::fabs(dx) <= near_hw && std::fabs(dy) <= near_hh)
+                near_player = true;
+        });
+        if (!near_player) return 0;
+    }
     if (cls == SpawnClass::kAnchor) {
         // 同款精英 1500 单位半径内至多 1 只（跨 Zone，总纲 R6）。
         // Must use for_each: spawn runs before spatial_hash.insert this tick.
@@ -1233,9 +1313,9 @@ uint8_t Map::_spawn_zone_mob_once(Simulation *sim) {
     }
     if (in_spawn_plaza(x, y)) {
         if (zone.difficulty != 0) return 0;
-        if (sim->plaza_mob_count >= 8) return 0;
+        if (sim->plaza_mob_count >= 56) return 0;
     }
-    _spawn_mob_at(sim, zone_id, mob_id, x, y);
+    _spawn_mob_at(sim, zone_id, mob_id, x, y, spawn_r);
     return 1;
 }
 

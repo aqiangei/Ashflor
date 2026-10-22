@@ -52,7 +52,12 @@ static struct PlayerBuffs _get_petal_passive_buffs(Simulation *sim, Entity &play
         if (attrs.equipment != EquipmentFlags::kNone)
             player.set_equip_flags(player.get_equip_flags() | (1 << attrs.equipment));
         buffs.vision_factor = std::min(buffs.vision_factor, attrs.vision_factor);
-        buffs.move_speed_factor *= attrs.move_speed_factor;
+        // Speed boosts: strongest single factor wins. Multiplying several
+        // Accelerators (1.3^n) turned map travel into an accidental rocket.
+        if (attrs.move_speed_factor > 1.f)
+            buffs.move_speed_factor = std::fmax(buffs.move_speed_factor, attrs.move_speed_factor);
+        else if (attrs.move_speed_factor > 0.f && attrs.move_speed_factor < 1.f)
+            buffs.move_speed_factor *= attrs.move_speed_factor;
         buffs.magnet_radius = std::fmax(buffs.magnet_radius, attrs.magnet_radius);
         buffs.extra_range = std::fmax(attrs.extra_range, buffs.extra_range);
         buffs.extra_damage = std::fmax(buffs.extra_damage, attrs.extra_body_damage);
@@ -71,17 +76,13 @@ static struct PlayerBuffs _get_petal_passive_buffs(Simulation *sim, Entity &play
         player.poison_armor = std::fmax(player.poison_armor, attrs.poison_armor / TPS);
         if (slot_petal_id == PetalID::kPoisonCactus)
             buffs.is_poisonous = 1;
-        // King's Oath v2-lite: low-HP damage surge (global feel via damage_factor)
+        // King's Oath: low-HP damage surge (on top of petal extra_damage_factor)
         if (slot_petal_id == PetalID::kKingsOath
             && player.max_health > 0.f
             && player.health / player.max_health < 0.35f)
             buffs.damage_factor *= 1.35f;
-        // Royal Banner v2-lite: spin / pressure buff for the wearer
-        if (slot_petal_id == PetalID::kRoyalBanner)
-            buffs.extra_rot += 1.2f;
-        // Phantom Eye v2-lite: slight damage amp while equipped
-        if (slot_petal_id == PetalID::kPhantomEye)
-            buffs.damage_factor *= 1.08f;
+        // Royal Banner / Phantom Eye spin & damage come only from PETAL_DATA attrs
+        // (no extra hardcoded stacks — keeps tooltip values honest).
     }
     return buffs;
 }

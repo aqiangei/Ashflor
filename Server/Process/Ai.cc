@@ -1298,6 +1298,15 @@ void tick_ai_behavior(Simulation *sim, Entity &ent) {
         ent.ai_tick = 0;
         return;
     }
+    // WorldExplore escorts: named, no damage, scripted path — do not wander/aggro.
+    if (ent.damage <= 0.f && ent.score_reward == 0
+        && BitMath::at(ent.flags, EntityFlags::kNoDrops)
+        && ent.has_component(kName) && ent.get_nametag_visible()) {
+        ent.target = NULL_ENTITY;
+        ent.acceleration.set(0, 0);
+        ent.velocity.set(0, 0);
+        return;
+    }
     // Hub respawn pad = sole no-aggro zone: drop chase if prey is inside.
     // Player attacks are unrestricted everywhere (including this pad).
     if (sim->ent_alive(ent.target) && !is_player_faction(sim, ent)) {

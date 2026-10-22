@@ -37,12 +37,22 @@ float estimate_max_hp(Entity const &ent) {
 } // namespace
 
 void Entity::tick_lerp(float amt) {
+    // rrolf-style: snappier local flower + camera (less input lag); keep the
+    // global curve for everyone else so remote entities don't jitter.
+    float phys_amt = amt;
+    float cam_amt = amt;
+    if (Game::alive()) {
+        if (id == Game::player_id && has_component(kFlower) && !has_component(kMob))
+            phys_amt = 1.f - powf(1.f - 0.62f, Ui::dt * 60.f / 1000.f);
+        if (id == Game::camera_id)
+            cam_amt = 1.f - powf(1.f - 0.62f, Ui::dt * 60.f / 1000.f);
+    }
     if (has_component(kPhysics)) {
         float prev_x = x;
         float prev_y = y;
         if (!pending_delete) {
-            x.step(amt);
-            y.step(amt);
+            x.step(phys_amt);
+            y.step(phys_amt);
         }
         if (has_component(kDrop) || has_component(kWeb)) {
             if (lifetime < TPS)
@@ -53,14 +63,14 @@ void Entity::tick_lerp(float amt) {
             animation += (1 + 0.75 * vel.magnitude()) * 0.075;
         }
         radius.step(amt);
-        angle.step_angle(amt);
+        angle.step_angle(phys_amt);
         if (pending_delete)
             deletion_animation = fclamp(deletion_animation + Ui::dt / 150, 0, 1);
     }
     if (has_component(kCamera)) {
-        camera_x.step(amt);
-        camera_y.step(amt);
-        fov.step(amt);
+        camera_x.step(cam_amt);
+        camera_y.step(cam_amt);
+        fov.step(cam_amt);
         Game::respawn_level = respawn_level;
     }
     if (has_component(kHealth)) {
@@ -75,8 +85,13 @@ void Entity::tick_lerp(float amt) {
                 && has_component(kMob) && !has_component(kPetal)
                 && !pending_delete) {
                 float amt = -delta * estimate_max_hp(*this);
+                // Cap Y offset so huge Unique+ radii do not bury floats inside the sprite
+                // or push them off-screen above the mob.
+                float rad = (float) get_radius();
+                float y_off = rad * 0.35f + 18.f;
+                if (y_off > 72.f) y_off = 72.f;
                 Particle::add_damage_number(
-                    id, (float) get_x(), (float) get_y() - (float) get_radius() * 0.6f, amt);
+                    id, (float) get_x(), (float) get_y() - y_off, amt);
             }
             // Local player heal pops (pink).
             if (delta > 0.0004f

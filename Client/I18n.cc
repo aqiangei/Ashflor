@@ -149,7 +149,7 @@ static char const *const EN[I18n::kCount] = {
     "Announcement",
     "Save",
     "Leaders can edit the guild board",
-    "Party gap ≤25 (free at Lv125+)",
+    "Party gap ≤50 (free at Lv100+)",
     "B Inv",
     "Z Talent",
     "C Craft",
@@ -184,6 +184,17 @@ static char const *const EN[I18n::kCount] = {
     "High crafts",
     "Best score",
     "Too many attempts, try again shortly",
+    "Burn:",
+    "Armor Pen:",
+    "Clump:",
+    "Follow aim",
+    "No orbit spin",
+    "Split shot",
+    "Drops from: ",
+    "Assemble (V)",
+    "Shop",
+    "Merge 5× lower rarity",
+    "Starter",
 };
 
 static char const *const ZH[I18n::kCount] = {
@@ -306,7 +317,7 @@ static char const *const ZH[I18n::kCount] = {
     "公告",
     "保存",
     "会长可编辑公会公告",
-    "组队等级差 ≤25（125 级以上不限）",
+    "组队等级差 ≤50（100 级以上不限）",
     "X 背包",
     "Z 天赋",
     "C 合成",
@@ -341,6 +352,17 @@ static char const *const ZH[I18n::kCount] = {
     "高级合成",
     "最高分",
     "尝试过于频繁，请稍后再试",
+    "燃烧：",
+    "穿甲：",
+    "簇集：",
+    "跟随瞄准",
+    "不绕转",
+    "分裂弹",
+    "掉落：",
+    "组装（V）",
+    "商店",
+    "5合1升稀有",
+    "初始赠送",
 };
 
 char const *I18n::tr(Str id) {

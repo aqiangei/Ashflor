@@ -124,6 +124,10 @@ void Minimap::on_render(Renderer &ctx) {
 
         bool const show_levels = Input::keys_held.contains('G');
         bool const show_names = show_levels; // Hold G: rarity rings + player names on dots
+        // Warm the levels layer in the background so first Hold-G does not hitch
+        // on a full zone+terrain bake.
+        if (!show_levels)
+            (void)static_minimap(mid, width, height, true);
         ctx.draw_image_at(static_minimap(mid, width, height, show_levels), 0.f, 0.f);
 
         float self_x = -1.f;
@@ -194,39 +198,69 @@ void Minimap::on_render(Renderer &ctx) {
             ctx.arc(px, py, pr_other);
             ctx.fill();
             ctx.stroke();
-            if (show_names) {
+            // Strangers / guild: names from arena sync. Party names drawn below
+            // from party_members (roster is authoritative; arena names can miss teammates).
+            // Fill-only names (strokeText per dot tanks Canvas2D under Hold-G).
+            if (show_names && !is_teammate_at(wx, wy)) {
                 std::string const &nm = Game::simulation.arena_info.minimap_names[i];
                 if (!nm.empty()) {
                     RenderContext label(&ctx);
                     ctx.translate(px, py - pr_other - 8.f);
                     ctx.draw_text(nm.c_str(), {
                         .fill = 0xffffffff,
+                        .stroke = 0,
                         .size = Game::minimap_expanded ? 11.f : 9.5f,
-                        .stroke_scale = 0.12f
+                        .stroke_scale = 0
                     });
                 }
             }
         }
 
-        // DOWN teammates (corpse pos) — pink, not in living minimap list
+        // Party roster: Hold-G names from party_members (authoritative).
+        // Skip members with no live/corpse pos (x<0) so leavers cannot ghost.
+        auto has_arena_dot_at = [](float wx, float wy) -> bool {
+            for (uint32_t i = 0; i < MINIMAP_PLAYER_CAP; ++i) {
+                float ax = Game::simulation.arena_info.minimap_x[i];
+                float ay = Game::simulation.arena_info.minimap_y[i];
+                if (!(ax >= 0.f && ay >= 0.f)) continue;
+                if (std::abs(ax - wx) < 80.f && std::abs(ay - wy) < 80.f)
+                    return true;
+            }
+            return false;
+        };
+        float const pr_party = Game::minimap_expanded ? 4.5f : 3.8f;
         float const pr_down = Game::minimap_expanded ? 4.0f : 3.4f;
+        float const name_sz = Game::minimap_expanded ? 11.f : 9.5f;
         for (Game::PartyMember const &m : Game::party_members) {
-            if (m.flags & 4) continue;
-            if (!(m.flags & 2)) continue;
+            if (m.flags & 4) continue; // self
             if (!(m.x >= 0.f && m.y >= 0.f)) continue;
             float px = (m.x - left) * sx;
             float py = (m.y - top) * sy;
-            ctx.set_fill(0x88ffffff);
-            ctx.begin_path();
-            ctx.arc(px, py, pr_down + 1.4f);
-            ctx.fill();
-            ctx.set_fill(0xccff69b4);
-            ctx.set_stroke(0xff882244);
-            ctx.set_line_width(1.1f);
-            ctx.begin_path();
-            ctx.arc(px, py, pr_down);
-            ctx.fill();
-            ctx.stroke();
+            uint8_t const is_down = (m.flags & 2) ? 1 : 0;
+            if (is_down || !has_arena_dot_at(m.x, m.y)) {
+                float pr = is_down ? pr_down : pr_party;
+                ctx.set_fill(is_down ? 0x88ffffff : 0xeeffffff);
+                ctx.begin_path();
+                ctx.arc(px, py, pr + (is_down ? 1.4f : 1.6f));
+                ctx.fill();
+                ctx.set_fill(is_down ? 0xccff69b4 : kTeammatePink);
+                ctx.set_stroke(is_down ? 0xff882244 : 0xff222222);
+                ctx.set_line_width(is_down ? 1.1f : 1.2f);
+                ctx.begin_path();
+                ctx.arc(px, py, pr);
+                ctx.fill();
+                ctx.stroke();
+            }
+            if (show_names && !m.name.empty()) {
+                RenderContext label(&ctx);
+                ctx.translate(px, py - pr_party - 8.f);
+                ctx.draw_text(m.name.c_str(), {
+                    .fill = is_down ? 0xffffb6d9u : 0xffffe0f0u,
+                    .stroke = 0,
+                    .size = name_sz,
+                    .stroke_scale = 0
+                });
+            }
         }
 
         // FOV box + self (gold, on top)

@@ -64,6 +64,7 @@ namespace Ui {
     Element *make_boss_health_bar();
     Element *make_server_announce_banner();
     Element *make_loot_toast();
+    Element *make_update_announce_bubble();
     Element *make_minimap();
     Element *make_mobile_attack_button();
     Element *make_mobile_defend_button();

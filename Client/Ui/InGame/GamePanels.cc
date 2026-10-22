@@ -119,12 +119,22 @@ static std::vector<PetalID::T> const &bag_sorted_ids() {
 }
 
 static PetalID::T bag_display_id(uint16_t idx) {
-    // Bank stacks must still list when loadout_count is briefly 0 (title/death sync).
-    for (PetalID::T id : bag_sorted_ids()) {
-        if (!bag_stack_count(id) || !bag_name_matches(id)) continue;
-        if (idx-- == 0) return id;
+    // Layout, visibility and painting query every cell repeatedly. Filter once
+    // per frame so a full backpack does not rescan the whole catalog per cell.
+    static double cached_at = -1;
+    static std::string cached_search;
+    static std::vector<PetalID::T> visible_ids;
+    if (cached_at != Game::timestamp || cached_search != bag_search_text) {
+        cached_at = Game::timestamp;
+        cached_search = bag_search_text;
+        visible_ids.clear();
+        // Stacks remain visible while loadout_count is briefly 0 during sync.
+        for (PetalID::T id : bag_sorted_ids()) {
+            if (bag_stack_count(id) && bag_name_matches(id))
+                visible_ids.push_back(id);
+        }
     }
-    return PetalID::kNone;
+    return idx < visible_ids.size() ? visible_ids[idx] : PetalID::kNone;
 }
 
 static uint8_t bag_slot_visible(uint16_t idx) {
@@ -378,7 +388,7 @@ public:
 
 // Drawer: slides up from above the bottom-left buttons
 static Element *make_drawer(std::vector<Element *> children, uint8_t panel_id) {
-    Element *elt = new Ui::VContainer(children, 18, 12, {
+    Element *elt = new Ui::VContainer(children, 20, 12, {
         .fill = Chrome::kPanelDeep,
         .line_width = 0,
         .round_radius = Chrome::kRadius,
@@ -518,6 +528,10 @@ static float tray_pulse = 0.f;
 static float tray_shake = 0.f;
 static float tray_spin = 0.f; // radians, during craft absorb
 static float win_flash = 0.f;
+static float result_reveal = 0.f; // 1 → 0 after a win lands in center
+static uint8_t result_rarity = 0;
+static float claim_tx = 0.f, claim_ty = 0.f; // snapshotted next-tier cell for take-fly
+static uint8_t claim_dest_ok = 0;
 static Element *tray_view = nullptr;
 static float mat_sx[PetalID::kNumPetals] = {};
 static float mat_sy[PetalID::kNumPetals] = {};
@@ -532,7 +546,7 @@ static float ease_in_out(float t) {
 }
 
 static void spawn_fly(PetalID::T id, float x0, float y0, float x1, float y1,
-                      Kind kind, float dur_ms = 280.f) {
+                      Kind kind, float dur_ms = 280.f, float spin = 0.f) {
     if (id == PetalID::kNone || id >= PetalID::kNumPetals) return;
     if (fly_n >= kMaxFlies) {
         // Drop oldest
@@ -545,7 +559,10 @@ static void spawn_fly(PetalID::T id, float x0, float y0, float x1, float y1,
     f.t = 0.f;
     f.dur = dur_ms;
     f.kind = kind;
-    f.spin = (kind == kMissBurst) ? (frand() * 2.f - 1.f) * 3.f : 0.f;
+    if (spin != 0.f) f.spin = spin;
+    else if (kind == kMissBurst) f.spin = (frand() * 2.f - 1.f) * 3.f;
+    else if (kind == kToBag) f.spin = (frand() * 2.f - 1.f) * 0.55f;
+    else f.spin = 0.f;
 }
 
 static void spawn_speck(float x, float y, uint32_t color) {
@@ -614,10 +631,20 @@ static uint8_t mat_screen(PetalID::T id, float &sx, float &sy) {
     return 1;
 }
 
+// rrolf-style: slot i holds (count + i) / 5 copies; remainder fills clockwise.
+static uint32_t tray_slot_stack(uint32_t count, uint32_t pos) {
+    if (pos >= Craft::kCraftBatch) return 0;
+    return (count + pos) / Craft::kCraftBatch;
+}
+
 static void fly_to_tray(PetalID::T id, float from_sx, float from_sy) {
-    uint32_t slot = Game::craft_tray_count;
-    if (slot > 0) --slot; // just-added last visible slot
-    if (slot >= Craft::kCraftBatch) slot = Craft::kCraftBatch - 1;
+    // Aim at the highest-index slot that just gained a stack (clockwise tip).
+    uint32_t count = Game::craft_tray_count;
+    uint32_t slot = Craft::kCraftBatch - 1;
+    for (uint32_t i = 0; i < Craft::kCraftBatch; ++i) {
+        if (tray_slot_stack(count, i) > tray_slot_stack(count > 0 ? count - 1 : 0, i))
+            slot = i;
+    }
     float tx, ty;
     if (!tray_slot_screen(slot, tx, ty))
         if (!tray_center_screen(tx, ty)) return;
@@ -636,6 +663,47 @@ static void fly_from_tray(PetalID::T id, uint32_t slot_hint) {
     spawn_fly(id, sx, sy, tx, ty, kFromTray, 260.f);
 }
 
+float result_intensity(uint8_t rarity) {
+    // Common quiet → Unique loud. Used for rings / spark count / breathe.
+    if (rarity >= RarityID::kNumRarities) rarity = 0;
+    return 0.40f + (float) rarity * 0.14f;
+}
+
+// Claim center product → fly into the next-rarity cell of that craft row.
+static void fly_result_claim(PetalID::T id, uint32_t count) {
+    if (id == PetalID::kNone || id >= PetalID::kNumPetals || count == 0) return;
+    float sx, sy, tx, ty;
+    if (!tray_center_screen(sx, sy)) {
+        sx = (float) Ui::window_width * 0.35f;
+        sy = (float) Ui::window_height * 0.55f;
+    }
+    // Destination: the result petal's mat cell (same name, higher rarity).
+    if (!mat_screen(id, tx, ty))
+        bag_target_screen(tx, ty);
+    uint8_t r = PETAL_DATA[id].rarity;
+    float inten = result_intensity(r);
+    float dist = std::hypot(tx - sx, ty - sy);
+    float dur = 420.f + inten * 90.f + dist * 0.08f;
+    if (dur > 720.f) dur = 720.f;
+    spawn_fly(id, sx, sy, tx, ty, kToBag, dur);
+    // Stacked wins: a couple of soft ghost copies, staggered.
+    uint32_t ghosts = count > 1u ? (count >= 3u ? 3u : count) : 1u;
+    for (uint32_t g = 1; g < ghosts; ++g) {
+        float jx = (frand() - 0.5f) * 22.f;
+        float jy = (frand() - 0.5f) * 16.f;
+        spawn_fly(id, sx + jx, sy + jy,
+                  tx + jx * 0.25f, ty + jy * 0.25f,
+                  kToBag, dur + (float) g * 55.f,
+                  (frand() * 2.f - 1.f) * 0.7f);
+    }
+    uint32_t col = 0xffffe763;
+    if (r < RarityID::kNumRarities) col = RARITY_COLORS[r] | 0xff000000;
+    uint32_t n_spark = 8u + (uint32_t) (inten * 8.f);
+    if (n_spark > 20) n_spark = 20;
+    for (uint32_t i = 0; i < n_spark; ++i)
+        spawn_speck(sx, sy, col);
+}
+
 static void begin_craft_absorb() {
     tray_spin = 0.f;
     tray_pulse = 1.f;
@@ -650,22 +718,23 @@ static void play_result(uint8_t result, PetalID::T petal) {
     if (result == CraftResultCode::kCraftWin
         || result == CraftResultCode::kCraftExchanged
         || result == CraftResultCode::kCraftBought) {
-        win_flash = 1.f;
-        tray_pulse = 1.f;
+        // Product stays in tray center until claimed — rarity-colored reveal, no fly-away.
         PetalID::T show = (petal != PetalID::kNone && petal < PetalID::kNumPetals)
-            ? petal : Game::craft_tray_id;
-        if (show == PetalID::kNone) show = petal;
-        // Fly toward the higher-rarity result cell in the craft grid, not the bag.
-        float tx, ty;
-        if (!mat_screen(show, tx, ty))
-            bag_target_screen(tx, ty);
-        spawn_fly(show, cx, cy, tx, ty, kToBag, 420.f);
+            ? petal : Game::craft_result_id;
+        uint8_t r = 0;
         uint32_t col = 0xffffe763;
-        if (show < PetalID::kNumPetals) {
-            uint8_t r = PETAL_DATA[show].rarity;
+        if (show != PetalID::kNone && show < PetalID::kNumPetals) {
+            r = PETAL_DATA[show].rarity;
             if (r < RarityID::kNumRarities) col = RARITY_COLORS[r] | 0xff000000;
         }
-        for (uint32_t i = 0; i < 18; ++i)
+        result_rarity = r;
+        result_reveal = 1.f;
+        win_flash = 1.f;
+        tray_pulse = 1.f;
+        float inten = result_intensity(r);
+        uint32_t n_speck = (uint32_t) (12.f + inten * 22.f);
+        if (n_speck > 40) n_speck = 40;
+        for (uint32_t i = 0; i < n_speck; ++i)
             spawn_speck(cx, cy, col);
     } else if (result == CraftResultCode::kCraftMiss) {
         tray_shake = 1.f;
@@ -696,6 +765,12 @@ static void tick(float dt_ms) {
         win_flash -= dt_ms / 500.f;
         if (win_flash < 0.f) win_flash = 0.f;
     }
+    if (result_reveal > 0.f) {
+        // Higher rarities linger longer on the punch-in.
+        float fade_ms = 520.f + result_intensity(result_rarity) * 480.f;
+        result_reveal -= dt_ms / fade_ms;
+        if (result_reveal < 0.f) result_reveal = 0.f;
+    }
     if (Game::game_panel == Game::kPanelCraft
         && Game::craft_tray_id == PetalID::kNone
         && tray_spin < 6.5f && tray_pulse > 0.2f)
@@ -703,8 +778,33 @@ static void tick(float dt_ms) {
 
     for (uint32_t i = 0; i < fly_n; ) {
         Fly &f = flies[i];
+        float prev_t = f.t;
         f.t += dt_ms / f.dur;
+        // Rarity trail while claiming into the next-tier cell.
+        if (f.kind == kToBag && f.t < 1.f && f.id < PetalID::kNumPetals) {
+            int step0 = (int) (prev_t * 14.f);
+            int step1 = (int) (f.t * 14.f);
+            if (step1 > step0) {
+                float e = ease_in_out(f.t < 1.f ? f.t : 1.f);
+                float x = f.x0 + (f.x1 - f.x0) * e;
+                float y = f.y0 + (f.y1 - f.y0) * e;
+                float dist = std::hypot(f.x1 - f.x0, f.y1 - f.y0);
+                y -= std::sin(f.t * (float) M_PI) * (32.f + dist * 0.10f);
+                uint8_t rr = PETAL_DATA[f.id].rarity;
+                uint32_t col = 0xffffe763;
+                if (rr < RarityID::kNumRarities) col = RARITY_COLORS[rr] | 0xff000000;
+                spawn_speck(x, y, col);
+            }
+        }
         if (f.t >= 1.f) {
+            // Soft land spark on the destination cell.
+            if (f.kind == kToBag && f.id < PetalID::kNumPetals) {
+                uint8_t rr = PETAL_DATA[f.id].rarity;
+                uint32_t col = 0xffffe763;
+                if (rr < RarityID::kNumRarities) col = RARITY_COLORS[rr] | 0xff000000;
+                for (uint32_t s = 0; s < 6; ++s)
+                    spawn_speck(f.x1, f.y1, col);
+            }
             flies[i] = flies[--fly_n];
             continue;
         }
@@ -745,9 +845,12 @@ static void render_overlay(Renderer &ctx) {
         float e = (f.kind == kToBag) ? ease_in_out(f.t) : ease_out(f.t);
         float x = f.x0 + (f.x1 - f.x0) * e;
         float y = f.y0 + (f.y1 - f.y0) * e;
-        // Arc lift so place/take-back reads as a toss
-        float arc = std::sin(f.t * (float) M_PI) * (f.kind == kMissBurst ? 12.f : 36.f);
-        y -= arc;
+        float dist = std::hypot(f.x1 - f.x0, f.y1 - f.y0);
+        // Arc: claim tosses higher over longer paths; miss is a short puff.
+        float arc_h = 36.f;
+        if (f.kind == kMissBurst) arc_h = 12.f;
+        else if (f.kind == kToBag) arc_h = 32.f + dist * 0.10f;
+        y -= std::sin(f.t * (float) M_PI) * arc_h;
         float ux = (x - (float) Ui::window_width * 0.5f) / (float) Ui::scale;
         float uy = (y - (float) Ui::window_height * 0.5f) / (float) Ui::scale;
         float alpha = 1.f;
@@ -758,8 +861,11 @@ static void render_overlay(Renderer &ctx) {
         } else if (f.kind == kFromTray) {
             scale = 0.75f + 0.2f * e;
         } else if (f.kind == kToBag) {
-            scale = 1.05f - 0.35f * e;
-            alpha = 1.f - e * 0.15f;
+            // Leave center large → shrink into the mat cell with a soft land squash.
+            float land = e > 0.82f ? (1.f - (e - 0.82f) / 0.18f) : 1.f;
+            float squash = 1.f + 0.10f * std::sin(e * (float) M_PI) * land;
+            scale = (1.20f - 0.42f * e) * squash;
+            alpha = 0.95f + 0.05f * (1.f - e);
         } else { // miss
             scale = 0.7f * (1.f - e);
             alpha = 1.f - e;
@@ -776,6 +882,20 @@ static void render_overlay(Renderer &ctx) {
             ctx.fill();
             continue;
         }
+        // Soft rarity halo behind claim flights.
+        if (f.kind == kToBag) {
+            uint8_t rr = PETAL_DATA[f.id].rarity;
+            uint32_t col = 0x66ffe763;
+            if (rr < RarityID::kNumRarities)
+                col = (RARITY_COLORS[rr] & 0x00ffffffu) | 0x55000000u;
+            RenderContext halo(&ctx);
+            ctx.translate(ux, uy);
+            ctx.set_global_alpha(alpha * (0.35f + 0.25f * (1.f - e)));
+            ctx.set_fill(col);
+            ctx.begin_path();
+            ctx.arc(0, 0, 22.f * scale);
+            ctx.fill();
+        }
         RenderContext g(&ctx);
         ctx.translate(ux, uy);
         ctx.rotate(f.spin * f.t);
@@ -788,14 +908,23 @@ static void render_overlay(Renderer &ctx) {
             / (float) Ui::scale;
         float uy = (tray_view->screen_y - (float) Ui::window_height * 0.5f)
             / (float) Ui::scale;
+        uint32_t flash_col = 0xffffe763;
+        if (result_rarity < RarityID::kNumRarities)
+            flash_col = RARITY_COLORS[result_rarity] | 0xff000000;
+        float inten = result_intensity(result_rarity);
         RenderContext g(&ctx);
         ctx.translate(ux, uy);
-        ctx.set_global_alpha(win_flash * 0.45f);
-        ctx.set_fill(0xffffe763);
+        ctx.set_global_alpha(win_flash * (0.35f + inten * 0.18f));
+        ctx.set_fill(flash_col);
         ctx.begin_path();
-        ctx.arc(0, 8.f, 70.f * (1.2f - win_flash * 0.4f));
+        ctx.arc(0, 8.f, (70.f + inten * 18.f) * (1.2f - win_flash * 0.4f));
         ctx.fill();
     }
+}
+
+static void clear_result_fx() {
+    result_reveal = 0.f;
+    win_flash = 0.f;
 }
 } // namespace CraftFx
 
@@ -805,19 +934,25 @@ static void on_craft_once(Element *, uint8_t e) {
         return;
     PetalID::T id = Game::craft_tray_id;
     uint32_t batches = Game::craft_tray_count / Craft::kCraftBatch;
-    if (batches > 200) batches = 200;
-    uint32_t used = batches * Craft::kCraftBatch;
     CraftFx::begin_craft_absorb();
-    Game::craft_petals(CraftMode::kCraftGamble, id, (uint16_t) batches);
-    if (Game::craft_tray_count <= used) Game::craft_tray_clear();
-    else Game::craft_tray_count -= used;
+    if (batches <= 1) {
+        // One pentagon: a single roll (miss leaves 1–4 of that batch).
+        Game::craft_petals(CraftMode::kCraftGamble, id, 1);
+        if (Game::craft_tray_count <= Craft::kCraftBatch) Game::craft_tray_clear();
+        else Game::craft_tray_count -= Craft::kCraftBatch;
+    } else {
+        // Many on the tray: keep rolling through miss refunds until < 5 left.
+        Game::craft_petals(CraftMode::kCraftGambleAll, id, 65535);
+        Game::craft_tray_clear();
+    }
 }
 static void on_craft_all(Element *, uint8_t e) {
     if (e != Ui::kClick) return;
     PetalID::T id = Game::craft_tray_id;
     if (id == PetalID::kNone) return;
     CraftFx::begin_craft_absorb();
-    Game::craft_petals(CraftMode::kCraftGambleAll, id, 200);
+    // Drain owned copies of this petal until remainder is 1–4 (or 0 on all wins).
+    Game::craft_petals(CraftMode::kCraftGambleAll, id, 65535);
     Game::craft_tray_clear();
 }
 static void on_close_craft(Element *, uint8_t e) {
@@ -853,10 +988,37 @@ static void craft_tray_take_back() {
     uint32_t n = Game::craft_tray_count;
     uint32_t take = Craft::kCraftBatch;
     if (take > n) take = n;
-    uint32_t slot = n > 0 ? (n - 1) : 0;
-    if (slot >= Craft::kCraftBatch) slot = Craft::kCraftBatch - 1;
+    // Peel from the clockwise tip (highest pos that still has a stack).
+    uint32_t slot = 0;
+    for (uint32_t i = 0; i < Craft::kCraftBatch; ++i)
+        if (CraftFx::tray_slot_stack(n, i) > 0) slot = i;
     CraftFx::fly_from_tray(id, slot);
     Game::craft_tray_remove(take);
+}
+
+static void draw_stack_badge(Renderer &ctx, float slot_w, uint32_t stack, uint8_t always = 0) {
+    if (stack == 0) return;
+    if (stack <= 1 && !always) return;
+    std::string badge = format_stack(stack);
+    float const sz = 13.f;
+    ctx.set_text_size(sz);
+    float tw = (float) ctx.get_text_size(badge.c_str());
+    float bw = std::max(22.f, tw + 10.f);
+    float bx = slot_w / 2 - bw * 0.35f;
+    float by = -slot_w / 2 + 10.f;
+    ctx.set_fill(0xe0000000);
+    ctx.begin_path();
+    ctx.round_rect(bx - bw * 0.5f, by - 9, bw, 18, 8);
+    ctx.fill();
+    {
+        RenderContext c(&ctx);
+        ctx.translate(bx, by);
+        ctx.center_text_align();
+        ctx.center_text_baseline();
+        ctx.draw_text(badge.c_str(), {
+            .fill = Chrome::kGold, .size = sz, .stroke_scale = 0.1f
+        });
+    }
 }
 
 // Large pentagon work area, matching the warm crafting board.
@@ -905,17 +1067,31 @@ public:
             show_n = ghost_count;
             fade = 1.f - clear_anim;
         }
-        // Soft board glow while pulsing / winning
-        if (pulse > 0.05f || CraftFx::win_flash > 0.05f) {
+        uint8_t has_result = Game::craft_result_id != PetalID::kNone
+            && Game::craft_result_count > 0
+            && Game::craft_result_id < PetalID::kNumPetals;
+        uint8_t result_r = 0;
+        uint32_t result_col = 0xffffe763;
+        float result_inten = 0.4f;
+        if (has_result) {
+            result_r = PETAL_DATA[Game::craft_result_id].rarity;
+            if (result_r < RarityID::kNumRarities)
+                result_col = RARITY_COLORS[result_r] | 0xff000000;
+            result_inten = CraftFx::result_intensity(result_r);
+        }
+        // Soft board glow — rarity tint while a product waits / reveals.
+        if (pulse > 0.05f || CraftFx::win_flash > 0.05f || has_result) {
             float g = std::max(pulse, CraftFx::win_flash);
-            ctx.set_global_alpha(g * 0.25f);
-            ctx.set_fill(0xffffe763);
+            if (has_result && g < 0.28f + result_inten * 0.12f)
+                g = 0.28f + result_inten * 0.12f;
+            ctx.set_global_alpha(g * (has_result ? 0.22f + result_inten * 0.08f : 0.25f));
+            ctx.set_fill(has_result ? result_col : 0xffffe763);
             ctx.begin_path();
-            ctx.arc(cx, cy, rad + 36.f);
+            ctx.arc(cx, cy, rad + 36.f + (has_result ? result_inten * 10.f : 0.f));
             ctx.fill();
             ctx.set_global_alpha(1.f);
         }
-        float spin = (show_n == 0 && fade < 1.f) ? clear_anim * 1.2f : 0.f;
+        float spin = (show_n == 0 && fade < 1.f && !has_result) ? clear_anim * 1.2f : 0.f;
         for (uint32_t i = 0; i < Craft::kCraftBatch; ++i) {
             float ang = (float) (-M_PI / 2 + i * (2 * M_PI / Craft::kCraftBatch)) + spin;
             float x = cx + std::cos(ang) * rad;
@@ -924,7 +1100,9 @@ public:
             ctx.begin_path();
             ctx.round_rect(x - slot / 2, y - slot / 2, slot, slot, 7);
             ctx.fill();
-            if (show_id != PetalID::kNone && show_n > i) {
+            uint32_t stack = (show_id != PetalID::kNone)
+                ? CraftFx::tray_slot_stack(show_n, i) : 0;
+            if (stack > 0 && !has_result) {
                 RenderContext guard(&ctx);
                 ctx.translate(x, y);
                 float pop = 1.f + pulse * 0.12f * std::sin((float) i * 1.1f + (float) Game::timestamp * 0.02f);
@@ -932,23 +1110,121 @@ public:
                 ctx.scale(s);
                 ctx.set_global_alpha(fade);
                 draw_loadout_background(ctx, show_id, 1.f, 0);
+                draw_stack_badge(ctx, slot, stack);
+            } else if (stack > 0 && has_result) {
+                // Dim materials while a product waits in the center.
+                RenderContext guard(&ctx);
+                ctx.translate(x, y);
+                ctx.set_global_alpha(0.35f * fade);
+                ctx.scale(0.85f);
+                draw_loadout_background(ctx, show_id, 1.f, 0);
+                draw_stack_badge(ctx, slot, stack);
             }
         }
-        if (show_n > Craft::kCraftBatch && fade > 0.05f) {
-            std::string t = format_stack(show_n);
-            ctx.set_global_alpha(fade);
-            ctx.set_fill(0xffffffff);
-            ctx.set_stroke(0xff222222);
-            ctx.set_text_size(14);
-            ctx.set_line_width(1.6f);
+        if (has_result) {
+            PetalID::T rid = Game::craft_result_id;
+            uint32_t rn = Game::craft_result_count;
+            float rslot = 72.f;
+            float reveal = CraftFx::result_reveal;
+            float t = (float) Game::timestamp;
+            float breathe = 1.f
+                + (0.035f + result_inten * 0.025f)
+                    * std::sin(t * (0.006f + result_inten * 0.002f));
+            // Punch-in on land: overshoot then settle into breathe.
+            float punch = 1.f;
+            if (reveal > 0.f) {
+                float u = 1.f - reveal;
+                punch = 0.55f + 0.55f * (1.f - (1.f - u) * (1.f - u))
+                    + 0.18f * result_inten * reveal;
+            }
+            float plate = breathe * punch;
+            {
+                RenderContext guard(&ctx);
+                ctx.translate(cx, cy);
+                // Expanding shock rings on reveal (more / thicker by rarity).
+                if (reveal > 0.02f) {
+                    uint32_t rings = 1 + (uint32_t) (result_inten * 1.6f);
+                    if (rings > 3) rings = 3;
+                    for (uint32_t ri = 0; ri < rings; ++ri) {
+                        float phase = reveal + (float) ri * 0.12f;
+                        if (phase > 1.f) phase = 1.f;
+                        float rr = 28.f + (1.f - phase) * (48.f + result_inten * 36.f)
+                            + (float) ri * 14.f;
+                        ctx.set_global_alpha(phase * (0.35f + result_inten * 0.2f));
+                        ctx.set_stroke(result_col);
+                        ctx.set_line_width(2.f + result_inten * 1.4f - (float) ri * 0.4f);
+                        ctx.begin_path();
+                        ctx.arc(0, 0, rr);
+                        ctx.stroke();
+                    }
+                    ctx.set_global_alpha(1.f);
+                }
+                // Soft rotating orbit dots in rarity color.
+                {
+                    uint32_t dots = 4 + (uint32_t) (result_inten * 3.f);
+                    if (dots > 10) dots = 10;
+                    float orbit_r = 46.f + result_inten * 10.f;
+                    float spin_orb = t * (0.0018f + result_inten * 0.0006f);
+                    for (uint32_t di = 0; di < dots; ++di) {
+                        float a = spin_orb + (float) di * ((float) (2.0 * M_PI) / (float) dots);
+                        float dx = std::cos(a) * orbit_r;
+                        float dy = std::sin(a) * orbit_r;
+                        float tw = 0.45f + 0.55f * (0.5f + 0.5f * std::sin(t * 0.01f + (float) di));
+                        ctx.set_global_alpha(tw * (0.35f + result_inten * 0.25f));
+                        ctx.set_fill(result_col);
+                        ctx.begin_path();
+                        ctx.arc(dx, dy, 2.2f + result_inten * 1.1f);
+                        ctx.fill();
+                    }
+                    ctx.set_global_alpha(1.f);
+                }
+                // Aura disc behind the plate.
+                ctx.set_global_alpha(0.18f + result_inten * 0.12f
+                    + reveal * (0.2f + result_inten * 0.15f));
+                ctx.set_fill(result_col);
+                ctx.begin_path();
+                ctx.arc(0, 0, 40.f + result_inten * 12.f);
+                ctx.fill();
+                ctx.set_global_alpha(1.f);
+                ctx.scale(plate);
+                ctx.set_fill(Chrome::kPanelInset);
+                ctx.begin_path();
+                ctx.round_rect(-rslot / 2, -rslot / 2, rslot, rslot, 10);
+                ctx.fill();
+                // Rarity rim — thicker / brighter at higher tiers.
+                ctx.set_stroke(result_col);
+                ctx.set_line_width(2.2f + result_inten * 1.6f);
+                ctx.set_global_alpha(0.75f + result_inten * 0.2f);
+                ctx.begin_path();
+                ctx.round_rect(-rslot / 2 - 1, -rslot / 2 - 1, rslot + 2, rslot + 2, 11);
+                ctx.stroke();
+                ctx.set_global_alpha(1.f);
+                // Outer hairline for Mythic+ presence.
+                if (result_r >= RarityID::kMythic) {
+                    float halo = 4.f + result_inten * 2.f
+                        + 2.f * std::sin(t * 0.01f);
+                    ctx.set_global_alpha(0.25f + result_inten * 0.1f);
+                    ctx.set_stroke(result_col);
+                    ctx.set_line_width(1.2f);
+                    ctx.begin_path();
+                    ctx.round_rect(-rslot / 2 - halo, -rslot / 2 - halo,
+                                   rslot + halo * 2.f, rslot + halo * 2.f, 12);
+                    ctx.stroke();
+                    ctx.set_global_alpha(1.f);
+                }
+                draw_loadout_background(ctx, rid, 1.f, 0);
+                draw_stack_badge(ctx, rslot, rn, 1);
+            }
+            ctx.set_global_alpha(0.7f);
+            ctx.set_fill(Chrome::kMuted);
+            ctx.set_text_size(12);
             ctx.center_text_align();
             ctx.center_text_baseline();
-            ctx.stroke_text(t.c_str());
-            ctx.fill_text(t.c_str());
+            ctx.translate(cx, cy + rslot * 0.5f + 16.f);
+            ctx.fill_text(I18n::use_chinese ? "点击取下" : "Tap to take");
+            ctx.translate(-cx, -(cy + rslot * 0.5f + 16.f));
             ctx.set_global_alpha(1.f);
-        }
-        // Hint: click tray to take back
-        if (show_id != PetalID::kNone && show_n > 0 && fade > 0.9f) {
+        } else if (show_id != PetalID::kNone && show_n > 0 && fade > 0.9f) {
             ctx.set_global_alpha(0.55f);
             ctx.set_fill(Chrome::kMuted);
             ctx.set_text_size(12);
@@ -960,9 +1236,16 @@ public:
     }
     void on_event(uint8_t event) override {
         // kClick only — kMouseDown+kClick would take back twice.
-        if (event == kClick
-            && Game::craft_tray_id != PetalID::kNone
-            && Game::craft_tray_count > 0)
+        if (event != kClick) return;
+        if (Game::craft_result_id != PetalID::kNone && Game::craft_result_count > 0) {
+            PetalID::T rid = Game::craft_result_id;
+            uint32_t rn = Game::craft_result_count;
+            CraftFx::fly_result_claim(rid, rn);
+            CraftFx::clear_result_fx();
+            Game::craft_result_take();
+            return;
+        }
+        if (Game::craft_tray_id != PetalID::kNone && Game::craft_tray_count > 0)
             craft_tray_take_back();
     }
 };
@@ -976,7 +1259,7 @@ static PetalID::T resolve_craft_family_petal(char const *name, uint8_t rarity) {
     uint32_t best_owned_n = 0;
     for (uint32_t raw = 1; raw < (uint32_t) PetalID::kNumPetals; ++raw) {
         PetalID::T id = (PetalID::T) raw;
-        if (Recipe::is_bag_only(id)) continue;
+        if (id == PetalID::kCoin || Recipe::is_bag_only(id)) continue;
         if (PETAL_DATA[id].rarity != rarity) continue;
         if (PETAL_DATA[id].name == nullptr) continue;
         if (std::strcmp(PETAL_DATA[id].name, name) != 0) continue;
@@ -996,7 +1279,7 @@ static PetalID::T resolve_craft_family_slot(char const *name, uint8_t rarity) {
     PetalID::T best_any = PetalID::kNone;
     for (uint32_t raw = 1; raw < (uint32_t) PetalID::kNumPetals; ++raw) {
         PetalID::T id = (PetalID::T) raw;
-        if (Recipe::is_bag_only(id)) continue;
+        if (id == PetalID::kCoin || Recipe::is_bag_only(id)) continue;
         if (PETAL_DATA[id].rarity != rarity) continue;
         if (PETAL_DATA[id].name == nullptr) continue;
         if (std::strcmp(PETAL_DATA[id].name, name) != 0) continue;
@@ -1011,6 +1294,7 @@ class CraftMatCell final : public Element {
     float hold_timer = 0;
     float hold_interval = 0.28f;
     uint8_t holding = 0;
+    uint32_t hold_touch = (uint32_t)-1;
     float empty_anim = 0.f; // 0 = empty plate; never start as a ghost catalog icon
     PetalID::T last_shown_id = PetalID::kNone;
 
@@ -1019,6 +1303,12 @@ class CraftMatCell final : public Element {
         PetalID::T id = resolve_craft_family_petal(family_name, rarity);
         if (id == PetalID::kNone || Game::craft_owned(id) == 0) return PetalID::kNone;
         return id;
+    }
+    void end_hold() {
+        holding = 0;
+        hold_touch = (uint32_t)-1;
+        hold_timer = 0;
+        hold_interval = 0.28f;
     }
 public:
     CraftMatCell(char const *name, uint8_t r)
@@ -1045,14 +1335,19 @@ public:
             if (empty_anim <= 0.f) last_shown_id = PetalID::kNone;
 
             if (!holding) return;
-            if (!(focus_state == kMouseDown)) {
-                holding = 0;
-                hold_timer = 0;
-                hold_interval = 0.28f;
+            // Mobile repeats kMouseDown while held; track the finger, not focus_state.
+            uint8_t still_down = 0;
+            if (Input::is_mobile) {
+                still_down = Input::touches.contains(hold_touch) ? 1 : 0;
+            } else {
+                still_down = (focus_state == kMouseDown) ? 1 : 0;
+            }
+            if (!still_down) {
+                end_hold();
                 return;
             }
             if (petal_id == PetalID::kNone || avail == 0) {
-                holding = 0;
+                end_hold();
                 return;
             }
             hold_timer += (float) (Ui::dt / 1000.0);
@@ -1061,7 +1356,7 @@ public:
                 craft_tray_add_animated(petal_id, Craft::kCraftBatch, screen_x, screen_y);
                 hold_interval = std::max(0.04f, hold_interval * 0.82f);
                 if (Game::craft_available(petal_id) == 0) {
-                    holding = 0;
+                    end_hold();
                     break;
                 }
             }
@@ -1149,17 +1444,21 @@ public:
             if (shift_alt_held()) {
                 craft_tray_add_animated(petal_id, Game::craft_available(petal_id),
                                         screen_x, screen_y);
-                holding = 0;
-            } else {
+                end_hold();
+            } else if (!holding) {
+                // Mobile fires kMouseDown every held frame — arm once so accelerate works.
                 craft_tray_add_animated(petal_id, Craft::kCraftBatch, screen_x, screen_y);
                 holding = 1;
+                hold_touch = touch_id;
                 hold_timer = 0;
                 hold_interval = 0.28f;
             }
         } else if (event == kMouseUp || event == kFocusLost) {
-            holding = 0;
-            hold_timer = 0;
-            hold_interval = 0.28f;
+            // On mobile, focus can flicker while the finger stays down — only end
+            // when the tracked touch is gone (or desktop mouse-up).
+            if (!(Input::is_mobile && event == kFocusLost
+                  && Input::touches.contains(hold_touch)))
+                end_hold();
         }
         if (event != kFocusLost && petal_id < PetalID::kNumPetals) {
             rendering_tooltip = 1;
@@ -1187,7 +1486,7 @@ static Element *make_craft_material_grid() {
     std::vector<char const *> family_names;
     for (uint32_t raw = 1; raw < (uint32_t) PetalID::kNumPetals; ++raw) {
         PetalID::T id = (PetalID::T) raw;
-        if (Recipe::is_bag_only(id)) continue;
+        if (id == PetalID::kCoin || Recipe::is_bag_only(id)) continue;
         char const *name = PETAL_DATA[id].name;
         uint8_t r = PETAL_DATA[id].rarity;
         if (name == nullptr || r >= RarityID::kNumRarities) continue;
@@ -1268,30 +1567,33 @@ static void on_compact_bag(Element *, uint8_t e) {
 }
 
 Element *Ui::make_inventory_panel() {
+    float const content_w = Input::is_mobile ? kBagPanelWMobile : kBagPanelW;
+    float const panel_pad = 20.f;
     Element *body = new Ui::VContainer({
-        new Ui::Element(kBagPanelW, 1),
+        new Ui::Element(content_w, 1),
         new Ui::HFlexContainer(
-            new Ui::DynamicText(29, [](){ return I18n::use_chinese ? "背包" : "Backpack"; }, {
+            new Ui::DynamicText(28, [](){ return I18n::use_chinese ? "背包" : "Backpack"; }, {
                 .fill = Chrome::kTitle
             }),
             new Ui::Button(36, 36,
                 new Ui::DynamicText(18, [](){ return std::string{"X"}; }),
                 on_close_inventory, nullptr,
                 { .fill = Chrome::kBtnDanger, .line_width = 0, .round_radius = Chrome::kRadius }),
-            0, 10, {}
+            panel_pad, 12, {}
         ),
-        new Ui::TextInput(bag_search_text, Input::is_mobile ? 420.f : 540.f, 42, 48, {
+        // Centered search — Left justify looked jammed into the rim.
+        new Ui::TextInput(bag_search_text, content_w - 8.f, 42, 48, {
             .fill = 0xfff5f5f5, .line_width = 3, .round_radius = 3,
-            .h_justify = Style::Left, .no_animation = 1
+            .no_animation = 1
         }),
         make_bag_scroll(),
-    }, 18, 10, {
+    }, panel_pad, 12, {
         .fill = 0xff5e9fd2,
         .line_width = Chrome::kRim,
         .round_radius = Chrome::kRadius,
         // Mobile: snap open (slide lerp felt like “scale lag” on bag expand)
-        .animate = [](Element *elt, Renderer &ctx){
-            elt->width = (Input::is_mobile ? kBagPanelWMobile : kBagPanelW) + 32.f;
+        .animate = [content_w, panel_pad](Element *elt, Renderer &ctx){
+            elt->width = content_w + 2.f * panel_pad;
             if (!Input::is_mobile)
                 ctx.translate(0, (1.f - (float) elt->animation) * (elt->height + 24.f));
             float mx = Input::mouse_x, my = Input::mouse_y;
@@ -1402,7 +1704,7 @@ Element *Ui::make_presets_panel() {
                 new Ui::DynamicText(18, [](){ return std::string{"X"}; }),
                 on_close_inventory, nullptr,
                 { .fill = Chrome::kBtnDanger, .line_width = 0, .round_radius = Chrome::kRadius }),
-            0, 10, {}
+            16, 12, {}
         ),
         new Ui::DynamicText(14, [](){
             return I18n::use_chinese
@@ -2157,7 +2459,7 @@ Element *Ui::make_talents_panel() {
                 new Ui::DynamicText(20, [](){ return std::string{"×"}; }),
                 on_close_inventory, nullptr,
                 { .fill = Chrome::kBtnDanger, .round_radius = 12 }),
-            0, 8, { .no_animation = 1 }),
+            16, 8, { .no_animation = 1 }),
         new Ui::HContainer({
             new TalentInfoCapsule(0),
             new TalentInfoCapsule(1),
@@ -2285,6 +2587,7 @@ public:
         .should_render = [](){
             return CraftFx::fly_n > 0 || CraftFx::speck_n > 0
                 || CraftFx::win_flash > 0.02f
+                || CraftFx::result_reveal > 0.02f
                 || (Game::game_panel == Game::kPanelCraft
                     && (Game::alive() || Game::on_game_screen));
         },
@@ -2352,7 +2655,7 @@ Element *Ui::make_boost_panel() {
                 new Ui::DynamicText(22, [](){ return std::string{"×"}; }),
                 [](Element *, uint8_t e){ if (e == Ui::kClick) Game::close_game_panel(); },
                 nullptr, { .fill = Chrome::kBtnDanger, .round_radius = 6 }),
-            0, 14),
+            16, 14),
         new Ui::HContainer({
             new BonusToggleButton(),
             new Ui::DynamicText(mobile ? 20.f : 22.f, [](){
@@ -2402,27 +2705,83 @@ Element *Ui::make_boost_panel() {
 }
 
 // Assembly workshop (V): A + B = Result [hammer] — matches craft mockup.
-// Tiers: 0 基础 · 1 跨图 · 2 传说 · 3 超级(coin shop)
+// Bottom: recipe tiers · Top-right: result rarity (same pager pattern as shop).
 static uint8_t recipe_filter_tier = 0;
+static uint8_t recipe_filter_rarity = RarityID::kCommon;
 static uint16_t recipe_selected = 0;
 static constexpr uint8_t kRecipeTierCount = 4;
 
 static char const *recipe_tier_label() {
     if (I18n::use_chinese) {
         switch (recipe_filter_tier) {
-            case 0: return "基础";
-            case 1: return "跨图";
-            case 2: return "传说";
-            case 3: return "超级";
-            default: return "基础";
+            case 0: return "本地锻冶";
+            case 1: return "边境合璧";
+            case 2: return "君王遗物";
+            case 3: return "城中奇物";
+            default: return "本地锻冶";
         }
     }
     switch (recipe_filter_tier) {
-        case 0: return "Base";
-        case 1: return "Cross";
-        case 2: return "Legend";
-        case 3: return "Super";
-        default: return "Base";
+        case 0: return "Local Forge";
+        case 1: return "Border Rite";
+        case 2: return "Sovereign Relic";
+        case 3: return "City Curio";
+        default: return "Local Forge";
+    }
+}
+
+static char const *recipe_rarity_label() {
+    if (recipe_filter_rarity >= RarityID::kNumRarities) return "?";
+    return I18n::rarity_name(recipe_filter_rarity);
+}
+
+static uint8_t recipe_result_rarity(uint16_t idx) {
+    if (idx >= Recipe::recipe_count()) return 0;
+    PetalID::T id = Recipe::recipe_at(idx).result;
+    if (id == PetalID::kNone || id >= PetalID::kNumPetals) return 0;
+    return PETAL_DATA[id].rarity;
+}
+
+static uint8_t recipe_tier_has_rarity(uint8_t tier, uint8_t rarity) {
+    uint16_t n = Recipe::recipe_count();
+    for (uint16_t i = 0; i < n; ++i) {
+        if (Recipe::recipe_at(i).tier != tier) continue;
+        if (recipe_result_rarity(i) == rarity) return 1;
+    }
+    return 0;
+}
+
+static void recipe_snap_rarity_to_tier() {
+    if (recipe_tier_has_rarity(recipe_filter_tier, recipe_filter_rarity)) return;
+    for (uint8_t r = 0; r < RarityID::kNumRarities; ++r) {
+        if (recipe_tier_has_rarity(recipe_filter_tier, r)) {
+            recipe_filter_rarity = r;
+            Game::craft_selected_rarity = r;
+            return;
+        }
+    }
+}
+
+static void on_recipe_rarity_prev(Element *, uint8_t e) {
+    if (e != Ui::kClick) return;
+    for (uint8_t step = 0; step < RarityID::kNumRarities; ++step) {
+        recipe_filter_rarity = (uint8_t) (
+            (recipe_filter_rarity + RarityID::kNumRarities - 1) % RarityID::kNumRarities);
+        if (recipe_tier_has_rarity(recipe_filter_tier, recipe_filter_rarity)) {
+            Game::craft_selected_rarity = recipe_filter_rarity;
+            return;
+        }
+    }
+}
+static void on_recipe_rarity_next(Element *, uint8_t e) {
+    if (e != Ui::kClick) return;
+    for (uint8_t step = 0; step < RarityID::kNumRarities; ++step) {
+        recipe_filter_rarity = (uint8_t) (
+            (recipe_filter_rarity + 1) % RarityID::kNumRarities);
+        if (recipe_tier_has_rarity(recipe_filter_tier, recipe_filter_rarity)) {
+            Game::craft_selected_rarity = recipe_filter_rarity;
+            return;
+        }
     }
 }
 
@@ -2502,6 +2861,8 @@ public:
             if (!Game::should_render_game_ui()) return false;
             if (idx >= Recipe::recipe_count()) return false;
             if (Recipe::recipe_at(idx).tier != recipe_filter_tier)
+                return false;
+            if (recipe_result_rarity(idx) != recipe_filter_rarity)
                 return false;
             return recipe_visible(idx) != 0;
         };
@@ -2678,28 +3039,54 @@ static Element *make_recipe_scroll() {
 static void on_recipe_tier_prev(Element *, uint8_t e) {
     if (e != Ui::kClick) return;
     recipe_filter_tier = (uint8_t) ((recipe_filter_tier + kRecipeTierCount - 1) % kRecipeTierCount);
+    recipe_snap_rarity_to_tier();
 }
 static void on_recipe_tier_next(Element *, uint8_t e) {
     if (e != Ui::kClick) return;
     recipe_filter_tier = (uint8_t) ((recipe_filter_tier + 1) % kRecipeTierCount);
+    recipe_snap_rarity_to_tier();
 }
 
 Element *Ui::make_special_craft_panel() {
+    recipe_filter_rarity = Game::craft_selected_rarity < RarityID::kNumRarities
+        ? Game::craft_selected_rarity : RarityID::kCommon;
+    recipe_snap_rarity_to_tier();
     Element *elt = make_drawer({
         new Ui::HFlexContainer(
             new Ui::DynamicText(28, [](){
                 return I18n::use_chinese ? "组装" : "Assemble";
             }, { .fill = 0xffffffff }),
-            new Ui::Button(36, 36,
-                new Ui::DynamicText(18, [](){ return std::string{"X"}; }),
-                [](Element *, uint8_t e){
-                    if (e == Ui::kClick) Game::close_game_panel();
-                }, nullptr,
-                { .fill = Chrome::kBtnDanger, .line_width = 0, .round_radius = Chrome::kRadius }),
+            // Top-right: ◀ rarity ▶ X — same pattern as the coin shop.
+            new Ui::HContainer({
+                new Ui::Button(32, 32,
+                    new Ui::DynamicText(16, [](){ return std::string{"◀"}; },
+                        { .fill = 0xffffffff }),
+                    on_recipe_rarity_prev, nullptr,
+                    { .fill = Chrome::kBtnMoss, .line_width = 0, .round_radius = Chrome::kRadius }),
+                new Ui::Button(88, 32,
+                    new Ui::DynamicText(14, [](){ return std::string{recipe_rarity_label()}; },
+                        { .fill = 0xffffffff }),
+                    [](Element *, uint8_t e){
+                        if (e == Ui::kClick) on_recipe_rarity_next(nullptr, e);
+                    },
+                    nullptr,
+                    { .fill = 0xff3a3a3a, .line_width = 0, .round_radius = Chrome::kRadius }),
+                new Ui::Button(32, 32,
+                    new Ui::DynamicText(16, [](){ return std::string{"▶"}; },
+                        { .fill = 0xffffffff }),
+                    on_recipe_rarity_next, nullptr,
+                    { .fill = 0xff3a3a3a, .line_width = 0, .round_radius = Chrome::kRadius }),
+                new Ui::Button(36, 36,
+                    new Ui::DynamicText(18, [](){ return std::string{"X"}; }),
+                    [](Element *, uint8_t e){
+                        if (e == Ui::kClick) Game::close_game_panel();
+                    }, nullptr,
+                    { .fill = Chrome::kBtnDanger, .line_width = 0, .round_radius = Chrome::kRadius }),
+            }, 0, 6, {}),
             0, 10, {}
         ),
         make_recipe_scroll(),
-        // Bottom pager: ◀  超级  ▶  (matches mockup)
+        // Bottom pager: recipe tier categories
         new Ui::HContainer({
             new Ui::Button(48, 44,
                 new Ui::DynamicText(22, [](){ return std::string{"◀"}; },
@@ -2720,8 +3107,8 @@ Element *Ui::make_special_craft_panel() {
         }, 0, 12, {}),
         new Ui::DynamicText(13, [](){
             return I18n::use_chinese
-                ? "列出本阶全部配方；材料不足也会显示。够数点右侧锤头，原料与成品都在背包。"
-                : "All recipes in this tier (missing mats shown). Hammer when ready; mats & results in bag.";
+                ? "右上切换成品稀有度；底部分：本地锻冶 / 边境合璧 / 君王遗物 / 城中奇物。够数点锤头。"
+                : "Top-right: result rarity. Bottom: Local / Border / Relic / Curio. Hammer when ready.";
         }, { .fill = 0xffb8e0e0, .h_justify = Style::Left }),
         new Ui::DynamicText(14, [](){ return Game::craft_status; }, {
             .fill = Chrome::kGold, .h_justify = Style::Left
@@ -2815,29 +3202,29 @@ static char const *shop_tab_hint() {
     if (I18n::use_chinese) {
         switch (shop_filter_tab) {
             case Craft::kShopSpecials:
-                return "机制花瓣与全服广播；广播点购买后输入内容，空则取消。";
+                return "流亡商的城中奇物；全服广播另算，买后输入（空则取消）。";
             case Craft::kShopMaterials:
-                return "常见群系素材；图内刷更划算，商店补缺口。";
+                return "八域残片柜；猎场更赚，这里补缺口。";
             case Craft::kShopRareMats:
-                return "稀有/Boss 素材，对应组装高阶配方。";
+                return "副核与精炼残片——高阶组装与君王遗物的钥匙。";
             case Craft::kShopCombos:
-                return "基础组合成品；贵于自刷素材+组装。";
+                return "本地锻冶成品；贵于自刷残片+组装。";
             case Craft::kShopRandom:
-                return "按稀有度开随机花瓣（期望低于专注刷图）。";
+                return "盲盒；期望低于专注刷图。";
             default: return "";
         }
     }
     switch (shop_filter_tab) {
         case Craft::kShopSpecials:
-            return "Utility petals + server announce; buy then type (empty cancels).";
+            return "Exiled merchant's city curios; announce sold apart (empty cancels).";
         case Craft::kShopMaterials:
-            return "Common biome mats; farming is better EV, shop fills gaps.";
+            return "Eight-realm scrap cabinet; farming pays better, shop fills gaps.";
         case Craft::kShopRareMats:
-            return "Rare/boss mats for high assemble recipes.";
+            return "Side-cores & refined scrap — keys to high assemble and relics.";
         case Craft::kShopCombos:
-            return "Base craft results — priced above farm+assemble.";
+            return "Local-forge results — priced above farm+assemble.";
         case Craft::kShopRandom:
-            return "Random petal by rarity (worse EV than focused farming).";
+            return "Blind packs; worse EV than focused farming.";
         default: return "";
     }
 }

@@ -27,7 +27,7 @@
       radial-gradient(ellipse at 90% 100%, #c5e0d8 0%, transparent 45%),
       var(--bg);
   }
-  main { max-width: 1100px; margin: 0 auto; padding: 24px 16px 56px; }
+  main { max-width: 1280px; margin: 0 auto; padding: 24px 16px 56px; }
   h1 { margin: 0 0 4px; font-size: 1.7rem; font-weight: 700; letter-spacing: -0.02em; }
   h2 { margin: 0 0 10px; font-size: 1.05rem; font-weight: 700; }
   .sub { color: var(--muted); font-size: 0.88rem; margin-bottom: 18px; }
@@ -47,14 +47,36 @@
     background: var(--card); border: 1px solid var(--line);
     border-radius: 8px; padding: 10px; text-align: center;
   }
+  .boss {
+    display: flex; flex-direction: column; align-items: stretch;
+    min-height: 78px; padding-bottom: 10px; gap: 0;
+  }
+  .boss-body {
+    flex: 1; display: flex; flex-direction: column; min-height: 0;
+  }
   .map.empty, .boss.dead { opacity: 0.5; }
-  .map .n, .boss .n { font-size: 1.15rem; font-weight: 700; }
+  .map .n, .boss .n { font-size: 1.15rem; font-weight: 700; line-height: 1.25; }
   .map .l, .boss .l { font-size: 0.72rem; color: var(--muted); margin-top: 2px; }
+  /* Name vertically centered in the free space above map/HP line. */
+  .boss .n {
+    flex: 1;
+    display: flex; align-items: center; justify-content: center;
+    min-height: 0;
+  }
+  /* Map · HP sits directly above the bar. */
+  .boss .l {
+    flex-shrink: 0;
+    margin-top: 0;
+    margin-bottom: 4px;
+    line-height: 1.2;
+  }
   .boss.alive .n { color: var(--boss); }
   .boss .hp {
-    margin-top: 6px; height: 5px; background: #d5e6d0; border-radius: 3px; overflow: hidden;
+    flex-shrink: 0; margin-top: 0;
+    height: 5px; background: #d5e6d0; border-radius: 3px; overflow: hidden;
   }
   .boss .hp > i { display: block; height: 100%; background: var(--boss); }
+  .boss .hp.empty { visibility: hidden; }
   .panel {
     background: var(--card); border: 1px solid var(--line);
     border-radius: 10px; padding: 14px; margin-bottom: 16px;
@@ -75,11 +97,19 @@
   tr.title { color: var(--muted); font-style: italic; }
   tr.detail td { background: #eef6eb; padding: 12px 14px; }
   .petals { display: flex; flex-wrap: wrap; gap: 6px; }
+  .petals.bag {
+    max-height: 220px; overflow-y: auto;
+    content-visibility: auto;
+  }
   .petal {
     border: 1px solid var(--line); border-radius: 6px;
     padding: 4px 8px; font-size: 0.78rem; background: #fff;
   }
   .petal .rz { color: var(--muted); margin-left: 4px; }
+  .bag-more {
+    width: auto; margin: 4px 0 0; padding: 5px 10px;
+    font-size: 0.78rem; background: #6b8f6a; border-color: #6b8f6a;
+  }
   .meta { color: var(--muted); font-size: 0.82rem; margin-bottom: 8px; }
   .lb-grid {
     display: grid;
@@ -91,11 +121,28 @@
   .lb-col li { margin: 2px 0; }
   .lb-col .v { color: var(--muted); float: right; }
   .feed {
-    max-height: 280px; overflow-y: auto;
+    max-height: 360px; overflow-y: auto;
     font-size: 0.86rem; line-height: 1.45;
   }
   .feed .row { padding: 6px 0; border-bottom: 1px dashed var(--line); }
   .feed .who { color: var(--accent); font-weight: 600; margin-right: 6px; }
+  .feed .meta { color: var(--muted); font-size: 0.72rem; margin-right: 6px; }
+  .feed .kind-kill .who { color: #c45c26; }
+  .feed .kind-craft .who { color: #2a7a4b; }
+  .feed .kind-announce .who { color: #3a5f9a; }
+  .feed-tools {
+    display: grid;
+    grid-template-columns: auto 1fr auto auto auto;
+    gap: 8px;
+    align-items: end;
+    margin-bottom: 8px;
+  }
+  .feed-tools label { margin: 0; }
+  .feed-tools button { margin-top: 0; width: auto; padding: 7px 12px; }
+  .feed-load { text-align: center; color: var(--muted); font-size: 0.75rem; padding: 4px 0; }
+  @media (max-width: 720px) {
+    .feed-tools { grid-template-columns: 1fr 1fr; }
+  }
   .err { color: var(--warn); margin-top: 10px; }
   .ok { color: var(--accent); margin-top: 8px; font-size: 0.88rem; }
   .empty-msg { color: var(--muted); padding: 18px; text-align: center; }
@@ -125,6 +172,48 @@
   .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
   .token-row { display: grid; grid-template-columns: 1fr auto; gap: 8px; align-items: end; }
   .token-row button { margin-top: 0; width: auto; padding: 7px 14px; }
+  .minimap-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+    gap: 12px;
+  }
+  .minimap-card {
+    background: #111; border: 1px solid var(--line); border-radius: 10px;
+    padding: 8px 8px 10px; overflow: hidden;
+  }
+  .minimap-card .mh {
+    display: flex; justify-content: space-between; align-items: baseline;
+    color: #e8f0e4; font-size: 0.82rem; margin: 0 2px 6px; font-weight: 600;
+  }
+  .minimap-card .mh .cnt { color: #9ecf9a; font-weight: 700; }
+  .minimap-card canvas {
+    display: block; width: 100%; height: auto;
+    border-radius: 6px; background: #f8f8f4;
+  }
+  .minimap-tools {
+    display: flex; flex-wrap: wrap; gap: 12px; align-items: center;
+    margin-bottom: 10px; font-size: 0.82rem; color: var(--muted);
+  }
+  .minimap-tools label { display: inline-flex; align-items: center; gap: 6px; margin: 0; cursor: pointer; }
+  .minimap-tools input { width: auto; margin: 0; }
+  .combo { position: relative; }
+  .combo-menu {
+    position: absolute; left: 0; right: 0; top: calc(100% + 2px); z-index: 40;
+    max-height: 220px; overflow-y: auto;
+    background: #fff; border: 1px solid var(--line); border-radius: 6px;
+    box-shadow: 0 8px 20px rgba(26,46,26,0.12);
+  }
+  .combo-menu[hidden] { display: none !important; }
+  .combo-item {
+    display: block; width: 100%; text-align: left;
+    padding: 8px 10px; border: 0; border-radius: 0; margin: 0;
+    background: #fff; color: var(--ink); font-weight: 400; cursor: pointer;
+  }
+  .combo-item:hover, .combo-item.active { background: #e8f5e4; }
+  .combo-item .sub { display: block; font-size: 0.72rem; color: var(--muted); margin-top: 1px; }
+  .combo-empty { padding: 10px; color: var(--muted); font-size: 0.82rem; }
+  .link-hint { color: var(--accent); font-size: 0.75rem; margin: 4px 0 0; min-height: 1.1em; }
+  select:focus, .combo input:focus { outline: 2px solid #9fd4a8; outline-offset: 1px; }
 </style>
 </head>
 <body>
@@ -183,10 +272,12 @@
       <div class="admin-box">
         <h3>发放花瓣</h3>
         <label>玩家（游戏名或账号）</label>
-        <input id="giveWho" list="playerList" placeholder="在线玩家名">
-        <datalist id="playerList"></datalist>
-        <label>筛选（中英文名）</label>
-        <input id="petalFilter" placeholder="如：基本 / Basic / 玫瑰">
+        <div class="combo" id="giveWhoCombo">
+          <input id="giveWho" autocomplete="off" placeholder="点击选择或输入在线玩家">
+          <div class="combo-menu" id="giveWhoMenu" hidden></div>
+        </div>
+        <label>筛选花瓣（中英文）</label>
+        <input id="petalFilter" autocomplete="off" placeholder="如：基本 / Basic / 玫瑰">
         <label>花瓣</label>
         <select id="givePetal"></select>
         <div class="row2">
@@ -204,6 +295,12 @@
       </div>
       <div class="admin-box">
         <h3>刷怪</h3>
+        <label>靠近玩家（优先；选中后自动切到其所在地图）</label>
+        <div class="combo" id="spawnNearCombo">
+          <input id="spawnNear" autocomplete="off" placeholder="留空则出生点附近">
+          <div class="combo-menu" id="spawnNearMenu" hidden></div>
+        </div>
+        <p class="hint" id="spawnNearHint" style="margin-top:4px">未选玩家时，按下方地图出生点刷怪</p>
         <label>地图</label>
         <select id="spawnMap">
           <option value="0">花园</option>
@@ -215,12 +312,10 @@
           <option value="6">火山</option>
           <option value="7">王城</option>
         </select>
+        <label>筛选怪物（中英文）</label>
+        <input id="mobFilter" autocomplete="off" placeholder="如：蜜蜂 / Bee / boss">
         <label>怪物</label>
         <select id="spawnMob"></select>
-        <label>筛选</label>
-        <input id="mobFilter" placeholder="名称关键字 / boss">
-        <label>靠近玩家（可选，优先）</label>
-        <input id="spawnNear" list="playerList" placeholder="留空则出生点附近">
         <div class="row2">
           <div><label>X（可选）</label><input id="spawnX" type="number" placeholder="自动"></div>
           <div><label>Y（可选）</label><input id="spawnY" type="number" placeholder="自动"></div>
@@ -239,33 +334,112 @@
   </div>
 
   <div class="panel">
+    <h2>实时小地图</h2>
+    <p class="hint">与游戏内右上角同款：地形 + 玩家点 + Boss。勾选 G 模式会显示稀有度分区与玩家名；坐标约 20Hz 刷新并插值。</p>
+    <div class="minimap-tools">
+      <label><input type="checkbox" id="mmLevels"> 稀有度分区 + 玩家名（等同按住 G）</label>
+      <span id="mmStatus">加载地形中…</span>
+    </div>
+    <div class="minimap-grid" id="minimaps"></div>
+  </div>
+
+  <div class="panel">
     <h2>Boss 存活</h2>
     <div class="bosses" id="bosses"></div>
   </div>
 
   <div class="panel">
     <h2>全服播报</h2>
-    <p class="hint">合成 / Boss 击杀 / 管理公告（重启后清空）</p>
+    <p class="hint">旧→新；上滑加载更早。超容优先丢最旧击杀，击杀清空后再丢合成；公告与聊天永不淘汰（上限 8万 / 20万）。</p>
+    <div class="feed-tools">
+      <label>日期
+        <input type="date" id="bcDay">
+      </label>
+      <label>玩家
+        <input type="text" id="bcPlayer" placeholder="名字片段" autocomplete="off">
+      </label>
+      <label>来源地图
+        <select id="bcMap">
+          <option value="">全部</option>
+          <option value="0">花园</option>
+          <option value="1">沙漠</option>
+          <option value="2">海洋</option>
+          <option value="3">雪原</option>
+          <option value="4">丛林</option>
+          <option value="5">蚁穴</option>
+          <option value="6">火山</option>
+          <option value="7">王城</option>
+          <option value="255">未知</option>
+        </select>
+      </label>
+      <label>类型
+        <select id="bcKind">
+          <option value="">全部</option>
+          <option value="0">击杀</option>
+          <option value="1">合成</option>
+          <option value="2">公告</option>
+        </select>
+      </label>
+      <button type="button" id="bcApply">筛选</button>
+    </div>
     <div class="feed" id="feed"><div class="empty-msg">暂无播报</div></div>
   </div>
 
   <div class="panel">
+    <h2>聊天记录</h2>
+    <p class="hint">频道（含全服）与来源地图分开：全服是频道，地图是说话时所在图。</p>
+    <div class="feed-tools">
+      <label>日期
+        <input type="date" id="chatDay">
+      </label>
+      <label>玩家
+        <input type="text" id="chatPlayer" placeholder="名字片段" autocomplete="off">
+      </label>
+      <label>来源地图
+        <select id="chatMap">
+          <option value="">全部</option>
+          <option value="0">花园</option>
+          <option value="1">沙漠</option>
+          <option value="2">海洋</option>
+          <option value="3">雪原</option>
+          <option value="4">丛林</option>
+          <option value="5">蚁穴</option>
+          <option value="6">火山</option>
+          <option value="7">王城</option>
+          <option value="255">未知</option>
+        </select>
+      </label>
+      <label>频道
+        <select id="chatChannel">
+          <option value="">全部</option>
+          <option value="0">附近</option>
+          <option value="1">队伍</option>
+          <option value="2">公会</option>
+          <option value="3">私聊</option>
+          <option value="5">全服</option>
+        </select>
+      </label>
+      <button type="button" id="chatApply">筛选</button>
+    </div>
+    <div class="feed" id="chatFeed"><div class="empty-msg">暂无记录</div></div>
+  </div>
+
+  <div class="panel">
     <h2>在线玩家</h2>
-    <p class="hint">点击行展开装备 / 背包 / 银行</p>
+    <p class="hint">点击行展开装备 / 背包</p>
     <table>
       <thead>
         <tr>
           <th></th>
-          <th>玩家</th>
+          <th>账号</th>
           <th>等级</th>
           <th>地图</th>
           <th>公会</th>
-          <th>账号</th>
           <th>状态</th>
         </tr>
       </thead>
       <tbody id="rows">
-        <tr><td colspan="7" class="empty-msg">加载中…</td></tr>
+        <tr><td colspan="6" class="empty-msg">加载中…</td></tr>
       </tbody>
     </table>
   </div>
@@ -280,9 +454,36 @@
 <script>
 const $ = (id) => document.getElementById(id);
 const expanded = new Set();
-let lastBcId = 0;
+const bagShowAll = new Set(); // player keys that show full bag (not preview)
+const BAG_PREVIEW = 40;
 let catalog = { petals: [], mobs: [] };
+let lastPlayersSorted = [];
+let lastDetailSig = new Map(); // key -> bag/loadout signature
+// Broadcast / chatlog history (oldest → newest in DOM)
+const KIND_ZH = { 0: "击杀", 1: "合成", 2: "公告" };
+const CH_ZH = { 0: "附近", 1: "队伍", 2: "公会", 3: "私聊", 4: "系统", 5: "全服" };
+let bcRows = [];
+let bcOldestId = 0;
+let bcNewestId = 0;
+let bcLoading = false;
+let bcHasMore = true;
+let bcFilterActive = false;
+let chatRows = [];
+let chatOldestId = 0;
+let chatNewestId = 0;
+let chatLoading = false;
+let chatHasMore = true;
 let lastPlayers = [];
+let mapLayout = null;
+const mmStatic = {}; // map_id -> { levels:bool, canvas:HTMLCanvasElement }
+const mmUi = {}; // map_id -> { card, canvas, title, count }
+// Smooth minimap: previous/current snapshots + rAF lerp
+let mmSnapA = null; // older
+let mmSnapB = null; // newer
+let mmSnapAt = 0;
+let mmPollMs = 50; // ~game TPS
+let mmPosBusy = false;
+let mmRafStarted = false;
 
 let adminAuthed = false;
 let authRequired = false;
@@ -363,15 +564,59 @@ if ($("btnLogout")) $("btnLogout").onclick = () => {
   flashOk("已退出管理");
 };
 
+const MAP_NAMES = ["花园","沙漠","海洋","雪原","丛林","蚁穴","火山","王城"];
+// Matches RarityID / Server::live_rarity_zh: Common…Mythic, Ultra, Super, Unique
+const RARITY_ZH = ["普通","罕见","稀有","史诗","传奇","神话","究极","超凡","独特"];
+const openCombos = new Set();
+
+function uiBusy() {
+  const ae = document.activeElement;
+  if (ae && ae.closest && ae.closest("#adminPanel")) return true;
+  if (openCombos.size) return true;
+  return false;
+}
+
 function fillSelect(sel, items, labelFn) {
+  if (!sel) return;
+  // Don't rebuild while native dropdown is open — that closes it mid-click.
+  if (document.activeElement === sel) {
+    sel._pendingItems = items;
+    sel._pendingLabel = labelFn;
+    return;
+  }
   const cur = sel.value;
-  sel.innerHTML = items.map((it) =>
+  const html = items.map((it) =>
     `<option value="${it.id}">${esc(labelFn(it))}</option>`
   ).join("");
+  if (sel.innerHTML === html) {
+    if ([...sel.options].some((o) => o.value === cur)) sel.value = cur;
+    return;
+  }
+  sel.innerHTML = html;
   if ([...sel.options].some((o) => o.value === cur)) sel.value = cur;
 }
 
-const RARITY_ZH = ["普通","罕见","稀有","史诗","传奇","神话","独特","超凡","究极"];
+["givePetal", "giveRarity", "spawnMob", "spawnMap"].forEach((id) => {
+  const sel = $(id);
+  if (!sel) return;
+  sel.addEventListener("blur", () => {
+    if (!sel._pendingItems) return;
+    const items = sel._pendingItems;
+    const labelFn = sel._pendingLabel;
+    sel._pendingItems = null;
+    sel._pendingLabel = null;
+    fillSelect(sel, items, labelFn);
+    if (id === "givePetal") refreshGiveRarity();
+  });
+});
+
+function debounce(fn, ms) {
+  let t = 0;
+  return (...args) => {
+    clearTimeout(t);
+    t = setTimeout(() => fn(...args), ms);
+  };
+}
 
 function refreshGiveRarity() {
   const sel = $("givePetal");
@@ -379,15 +624,18 @@ function refreshGiveRarity() {
   const rsel = $("giveRarity");
   const p = (catalog.petals || []).find((x) => String(x.id) === String(sel.value));
   if (!p) {
-    rsel.innerHTML = "";
+    if (document.activeElement !== rsel) rsel.innerHTML = "";
     hint.textContent = "选择花瓣后显示可用等级";
     return;
   }
   const avail = Array.isArray(p.rarities) ? p.rarities.slice() : [p.rarity];
   const cur = rsel.value;
-  rsel.innerHTML = avail.map((r) =>
+  const html = avail.map((r) =>
     `<option value="${r}">${RARITY_ZH[r] || ("稀有度"+r)} (${r})</option>`
   ).join("");
+  if (document.activeElement !== rsel && rsel.innerHTML !== html) {
+    rsel.innerHTML = html;
+  }
   if (avail.map(String).includes(String(cur))) rsel.value = cur;
   else if (avail.includes(p.rarity)) rsel.value = String(p.rarity);
   hint.textContent = `「${p.name_zh || p.name}」可用：` +
@@ -396,7 +644,6 @@ function refreshGiveRarity() {
 
 function refreshPetalSelect() {
   const q = ($("petalFilter").value || "").trim().toLowerCase();
-  // Deduplicate by English name — keep lowest id as representative
   const byName = new Map();
   (catalog.petals || []).forEach((p) => {
     const key = p.name || String(p.id);
@@ -420,12 +667,155 @@ function refreshPetalSelect() {
 
 function refreshMobSelect() {
   const q = ($("mobFilter").value || "").trim().toLowerCase();
-  const items = catalog.mobs.filter((m) => {
-    if (!q) return true;
-    if (q === "boss") return !!m.boss;
-    return m.name.toLowerCase().includes(q) || (m.boss && "boss".includes(q));
+  let items = (catalog.mobs || []).slice();
+  if (q) {
+    items = items.filter((m) => {
+      if (q === "boss") return !!m.boss;
+      const en = String(m.name || "").toLowerCase();
+      const zh = String(m.name_zh || "");
+      return en.includes(q) || zh.includes(q) || zh.toLowerCase().includes(q)
+        || (m.boss && "boss".includes(q));
+    });
+  }
+  items.sort((a, b) => {
+    if (!!b.boss !== !!a.boss) return b.boss ? 1 : -1;
+    return String(a.name_zh || a.name).localeCompare(String(b.name_zh || b.name), "zh");
   });
-  fillSelect($("spawnMob"), items, (m) => `${m.boss ? "★ " : ""}${m.name} #${m.id}`);
+  fillSelect($("spawnMob"), items, (m) =>
+    `${m.boss ? "★ " : ""}${m.name_zh || m.name} / ${m.name}`
+  );
+}
+
+function playerChoices() {
+  const seen = new Set();
+  const out = [];
+  (lastPlayers || []).forEach((p) => {
+    const value = p.name || p.account || "";
+    if (!value || seen.has(value)) return;
+    seen.add(value);
+    out.push({
+      value,
+      label: value,
+      sub: [
+        p.account && p.account !== p.name ? `账号 ${p.account}` : "",
+        p.in_game ? (MAP_NAMES[p.map_id] || p.map || "") : "标题页",
+        p.alive ? "存活" : (p.in_game ? "未存活" : ""),
+      ].filter(Boolean).join(" · "),
+      map_id: p.map_id,
+      in_game: !!p.in_game,
+      alive: !!p.alive,
+      map: p.map || MAP_NAMES[p.map_id] || "",
+    });
+  });
+  out.sort((a, b) => String(a.label).localeCompare(String(b.label), "zh"));
+  return out;
+}
+
+function syncSpawnMapFromPlayer(choice) {
+  const hint = $("spawnNearHint");
+  if (!choice || choice.map_id == null || !choice.in_game) {
+    if (hint) hint.textContent = "未选玩家时，按下方地图出生点刷怪";
+    return;
+  }
+  $("spawnMap").value = String(choice.map_id);
+  if (hint) {
+    hint.textContent = choice.alive
+      ? `已同步地图 → ${choice.map || MAP_NAMES[choice.map_id]}（靠近该玩家）`
+      : `已同步地图 → ${choice.map || MAP_NAMES[choice.map_id]}（玩家未存活，刷怪可能失败）`;
+  }
+}
+
+function bindPlayerCombo(inputId, menuId, onPick) {
+  const input = $(inputId);
+  const menu = $(menuId);
+  if (!input || !menu) return;
+  let active = -1;
+  let items = [];
+
+  const close = () => {
+    menu.hidden = true;
+    openCombos.delete(inputId);
+    active = -1;
+  };
+  const open = () => {
+    render();
+    menu.hidden = false;
+    openCombos.add(inputId);
+  };
+  const render = () => {
+    const q = (input.value || "").trim().toLowerCase();
+    items = playerChoices().filter((it) => {
+      if (!q) return true;
+      return String(it.label).toLowerCase().includes(q)
+        || String(it.sub).toLowerCase().includes(q);
+    });
+    if (!items.length) {
+      menu.innerHTML = `<div class="combo-empty">${lastPlayers.length ? "无匹配玩家" : "当前无人在线"}</div>`;
+      return;
+    }
+    menu.innerHTML = items.map((it, i) =>
+      `<button type="button" class="combo-item${i === active ? " active" : ""}" data-i="${i}">` +
+      `${esc(it.label)}${it.sub ? `<span class="sub">${esc(it.sub)}</span>` : ""}</button>`
+    ).join("");
+    menu.querySelectorAll(".combo-item").forEach((btn) => {
+      btn.onmousedown = (ev) => {
+        ev.preventDefault(); // keep focus; avoid blur race
+        const it = items[Number(btn.getAttribute("data-i"))];
+        if (!it) return;
+        input.value = it.value;
+        close();
+        if (onPick) onPick(it);
+      };
+    });
+  };
+
+  input.addEventListener("focus", open);
+  input.addEventListener("click", open);
+  input.addEventListener("input", () => { active = -1; open(); });
+  input.addEventListener("keydown", (ev) => {
+    if (menu.hidden && (ev.key === "ArrowDown" || ev.key === "Enter")) {
+      open();
+      return;
+    }
+    if (menu.hidden) return;
+    if (ev.key === "ArrowDown") {
+      ev.preventDefault();
+      active = Math.min(items.length - 1, active + 1);
+      render();
+    } else if (ev.key === "ArrowUp") {
+      ev.preventDefault();
+      active = Math.max(0, active - 1);
+      render();
+    } else if (ev.key === "Enter") {
+      ev.preventDefault();
+      if (active >= 0 && items[active]) {
+        input.value = items[active].value;
+        const it = items[active];
+        close();
+        if (onPick) onPick(it);
+      }
+    } else if (ev.key === "Escape") {
+      close();
+    }
+  });
+  input.addEventListener("blur", () => {
+    // Delay so mousedown on item can fire first
+    setTimeout(() => {
+      if (!menu.contains(document.activeElement)) close();
+    }, 120);
+  });
+
+  // Refresh open menu when roster changes
+  input._refreshCombo = () => {
+    if (!menu.hidden) render();
+  };
+}
+
+function refreshOpenPlayerCombos() {
+  ["giveWho", "spawnNear"].forEach((id) => {
+    const el = $(id);
+    if (el && el._refreshCombo) el._refreshCombo();
+  });
 }
 
 async function loadCatalog() {
@@ -436,9 +826,269 @@ async function loadCatalog() {
   refreshMobSelect();
 }
 
-$("petalFilter").oninput = refreshPetalSelect;
+function argbToCss(hex) {
+  if (typeof hex === "string") return hex;
+  return "#" + (hex & 0xffffff).toString(16).padStart(6, "0");
+}
+
+function ensureMinimapUi() {
+  if (!mapLayout || !mapLayout.maps) return;
+  const host = $("minimaps");
+  if (host.childElementCount) return;
+  mapLayout.maps.forEach((m) => {
+    const card = document.createElement("div");
+    card.className = "minimap-card";
+    card.innerHTML = `<div class="mh"><span>${esc(m.name)}</span><span class="cnt" data-cnt>0</span></div>`;
+    const canvas = document.createElement("canvas");
+    const aw = mapLayout.arena_w || 28000;
+    const ah = mapLayout.arena_h || 20000;
+    canvas.width = 420;
+    canvas.height = Math.round(420 * ah / aw);
+    card.appendChild(canvas);
+    host.appendChild(card);
+    mmUi[m.id] = {
+      card,
+      canvas,
+      count: card.querySelector("[data-cnt]"),
+    };
+  });
+}
+
+function bakeStaticLayer(mapDef, levels) {
+  const aw = mapLayout.arena_w || 28000;
+  const ah = mapLayout.arena_h || 20000;
+  const w = 420;
+  const h = Math.round(w * ah / aw);
+  const c = document.createElement("canvas");
+  c.width = w;
+  c.height = h;
+  const ctx = c.getContext("2d");
+  const sx = w / aw;
+  const sy = h / ah;
+  ctx.fillStyle = "#F8F8F4";
+  ctx.fillRect(0, 0, w, h);
+  if (levels) {
+    const colors = mapLayout.rarity_colors || [];
+    (mapDef.zones || []).forEach((z) => {
+      const d = Math.min(z.d | 0, colors.length - 1);
+      ctx.fillStyle = colors[d] || "#7eef6d";
+      ctx.fillRect(z.l * sx, z.t * sy, (z.r - z.l) * sx, (z.b - z.t) * sy);
+    });
+  }
+  (mapDef.terrain || []).forEach((f) => {
+    const p = f.p || [];
+    if (p.length < 6) return;
+    if (levels && !f.imp) return;
+    ctx.beginPath();
+    ctx.moveTo(p[0] * sx, p[1] * sy);
+    for (let i = 2; i < p.length; i += 2)
+      ctx.lineTo(p[i] * sx, p[i + 1] * sy);
+    ctx.closePath();
+    ctx.fillStyle = f.imp ? "#08090B" : "#F8F8F4";
+    ctx.fill();
+  });
+  // Spawn hub ring
+  const hx = (mapLayout.spawn_x || aw / 2) * sx;
+  const hy = (mapLayout.spawn_y || ah / 2) * sy;
+  ctx.strokeStyle = "rgba(45,138,78,0.55)";
+  ctx.lineWidth = 1.5;
+  ctx.beginPath();
+  ctx.ellipse(hx, hy, 5200 * sx, 4000 * sy, 0, 0, Math.PI * 2);
+  ctx.stroke();
+  return c;
+}
+
+function getStaticLayer(mapDef, levels) {
+  const key = mapDef.id;
+  const hit = mmStatic[key];
+  if (hit && hit.levels === levels) return hit.canvas;
+  const canvas = bakeStaticLayer(mapDef, levels);
+  mmStatic[key] = { levels, canvas };
+  return canvas;
+}
+
+function ingestPosSnap(data) {
+  const players = {};
+  (data.players || []).forEach((p) => {
+    if (!(p.alive && p.x >= 0 && p.y >= 0)) return;
+    const id = p.id || (`${p.name}|${p.map_id}`);
+    players[id] = {
+      id,
+      name: p.name || "",
+      map_id: p.map_id | 0,
+      x: +p.x,
+      y: +p.y,
+      color: p.color | 0,
+    };
+  });
+  const bosses = {};
+  (data.bosses || []).forEach((b) => {
+    if (!b.has_boss) return;
+    bosses[b.map_id | 0] = {
+      map_id: b.map_id | 0,
+      alive: !!b.alive,
+      x: +b.x,
+      y: +b.y,
+    };
+  });
+  const counts = {};
+  (data.maps || []).forEach((m) => { counts[m.id] = m.players; });
+  mmSnapA = mmSnapB;
+  mmSnapB = { players, bosses, counts, ts: data.ts || Date.now() };
+  mmSnapAt = performance.now();
+}
+
+function lerpPos(a, b, t) {
+  if (!a) return b;
+  if (!b) return a;
+  return {
+    id: b.id,
+    name: b.name,
+    map_id: b.map_id,
+    x: a.x + (b.x - a.x) * t,
+    y: a.y + (b.y - a.y) * t,
+    color: b.color,
+  };
+}
+
+function drawMinimapsFrame() {
+  if (!mapLayout || !mmSnapB) return;
+  ensureMinimapUi();
+  const levels = !!( $("mmLevels") && $("mmLevels").checked );
+  const aw = mapLayout.arena_w || 28000;
+  const ah = mapLayout.arena_h || 20000;
+  const flowerColors = mapLayout.flower_colors || ["#ffe763", "#999999", "#689ce2", "#ec6869"];
+  const elapsed = performance.now() - mmSnapAt;
+  const t = Math.max(0, Math.min(1, elapsed / mmPollMs));
+
+  // Merge ids from both snaps for continuity
+  const ids = new Set([
+    ...Object.keys(mmSnapB.players),
+    ...(mmSnapA ? Object.keys(mmSnapA.players) : []),
+  ]);
+  const byMap = {};
+  ids.forEach((id) => {
+    const b = mmSnapB.players[id];
+    const a = mmSnapA && mmSnapA.players[id];
+    if (!b && !a) return;
+    // Fade out if vanished
+    if (!b) return;
+    const p = lerpPos(a, b, a ? t : 1);
+    (byMap[p.map_id] || (byMap[p.map_id] = [])).push(p);
+  });
+
+  mapLayout.maps.forEach((m) => {
+    const ui = mmUi[m.id];
+    if (!ui) return;
+    ui.count.textContent = String(mmSnapB.counts[m.id] ?? 0);
+    const canvas = ui.canvas;
+    const ctx = canvas.getContext("2d");
+    const w = canvas.width;
+    const h = canvas.height;
+    const sx = w / aw;
+    const sy = h / ah;
+    ctx.clearRect(0, 0, w, h);
+    ctx.drawImage(getStaticLayer(m, levels), 0, 0);
+    const players = byMap[m.id] || [];
+    const pr = 4.2;
+    players.forEach((p) => {
+      const px = p.x * sx;
+      const py = p.y * sy;
+      const col = flowerColors[(p.color | 0) % flowerColors.length] || "#ffe763";
+      ctx.beginPath();
+      ctx.arc(px, py, pr + 1.6, 0, Math.PI * 2);
+      ctx.fillStyle = "rgba(255,255,255,0.93)";
+      ctx.fill();
+      ctx.beginPath();
+      ctx.arc(px, py, pr, 0, Math.PI * 2);
+      ctx.fillStyle = col;
+      ctx.fill();
+      ctx.strokeStyle = "#222";
+      ctx.lineWidth = 1.1;
+      ctx.stroke();
+      if (levels && p.name) {
+        ctx.font = "600 11px Segoe UI, PingFang SC, Microsoft YaHei, sans-serif";
+        ctx.textAlign = "center";
+        ctx.textBaseline = "bottom";
+        ctx.lineWidth = 3;
+        ctx.strokeStyle = "rgba(0,0,0,0.75)";
+        ctx.strokeText(p.name, px, py - pr - 3);
+        ctx.fillStyle = "#fff";
+        ctx.fillText(p.name, px, py - pr - 3);
+      }
+    });
+    const bossB = mmSnapB.bosses[m.id];
+    const bossA = mmSnapA && mmSnapA.bosses[m.id];
+    if (bossB && bossB.x >= 0 && bossB.y >= 0) {
+      const bx = (bossA ? bossA.x + (bossB.x - bossA.x) * t : bossB.x) * sx;
+      const by = (bossA ? bossA.y + (bossB.y - bossA.y) * t : bossB.y) * sy;
+      ctx.beginPath();
+      ctx.moveTo(bx, by - 7);
+      ctx.lineTo(bx + 6, by + 5);
+      ctx.lineTo(bx - 6, by + 5);
+      ctx.closePath();
+      ctx.fillStyle = bossB.alive ? "#e11d48" : "rgba(148,163,184,0.7)";
+      ctx.fill();
+      ctx.strokeStyle = "#111";
+      ctx.lineWidth = 1;
+      ctx.stroke();
+    }
+  });
+}
+
+function startMinimapLoop() {
+  if (mmRafStarted) return;
+  mmRafStarted = true;
+  const frame = () => {
+    drawMinimapsFrame();
+    requestAnimationFrame(frame);
+  };
+  requestAnimationFrame(frame);
+  const poll = async () => {
+    if (mmPosBusy) return;
+    mmPosBusy = true;
+    try {
+      const r = await fetch("/api/live-pos", { cache: "no-store" });
+      if (r.ok) ingestPosSnap(await r.json());
+    } catch (e) { /* keep last snap */ }
+    finally { mmPosBusy = false; }
+  };
+  poll();
+  setInterval(poll, mmPollMs);
+}
+
+async function loadMapLayout() {
+  try {
+    const r = await fetch("/api/map-layout", { cache: "force-cache" });
+    if (!r.ok) throw new Error("HTTP " + r.status);
+    mapLayout = await r.json();
+    ensureMinimapUi();
+    $("mmStatus").textContent = "地形已就绪 · 20Hz 平滑刷新";
+    startMinimapLoop();
+  } catch (e) {
+    $("mmStatus").textContent = "地形加载失败：" + e.message;
+  }
+}
+
+$("petalFilter").oninput = debounce(refreshPetalSelect, 120);
 $("givePetal").onchange = refreshGiveRarity;
-$("mobFilter").oninput = refreshMobSelect;
+$("mobFilter").oninput = debounce(refreshMobSelect, 120);
+bindPlayerCombo("giveWho", "giveWhoMenu", null);
+bindPlayerCombo("spawnNear", "spawnNearMenu", (it) => syncSpawnMapFromPlayer(it));
+$("spawnNear").addEventListener("change", () => {
+  const v = $("spawnNear").value.trim();
+  if (!v) {
+    syncSpawnMapFromPlayer(null);
+    return;
+  }
+  const it = playerChoices().find((p) => p.value === v || p.label === v);
+  if (it) syncSpawnMapFromPlayer(it);
+});
+if ($("mmLevels")) {
+  $("mmLevels").onchange = () => {
+    Object.keys(mmStatic).forEach((k) => { delete mmStatic[k]; });
+  };
+}
 
 $("btnAnn").onclick = async () => {
   try {
@@ -468,11 +1118,16 @@ $("btnGive").onclick = async () => {
 $("btnSpawn").onclick = async () => {
   try {
     $("btnSpawn").disabled = true;
+    const near = $("spawnNear").value.trim();
+    if (near) {
+      const it = playerChoices().find((p) => p.value === near || p.label === near);
+      if (it) syncSpawnMapFromPlayer(it);
+    }
     const j = await admin({
       action: "spawn",
       map_id: Number($("spawnMap").value),
       mob_id: Number($("spawnMob").value),
-      near: $("spawnNear").value.trim(),
+      near,
       x: Number($("spawnX").value) || 0,
       y: Number($("spawnY").value) || 0,
     });
@@ -486,30 +1141,153 @@ function keyOf(p, i) {
 }
 
 function petalChip(p) {
-  if (!p || !p.name) return `<span class="petal">空</span>`;
+  if (!p || !(p.name || p.name_zh)) return `<span class="petal">空</span>`;
   const cnt = p.count != null ? ` ×${p.count}` : "";
-  return `<span class="petal">${esc(p.name)}${cnt}<span class="rz">${esc(p.rarity_zh || "")}</span></span>`;
+  const label = p.name_zh && p.name && p.name_zh !== p.name
+    ? `${p.name_zh} / ${p.name}`
+    : (p.name_zh || p.name);
+  return `<span class="petal">${esc(label)}${cnt}<span class="rz">${esc(p.rarity_zh || "")}</span></span>`;
 }
 
-function detailHtml(p) {
+function bagChipList(p, k) {
+  const raw = p.bag || [];
+  const chips = raw.map((b) => {
+    if (b && b.petal) return petalChip({ ...b.petal, count: b.count });
+    return petalChip(b);
+  });
+  if (!chips.length) return `<span class="empty-msg">空</span>`;
+  const showAll = bagShowAll.has(k);
+  if (showAll || chips.length <= BAG_PREVIEW) return chips.join("");
+  const rest = chips.length - BAG_PREVIEW;
+  return chips.slice(0, BAG_PREVIEW).join("")
+    + `<button type="button" class="bag-more" data-bagmore="${esc(k)}">还有 ${rest} 种，点开全部</button>`;
+}
+
+function detailSig(p) {
+  const bag = p.bag || [];
+  const lo = p.loadout || [];
+  let s = (p.coins | 0) + ":" + (p.hp | 0) + ":" + bag.length + ":" + lo.length;
+  for (let i = 0; i < bag.length; i += Math.max(1, (bag.length / 8) | 0)) {
+    const b = bag[i];
+    const id = (b && b.petal && b.petal.id != null) ? b.petal.id : (b && b.id);
+    s += "," + id + "x" + ((b && b.count) || 1);
+  }
+  return s;
+}
+
+function detailHtml(p, k) {
   const loadout = (p.loadout || []).map(petalChip).join("") || `<span class="empty-msg">无</span>`;
-  const bag = (p.bag || []).map(petalChip).join("") || `<span class="empty-msg">空</span>`;
-  const bank = (p.bank || []).map((b) => petalChip({ ...b.petal, count: b.count })).join("")
-    || `<span class="empty-msg">空</span>`;
+  const bagItems = bagChipList(p, k);
   const hp = p.max_hp > 0 ? `${p.hp}/${p.max_hp}` : "—";
   const who = p.name || p.account || "";
-  const giveBtn = who
-    ? `<button type="button" style="width:auto;margin:8px 0 0" data-give="${esc(who)}">给此人发花瓣</button>`
+  const giveWho = p.account || p.name || "";
+  const giveBtn = giveWho
+    ? `<button type="button" style="width:auto;margin:8px 8px 0 0" data-give="${esc(giveWho)}">给此人发花瓣</button>`
     : "";
+  const spawnBtn = (who && p.in_game)
+    ? `<button type="button" style="width:auto;margin:8px 0 0;background:#b45309;border-color:#b45309" data-spawn="${esc(who)}" data-map="${p.map_id}">靠近此人刷怪</button>`
+    : "";
+  const kinds = (p.bag || []).length;
   return `
-    <div class="meta">金币 ${p.coins ?? 0} · 生命 ${hp}</div>
+    <div class="meta">金币 ${p.coins ?? 0} · 生命 ${hp}${kinds ? ` · 背包 ${kinds} 种` : ""}</div>
     <div class="meta">装备</div>
     <div class="petals">${loadout}</div>
     <div class="meta" style="margin-top:10px">背包</div>
-    <div class="petals">${bag}</div>
-    <div class="meta" style="margin-top:10px">银行溢出</div>
-    <div class="petals">${bank}</div>
-    ${giveBtn}`;
+    <div class="petals bag">${bagItems}</div>
+    ${giveBtn}${spawnBtn}`;
+}
+
+function bindPlayerRowHandlers(tbody) {
+  tbody.querySelectorAll("tr.player").forEach((tr) => {
+    tr.onclick = () => {
+      const k = tr.getAttribute("data-k");
+      if (expanded.has(k)) {
+        expanded.delete(k);
+        bagShowAll.delete(k);
+        lastDetailSig.delete(k);
+      } else {
+        expanded.add(k);
+      }
+      // Local re-render only — no /api/live round-trip.
+      renderPlayersTable();
+    };
+  });
+  tbody.querySelectorAll("[data-bagmore]").forEach((btn) => {
+    btn.onclick = (ev) => {
+      ev.stopPropagation();
+      bagShowAll.add(btn.getAttribute("data-bagmore"));
+      renderPlayersTable();
+    };
+  });
+  tbody.querySelectorAll("[data-give]").forEach((btn) => {
+    btn.onclick = (ev) => {
+      ev.stopPropagation();
+      $("giveWho").value = btn.getAttribute("data-give");
+      $("giveWho").scrollIntoView({ behavior: "smooth", block: "center" });
+      flashOk("已填入玩家，选好花瓣后点发放");
+    };
+  });
+  tbody.querySelectorAll("[data-spawn]").forEach((btn) => {
+    btn.onclick = (ev) => {
+      ev.stopPropagation();
+      const who = btn.getAttribute("data-spawn");
+      const mid = btn.getAttribute("data-map");
+      $("spawnNear").value = who;
+      if (mid != null) $("spawnMap").value = String(mid);
+      const it = playerChoices().find((p) => p.value === who);
+      syncSpawnMapFromPlayer(it || { value: who, map_id: Number(mid), in_game: true, alive: true, map: MAP_NAMES[mid] });
+      $("spawnNear").scrollIntoView({ behavior: "smooth", block: "center" });
+      flashOk("已填入玩家并同步地图");
+    };
+  });
+}
+
+function renderPlayersTable() {
+  const players = lastPlayersSorted;
+  const tbody = $("rows");
+  if (!tbody) return;
+  if (!players.length) {
+    tbody.innerHTML = `<tr><td colspan="6" class="empty-msg">当前无人在线</td></tr>`;
+    lastDetailSig.clear();
+    return;
+  }
+  // Keep scroll position of open bag lists across refresh.
+  const bagScroll = new Map();
+  tbody.querySelectorAll("tr.detail .petals.bag").forEach((el) => {
+    const tr = el.closest("tr.detail");
+    const prev = tr && tr.previousElementSibling;
+    const k = prev && prev.getAttribute("data-k");
+    if (k) bagScroll.set(k, el.scrollTop);
+  });
+
+  let html = "";
+  for (let i = 0; i < players.length; i++) {
+    const p = players[i];
+    const k = keyOf(p, i);
+    const title = !p.in_game;
+    const status = title ? "标题页 / 未进局" : (p.alive ? "存活" : "等待复活");
+    const open = expanded.has(k);
+    html += `
+      <tr class="player ${title ? "title" : (p.alive ? "" : "dead")}" data-k="${esc(k)}">
+        <td>${open ? "▾" : "▸"}</td>
+        <td>${esc(p.account || "游客")}</td>
+        <td>${title ? "—" : p.level}</td>
+        <td>${title ? "—" : esc(p.map)}</td>
+        <td>${esc(p.guild || "—")}</td>
+        <td>${status}</td>
+      </tr>`;
+    if (open) {
+      const sig = detailSig(p);
+      lastDetailSig.set(k, sig);
+      html += `<tr class="detail" data-for="${esc(k)}"><td colspan="6">${detailHtml(p, k)}</td></tr>`;
+    }
+  }
+  tbody.innerHTML = html;
+  bindPlayerRowHandlers(tbody);
+  bagScroll.forEach((top, k) => {
+    const el = tbody.querySelector(`tr.detail[data-for="${CSS.escape(k)}"] .petals.bag`);
+    if (el) el.scrollTop = top;
+  });
 }
 
 function fmtPlaytime(sec) {
@@ -525,15 +1303,14 @@ function fmtStat(catId, v) {
   return String(v);
 }
 
-function updatePlayerList(players) {
-  const names = [];
-  players.forEach((p) => {
-    if (p.name) names.push(p.name);
-    if (p.account && p.account !== p.name) names.push(p.account);
-  });
-  $("playerList").innerHTML = [...new Set(names)].map((n) =>
-    `<option value="${esc(n)}"></option>`
-  ).join("");
+function updatePlayerList(_players) {
+  refreshOpenPlayerCombos();
+  // If spawnNear already filled, keep map synced to current roster.
+  const near = ($("spawnNear") && $("spawnNear").value.trim()) || "";
+  if (near) {
+    const it = playerChoices().find((p) => p.value === near || p.label === near);
+    if (it) syncSpawnMapFromPlayer(it);
+  }
 }
 
 async function tick() {
@@ -557,113 +1334,112 @@ async function tick() {
     $("deployHighlights").innerHTML = (dep.highlights || [])
       .map((h) => `<li>${esc(h)}</li>`).join("");
 
-    const maps = $("maps");
-    maps.innerHTML = "";
-    (d.maps || []).forEach((m) => {
-      const el = document.createElement("div");
-      el.className = "map" + (m.players ? "" : " empty");
-      el.innerHTML = `<div class="n">${m.players}</div><div class="l">${esc(m.name)}</div>`;
-      maps.appendChild(el);
-    });
+    // Pause heavy DOM rebuilds while admin controls are open — prevents
+    // native <select>/combo menus from vanishing mid-click every 1s tick.
+    const busy = uiBusy();
+    lastPlayers = d.players || [];
+    updatePlayerList(lastPlayers);
 
-    const bosses = $("bosses");
-    bosses.innerHTML = "";
-    let aliveN = 0;
-    (d.bosses || []).forEach((b) => {
-      if (!b.has_boss) return;
-      if (b.alive) aliveN++;
-      const el = document.createElement("div");
-      el.className = "boss " + (b.alive ? "alive" : "dead");
-      const ratio = b.max_hp > 0 ? Math.max(0, Math.min(1, b.hp / b.max_hp)) : 0;
-      const status = b.alive
-        ? `${b.hp}/${b.max_hp}`
-        : (b.respawn_sec > 0 ? `${b.respawn_sec}s 重生` : "未刷新");
-      el.innerHTML = `
-        <div class="n">${esc(b.name || "?")}</div>
-        <div class="l">${esc(b.map)} · ${status}</div>
-        ${b.alive ? `<div class="hp"><i style="width:${(ratio * 100).toFixed(1)}%"></i></div>` : ""}`;
-      bosses.appendChild(el);
-    });
-    $("bossAlive").textContent = aliveN;
-
-    const feed = $("feed");
-    const bcs = d.broadcasts || [];
-    if (!bcs.length) {
-      feed.innerHTML = `<div class="empty-msg">暂无播报</div>`;
-      lastBcId = 0;
-    } else if (bcs[0].id !== lastBcId) {
-      lastBcId = bcs[0].id;
-      feed.innerHTML = bcs.map((b) =>
-        `<div class="row"><span class="who">${esc(b.sender)}</span>${esc(b.text)}</div>`
-      ).join("");
-    }
-
-    const players = d.players || [];
-    lastPlayers = players;
-    updatePlayerList(players);
-    players.sort((a, b) => {
-      const ai = a.in_game ? 1 : 0, bi = b.in_game ? 1 : 0;
-      if (bi !== ai) return bi - ai;
-      return (b.level - a.level) || String(a.name || "").localeCompare(String(b.name || ""), "zh");
-    });
-    const tbody = $("rows");
-    if (!players.length) {
-      tbody.innerHTML = `<tr><td colspan="7" class="empty-msg">当前无人在线</td></tr>`;
-    } else {
-      tbody.innerHTML = players.map((p, i) => {
-        const k = keyOf(p, i);
-        const title = !p.in_game;
-        const status = title ? "标题页 / 未进局" : (p.alive ? "存活" : "等待复活");
-        const name = title ? "—" : (p.name || "(未命名)");
-        const open = expanded.has(k);
-        return `
-          <tr class="player ${title ? "title" : (p.alive ? "" : "dead")}" data-k="${esc(k)}">
-            <td>${open ? "▾" : "▸"}</td>
-            <td>${esc(name)}</td>
-            <td>${title ? "—" : p.level}</td>
-            <td>${title ? "—" : esc(p.map)}</td>
-            <td>${esc(p.guild || "—")}</td>
-            <td>${esc(p.account || "游客")}</td>
-            <td>${status}</td>
-          </tr>
-          ${open ? `<tr class="detail"><td colspan="7">${detailHtml(p)}</td></tr>` : ""}`;
-      }).join("");
-      tbody.querySelectorAll("tr.player").forEach((tr) => {
-        tr.onclick = () => {
-          const k = tr.getAttribute("data-k");
-          if (expanded.has(k)) expanded.delete(k);
-          else expanded.add(k);
-          tick();
-        };
+    if (!busy) {
+      const maps = $("maps");
+      maps.innerHTML = "";
+      (d.maps || []).forEach((m) => {
+        const el = document.createElement("div");
+        el.className = "map" + (m.players ? "" : " empty");
+        el.innerHTML = `<div class="n">${m.players}</div><div class="l">${esc(m.name)}</div>`;
+        maps.appendChild(el);
       });
-      tbody.querySelectorAll("[data-give]").forEach((btn) => {
-        btn.onclick = (ev) => {
-          ev.stopPropagation();
-          $("giveWho").value = btn.getAttribute("data-give");
-          $("giveWho").scrollIntoView({ behavior: "smooth", block: "center" });
-          flashOk("已填入玩家，选好花瓣后点发放");
-        };
-      });
-    }
 
-    const lb = $("lb");
-    const score = (d.leaderboard && d.leaderboard.score) || [];
-    const stats = (d.leaderboard && d.leaderboard.stats) || [];
-    let html = `<div class="lb-col"><h3>分数</h3><ol>`;
-    html += score.length
-      ? score.map((r) => `<li>${esc(r.name)} <span class="v">${r.score}</span></li>`).join("")
-      : `<li class="empty-msg">空</li>`;
-    html += `</ol></div>`;
-    stats.forEach((col) => {
-      html += `<div class="lb-col"><h3>${esc(col.name)}</h3><ol>`;
-      html += (col.rows || []).length
-        ? col.rows.map((r) =>
-            `<li>${esc(r.name)} <span class="v">${fmtStat(col.id, r.value)}</span></li>`
-          ).join("")
+      const bosses = $("bosses");
+      bosses.innerHTML = "";
+      let aliveN = 0;
+      (d.bosses || []).forEach((b) => {
+        if (!b.has_boss) return;
+        if (b.alive) aliveN++;
+        const el = document.createElement("div");
+        el.className = "boss " + (b.alive ? "alive" : "dead");
+        const ratio = b.max_hp > 0 ? Math.max(0, Math.min(1, b.hp / b.max_hp)) : 0;
+        const status = b.alive
+          ? `${b.hp}/${b.max_hp}`
+          : (b.respawn_sec > 0 ? `${b.respawn_sec}s 重生` : "未刷新");
+        el.innerHTML = `
+          <div class="boss-body">
+            <div class="n">${esc(b.name || "?")}</div>
+            <div class="l">${esc(b.map)} · ${status}</div>
+          </div>
+          <div class="hp${b.alive ? "" : " empty"}"><i style="width:${b.alive ? (ratio * 100).toFixed(1) : 0}%"></i></div>`;
+        bosses.appendChild(el);
+      });
+      $("bossAlive").textContent = aliveN;
+
+      if (!bcFilterActive) mergeLiveBroadcasts(d.broadcasts || []);
+
+      lastPlayersSorted = lastPlayers.slice().sort((a, b) => {
+        const ai = a.in_game ? 1 : 0, bi = b.in_game ? 1 : 0;
+        if (bi !== ai) return bi - ai;
+        return (b.level - a.level) || String(a.name || "").localeCompare(String(b.name || ""), "zh");
+      });
+      // Skip heavy bag rebuild when expanded inventory unchanged.
+      let detailDirty = expanded.size === 0;
+      if (!detailDirty) {
+        for (let i = 0; i < lastPlayersSorted.length; i++) {
+          const p = lastPlayersSorted[i];
+          const k = keyOf(p, i);
+          if (!expanded.has(k)) continue;
+          if (lastDetailSig.get(k) !== detailSig(p)) { detailDirty = true; break; }
+        }
+        // Roster length / keys shifted → must rebuild.
+        const tbody = $("rows");
+        const openRows = tbody ? tbody.querySelectorAll("tr.player").length : 0;
+        if (openRows !== lastPlayersSorted.length) detailDirty = true;
+      }
+      if (detailDirty || expanded.size === 0) {
+        renderPlayersTable();
+      } else {
+        // Cheap: refresh summary cells only.
+        const tbody = $("rows");
+        const rows = tbody ? tbody.querySelectorAll("tr.player") : [];
+        rows.forEach((tr, i) => {
+          const p = lastPlayersSorted[i];
+          if (!p) return;
+          const title = !p.in_game;
+          const status = title ? "标题页 / 未进局" : (p.alive ? "存活" : "等待复活");
+          const cells = tr.children;
+          if (cells.length >= 6) {
+            cells[1].textContent = p.account || "游客";
+            cells[2].textContent = title ? "—" : String(p.level);
+            cells[3].textContent = title ? "—" : (p.map || "");
+            cells[4].textContent = p.guild || "—";
+            cells[5].textContent = status;
+          }
+          tr.className = "player " + (title ? "title" : (p.alive ? "" : "dead"));
+        });
+      }
+
+      const lb = $("lb");
+      const score = (d.leaderboard && d.leaderboard.score) || [];
+      const stats = (d.leaderboard && d.leaderboard.stats) || [];
+      let html = `<div class="lb-col"><h3>分数</h3><ol>`;
+      html += score.length
+        ? score.map((r) => `<li>${esc(r.name)} <span class="v">${r.score}</span></li>`).join("")
         : `<li class="empty-msg">空</li>`;
       html += `</ol></div>`;
-    });
-    lb.innerHTML = html;
+      stats.forEach((col) => {
+        html += `<div class="lb-col"><h3>${esc(col.name)}</h3><ol>`;
+        html += (col.rows || []).length
+          ? col.rows.map((r) =>
+              `<li>${esc(r.name)} <span class="v">${fmtStat(col.id, r.value)}</span></li>`
+            ).join("")
+          : `<li class="empty-msg">空</li>`;
+        html += `</ol></div>`;
+      });
+      lb.innerHTML = html;
+    } else {
+      // Still refresh boss count text without rebuilding panels
+      let aliveN = 0;
+      (d.bosses || []).forEach((b) => { if (b.has_boss && b.alive) aliveN++; });
+      $("bossAlive").textContent = aliveN;
+    }
   } catch (e) {
     $("err").hidden = false;
     $("err").textContent = "拉取失败：" + e.message;
@@ -678,9 +1454,259 @@ function esc(s) {
     .replace(/"/g, "&quot;");
 }
 
+function fmtTs(ms) {
+  if (!ms) return "";
+  const d = new Date(ms);
+  const p = (n) => String(n).padStart(2, "0");
+  return `${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`;
+}
+
+function mapLabel(id) {
+  // map = where it was sent from; never label as「全服」(that is channel/kind)
+  if (id == null || id === "" || id === 255 || id === "255") return "未知";
+  const n = Number(id);
+  return (MAP_NAMES[n] != null) ? MAP_NAMES[n] : ("地图" + id);
+}
+
+function bcFilters() {
+  return {
+    day: ($("bcDay") && $("bcDay").value) || "",
+    player: (($("bcPlayer") && $("bcPlayer").value) || "").trim(),
+    kind: ($("bcKind") && $("bcKind").value) || "",
+    map: ($("bcMap") && $("bcMap").value) || ""
+  };
+}
+
+function chatFilters() {
+  return {
+    day: ($("chatDay") && $("chatDay").value) || "",
+    player: (($("chatPlayer") && $("chatPlayer").value) || "").trim(),
+    channel: ($("chatChannel") && $("chatChannel").value) || "",
+    map: ($("chatMap") && $("chatMap").value) || ""
+  };
+}
+
+function qsFrom(obj) {
+  const p = new URLSearchParams();
+  Object.keys(obj).forEach((k) => {
+    if (obj[k] !== "" && obj[k] != null) p.set(k, obj[k]);
+  });
+  const s = p.toString();
+  return s ? "?" + s : "";
+}
+
+function renderBcFeed(stickBottom) {
+  const feed = $("feed");
+  if (!feed) return;
+  const nearBottom = feed.scrollHeight - feed.scrollTop - feed.clientHeight < 48;
+  if (!bcRows.length) {
+    feed.innerHTML = `<div class="empty-msg">暂无播报</div>`;
+    return;
+  }
+  const head = bcHasMore
+    ? `<div class="feed-load" id="bcLoadHint">↑ 上滑加载更早</div>`
+    : `<div class="feed-load">已到最早</div>`;
+  feed.innerHTML = head + bcRows.map((b) => {
+    const k = b.kind === 0 ? "kill" : (b.kind === 1 ? "craft" : "announce");
+    const tag = KIND_ZH[b.kind] || "公告";
+    return `<div class="row kind-${k}" data-id="${b.id}">` +
+      `<span class="meta">${esc(fmtTs(b.ts))} · ${esc(mapLabel(b.map))} · ${tag}</span>` +
+      `<span class="who">${esc(b.sender)}</span>${esc(b.text)}</div>`;
+  }).join("");
+  if (stickBottom || nearBottom) feed.scrollTop = feed.scrollHeight;
+}
+
+function renderChatFeed(stickBottom) {
+  const feed = $("chatFeed");
+  if (!feed) return;
+  const nearBottom = feed.scrollHeight - feed.scrollTop - feed.clientHeight < 48;
+  if (!chatRows.length) {
+    feed.innerHTML = `<div class="empty-msg">暂无记录</div>`;
+    return;
+  }
+  const head = chatHasMore
+    ? `<div class="feed-load">↑ 上滑加载更早</div>`
+    : `<div class="feed-load">已到最早</div>`;
+  feed.innerHTML = head + chatRows.map((c) => {
+    const ch = CH_ZH[c.channel] != null ? CH_ZH[c.channel] : ("ch" + c.channel);
+    const to = c.to ? ` → ${esc(c.to)}` : "";
+    return `<div class="row" data-id="${c.id}">` +
+      `<span class="meta">${esc(fmtTs(c.ts))} · ${esc(mapLabel(c.map))} · ${ch}</span>` +
+      `<span class="who">${esc(c.from)}${to}</span>${esc(c.text)}</div>`;
+  }).join("");
+  if (stickBottom || nearBottom) feed.scrollTop = feed.scrollHeight;
+}
+
+function recomputeBcIds() {
+  bcOldestId = bcRows.length ? bcRows[0].id : 0;
+  bcNewestId = bcRows.length ? bcRows[bcRows.length - 1].id : 0;
+}
+
+function recomputeChatIds() {
+  chatOldestId = chatRows.length ? chatRows[0].id : 0;
+  chatNewestId = chatRows.length ? chatRows[chatRows.length - 1].id : 0;
+}
+
+function mergeLiveBroadcasts(bcs) {
+  // /api/live gives oldest→newest recent slice; append only brand-new ids.
+  if (!bcs || !bcs.length) {
+    if (!bcRows.length) renderBcFeed(true);
+    return;
+  }
+  const known = new Set(bcRows.map((r) => r.id));
+  const add = bcs.filter((b) => b && b.id && !known.has(b.id));
+  if (!bcRows.length) {
+    bcRows = bcs.slice();
+    bcHasMore = true;
+    recomputeBcIds();
+    renderBcFeed(true);
+    return;
+  }
+  if (!add.length) return;
+  bcRows = bcRows.concat(add);
+  recomputeBcIds();
+  renderBcFeed(false);
+}
+
+async function fetchBcPage(beforeId, prepend) {
+  if (bcLoading) return;
+  bcLoading = true;
+  try {
+    const f = bcFilters();
+    const q = qsFrom({
+      before: beforeId || 0,
+      limit: 60,
+      day: f.day,
+      player: f.player,
+      kind: f.kind,
+      map: f.map
+    });
+    const r = await fetch("/api/broadcasts" + q, { cache: "no-store" });
+    const j = await r.json();
+    const rows = j.rows || [];
+    if (prepend) {
+      const prevH = $("feed").scrollHeight;
+      const prevT = $("feed").scrollTop;
+      const known = new Set(bcRows.map((x) => x.id));
+      const older = rows.filter((x) => x && x.id && !known.has(x.id));
+      bcRows = older.concat(bcRows);
+      bcHasMore = rows.length >= 60;
+      recomputeBcIds();
+      renderBcFeed(false);
+      const feed = $("feed");
+      feed.scrollTop = feed.scrollHeight - prevH + prevT;
+    } else {
+      bcRows = rows.slice();
+      bcHasMore = rows.length >= 60;
+      recomputeBcIds();
+      renderBcFeed(true);
+    }
+  } catch (e) {
+    flashErr("播报加载失败：" + e.message);
+  } finally {
+    bcLoading = false;
+  }
+}
+
+async function fetchChatPage(beforeId, prepend) {
+  if (chatLoading) return;
+  chatLoading = true;
+  try {
+    const f = chatFilters();
+    const q = qsFrom({
+      before: beforeId || 0,
+      limit: 60,
+      day: f.day,
+      player: f.player,
+      channel: f.channel,
+      map: f.map
+    });
+    const r = await fetch("/api/chatlog" + q, { cache: "no-store" });
+    const j = await r.json();
+    const rows = j.rows || [];
+    if (prepend) {
+      const feed = $("chatFeed");
+      const prevH = feed.scrollHeight;
+      const prevT = feed.scrollTop;
+      const known = new Set(chatRows.map((x) => x.id));
+      const older = rows.filter((x) => x && x.id && !known.has(x.id));
+      chatRows = older.concat(chatRows);
+      chatHasMore = rows.length >= 60;
+      recomputeChatIds();
+      renderChatFeed(false);
+      feed.scrollTop = feed.scrollHeight - prevH + prevT;
+    } else {
+      chatRows = rows.slice();
+      chatHasMore = rows.length >= 60;
+      recomputeChatIds();
+      renderChatFeed(true);
+    }
+  } catch (e) {
+    flashErr("聊天记录加载失败：" + e.message);
+  } finally {
+    chatLoading = false;
+  }
+}
+
+function bindHistoryFeeds() {
+  const feed = $("feed");
+  if (feed) {
+    feed.addEventListener("scroll", () => {
+      if (feed.scrollTop < 24 && bcHasMore && !bcLoading && bcOldestId)
+        fetchBcPage(bcOldestId, true);
+    });
+  }
+  const chat = $("chatFeed");
+  if (chat) {
+    chat.addEventListener("scroll", () => {
+      if (chat.scrollTop < 24 && chatHasMore && !chatLoading && chatOldestId)
+        fetchChatPage(chatOldestId, true);
+    });
+  }
+  if ($("bcApply")) {
+    $("bcApply").addEventListener("click", () => {
+      const f = bcFilters();
+      bcFilterActive = !!(f.day || f.player || f.kind || f.map);
+      fetchBcPage(0, false);
+    });
+  }
+  if ($("chatApply")) {
+    $("chatApply").addEventListener("click", () => {
+      fetchChatPage(0, false);
+    });
+  }
+}
+
 loadCatalog().catch((e) => flashErr("目录加载失败：" + e.message));
+loadMapLayout();
+bindHistoryFeeds();
+fetchBcPage(0, false);
+fetchChatPage(0, false);
 tick();
 setInterval(tick, 1000);
+setInterval(async () => {
+  if (bcFilterActive && !bcLoading) await fetchBcPage(0, false);
+  if (chatLoading) return;
+  try {
+    const f = chatFilters();
+    const q = qsFrom({ before: 0, limit: 40, day: f.day, player: f.player, channel: f.channel, map: f.map });
+    const r = await fetch("/api/chatlog" + q, { cache: "no-store" });
+    const j = await r.json();
+    const rows = j.rows || [];
+    if (!chatRows.length) {
+      chatRows = rows.slice();
+      recomputeChatIds();
+      renderChatFeed(true);
+      return;
+    }
+    const known = new Set(chatRows.map((x) => x.id));
+    const add = rows.filter((x) => x && x.id && !known.has(x.id));
+    if (!add.length) return;
+    chatRows = chatRows.concat(add);
+    recomputeChatIds();
+    renderChatFeed(false);
+  } catch (e) { /* ignore poll errors */ }
+}, 8000);
 </script>
 </body>
 </html>

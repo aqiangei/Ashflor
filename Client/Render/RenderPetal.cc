@@ -27,10 +27,13 @@ static void refresh_tier_overlay_state() {
     g_tier_on = Input::keys_held.contains('G') ? 1 : 0;
     g_player_flower_ids.clear();
     if (!g_tier_on) return;
-    Game::simulation.for_each<kFlower>([](Simulation *, Entity const &flower) {
-        if (flower.has_component(kMob)) return;
-        g_player_flower_ids.insert(flower.id);
-    });
+    // Only the local flower — painting every nearby player's petals with
+    // rarity discs + draw_text made Hold-G hitch hard.
+    if (Game::alive() && Game::simulation.ent_alive(Game::player_id)) {
+        Entity const &me = Game::simulation.get_ent(Game::player_id);
+        if (!me.has_component(kMob))
+            g_player_flower_ids.insert(me.id);
+    }
 }
 
 static uint8_t player_owned_petal(Entity const &ent) {

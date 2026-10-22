@@ -362,15 +362,33 @@ void Storage::retrieve() {
                     prev_cross, prev_basecraft, prev_mats, prev_monstera, prev_coin,
                     prev_common, prev_stinger, prev_jungle, prev_ladder, prev_royal
                 };
+                // Prefer exact trailing length match (bank [+ coins]) over "largest fits".
+                auto guest_bank_ok = [&](uint32_t cand) -> bool {
+                    return remain == cand || remain == cand + 1;
+                };
+                bank_n = 0;
                 for (uint32_t cand : bank_candidates) {
-                    if (remain >= cand) {
+                    if (guest_bank_ok(cand)) {
                         bank_n = cand;
                         break;
                     }
                 }
+                if (bank_n == 0) {
+                    for (uint32_t cand : bank_candidates) {
+                        if (remain >= cand) {
+                            bank_n = cand;
+                            break;
+                        }
+                    }
+                    if (bank_n == 0) bank_n = PetalID::kNumPetals;
+                }
                 if (remain >= bank_n && !(remain == 7 || remain == 8)) {
-                    for (uint32_t i = 0; i < bank_n; ++i)
-                        Game::guest_craft_bank[i] = reader.read<uint32_t>();
+                    for (uint32_t i = 0; i < bank_n; ++i) {
+                        uint32_t v = reader.read<uint32_t>();
+                        if (i != (uint32_t) PetalID::kCoin && v > 1000000u) v = 0;
+                        else if (i == (uint32_t) PetalID::kCoin && v > 1000000000u) v = 1000000000u;
+                        Game::guest_craft_bank[i] = v;
+                    }
                     if (reader.at + 4 <= StorageProtocol::buffer + len)
                         Game::guest_coins = reader.read<uint32_t>();
                 } else if (remain == 7 || remain == 8) {
@@ -397,6 +415,11 @@ void Storage::retrieve() {
                     if (sum > 1000000000ull) sum = 1000000000ull;
                     Game::guest_craft_bank[PetalID::kCoin] = (uint32_t) sum;
                     Game::guest_coins = 0;
+                }
+                for (uint32_t i = 0; i < PetalID::kNumPetals; ++i) {
+                    if (i == (uint32_t) PetalID::kCoin) continue;
+                    if (Game::guest_craft_bank[i] > 1000000u)
+                        Game::guest_craft_bank[i] = 0;
                 }
                 if (Game::guest_save_valid) {
                     Game::craft_bank = Game::guest_craft_bank;

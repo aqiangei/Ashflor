@@ -14,18 +14,35 @@
 #include <iostream>
 #include <vector>
 
-static void update_minimap(Simulation *sim, std::vector<Entity const *> &players) {
+static std::string resolve_player_name(Simulation *sim, Entity &camera, Entity &player) {
+    if (!player.get_name().empty()) return player.get_name();
+    // Revive / rare spawn paths can leave the flower nameless; heal from session.
+    Client *c = Server::client_by_camera(sim, camera.id);
+    if (c == nullptr) return {};
+    std::string n = !c->play_name.empty() ? c->play_name : c->account_name;
+    if (!n.empty()) player.set_name(n);
+    return n;
+}
+
+static void update_minimap(Simulation *sim, std::vector<Entity *> &players,
+    std::vector<std::string> const &names)
+{
     uint32_t online = (uint32_t) players.size();
-    std::stable_sort(players.begin(), players.end(), [](Entity const *a, Entity const *b){
-        return a->get_score() > b->get_score();
+    // Keep name tied to entity while sorting by score.
+    std::vector<uint32_t> order(online);
+    for (uint32_t i = 0; i < online; ++i) order[i] = i;
+    std::stable_sort(order.begin(), order.end(), [&](uint32_t a, uint32_t b){
+        return players[a]->get_score() > players[b]->get_score();
     });
     uint32_t map_n = std::min(online, MINIMAP_PLAYER_CAP);
     for (uint32_t i = 0; i < MINIMAP_PLAYER_CAP; ++i) {
         if (i < map_n) {
-            sim->arena_info.set_minimap_x(i, players[i]->get_x());
-            sim->arena_info.set_minimap_y(i, players[i]->get_y());
-            sim->arena_info.set_minimap_colors(i, players[i]->get_color());
-            sim->arena_info.set_minimap_names(i, players[i]->get_name());
+            uint32_t oi = order[i];
+            Entity *p = players[oi];
+            sim->arena_info.set_minimap_x(i, p->get_x());
+            sim->arena_info.set_minimap_y(i, p->get_y());
+            sim->arena_info.set_minimap_colors(i, p->get_color());
+            sim->arena_info.set_minimap_names(i, names[oi]);
         } else {
             sim->arena_info.set_minimap_x(i, -1.f);
             sim->arena_info.set_minimap_y(i, -1.f);
@@ -33,16 +50,21 @@ static void update_minimap(Simulation *sim, std::vector<Entity const *> &players
             sim->arena_info.set_minimap_names(i, std::string{});
         }
     }
+    // WS send can drop when bufferedAmount is high; force full slot snapshot
+    // every 2s so emptied slots (x=-1) cannot leave ghost dots on clients.
+    if (sim->tick_index % (2 * TPS) == 0)
+        sim->arena_info.force_sync_minimap_slots();
 }
 
 static void calculate_leaderboard(Simulation *sim) {
-    std::vector<Entity const *> players;
+    std::vector<Entity *> players;
+    std::vector<std::string> names;
     sim->for_each<kCamera>([&](Simulation *sim, Entity &ent) {
         if (!sim->ent_alive(ent.get_player())) return;
-        Entity const &player = sim->get_ent(ent.get_player());
+        Entity &player = sim->get_ent(ent.get_player());
+        std::string name = resolve_player_name(sim, ent, player);
         players.push_back(&player);
-        // Persist best score for every named entrant
-        std::string const &name = player.get_name();
+        names.push_back(name);
         if (!name.empty())
             LeaderboardStore::record(name, player.get_score(), player.get_color());
     });
@@ -66,7 +88,7 @@ static void calculate_leaderboard(Simulation *sim) {
             }
         }
     }
-    update_minimap(sim, players);
+    update_minimap(sim, players, names);
 }
 
 // 每图唯一的 Boss：由 MapGen 提供的锚点驱动，活着时不再生成，死了 45 秒重生。
@@ -119,7 +141,9 @@ void Simulation::on_tick() {
     uint8_t const occupied = flowers > 0;
 
     spatial_hash.refresh(ARENA_WIDTH, ARENA_HEIGHT);
-    if (occupied) ensure_boss(this);
+    // Always — empty-map early-out used to skip this and bosses never spawned
+    // at boot / never counted respawn CD (live "Boss 存活" all dead).
+    ensure_boss(this);
 
     // Idle map (Server already ~1 Hz): thin wild mobs slowly, skip collide/AI.
     if (!occupied) {
@@ -128,14 +152,17 @@ void Simulation::on_tick() {
             if (ent.zone == 0xFF) return; // boss / special
             if (BitMath::at(ent.flags, EntityFlags::kIsDespawning)) return;
             // ~1.5% per idle tick → density drops without a stampede of deletes
-            if (frand() < 0.015f)
+            if (frand() < 0.015f) {
+                BitMath::set(ent.flags, EntityFlags::kNoDrops);
                 sim->request_delete(ent.id);
+            }
         });
         for_each_entity(entity_clear_references);
         return;
     }
 
-    // Occupied: modest refill (was up to 24 batches → tick hog with dense biomes).
+    // Occupied: refill near players. Cap restored to 8 — network-AOI near box
+    // is ~2.9× AI-cull area, so the earlier cut to 6 felt sparse on zone entry.
     if (frand() < 1.0f / TPS) {
         uint32_t batches = 2u + flowers;
         if (batches > 8u) batches = 8u;
@@ -149,6 +176,53 @@ void Simulation::on_tick() {
             BitMath::set(ent.flags, EntityFlags::kIsCulled);
     });
     for_each<kCamera>(tick_culling_behavior);
+
+    // florr unseenDespawn: zone mobs still culled after AOI → delete, no loot.
+    // Stride ~5 ticks (~6Hz). unseen_ticks==0 = never in any camera AOI.
+    // Hub/plaza used the same 30s as the wild → packs around spawn felt like they
+    // blinked out while you turned; soft zones keep fauna longer.
+    if (tick_index % 5 == 0) {
+        for_each<kMob>([](Simulation *sim, Entity &ent) {
+            if (!BitMath::at(ent.flags, EntityFlags::kSpawnedFromZone)) return;
+            if (ent.zone == 0xFF) return; // boss / special
+            if (BitMath::at(ent.flags, EntityFlags::kIsDespawning)) return;
+            if (!BitMath::at(ent.flags, EntityFlags::kHasCulling)) return;
+
+            game_tick_t unseen_limit = (game_tick_t)(30 * TPS);
+            game_tick_t never_seen_life = (game_tick_t)(60 * TPS);
+            uint8_t in_plaza = Map::in_spawn_plaza(ent.get_x(), ent.get_y());
+            uint32_t zdiff = RarityID::kNumRarities;
+            if (ent.zone < MAX_ZONES_PER_MAP)
+                zdiff = map_zones(sim->map_id)[ent.zone].difficulty;
+            if (in_plaza) {
+                // Respawn pad fauna: persist while you circle the hub.
+                unseen_limit = (game_tick_t)(180 * TPS);
+                never_seen_life = (game_tick_t)(180 * TPS);
+            } else if (zdiff <= RarityID::kUnusual) {
+                unseen_limit = (game_tick_t)(90 * TPS);
+                never_seen_life = (game_tick_t)(120 * TPS);
+            }
+
+            if (BitMath::at(ent.flags, EntityFlags::kIsCulled)) {
+                if (ent.unseen_ticks == 0) {
+                    if (ent.lifetime >= never_seen_life) {
+                        BitMath::set(ent.flags, EntityFlags::kNoDrops);
+                        sim->request_delete(ent.id);
+                    }
+                    return;
+                }
+                ent.unseen_ticks = (game_tick_t)(ent.unseen_ticks + 5);
+                if (ent.unseen_ticks >= unseen_limit) {
+                    BitMath::set(ent.flags, EntityFlags::kNoDrops);
+                    sim->request_delete(ent.id);
+                }
+            } else {
+                // Mark seen: any positive value arms the despawn clock when culled again.
+                ent.unseen_ticks = 1;
+            }
+        });
+    }
+
     // Magnet pulls rewrite drop acceleration each tick
     for_each<kDrop>([](Simulation *, Entity &drop) {
         drop.acceleration.set(0, 0);

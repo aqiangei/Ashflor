@@ -57,11 +57,26 @@ public:
     uint64_t last_chat_ms = 0;
     uint64_t last_server_chat_ms = 0; // 全服频道单独冷却
     std::string last_whisper_from; // for /r /reply
-    // Bit i set → puzzle claimed on MapID i this session
-    uint8_t treasure_claimed = 0;
-    // Bits map*2+chest → walk-up loot chests claimed
-    uint16_t treasure_chest_claimed = 0;
+    // Per-map ritual claim bits (bit ritual_idx) — session only
+    uint8_t treasure_ritual_claimed[8] = {};
+    // Per-map chest claim bits (bit chest_idx) — session only
+    uint8_t treasure_chest_claimed[8] = {};
     uint32_t treasure_hint_cd = 0; // ticks until next NPC hint
+    // WorldExplore: per-map follow + 3-touch (session). Step is for current map only.
+    uint8_t explore_follow_done[8] = {};
+    uint8_t explore_puzzle_done[8] = {};
+    uint8_t explore_puzzle_step = 0;
+    uint32_t explore_follow_cd = 0;
+    EntityID explore_follower = NULL_ENTITY;
+    // WorldEvent: per-map claim bits (slot 0..15) — session
+    uint16_t world_event_claimed[8] = {};
+    // Timed-touch attempt (current map only)
+    uint8_t timed_touch_mask = 0;
+    uint8_t timed_touch_event = 255; // index into map event list
+    uint32_t timed_touch_ticks = 0;
+    // Height-order mushrooms (G06)
+    uint8_t height_order_step = 0;
+    uint8_t height_order_event = 255;
     uint32_t party_id = 0;
     uint8_t party_leader = 0;
     std::string pending_party_from;

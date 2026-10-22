@@ -51,6 +51,19 @@ FIELDS_Arena
 #undef SINGLE
 #undef MULTIPLE
 
+void Arena::force_sync_minimap_slots() {
+    BitMath::set_arr(state, kminimap_x);
+    BitMath::set_arr(state, kminimap_y);
+    BitMath::set_arr(state, kminimap_colors);
+    BitMath::set_arr(state, kminimap_names);
+    for (uint32_t i = 0; i < MINIMAP_PLAYER_CAP; ++i) {
+        BitMath::set_arr(state_per_minimap_x, i);
+        BitMath::set_arr(state_per_minimap_y, i);
+        BitMath::set_arr(state_per_minimap_colors, i);
+        BitMath::set_arr(state_per_minimap_names, i);
+    }
+}
+
 void Arena::write(Writer *writer, uint8_t create) {
     if (create) {
         #define SINGLE(name, type) writer->write<type>(name);

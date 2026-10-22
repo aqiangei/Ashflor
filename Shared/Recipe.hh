@@ -25,6 +25,7 @@ namespace Recipe {
     // Returns recipe index or (uint16_t)-1
     uint16_t find_by_result(PetalID::T result);
 
-    // Currency (coins): stack in bag, never equip to primary.
+    // True for ids that must never sit in a primary loadout slot.
+    // Coins are equippable (combat petal); only invalid ids are barred.
     uint8_t is_bag_only(PetalID::T id);
 }

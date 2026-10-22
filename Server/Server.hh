@@ -40,6 +40,10 @@ namespace Server {
     extern Client *client_by_camera(Simulation *, EntityID const &);
     // JSON snapshot for /api/live (online roster + per-map counts)
     extern std::string live_status_json();
+    // Slim positions-only JSON for smooth minimap polling (~TPS)
+    extern std::string live_positions_json();
+    // Static per-map terrain/zones for live.html minimaps (cached)
+    extern std::string live_map_layout_json();
     // Petal / mob id→name lists for the live admin UI
     extern std::string live_catalog_json();
     // Live admin actions — return compact JSON {ok,msg,...}

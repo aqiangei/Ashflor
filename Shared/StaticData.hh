@@ -89,11 +89,14 @@ inline std::array const MAPS = std::to_array<MapZones>({
             .difficulty = 1, .color = MapTheme::GARDEN_GROUND, .name = "Garden"
         },
         {
-            // Spawn hub — denser passives so the plaza is not empty.
+            // Spawn hub — rich low-tier mix (periphery packs).
             .left = 7200, .top = 7200, .right = 10800, .bottom = 10800,
-            .density = 0.18f, .drop_multiplier = 0.02,
+            .density = 3.80f, .drop_multiplier = 0.02,
             .spawns = {
-                { MobID::kRock, 600000 }, { MobID::kLadybug, 400000 }
+                { MobID::kRock, 220000 }, { MobID::kLadybug, 200000 },
+                { MobID::kBee, 180000 }, { MobID::kBeetle, 140000 },
+                { MobID::kCentipede, 50000 }, { MobID::kShinyLadybug, 8000 },
+                { MobID::kSquare, 1 }
             },
             .difficulty = 0, .color = MapTheme::GARDEN_GROUND, .name = "Garden"
         }
@@ -131,11 +134,13 @@ inline std::array const MAPS = std::to_array<MapZones>({
             .difficulty = 1, .color = 0xffd4a84b, .name = "Desert"
         },
         {
-            // Spawn hub — denser passives so the plaza is not empty.
+            // Spawn hub — rich low-tier desert pack.
             .left = 7200, .top = 7200, .right = 10800, .bottom = 10800,
-            .density = 0.18f, .drop_multiplier = 0.02,
+            .density = 3.80f, .drop_multiplier = 0.02,
             .spawns = {
-                { MobID::kDuneStone, 145000 }, { MobID::kSandMite, 155000 }
+                { MobID::kDuneStone, 160000 }, { MobID::kSandMite, 180000 },
+                { MobID::kCactus, 150000 }, { MobID::kDuneBeetle, 140000 },
+                { MobID::kScorpion, 60000 }, { MobID::kSquare, 1 }
             },
             .difficulty = 0, .color = MapTheme::DESERT_GROUND, .name = "Desert"
         }
@@ -173,11 +178,13 @@ inline std::array const MAPS = std::to_array<MapZones>({
             .difficulty = 1, .color = 0xff00669c, .name = "Ocean"
         },
         {
-            // Spawn hub — denser passives so the plaza is not empty.
+            // Spawn hub — rich low-tier ocean pack.
             .left = 7200, .top = 7200, .right = 10800, .bottom = 10800,
-            .density = 0.18f, .drop_multiplier = 0.02,
+            .density = 3.80f, .drop_multiplier = 0.02,
             .spawns = {
-                { MobID::kReefStone, 140000 }, { MobID::kSeaFry, 150000 }
+                { MobID::kReefStone, 140000 }, { MobID::kSeaFry, 160000 },
+                { MobID::kMoonJelly, 130000 }, { MobID::kCoralStar, 130000 },
+                { MobID::kReefCrab, 90000 }, { MobID::kSquare, 1 }
             },
             .difficulty = 0, .color = MapTheme::OCEAN_GROUND, .name = "Ocean"
         }
@@ -215,11 +222,13 @@ inline std::array const MAPS = std::to_array<MapZones>({
             .difficulty = 1, .color = 0xff9aa3ab, .name = "Snow"
         },
         {
-            // Spawn hub — denser passives so the plaza is not empty.
+            // Spawn hub — rich low-tier snow pack.
             .left = 7200, .top = 7200, .right = 10800, .bottom = 10800,
-            .density = 0.18f, .drop_multiplier = 0.02,
+            .density = 3.80f, .drop_multiplier = 0.02,
             .spawns = {
-                { MobID::kFrostStone, 145000 }, { MobID::kSnowMite, 155000 }
+                { MobID::kFrostStone, 140000 }, { MobID::kSnowMite, 160000 },
+                { MobID::kSnowHare, 140000 }, { MobID::kIceSpider, 110000 },
+                { MobID::kFrostHornet, 70000 }, { MobID::kSquare, 1 }
             },
             .difficulty = 0, .color = MapTheme::POLAR_GROUND, .name = "Snow"
         }
@@ -261,11 +270,13 @@ inline std::array const MAPS = std::to_array<MapZones>({
             .difficulty = 1, .color = 0xff40916c, .name = "Jungle Edge"
         },
         {
-            // hub — denser passives; no wasps (those chase on sight)
+            // hub — rich low-tier jungle; no wasps (aggro on sight)
             .left = 7200, .top = 7200, .right = 10800, .bottom = 10800,
-            .density = 0.18f, .drop_multiplier = 0.02,
+            .density = 3.80f, .drop_multiplier = 0.02,
             .spawns = {
-                { MobID::kJungleStone, 140000 }, { MobID::kJungleCrawler, 150000 }
+                { MobID::kJungleStone, 130000 }, { MobID::kJungleCrawler, 150000 },
+                { MobID::kLeafBeetle, 140000 }, { MobID::kJungleMite, 140000 },
+                { MobID::kVineBug, 70000 }, { MobID::kSquare, 1 }
             },
             .difficulty = 0, .color = MapTheme::JUNGLE_GROUND, .name = "Jungle Hub"
         }
@@ -302,11 +313,13 @@ inline std::array const MAPS = std::to_array<MapZones>({
             .difficulty = 1, .color = 0xffa98467, .name = "Ant Hell"
         },
         {
-            // Spawn hub — denser passives (no garden imports).
+            // Spawn hub — rich low-tier ant pack.
             .left = 7200, .top = 7200, .right = 10800, .bottom = 10800,
-            .density = 0.18f, .drop_multiplier = 0.02,
+            .density = 3.80f, .drop_multiplier = 0.02,
             .spawns = {
-                { MobID::kAntHole, 140000 }, { MobID::kBabyAnt, 150000 }
+                { MobID::kBabyAnt, 200000 }, { MobID::kWorkerAnt, 160000 },
+                { MobID::kAntHole, 40000 }, { MobID::kSoldierAnt, 50000 },
+                { MobID::kSquare, 1 }
             },
             .difficulty = 0, .color = MapTheme::ANT_GROUND, .name = "Ant Hell"
         }
@@ -344,11 +357,13 @@ inline std::array const MAPS = std::to_array<MapZones>({
             .difficulty = 1, .color = 0xff4a4e69, .name = "Volcano"
         },
         {
-            // Spawn hub — denser passives so the plaza is not empty.
+            // Spawn hub — rich low-tier volcano pack.
             .left = 7200, .top = 7200, .right = 10800, .bottom = 10800,
-            .density = 0.18f, .drop_multiplier = 0.02,
+            .density = 3.80f, .drop_multiplier = 0.02,
             .spawns = {
-                { MobID::kEmberStone, 145000 }, { MobID::kAshMite, 155000 }
+                { MobID::kEmberStone, 140000 }, { MobID::kAshMite, 160000 },
+                { MobID::kCinderMoth, 130000 }, { MobID::kLavaBeetle, 120000 },
+                { MobID::kEmberWasp, 60000 }, { MobID::kSquare, 1 }
             },
             .difficulty = 0, .color = MapTheme::VOLCANO_GROUND, .name = "Volcano"
         }
@@ -356,18 +371,21 @@ inline std::array const MAPS = std::to_array<MapZones>({
     // ---- Royal Capital (exactly 6 zones; geometry rewritten by build_zones_royal) ----
     MapZones({
         {
-            // 0 Outer Wall — spawn-safe base (covers arena; later zones overlay)
+            // 0 Outer Wall — rich low-tier capital pack
             .left = 0, .top = 0, .right = (float)ARENA_WIDTH, .bottom = (float)ARENA_HEIGHT,
-            .density = 0.18f, .drop_multiplier = 0.02,
+            .density = 3.80f, .drop_multiplier = 0.02,
             .spawns = {
-                { MobID::kRoyalBoulder, 140000 }, { MobID::kRoyalPebble, 150000 }
+                { MobID::kRoyalBoulder, 140000 }, { MobID::kRoyalPebble, 150000 },
+                { MobID::kRustMite, 160000 }, { MobID::kCoinBeetle, 120000 },
+                { MobID::kMimicChest, 80000 }, { MobID::kWanderingGuard, 50000 },
+                { MobID::kSquare, 1 }
             },
             .difficulty = 0, .color = RARITY_COLORS[RarityID::kCommon], .name = "Outer Wall"
         },
         {
             // 1 Common Quarter — Unusual band
             .left = 800, .top = 7500, .right = 12500, .bottom = 19200,
-            .density = 2.7f, .drop_multiplier = 0.09,
+            .density = 3.50f, .drop_multiplier = 0.09,
             .spawns = {
                 { MobID::kRustMite, 300000 }, { MobID::kMimicChest, 250000 },
                 { MobID::kCoinBeetle, 200000 }, { MobID::kWanderingGuard, 250000 },

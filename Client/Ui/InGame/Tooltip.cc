@@ -9,9 +9,72 @@
 
 #include <Client/Game.hh>
 
+#include <Shared/Craft.hh>
+#include <Shared/Recipe.hh>
+
 #include <format>
+#include <string>
+#include <vector>
 
 using namespace Ui;
+
+// Reverse lookup: drop sources / craft / shop / rarity merge for petal tooltips.
+static std::string petal_acquisition_hint(PetalID::T id) {
+    if (id == PetalID::kNone || id >= PetalID::kNumPetals) return {};
+
+    std::vector<std::string> parts;
+
+    std::vector<MobID::T> bosses;
+    std::vector<MobID::T> trash;
+    for (MobID::T m = 0; m < MobID::kNumMobs; ++m) {
+        for (PetalID::T d : MOB_DATA[m].drops) {
+            if (d != id) continue;
+            if (is_boss_mob(m)) bosses.push_back(m);
+            else trash.push_back(m);
+            break;
+        }
+    }
+    if (!bosses.empty() || !trash.empty()) {
+        std::string line = I18n::tr(I18n::kAcquireDrop);
+        std::vector<MobID::T> shown;
+        shown.reserve(3);
+        for (MobID::T m : bosses) {
+            if (shown.size() >= 3) break;
+            shown.push_back(m);
+        }
+        for (MobID::T m : trash) {
+            if (shown.size() >= 3) break;
+            shown.push_back(m);
+        }
+        char const *sep = I18n::use_chinese ? "、" : ", ";
+        for (size_t i = 0; i < shown.size(); ++i) {
+            if (i) line += sep;
+            line += I18n::mob_name(shown[i]);
+        }
+        size_t total = bosses.size() + trash.size();
+        if (total > shown.size())
+            line += I18n::use_chinese ? " 等" : "…";
+        parts.push_back(std::move(line));
+    }
+
+    if (Recipe::find_by_result(id) != (uint16_t)-1)
+        parts.push_back(I18n::tr(I18n::kAcquireCraft));
+
+    if (Craft::is_shop_purchasable(id))
+        parts.push_back(I18n::tr(I18n::kAcquireShop));
+
+    // Starter Basic (Common) — no drop table, given on spawn.
+    if (id == PetalID::kBasic)
+        parts.push_back(I18n::tr(I18n::kAcquireStarter));
+
+    if (parts.empty()) return {};
+    std::string out = parts[0];
+    for (size_t i = 1; i < parts.size(); ++i) {
+        out += " · ";
+        out += parts[i];
+    }
+    return out;
+}
 
 Element *Ui::UiLoadout::petal_tooltips[PetalID::kNumPetals] = {nullptr};
 
@@ -85,14 +148,34 @@ static Ui::Element *make_petal_stat_container(PetalID::T id) {
     }
     if (attrs.burn_damage.damage > 0) {
         stats.push_back(new Ui::HContainer({
-            new Ui::StaticText(12, "Burn", { .fill = 0xffff8844 }),
+            new Ui::DynamicText(12, [](){ return I18n::tr(I18n::kBurn); }, { .fill = 0xffff8844 }),
             new Ui::StaticText(12, format_number(attrs.burn_damage.time * attrs.burn_damage.damage) + " (" + format_number(attrs.burn_damage.damage) + "/s)")
         }, 0, 5, { .h_justify = Style::Left }));
     }
     if (attrs.armor_penetration > 0) {
         stats.push_back(new Ui::HContainer({
-            new Ui::StaticText(12, "Armor Pen", { .fill = 0xffaaaaaa }),
+            new Ui::DynamicText(12, [](){ return I18n::tr(I18n::kArmorPen); }, { .fill = 0xffaaaaaa }),
             new Ui::StaticText(12, format_pct(attrs.armor_penetration * 100))
+        }, 0, 5, { .h_justify = Style::Left }));
+    }
+    if (attrs.clump_radius > 0) {
+        stats.push_back(new Ui::HContainer({
+            new Ui::DynamicText(12, [](){ return I18n::tr(I18n::kClump); }, { .fill = 0xffcde23b }),
+            new Ui::StaticText(12, format_number(attrs.clump_radius))
+        }, 0, 5, { .h_justify = Style::Left }));
+    }
+    if (attrs.rotation_style == PetalAttributes::kFollowRot) {
+        stats.push_back(new Ui::HContainer({
+            new Ui::DynamicText(12, [](){ return I18n::tr(I18n::kFollowAim); }, { .fill = 0xffbbbbbb })
+        }, 0, 5, { .h_justify = Style::Left }));
+    } else if (attrs.rotation_style == PetalAttributes::kNoRot) {
+        stats.push_back(new Ui::HContainer({
+            new Ui::DynamicText(12, [](){ return I18n::tr(I18n::kNoRotate); }, { .fill = 0xffbbbbbb })
+        }, 0, 5, { .h_justify = Style::Left }));
+    }
+    if (attrs.split_projectile) {
+        stats.push_back(new Ui::HContainer({
+            new Ui::DynamicText(12, [](){ return I18n::tr(I18n::kSplitShot); }, { .fill = 0xffd2eb34 })
         }, 0, 5, { .h_justify = Style::Left }));
     }
     if (attrs.extra_health > 0) {
@@ -314,10 +397,19 @@ static Ui::Element *make_petal_stat_container(PetalID::T id) {
             new Ui::StaticText(12, "+"+format_pct(100 * (attrs.extra_damage_factor - 1)))
         }, 0, 5, { .h_justify = Style::Left }));
     }
-    if (attrs.extra_reload_factor > 1) {
+    if (attrs.extra_reload_factor > 1.0001f) {
         stats.push_back(new Ui::HContainer({
             new Ui::DynamicText(12, [](){ return I18n::tr(I18n::kExtraReload); }, { .fill = 0xff7777ff }),
             new Ui::StaticText(12, "+"+format_pct(100 * (attrs.extra_reload_factor - 1)))
+        }, 0, 5, { .h_justify = Style::Left }));
+    } else if (attrs.extra_reload_factor < 0.999f) {
+        // Cooldown cut (e.g. Golden Leaf); stacks by multiplying factors.
+        float cut_pct = 100.f * (1.f - attrs.extra_reload_factor);
+        stats.push_back(new Ui::HContainer({
+            new Ui::DynamicText(12, [](){
+                return I18n::use_chinese ? "花瓣冷却：" : "Cooldown:";
+            }, { .fill = 0xff77ddff }),
+            new Ui::StaticText(12, "-"+format_pct(cut_pct))
         }, 0, 5, { .h_justify = Style::Left }));
     }
     return new Ui::VContainer(stats, 0, 2, { .h_justify = Style::Left });
@@ -340,6 +432,7 @@ static void make_petal_tooltip(PetalID::T id) {
         new Ui::DynamicText(14, [id](){ return I18n::rarity_name(PETAL_DATA[id].rarity); }, { .fill = RARITY_COLORS[PETAL_DATA[id].rarity], .h_justify = Style::Left }),
         new Ui::Element(0, 6),
         new Ui::DynamicText(12, [id](){ return I18n::petal_desc(id); }, { .fill = 0xffffffff, .h_justify = Style::Left }),
+        new Ui::DynamicText(11, [id](){ return petal_acquisition_hint(id); }, { .fill = 0xff9ec9a8, .h_justify = Style::Left }),
         new Ui::Element(0, 6),
         make_petal_stat_container(id)
     }, 5, 2);

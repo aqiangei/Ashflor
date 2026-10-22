@@ -30,6 +30,12 @@ void inflict_damage(Simulation *sim, EntityID const atk_id, EntityID const def_i
     DEBUG_ONLY(assert(!defender.pending_delete);)
     DEBUG_ONLY(assert(defender.has_component(kHealth));)
     if (defender.immunity_ticks > 0) return;
+    // Explore guide spirits / treasure NPCs: scripted props, never die to petals or mobs.
+    if (defender.has_component(kMob)
+        && defender.damage <= 0.f && defender.score_reward == 0
+        && BitMath::at(defender.flags, EntityFlags::kNoDrops)
+        && defender.get_nametag_visible())
+        return;
     // No PvP: players, CPU bots, petals, and flower summons cannot hurt each other
     if (sim->ent_alive(atk_id)) {
         Entity &attacker = sim->get_ent(atk_id);
@@ -143,12 +149,14 @@ void inflict_damage(Simulation *sim, EntityID const atk_id, EntityID const def_i
         defender.slow_ticks = attacker.slow_inflict;
     
     if (attacker.has_component(kPetal)) {
-        switch (attacker.get_petal_id()) {
-            case PetalID::kDandelion:
-                defender.dandy_ticks = 10 * TPS;
-                break;
-            default:
-                break;
+        PetalID::T pid = attacker.get_petal_id();
+        if (pid < PetalID::kNumPetals) {
+            float dandy_s = PETAL_DATA[pid].attributes.dandelion_inflict_seconds;
+            if (dandy_s > 0.f) {
+                game_tick_t ticks = (game_tick_t)(dandy_s * TPS);
+                if (defender.dandy_ticks < ticks)
+                    defender.dandy_ticks = ticks;
+            }
         }
     }
 

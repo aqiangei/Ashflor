@@ -151,6 +151,115 @@
                 0%, 100% { opacity: 1; transform: scale(1); }
                 50% { opacity: 0.45; transform: scale(1.06); }
             }
+            /* In-game update poster (DOM above canvas; does not pause server) */
+            #update-poster-overlay {
+                position: fixed;
+                inset: 0;
+                z-index: 40;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                padding: max(12px, env(safe-area-inset-top)) max(12px, env(safe-area-inset-right))
+                    max(12px, env(safe-area-inset-bottom)) max(12px, env(safe-area-inset-left));
+                box-sizing: border-box;
+                background: rgba(10, 12, 10, 0.62);
+                opacity: 0;
+                visibility: hidden;
+                pointer-events: none;
+                transition: opacity 0.24s ease, visibility 0.24s ease;
+            }
+            #update-poster-overlay.show {
+                opacity: 1;
+                visibility: visible;
+                pointer-events: auto;
+            }
+            body.update-poster-open {
+                touch-action: none;
+            }
+            .update-poster-panel {
+                position: relative;
+                width: min(92vw, 520px);
+                max-height: min(88vh, 860px);
+                border-radius: 18px;
+                background: #1c241c;
+                box-shadow: 0 12px 40px rgba(0, 0, 0, 0.45);
+                overflow: hidden;
+                transform: scale(0.94);
+                transition: transform 0.26s ease;
+            }
+            #update-poster-overlay.show .update-poster-panel {
+                transform: scale(1);
+            }
+            .update-poster-scroll {
+                max-height: min(88vh, 860px);
+                overflow-y: auto;
+                -webkit-overflow-scrolling: touch;
+                overscroll-behavior: contain;
+            }
+            .update-poster-img {
+                display: block;
+                width: 100%;
+                height: auto;
+                vertical-align: top;
+            }
+            .update-poster-close {
+                position: absolute;
+                top: 8px;
+                right: 10px;
+                z-index: 2;
+                width: 40px;
+                height: 40px;
+                border: none;
+                border-radius: 12px;
+                background: rgba(0, 0, 0, 0.45);
+                color: #f4f1e8;
+                font-size: 26px;
+                font-weight: 700;
+                line-height: 1;
+                cursor: pointer;
+                -webkit-tap-highlight-color: transparent;
+            }
+            .update-poster-fallback {
+                padding: 36px 28px 40px;
+                color: #f3ecd8;
+                font-family: "Noto Sans SC", "Microsoft YaHei", sans-serif;
+            }
+            .update-poster-brand {
+                font-family: Ubuntu, "Noto Sans SC", sans-serif;
+                font-size: 18px;
+                letter-spacing: 0.08em;
+                opacity: 0.85;
+                margin-bottom: 10px;
+            }
+            .update-poster-title {
+                font-family: Georgia, "Noto Serif SC", serif;
+                font-size: clamp(28px, 6vw, 40px);
+                font-weight: 700;
+                margin-bottom: 8px;
+            }
+            .update-poster-sub {
+                font-size: 16px;
+                opacity: 0.85;
+                margin-bottom: 22px;
+            }
+            .update-poster-list {
+                margin: 0;
+                padding-left: 1.2em;
+                line-height: 1.7;
+                font-size: 15px;
+            }
+            .update-poster-error {
+                padding: 28px;
+                text-align: center;
+                color: #ffb4a8;
+                font-size: 15px;
+            }
+            @media (prefers-reduced-motion: reduce) {
+                #update-poster-overlay,
+                .update-poster-panel {
+                    transition: none;
+                }
+            }
             /* Disconnect / redeploy wait screen + mini petal game */
             #reconnect-overlay {
                 position: fixed;
@@ -311,7 +420,7 @@
 
         document.addEventListener("DOMContentLoaded", () => {
             // deploy-update.ps1 bumps this digits-only string each release
-            var cacheV = '21640';
+            var cacheV = '21685';
             var hidden = false;
             var loadingEl = document.getElementById("loading");
             var trackEl = document.getElementById("loading-track");

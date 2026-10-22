@@ -9,6 +9,7 @@ set(SRCS
     Assets/Flower.cc
     Assets/Mob.cc
     Assets/Petal.cc
+    Assets/ThemeArt.cc
     Assets/Web.cc
     Render/RenderDrop.cc
     Render/RenderFlower.cc
@@ -24,6 +25,7 @@ set(SRCS
     I18n.cc
     Input.cc
     MapChunkCache.cc
+    MobLabelCache.cc
     TerrainPattern.cc
     Main.cc
     Network.cc
@@ -39,6 +41,7 @@ set(SRCS
     Ui/InGame/LevelBar.cc
     Ui/InGame/BossHealthBar.cc
     Ui/InGame/ServerAnnounce.cc
+    Ui/InGame/UpdateAnnounce.cc
     Ui/InGame/LoadoutPetal.cc
     Ui/InGame/LoadoutSlot.cc
     Ui/InGame/Map.cc
@@ -103,7 +106,7 @@ else()
 endif()
 
 add_link_options(-sEXPORTED_RUNTIME_METHODS=stringToNewUTF8)
-add_link_options(-sEXPORTED_FUNCTIONS=_main,_key_event,_mouse_event,_touch_event,_wheel_event,_clipboard_event,_loop,_on_message,_ashflor_cancel_petal_drags,_ashflor_text_enter)
+add_link_options(-sEXPORTED_FUNCTIONS=_main,_key_event,_mouse_event,_touch_event,_wheel_event,_clipboard_event,_loop,_on_message,_ashflor_cancel_petal_drags,_ashflor_text_enter,_ashflor_update_poster_close)
 # Map/UI statics already ~19MB; without growth, Game::init malloc hits the ceiling and abort()s.
 add_link_options(-sALLOW_MEMORY_GROWTH=1 -sINITIAL_MEMORY=33554432 -sSTACK_SIZE=5242880)
 

@@ -153,16 +153,20 @@ static PetalID::T _roll_mob_drop(Simulation *sim, MobID::T mob_id, float rarity_
         w *= Craft::drop_weight_mult(drop_id);
         uint8_t r = PETAL_DATA[drop_id].rarity;
         if (boss) {
-            // Craft mats belong on trash mobs / shop — not boss kill rewards.
-            if (Craft::is_shop_material(drop_id))
-                w *= 0.05f;
+            // Epic+ craft mats are intended boss cores; low mats stay crushed.
+            if (Craft::is_shop_material(drop_id)) {
+                if (r >= RarityID::kEpic)
+                    w *= 2.4f;
+                else
+                    w *= 0.05f;
+            }
             // Common / Unusual combat fillers (Wing, Iris, AntEgg…) stay rare on bosses.
             else if (r <= RarityID::kUnusual)
                 w *= 0.18f;
             else if (r == RarityID::kRare)
                 w *= 0.85f;
             else if (r >= RarityID::kEpic && r < RarityID::kUnique)
-                w *= 2.4f;
+                w *= 2.0f;
         }
         if (rarity_boost > 0.f) {
             // Zone / boss tilt must not inflate Unique+ (Moon/Ygg) toward a guarantee.
@@ -363,7 +367,9 @@ void entity_on_death(Simulation *sim, Entity const &ent) {
                     std::string text = is_party
                         ? ("小队「" + who + "」合力击败了 " + mob_nm + "！")
                         : (who + " 击败了 " + mob_nm + "！");
-                    Chat::broadcast_server("系统", text);
+                    // Origin map of the kill (broadcast is cross-map; map ≠ 全服标签)
+                    uint8_t mid = (game != nullptr) ? game->map_id : sim->map_id;
+                    Chat::broadcast_server("系统", text, {}, Chat::kKill, who, mid);
                 }
             }
 
@@ -402,23 +408,24 @@ void entity_on_death(Simulation *sim, Entity const &ent) {
                     success_drops.push_back(chosen);
                 // Bosses: always at least 3 petal piles; normals keep chance curve.
                 if (is_boss_kill) {
+                    // Still guarantee ≥3 piles; 4th/5th less free than before.
                     for (uint32_t n = 0; n < 2 && success_drops.size() < MAX_DROPS_PER_MOB; ++n) {
                         PetalID::T extra = roll_one();
                         if (extra != PetalID::kNone)
                             success_drops.push_back(extra);
                     }
-                    if (success_drops.size() < MAX_DROPS_PER_MOB && frand() < 0.72f) {
+                    if (success_drops.size() < MAX_DROPS_PER_MOB && frand() < 0.55f) {
                         PetalID::T extra = roll_one();
                         if (extra != PetalID::kNone)
                             success_drops.push_back(extra);
                     }
-                    if (success_drops.size() < MAX_DROPS_PER_MOB && frand() < 0.40f) {
+                    if (success_drops.size() < MAX_DROPS_PER_MOB && frand() < 0.28f) {
                         PetalID::T extra = roll_one();
                         if (extra != PetalID::kNone)
                             success_drops.push_back(extra);
                     }
                 } else {
-                    float p2 = 0.26f + 0.045f * (float) live_rarity;
+                    float p2 = 0.18f + 0.035f * (float) live_rarity;
                     if (success_drops.size() < MAX_DROPS_PER_MOB && frand() < p2) {
                         PetalID::T extra = roll_one();
                         if (extra != PetalID::kNone)
@@ -426,7 +433,7 @@ void entity_on_death(Simulation *sim, Entity const &ent) {
                     }
                     if (live_rarity >= RarityID::kEpic
                         && success_drops.size() < MAX_DROPS_PER_MOB) {
-                        float p3 = 0.10f + 0.025f * (float) live_rarity;
+                        float p3 = 0.07f + 0.02f * (float) live_rarity;
                         if (frand() < p3) {
                             PetalID::T extra = roll_one();
                             if (extra != PetalID::kNone)
@@ -435,7 +442,7 @@ void entity_on_death(Simulation *sim, Entity const &ent) {
                     }
                     if (live_rarity >= RarityID::kLegendary
                         && success_drops.size() < MAX_DROPS_PER_MOB) {
-                        float p4 = 0.05f + 0.02f * (float) (live_rarity - RarityID::kLegendary);
+                        float p4 = 0.035f + 0.015f * (float) (live_rarity - RarityID::kLegendary);
                         if (frand() < p4) {
                             PetalID::T extra = roll_one();
                             if (extra != PetalID::kNone)
@@ -463,7 +470,7 @@ void entity_on_death(Simulation *sim, Entity const &ent) {
                         diff = zones[ent.zone].difficulty;
                     coins = (uint32_t) (coins * zone_coin_mult(diff)
                         * mob_spawn_xp_mult(mob_data.rarity, live_rarity) + 0.5f);
-                    if (is_boss_kill) coins = coins * 4u + 120u;
+                    if (is_boss_kill) coins = coins * 3u + 80u;
                     if (coins < 1) coins = 1;
                 }
                 if (coins > 0) {

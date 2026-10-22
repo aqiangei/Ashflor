@@ -1,0 +1,52 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="900" height="1400" viewBox="0 0 900 1400">
+  <defs>
+    <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#1a4a3a"/>
+      <stop offset="45%" stop-color="#2d6b4f"/>
+      <stop offset="100%" stop-color="#c4a574"/>
+    </linearGradient>
+    <linearGradient id="glow" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#ffe08a" stop-opacity="0.9"/>
+      <stop offset="100%" stop-color="#7ec8a0" stop-opacity="0.2"/>
+    </linearGradient>
+    <radialGradient id="spark" cx="50%" cy="40%" r="50%">
+      <stop offset="0%" stop-color="#fff6c8"/>
+      <stop offset="70%" stop-color="#ffd36a" stop-opacity="0.5"/>
+      <stop offset="100%" stop-color="#ffd36a" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+  <rect width="900" height="1400" fill="url(#sky)"/>
+  <circle cx="720" cy="220" r="180" fill="url(#spark)"/>
+  <circle cx="160" cy="380" r="90" fill="#7ec8a0" opacity="0.25"/>
+  <!-- soft hills -->
+  <ellipse cx="450" cy="980" rx="520" ry="220" fill="#3d6b4a"/>
+  <ellipse cx="200" cy="1050" rx="320" ry="180" fill="#2f553c"/>
+  <ellipse cx="700" cy="1080" rx="360" ry="200" fill="#4a7a55"/>
+  <!-- floating mote trails -->
+  <g fill="#ffe08a" opacity="0.85">
+    <circle cx="120" cy="180" r="4"/>
+    <circle cx="200" cy="260" r="3"/>
+    <circle cx="780" cy="420" r="5"/>
+    <circle cx="640" cy="520" r="3"/>
+    <circle cx="320" cy="480" r="4"/>
+    <circle cx="520" cy="300" r="3"/>
+  </g>
+  <!-- brand -->
+  <text x="450" y="160" text-anchor="middle" font-family="Georgia, 'Noto Serif SC', serif" font-size="42" fill="#f4f1e8" opacity="0.9">ASHFLOR</text>
+  <text x="450" y="280" text-anchor="middle" font-family="Georgia, 'Noto Serif SC', serif" font-size="72" font-weight="700" fill="#fff8e8">八域更生</text>
+  <text x="450" y="340" text-anchor="middle" font-family="'Noto Sans SC', sans-serif" font-size="28" fill="#e8dcc0">世界不再空旷</text>
+  <!-- feature list plate -->
+  <rect x="90" y="420" width="720" height="520" rx="28" fill="#1a241c" opacity="0.55"/>
+  <g font-family="'Noto Sans SC', 'Microsoft YaHei', sans-serif" fill="#f3ecd8" font-size="28">
+    <text x="140" y="500">· 八域探索站点与路边宝箱</text>
+    <text x="140" y="560">· 跟随 NPC 与引路偶遇</text>
+    <text x="140" y="620">· 隐藏触碰 · 限时 · 伏击环</text>
+    <text x="140" y="680">· 睡觉怪变体与环境粒子</text>
+    <text x="140" y="740">· 海市蜃楼箱 · Boss 附近抑制</text>
+    <text x="140" y="800">· 每域 12 槽命名事件</text>
+    <text x="140" y="860" font-size="22" fill="#c8bfa8">奖励走现有金币 / 材料通道 · 不改花瓣表</text>
+  </g>
+  <!-- footer -->
+  <text x="450" y="1280" text-anchor="middle" font-family="'Noto Sans SC', sans-serif" font-size="22" fill="#f4f1e8" opacity="0.75">点击空白处或 Esc 关闭</text>
+  <rect x="0" y="0" width="900" height="1400" fill="none" stroke="#ffe08a" stroke-opacity="0.35" stroke-width="8"/>
+</svg>

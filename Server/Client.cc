@@ -8,6 +8,8 @@
 #include <Server/Guild.hh>
 #include <Server/Party.hh>
 #include <Server/PetalTracker.hh>
+#include <Server/WorldEvent.hh>
+#include <Server/WorldExplore.hh>
 #include <Server/RateLimit.hh>
 #include <Server/Server.hh>
 #include <Server/Spawn.hh>
@@ -76,11 +78,14 @@ void client_tick_bonus(Client *client) {
 
 static uint8_t try_give_petal(Client *client, PetalID::T id);
 
-static void send_craft_update(Client *client, uint8_t result, PetalID::T petal) {
+static void send_craft_update(Client *client, uint8_t result, PetalID::T petal,
+                              uint16_t amount = 0) {
     Writer writer(Server::OUTGOING_PACKET);
     writer.write<uint8_t>(Clientbound::kCraftUpdate);
     writer.write<uint8_t>(result);
     writer.write<PetalID::T>(petal);
+    // Win/buy count (or miss loss). 0 for bank sync / errors.
+    writer.write<uint16_t>(amount);
     for (uint32_t i = 0; i < PetalID::kNumPetals; ++i)
         writer.write<uint32_t>(client->craft_bank[i]);
     writer.write<uint32_t>(client->coins);
@@ -177,8 +182,12 @@ static void credit_high_craft(Client *client, PetalID::T got) {
     char const *pname = PETAL_DATA[got].name;
     if (pname == nullptr || pname[0] == 0) pname = "花瓣";
     // whisper_to "craft:N" → client paints the line in that rarity color
-    std::string msg = craft_announce_name(client) + " 合成了【" + rarity_zh(r) + "】" + pname + "！";
-    Chat::broadcast_server("系统", msg, "craft:" + std::to_string((unsigned) r));
+    std::string who = craft_announce_name(client);
+    std::string msg = who + " 合成了【" + rarity_zh(r) + "】" + pname + "！";
+    uint8_t mid = Chat::MAP_UNKNOWN;
+    if (client->game != nullptr) mid = client->game->map_id;
+    Chat::broadcast_server("系统", msg, "craft:" + std::to_string((unsigned) r),
+                           Chat::kCraft, who, mid);
 }
 
 void client_flush_stats(Client *client) {
@@ -471,7 +480,7 @@ static uint8_t try_give_petal(Client *client, PetalID::T id) {
     };
     for (uint32_t i = loadout; i < loadout + MAX_SLOT_COUNT; ++i)
         if (place(i)) return 1;
-    // Coins never occupy primary slots; craft materials equip like any petal.
+    // Primary after backpack/secondary — coins equip like any other petal.
     if (!Recipe::is_bag_only(id)) {
         for (uint32_t i = 0; i < loadout; ++i)
             if (place(i)) return 1;
@@ -702,6 +711,8 @@ void Client::on_message(WebSocket *ws, std::string_view message, uint64_t code) 
             Party::apply_team(client);
             Party::send_update(client);
             Guild::send_update(client);
+            WorldExplore::on_player_spawned(client);
+            WorldEvent::clear_client(client);
             break;
         }
         case Serverbound::kAccountAuth: {
@@ -860,7 +871,9 @@ void Client::on_message(WebSocket *ws, std::string_view message, uint64_t code) 
                 // Body always carries the payer name so chat + banner stay clear
                 // even if the title line is missed (small UI / faded alpha).
                 std::string body = who + "：" + text;
-                Chat::broadcast_server_banner(who, body);
+                uint8_t mid = Chat::MAP_UNKNOWN;
+                if (client->game != nullptr) mid = client->game->map_id;
+                Chat::broadcast_server_banner(who, body, who, mid);
                 persist_account(client);
                 send_craft_update(client, CraftResultCode::kCraftBought, PetalID::kNone);
                 break;
@@ -887,7 +900,7 @@ void Client::on_message(WebSocket *ws, std::string_view message, uint64_t code) 
                     send_craft_update(client, CraftResultCode::kCraftInvFull, got);
                 } else {
                     persist_account(client);
-                    send_craft_update(client, CraftResultCode::kCraftBought, got);
+                    send_craft_update(client, CraftResultCode::kCraftBought, got, 1);
                 }
                 break;
             }
@@ -911,7 +924,7 @@ void Client::on_message(WebSocket *ws, std::string_view message, uint64_t code) 
                     send_craft_update(client, CraftResultCode::kCraftInvFull, id);
                 } else {
                     persist_account(client);
-                    send_craft_update(client, CraftResultCode::kCraftBought, id);
+                    send_craft_update(client, CraftResultCode::kCraftBought, id, 1);
                 }
                 break;
             }
@@ -950,7 +963,7 @@ void Client::on_message(WebSocket *ws, std::string_view message, uint64_t code) 
                 } else {
                     credit_high_craft(client, rec.result);
                     persist_account(client);
-                    send_craft_update(client, CraftResultCode::kCraftBought, rec.result);
+                    send_craft_update(client, CraftResultCode::kCraftBought, rec.result, 1);
                 }
                 break;
             }
@@ -979,15 +992,23 @@ void Client::on_message(WebSocket *ws, std::string_view message, uint64_t code) 
                 persist_account(client);
                 send_craft_update(client,
                     placed ? CraftResultCode::kCraftExchanged : CraftResultCode::kCraftInvFull,
-                    got);
+                    got, placed ? 1 : 0);
                 break;
             }
-            uint32_t max_batches = (mode == CraftMode::kCraftGambleAll) ? 200u : 1u;
+            uint32_t max_batches = (mode == CraftMode::kCraftGambleAll) ? 65535u : 1u;
             if (mode == CraftMode::kCraftGamble || mode == CraftMode::kCraftGambleAll) {
                 if (client->check_invalid(validator.validate_uint16())) return;
                 uint16_t n = reader.read<uint16_t>();
                 if (n > 0) max_batches = n;
-                if (max_batches > 200u) max_batches = 200u;
+                if (max_batches > 65535u) max_batches = 65535u;
+            }
+            // Multi-batch / All: miss refunds 1–4 back into the pool — keep
+            // rolling until fewer than a full batch remain. Each attempt loses
+            // ≥1 so initial owned is a safe iteration bound.
+            if (mode == CraftMode::kCraftGambleAll || max_batches > 1u) {
+                uint32_t owned0 = craft_owned(client, from);
+                if (owned0 > max_batches) max_batches = owned0;
+                if (max_batches > 65535u) max_batches = 65535u;
             }
             uint32_t done = 0;
             uint32_t wins = 0;
@@ -1026,11 +1047,13 @@ void Client::on_message(WebSocket *ws, std::string_view message, uint64_t code) 
             else if (wins > 0)
                 send_craft_update(client,
                     last_placed ? CraftResultCode::kCraftWin : CraftResultCode::kCraftInvFull,
-                    last_got);
-            else
-                // Encode lost count in petal field (unused on miss).
+                    last_got, (uint16_t) (wins > 65535u ? 65535u : wins));
+            else {
+                uint16_t lost = (uint16_t) (last_lost > 0 ? last_lost : Craft::kCraftFailLossMin);
+                // Petal field still encodes loss for older clients; amount is canonical.
                 send_craft_update(client, CraftResultCode::kCraftMiss,
-                    (PetalID::T) (last_lost > 0 ? last_lost : Craft::kCraftFailLossMin));
+                    (PetalID::T) lost, lost);
+            }
             break;
         }
         case Serverbound::kPetalSwap: {
@@ -1046,6 +1069,7 @@ void Client::on_message(WebSocket *ws, std::string_view message, uint64_t code) 
                 if (pos1 >= MAX_SLOT_COUNT + player.get_loadout_count()) break;
                 if (pos2 >= MAX_SLOT_COUNT + player.get_loadout_count()) break;
                 uint8_t primary = player.get_loadout_count();
+                // Same rule as client: bag-only barred from primary; empty OK.
                 if ((pos1 < primary && Recipe::is_bag_only(player.get_loadout_ids(pos2)))
                     || (pos2 < primary && Recipe::is_bag_only(player.get_loadout_ids(pos1))))
                     break;
@@ -1220,7 +1244,6 @@ void Client::on_message(WebSocket *ws, std::string_view message, uint64_t code) 
                 if (player != nullptr) player->set_loadout_ids(i, v);
                 else camera.set_inventory(i, v);
             };
-            // Coins stay in the backpack — never on primary.
             if (Recipe::is_bag_only(id)) break;
             uint8_t lim = (uint8_t) (n + MAX_SLOT_COUNT);
             if (lim > 2 * MAX_SLOT_COUNT) lim = 2 * MAX_SLOT_COUNT;

@@ -27,11 +27,12 @@ namespace Map {
     // 迷宫格口硬下限（总纲 §1.2 / R7）
     inline constexpr float kMinMazeGate = 800.f;
 
-    // Ellipse around the fixed center spawn. Aggressive zones must not fill it
-    // (spawn density / terrain carve). Not the combat sanctuary — see below.
+    // Soft pad around respawn: sparse hub fill + blocks high-diff spawns.
+    // Was 5200×4000 (swallowed the whole Common hub → ~8 mobs total, looked empty).
+    // Keep modest so hub *periphery* can pack Common/Unusual packs.
     inline bool in_spawn_plaza(float x, float y) {
-        float dx = (x - MAP_SPAWN_X) / 5200.f;
-        float dy = (y - MAP_SPAWN_Y) / 4000.f;
+        float dx = (x - MAP_SPAWN_X) / 1600.f;
+        float dy = (y - MAP_SPAWN_Y) / 1200.f;
         return dx * dx + dy * dy < 1.f;
     }
 
@@ -74,8 +75,8 @@ namespace Map {
     // 按 Zone 密度加权选区 → 按落点类别选点 → 抽怪生成
     extern void spawn_zone_mob(Simulation *);
     extern bool find_spawn_location(Simulation *, float, Vector &);
-    // 在指定 Zone 内按落点类别采样一个合法落点；成功返回 1
-    extern uint8_t sample_spawn_point(Simulation *, uint32_t zone_id, uint8_t mob_id, float &x, float &y);
+    // 在指定 Zone 内按落点类别采样；clearance 用 spawn_rarity 放大后半径。成功返回 1
+    extern uint8_t sample_spawn_point(Simulation *, uint32_t zone_id, uint8_t mob_id, float &x, float &y, uint8_t spawn_rarity);
     // Zone 权重 = density × 独占面积；返回被抽中的 Zone 索引。
     extern uint32_t pick_spawn_zone(uint8_t map_id);
     // 落点相关查询
@@ -83,8 +84,8 @@ namespace Map {
     extern float corridor_reach(uint8_t map_id, float x, float y, float dx, float dy, float radius, float max_dist);
     // Boss 锚点（每图至多一个）；无 Boss 时返回 0
     extern uint8_t boss_anchor(uint8_t map_id, float &x, float &y, uint8_t &mob_id);
-    // 生成一只怪到指定点（套用 Zone 难度倍率并记账）
-    extern void _spawn_mob_at(Simulation *, uint32_t zone_id, uint8_t mob_id, float x, float y);
+    // 生成一只怪到指定点（套用 Zone 难度 + 给定 spawn_rarity 体型/战斗倍率并记账）
+    extern void _spawn_mob_at(Simulation *, uint32_t zone_id, uint8_t mob_id, float x, float y, uint8_t spawn_rarity);
     extern uint8_t _spawn_zone_mob_once(Simulation *);
     #endif
 

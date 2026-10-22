@@ -270,8 +270,10 @@ namespace Recipe {
     }
 
     uint8_t is_bag_only(PetalID::T id) {
-        if (id == PetalID::kNone || id >= PetalID::kNumPetals) return 1;
-        // Coins only — craft materials are normal petals and can equip.
-        return id == PetalID::kCoin;
+        // Empty is a normal swap partner (primary ↔ empty secondary and reverse).
+        // Coins equip like any petal; only out-of-range ids are barred.
+        if (id == PetalID::kNone) return 0;
+        if (id >= PetalID::kNumPetals) return 1;
+        return 0;
     }
 }

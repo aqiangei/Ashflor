@@ -152,6 +152,10 @@ namespace Game {
     void persist_camera_zoom(); // localStorage cam_zoom (florr_clone-style recall)
     extern uint8_t pause_menu_open;
     extern uint8_t leave_confirm_open;
+    // Client-only update poster modal (does not pause the server).
+    extern uint8_t update_poster_open;
+    void close_update_poster();
+    uint8_t update_poster_try_close(); // 1 if it was open and is now closed
     extern uint8_t game_panel; // 0 none, see kPanel*
     enum : uint8_t {
         kPanelNone = 0,
@@ -211,6 +215,9 @@ namespace Game {
     extern uint8_t craft_selected_rarity; // shop / specials
     extern PetalID::T craft_tray_id;
     extern uint32_t craft_tray_count;
+    // Pending craft product shown in tray center until clicked (session-only).
+    extern PetalID::T craft_result_id;
+    extern uint32_t craft_result_count;
     extern std::string craft_status;
     extern uint32_t daily_bonus_seconds;
     extern uint32_t offline_bonus_seconds;
@@ -338,6 +345,10 @@ namespace Game {
     // Return petals from the craft tray back into the available pool.
     void craft_tray_remove(uint32_t amount);
     void craft_tray_clear();
+    // Sticky center product: already credited to bag/bank; UI claim only.
+    void craft_result_set(PetalID::T id, uint32_t amount);
+    void craft_result_take();
+    void craft_result_clear();
     void on_message(uint8_t *, uint32_t);
     void poll_ui_event(Ui::ScreenEvent const &);
 };

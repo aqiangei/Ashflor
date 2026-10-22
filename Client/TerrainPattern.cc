@@ -3,6 +3,7 @@
 #include <Client/Render/Renderer.hh>
 #include <Client/ThemeMaterial.hh>
 
+#include <Shared/StaticData.hh>
 #include <Shared/StaticDefinitions.hh>
 #include <Shared/Map.hh>
 
@@ -227,7 +228,7 @@ void organic(Renderer &r, uint8_t mid, float left, float top, float right, float
             for (int i=0; i<3; ++i) {
                 float px=x-60.f+i*47.f, py=y+35.f+signed_unit(gx+i,gy,204)*20.f;
                 r.set_stroke(0xff69AD64); r.set_line_width(2.6f);
-                r.begin_path(); r.move_to(px,py+8); r.qcurve_to(px-7,py-8,px-7,py); 
+                r.begin_path(); r.move_to(px,py+8); r.qcurve_to(px-7,py-8,px-7,py);
                 r.move_to(px,py+8); r.qcurve_to(px+5,py-9,px+5,py);
                 r.move_to(px,py+8); r.qcurve_to(px+11,py-4,px+10,py+3); r.stroke();
             }
@@ -235,6 +236,20 @@ void organic(Renderer &r, uint8_t mid, float left, float top, float right, float
                 r.set_fill(0xffF6E9B5);
                 for (int i=0;i<4;++i) { r.begin_path(); r.arc(x+std::cos(i*1.5708f)*6.f,y+std::sin(i*1.5708f)*6.f,3.3f); r.fill(); }
                 r.set_fill(0xffEAC761); r.begin_path(); r.arc(x,y,2.5f); r.fill();
+            } else if (v < .42f) {
+                // Soft pink petal tuft
+                r.set_fill(0xffF5A7BD);
+                r.begin_path(); r.ellipse(x + 18.f, y - 12.f, 5.f, 3.5f); r.fill();
+                r.begin_path(); r.ellipse(x + 24.f, y - 8.f, 4.f, 3.f); r.fill();
+            } else if (v < .55f) {
+                // Pebble cluster
+                r.set_fill(0xffA8C49A);
+                r.begin_path(); r.ellipse(x - 22.f, y + 18.f, 4.5f, 3.f); r.fill();
+                r.begin_path(); r.ellipse(x - 16.f, y + 22.f, 3.2f, 2.4f); r.fill();
+            }
+            if (unit(gx, gy, 0x30a1u) < .35f) {
+                // Fallen leaf litter (deterministic, no collision)
+                leaf(r, x + 40.f, y - 28.f, 14.f, 5.5f, 0xff8FC777, 0xffB2CE85);
             }
         } else if (mid == MapID::kDesert) {
             sweep(r,x,y,155.f,18.f,0xffF9E7BA,5.f);
@@ -270,13 +285,179 @@ void organic(Renderer &r, uint8_t mid, float left, float top, float right, float
         }
     }
 }
+
+// Sparse cached landmarks (design Phase 1 / empty-map POI). Drawn inside chunk
+// cache — no per-frame random, no network, no collision. Step ~1400 keeps cost low.
+void sparse_landmarks(Renderer &r, uint8_t mid,
+                      float left, float top, float right, float bottom) {
+    constexpr float step = 1400.f;
+    int x0 = (int) std::floor(left / step) - 1;
+    int x1 = (int) std::ceil(right / step) + 1;
+    int y0 = (int) std::floor(top / step) - 1;
+    int y1 = (int) std::ceil(bottom / step) + 1;
+    // Skip hub plaza so spawn stays clear
+    float hx = MAP_SPAWN_X, hy = MAP_SPAWN_Y;
+    for (int gy = y0; gy <= y1; ++gy) for (int gx = x0; gx <= x1; ++gx) {
+        // ~1/5 cells get a landmark (deterministic)
+        if ((hash(gx, gy, 0x51deu ^ mid) % 5u) != 0u) continue;
+        float x = (gx + .5f) * step + signed_unit(gx, gy, 0x51dfu) * 180.f;
+        float y = (gy + .5f) * step + signed_unit(gx, gy, 0x51e0u) * 180.f;
+        float dhx = x - hx, dhy = y - hy;
+        if (dhx * dhx + dhy * dhy < 1600.f * 1600.f) continue;
+        if (x < left - 80.f || x > right + 80.f || y < top - 80.f || y > bottom + 80.f)
+            continue;
+        float s = .85f + unit(gx, gy, 0x51e1u) * .35f;
+        switch (mid) {
+        case MapID::kGarden:
+            // Flower ring cairn
+            r.set_fill(0xff6DAD58);
+            for (int i = 0; i < 5; ++i) {
+                float a = i * 1.2566f;
+                r.begin_path();
+                r.ellipse(x + std::cos(a) * 18.f * s, y + std::sin(a) * 14.f * s,
+                          10.f * s, 7.f * s);
+                r.fill();
+            }
+            r.set_fill(0xffF5A7BD);
+            r.begin_path(); r.arc(x, y, 6.f * s); r.fill();
+            break;
+        case MapID::kDesert:
+            r.set_fill(0xffC89B56);
+            r.begin_path();
+            r.move_to(x - 22 * s, y + 10 * s);
+            r.line_to(x - 6 * s, y - 28 * s);
+            r.line_to(x + 18 * s, y - 8 * s);
+            r.line_to(x + 10 * s, y + 16 * s);
+            r.close_path(); r.fill();
+            r.set_fill(0xff6DAD68);
+            r.begin_path(); r.ellipse(x + 28 * s, y + 6 * s, 7 * s, 16 * s); r.fill();
+            break;
+        case MapID::kOcean:
+            r.set_fill(0xff4CC9F0);
+            r.begin_path(); r.arc(x, y, 14.f * s); r.fill();
+            r.set_stroke(0xffFFE0EA); r.set_line_width(2.5f);
+            r.begin_path(); r.arc(x, y, 20.f * s); r.stroke();
+            break;
+        case MapID::kPolar:
+            r.set_fill(0xffA5DDEA);
+            r.begin_path();
+            r.move_to(x, y - 26 * s); r.line_to(x + 16 * s, y + 10 * s);
+            r.line_to(x - 16 * s, y + 10 * s); r.close_path(); r.fill();
+            break;
+        case MapID::kJungle:
+            leaf(r, x, y, 36.f * s, 14.f * s, 0xff40916C, 0xff95D5B2);
+            leaf(r, x + 14 * s, y - 8 * s, 28.f * s, 11.f * s, 0xff2D6A4F, 0xff95D5B2);
+            break;
+        case MapID::kAntHell:
+            r.set_fill(0xff704A35);
+            r.begin_path(); r.ellipse(x, y, 22 * s, 14 * s); r.fill();
+            r.set_fill(0xffC9A477);
+            r.begin_path(); r.arc(x - 4 * s, y - 2 * s, 6 * s); r.fill();
+            break;
+        case MapID::kVolcano:
+            r.set_fill(0xff1A1A2E);
+            r.begin_path();
+            r.move_to(x - 20 * s, y + 12 * s); r.line_to(x, y - 24 * s);
+            r.line_to(x + 22 * s, y + 12 * s); r.close_path(); r.fill();
+            r.set_fill(0xffE76F51);
+            r.begin_path(); r.arc(x, y + 2 * s, 5 * s); r.fill();
+            break;
+        case MapID::kRoyalCapital:
+            r.set_fill(0xff8B8D98);
+            r.begin_path(); r.round_rect(x - 16 * s, y - 10 * s, 32 * s, 20 * s, 3.f); r.fill();
+            r.set_fill(0xffC94D4C);
+            r.begin_path(); r.arc(x, y - 18 * s, 5 * s); r.fill();
+            break;
+        default: break;
+        }
+    }
 }
+
+// L0 fine litter — deterministic, no collision / network. Hub plaza kept clear.
+void map_fine_litter(Renderer &r, uint8_t mid,
+                     float left, float top, float right, float bottom) {
+    constexpr float fine = 210.f;
+    int fx0 = (int) std::floor(left / fine) - 1;
+    int fx1 = (int) std::ceil(right / fine) + 1;
+    int fy0 = (int) std::floor(top / fine) - 1;
+    int fy1 = (int) std::ceil(bottom / fine) + 1;
+    float hx = MAP_SPAWN_X, hy = MAP_SPAWN_Y;
+    uint32_t salt = 0x40b2u ^ ((uint32_t) mid * 0x9e3779b9u);
+    for (int gy = fy0; gy <= fy1; ++gy) for (int gx = fx0; gx <= fx1; ++gx) {
+        if ((hash(gx, gy, salt) % 7u) != 0u) continue;
+        float x = (gx + .5f) * fine + signed_unit(gx, gy, salt + 1) * 40.f;
+        float y = (gy + .5f) * fine + signed_unit(gx, gy, salt + 2) * 40.f;
+        float dhx = x - hx, dhy = y - hy;
+        if (dhx * dhx + dhy * dhy < 900.f * 900.f) continue;
+        uint32_t kind = hash(gx, gy, salt + 3) % 3u;
+        switch (mid) {
+        case MapID::kGarden:
+            if (kind == 0) {
+                r.set_fill(0xffC9D9A8);
+                r.begin_path(); r.ellipse(x, y, 3.5f, 2.4f); r.fill();
+            } else if (kind == 1) {
+                r.set_stroke(0xff6DAD58); r.set_line_width(1.8f);
+                r.begin_path();
+                r.move_to(x, y + 4.f);
+                r.qcurve_to(x - 4.f, y - 2.f, x - 3.f, y + 1.f);
+                r.move_to(x, y + 4.f);
+                r.qcurve_to(x + 3.f, y - 3.f, x + 2.5f, y + 1.f);
+                r.stroke();
+            } else {
+                r.set_fill(0xffE8B4C8);
+                r.begin_path(); r.arc(x, y, 2.2f); r.fill();
+            }
+            break;
+        case MapID::kDesert:
+            if (kind == 0) {
+                r.set_fill(0xffD5AD72);
+                r.begin_path(); r.ellipse(x, y, 4.f, 2.2f); r.fill();
+            } else {
+                sweep(r, x, y, 36.f, 4.f, 0xffF9E7BA, 1.6f);
+            }
+            break;
+        case MapID::kOcean:
+            r.set_fill(kind ? 0xff7EC8E3 : 0xffFFE0EA);
+            r.begin_path(); r.arc(x, y, 2.4f + kind); r.fill();
+            break;
+        case MapID::kPolar:
+            r.set_fill(0xffFFFFFF);
+            r.begin_path(); r.ellipse(x, y, 3.f, 2.f); r.fill();
+            break;
+        case MapID::kJungle:
+            if (kind == 0)
+                leaf(r, x, y, 10.f, 4.f, 0xff40916C, 0xff95D5B2);
+            else {
+                r.set_fill(0xff2D6A4F);
+                r.begin_path(); r.arc(x, y, 2.f); r.fill();
+            }
+            break;
+        case MapID::kAntHell:
+            r.set_fill(kind ? 0xff8A5E43 : 0xffD9C09B);
+            r.begin_path(); r.ellipse(x, y, 3.2f, 2.f); r.fill();
+            break;
+        case MapID::kVolcano:
+            r.set_fill(kind ? 0xffE76F51 : 0xff373645);
+            r.begin_path(); r.arc(x, y, 2.5f); r.fill();
+            break;
+        case MapID::kRoyalCapital:
+            r.set_fill(kind ? 0xff8B8D98 : 0xffC94D4C);
+            r.begin_path(); r.round_rect(x - 2.5f, y - 2.f, 5.f, 4.f, 1.f); r.fill();
+            break;
+        default: break;
+        }
+    }
+}
+
+} // namespace
 
 void TerrainPattern::draw(Renderer &r, uint8_t map_id,
                           float left, float top, float right, float bottom) {
     if (map_id == MapID::kOcean) ocean(r,left,top,right,bottom);
     else if (map_id == MapID::kRoyalCapital) royal(r,left,top,right,bottom);
     else organic(r,map_id,left,top,right,bottom);
+    sparse_landmarks(r, map_id, left, top, right, bottom);
+    map_fine_litter(r, map_id, left, top, right, bottom);
     r.set_global_alpha(1.f);
 }
 

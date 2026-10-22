@@ -85,6 +85,7 @@ void Game::on_message(uint8_t *ptr, uint32_t len) {
                 password.clear();
                 session_token = 0;
                 craft_tray_clear();
+                craft_result_clear();
                 ensure_guest_id();
                 for (uint8_t i = 0; i < TalentID::kNum; ++i)
                     talent_ranks[i] = guest_talent_ranks[i];
@@ -130,6 +131,7 @@ void Game::on_message(uint8_t *ptr, uint32_t len) {
         case Clientbound::kCraftUpdate: {
             uint8_t result = reader.read<uint8_t>();
             PetalID::T petal = reader.read<PetalID::T>();
+            uint16_t amount = reader.read<uint16_t>();
             for (uint32_t i = 0; i < PetalID::kNumPetals; ++i)
                 craft_bank[i] = reader.read<uint32_t>();
             coins = reader.read<uint32_t>();
@@ -145,29 +147,38 @@ void Game::on_message(uint8_t *ptr, uint32_t len) {
             else if (result == CraftResultCode::kCraftNoCoins)
                 craft_status = I18n::use_chinese ? "钱币不足" : "Not enough coins";
             else if (result == CraftResultCode::kCraftMiss) {
-                uint32_t lost = (uint32_t) petal;
+                uint32_t lost = amount > 0 ? amount : (uint32_t) petal;
                 if (lost < Craft::kCraftFailLossMin || lost > Craft::kCraftFailLossMax)
                     lost = Craft::kCraftFailLossMin;
                 craft_status = I18n::use_chinese
                     ? std::format("合成失败，损失 {} 片", lost)
                     : std::format("Craft failed — lost {}", lost);
             }
-            else if (result == CraftResultCode::kCraftWin)
+            else if (result == CraftResultCode::kCraftWin) {
+                uint32_t n = amount > 0 ? amount : 1u;
+                craft_result_set(petal, n);
                 craft_status = I18n::use_chinese
-                    ? std::format("成功！获得 {}（已进背包）", I18n::petal_name(petal))
-                    : std::format("Success! {} → bag", I18n::petal_name(petal));
-            else if (result == CraftResultCode::kCraftExchanged)
+                    ? std::format("成功！{} ×{} — 点击托盘中央取下", I18n::petal_name(petal), n)
+                    : std::format("Success! {} ×{} — tap center to take", I18n::petal_name(petal), n);
+            }
+            else if (result == CraftResultCode::kCraftExchanged) {
+                uint32_t n = amount > 0 ? amount : 1u;
+                craft_result_set(petal, n);
                 craft_status = I18n::use_chinese
-                    ? std::format("直兑获得 {}（已进背包）", I18n::petal_name(petal))
-                    : std::format("Exchanged {} → bag", I18n::petal_name(petal));
+                    ? std::format("直兑获得 {} ×{} — 点击中央取下", I18n::petal_name(petal), n)
+                    : std::format("Exchanged {} ×{} — tap center", I18n::petal_name(petal), n);
+            }
             else if (result == CraftResultCode::kCraftBought) {
                 if (petal == PetalID::kNone)
                     craft_status = I18n::use_chinese
                         ? "全服广播已发送" : "Server announce sent";
-                else
+                else {
+                    uint32_t n = amount > 0 ? amount : 1u;
+                    craft_result_set(petal, n);
                     craft_status = I18n::use_chinese
-                        ? std::format("购买成功！{} 已放入背包", I18n::petal_name(petal))
-                        : std::format("Bought {} → backpack", I18n::petal_name(petal));
+                        ? std::format("购买成功！{} ×{} — 点击中央取下", I18n::petal_name(petal), n)
+                        : std::format("Bought {} ×{} — tap center", I18n::petal_name(petal), n);
+                }
             } else if (result == CraftResultCode::kCraftInvFull)
                 craft_status = I18n::use_chinese
                     ? "背包已满，先腾出空位"
@@ -481,6 +492,7 @@ void Game::send_inputs() {
     uint8_t blocked = Input::freeze_input || Game::pause_menu_open
         || Game::leave_confirm_open || Game::game_panel_blocking()
         || Game::guild_panel_open || Game::invite_open || Game::chat_menu_open
+        || Game::update_poster_open
         || Ui::panel_open != Ui::Panel::kNone
         || (Game::chat_open && Input::mobile_controls());
     float x = blocked ? 0.f : Input::game_inputs.x;
@@ -883,7 +895,8 @@ void Game::craft_petals(uint8_t mode, PetalID::T petal_id, uint16_t max_batches)
     if (!socket.ready || !(alive() || on_game_screen)) return;
     if (petal_id == PetalID::kNone || petal_id >= PetalID::kNumPetals) return;
     if (max_batches == 0) max_batches = 1;
-    if (max_batches > 200) max_batches = 200;
+    // uint16 wire; All-drain uses a high cap so miss refunds can keep feeding rolls.
+    if (max_batches > 65535) max_batches = 65535;
     Writer writer(static_cast<uint8_t *>(OUTGOING_PACKET));
     writer.write<uint8_t>(Serverbound::kPetalCraft);
     writer.write<uint8_t>(mode);
@@ -947,6 +960,32 @@ void Game::craft_tray_add(PetalID::T id, uint32_t amount) {
     uint32_t room = owned > craft_tray_count ? owned - craft_tray_count : 0;
     if (amount > room) amount = room;
     craft_tray_count += amount;
+}
+
+void Game::craft_result_clear() {
+    craft_result_id = PetalID::kNone;
+    craft_result_count = 0;
+}
+
+void Game::craft_result_take() {
+    if (craft_result_id == PetalID::kNone || craft_result_count == 0) return;
+    craft_result_clear();
+    craft_status = I18n::use_chinese ? "已放入高一阶格子" : "Sent to next rarity";
+}
+
+void Game::craft_result_set(PetalID::T id, uint32_t amount) {
+    if (id == PetalID::kNone || id >= PetalID::kNumPetals || amount == 0) {
+        craft_result_clear();
+        return;
+    }
+    // Same product → stack; different → replace (顶掉).
+    if (craft_result_id == id)
+        craft_result_count += amount;
+    else {
+        craft_result_id = id;
+        craft_result_count = amount;
+    }
+    if (craft_result_count > 1000000u) craft_result_count = 1000000u;
 }
 
 void Game::craft_buy_rarity(uint8_t rarity) {

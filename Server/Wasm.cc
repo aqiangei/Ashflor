@@ -1,4 +1,5 @@
 #ifdef WASM_SERVER
+#include <Server/Chat.hh>
 #include <Server/Client.hh>
 #include <Server/RateLimit.hh>
 #include <Server/Server.hh>
@@ -36,8 +37,30 @@ extern "C" {
         return heap_strdup_std(Server::live_catalog_json());
     }
 
+    EMSCRIPTEN_KEEPALIVE char *live_map_layout_json() {
+        return heap_strdup_std(Server::live_map_layout_json());
+    }
+
+    EMSCRIPTEN_KEEPALIVE char *live_positions_json() {
+        return heap_strdup_std(Server::live_positions_json());
+    }
+
     EMSCRIPTEN_KEEPALIVE char *live_admin_announce(char const *text) {
         return heap_strdup_std(Server::live_admin_announce(text ? text : ""));
+    }
+
+    EMSCRIPTEN_KEEPALIVE char *live_broadcasts_json(unsigned before_id, unsigned limit,
+                                                    char const *day, char const *player,
+                                                    int kind_filter, int map_filter) {
+        return heap_strdup_std(Chat::query_broadcasts_json(
+            before_id, limit, day ? day : "", player ? player : "", kind_filter, map_filter));
+    }
+
+    EMSCRIPTEN_KEEPALIVE char *live_chatlog_json(unsigned before_id, unsigned limit,
+                                                 char const *day, char const *player,
+                                                 int channel_filter, int map_filter) {
+        return heap_strdup_std(Chat::query_chatlog_json(
+            before_id, limit, day ? day : "", player ? player : "", channel_filter, map_filter));
     }
 
     EMSCRIPTEN_KEEPALIVE char *live_admin_give(char const *who, int petal_id, int count, int rarity) {
@@ -85,6 +108,7 @@ extern "C" {
     }
 
     void sigusr2() {
+        Chat::flush();
         Server::is_draining = 1;
     }
 
@@ -168,6 +192,57 @@ WebSocketServer::WebSocketServer() {
             }
             if (path === "/api/catalog") {
                 sendJson(200, fromWasm(_live_catalog_json()));
+                return;
+            }
+            if (path === "/api/map-layout") {
+                // Static terrain — allow short browser cache
+                const text = fromWasm(_live_map_layout_json());
+                const buf = Buffer.from(text, "utf8");
+                res.writeHead(200, {
+                    "Content-Type": "application/json; charset=utf-8",
+                    "Cache-Control": "public, max-age=3600",
+                    "Access-Control-Allow-Origin": "*",
+                    "Content-Length": buf.length
+                });
+                res.end(buf);
+                return;
+            }
+            if (path === "/api/live-pos") {
+                // Slim positions for high-rate minimap polling
+                let body = fromWasm(_live_positions_json());
+                body = body.replace(/"ts":[0-9]+/, '"ts":' + Date.now());
+                sendJson(200, body);
+                return;
+            }
+            if (path === "/api/broadcasts" || path === "/api/chatlog") {
+                let q = {};
+                try {
+                    const u = new URL(req.url || "/", "http://x");
+                    u.searchParams.forEach((v, k) => { q[k] = v; });
+                } catch (e) {}
+                const before = parseInt(q["before"] || q["before_id"] || "0", 10) || 0;
+                const limit = parseInt(q["limit"] || "60", 10) || 60;
+                const day = q["day"] || "";
+                const player = q["player"] || "";
+                const kind = q["kind"] !== undefined && q["kind"] !== ""
+                    ? parseInt(q["kind"], 10) : -1;
+                const channel = q["channel"] !== undefined && q["channel"] !== ""
+                    ? parseInt(q["channel"], 10) : -1;
+                const map = q["map"] !== undefined && q["map"] !== ""
+                    ? parseInt(q["map"], 10) : -1;
+                const dPtr = cstr(day);
+                const pPtr = cstr(player);
+                let out;
+                try {
+                    if (path === "/api/broadcasts")
+                        out = fromWasm(_live_broadcasts_json(before, limit, dPtr, pPtr, kind, map));
+                    else
+                        out = fromWasm(_live_chatlog_json(before, limit, dPtr, pPtr, channel, map));
+                } finally {
+                    _free(dPtr);
+                    _free(pPtr);
+                }
+                sendJson(200, out);
                 return;
             }
             if (path === "/api/admin") {
@@ -338,9 +413,34 @@ WebSocketServer::WebSocketServer() {
                     encodeType = "application/manifest+json";
                     file = "site.webmanifest";
                     break;
-                default:
+                default: {
+                    // Client update posters (SVG only). No /regex/ literals in EM_ASM
+                    // (escaped slashes get stripped and break Closure/acorn).
                     file = "";
+                    if (path.indexOf("/announcements/") === 0) {
+                        const base = path.slice(15);
+                        let ok = base.length >= 5 && base.length <= 120
+                            && base.indexOf("/") < 0 && base.indexOf("..") < 0
+                            && base.slice(-4) === ".svg";
+                        if (ok) {
+                            const stem = base.slice(0, -4);
+                            const c0 = stem.charCodeAt(0);
+                            ok = (c0 >= 48 && c0 <= 57) || (c0 >= 65 && c0 <= 90)
+                                || (c0 >= 97 && c0 <= 122);
+                            for (let i = 1; ok && i < stem.length; ++i) {
+                                const c = stem.charCodeAt(i);
+                                ok = (c >= 48 && c <= 57) || (c >= 65 && c <= 90)
+                                    || (c >= 97 && c <= 122) || c === 46 || c === 95
+                                    || c === 45;
+                            }
+                        }
+                        if (ok) {
+                            encodeType = "image/svg+xml";
+                            file = "announcements/" + base;
+                        }
+                    }
                     break;
+                }
             }
             if (file && fs.existsSync(file)) {
                 // HTML/SW: revalidate. Icons + JS/WASM: long-cache

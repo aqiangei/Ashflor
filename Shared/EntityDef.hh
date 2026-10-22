@@ -145,6 +145,8 @@ SINGLE(Name, guild, std::string)
     /* Wild leash home = spawn point (not zone AABB center — outer zones span the whole map) */ \
     SINGLE(home_x, float, =0) \
     SINGLE(home_y, float, =0) \
+    /* florr unseenDespawn: ticks since last camera AOI; zone mobs cull after ~30s */ \
+    SINGLE(unseen_ticks, game_tick_t, =0) \
     SINGLE(deletion_tick, uint8_t, =0) \
     SINGLE(deleted_petals, circ_arr_t, ={})
 #else

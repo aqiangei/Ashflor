@@ -164,6 +164,17 @@ namespace I18n {
         kLbCraftsTitle,
         kLbScoreTitle,
         kAuthRateLimited,
+        kBurn,
+        kArmorPen,
+        kClump,
+        kFollowAim,
+        kNoRotate,
+        kSplitShot,
+        kAcquireDrop,
+        kAcquireCraft,
+        kAcquireShop,
+        kAcquireMerge,
+        kAcquireStarter,
         kCount
     };
 

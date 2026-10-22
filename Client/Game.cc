@@ -157,6 +157,8 @@ namespace Game {
     uint8_t craft_selected_rarity = 0;
     PetalID::T craft_tray_id = PetalID::kNone;
     uint32_t craft_tray_count = 0;
+    PetalID::T craft_result_id = PetalID::kNone;
+    uint32_t craft_result_count = 0;
     std::string craft_status;
 }
 
@@ -279,6 +281,9 @@ void Game::init() {
     );
     game_ui_window.add_child(
         Ui::make_loot_toast()
+    );
+    game_ui_window.add_child(
+        Ui::make_update_announce_bubble()
     );
     game_ui_window.add_child(
         Ui::make_minimap()
@@ -405,6 +410,7 @@ void Game::reset() {
     leaving_to_title = 0;
     pause_menu_open = 0;
     leave_confirm_open = 0;
+    close_update_poster();
     game_panel = 0;
     chat_open = 0;
     chat_scroll_to_end = 0;
@@ -477,6 +483,8 @@ void Game::reset() {
     preset_ghost_bank = 0;
     craft_tray_id = PetalID::kNone;
     craft_tray_count = 0;
+    craft_result_id = PetalID::kNone;
+    craft_result_count = 0;
     simulation.reset();
 }
 
@@ -1008,6 +1016,7 @@ void Game::return_to_title() {
     invite_from.clear();
     pause_menu_open = 0;
     leave_confirm_open = 0;
+    craft_result_clear(); // session product does not survive leave
     leaving_to_title = 1;
     on_game_screen = 0;
     awaiting_party_revive = 0;
@@ -1066,8 +1075,8 @@ void Game::tick(double time) {
     double tick_start = Debug::get_timestamp();
     Game::timestamp = time;
     Ui::dt = time - g_last_time;
-    // Slightly snappier entity lerp (was 0.24); still smooth under variable dt
-    // Higher base → less visual lag behind server snapshots (was 0.28)
+    // Global entity lerp (~0.42 @60fps). Local flower/camera use a snappier
+    // curve in Entity::tick_lerp (rrolf-inspired dual-rate).
     Ui::lerp_amount = 1 - pow(1 - 0.42, Ui::dt * 60 / 1000);
     g_last_time = time;
     // JS key handlers read this while an HTML <input> is focused (chat, etc.).
@@ -1374,7 +1383,8 @@ void Game::tick(double time) {
     // Click outside chat / popups / drawers → close them (Esc still works)
     Ui::try_close_popups_outside_click();
     if (Input::keys_held_this_tick.contains(27) && Game::alive()) {
-        if (shop_announce_prompt_open) close_shop_announce_prompt();
+        if (Game::update_poster_try_close()) {}
+        else if (shop_announce_prompt_open) close_shop_announce_prompt();
         else if (chat_menu_open) close_chat_menu();
         else if (leave_confirm_open) leave_confirm_open = 0;
         else if (chat_open) close_chat();

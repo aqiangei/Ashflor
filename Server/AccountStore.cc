@@ -371,17 +371,46 @@ void AccountStore::load() {
             std::vector<uint64_t> rest(
                 fields.begin() + (std::ptrdiff_t) petal_n, fields.end());
 
-            uint32_t bank_n = PetalID::kNumPetals;
-            // Pick the largest known historical bank length that still fits.
+            // Pick bank_n by matching trailing layout (mid + presets + bonus), NOT
+            // "largest cand that fits". Otherwise coins/session_hash land in newly
+            // appended petal slots (honey/meteor) as multi-million fake stacks.
+            auto bank_layout_ok = [&](uint32_t cand) -> bool {
+                size_t const rem = rest.size();
+                if (rem < cand) return false;
+                for (uint32_t mid : {5u, 10u}) {
+                    size_t const presets = cand + mid + (size_t) LOADOUT_PRESET_COUNT * preset_w;
+                    size_t const full = presets + 4;
+                    size_t const full_ap = full + 1;
+                    if (rem == full || rem == full_ap || rem == presets) return true;
+                    if (rem >= cand && rem <= cand + mid) return true;
+                }
+                return false;
+            };
+            uint32_t bank_n = 0;
             for (uint32_t cand : bank_candidates) {
-                if (rest.size() >= cand) {
+                if (bank_layout_ok(cand)) {
                     bank_n = cand;
                     break;
                 }
             }
+            if (bank_n == 0) {
+                for (uint32_t cand : bank_candidates) {
+                    if (rest.size() >= cand) {
+                        bank_n = cand;
+                        break;
+                    }
+                }
+                if (bank_n == 0) bank_n = PetalID::kNumPetals;
+            }
             if (rest.size() >= bank_n && !(rest.size() == 7 || rest.size() == 8)) {
-                for (uint32_t i = 0; i < bank_n; ++i)
-                    acc.craft_bank[i] = (uint32_t) rest[i];
+                for (uint32_t i = 0; i < bank_n; ++i) {
+                    uint32_t v = (uint32_t) rest[i];
+                    // Petals hard-cap at 1e6; kCoin allows up to 1e9.
+                    // Larger petal counts = parse residue (coins/session in petal slots).
+                    if (i != (uint32_t) PetalID::kCoin && v > 1000000u) v = 0;
+                    else if (i == (uint32_t) PetalID::kCoin && v > 1000000000u) v = 1000000000u;
+                    acc.craft_bank[i] = v;
+                }
                 if (rest.size() > bank_n)
                     acc.coins = (uint32_t) rest[bank_n];
                 if (rest.size() > bank_n + 1)
@@ -457,6 +486,13 @@ void AccountStore::load() {
             if (sum > 1000000000ull) sum = 1000000000ull;
             acc.craft_bank[PetalID::kCoin] = (uint32_t) sum;
             acc.coins = 0;
+        }
+        // Scrub already-persisted misparses (honey/meteor etc. holding session_hash).
+        // Never scrub kCoin — balances legitimately exceed 1e6 (cap 1e9).
+        for (uint32_t i = 0; i < PetalID::kNumPetals; ++i) {
+            if (i == (uint32_t) PetalID::kCoin) continue;
+            if (acc.craft_bank[i] > 1000000u)
+                acc.craft_bank[i] = 0;
         }
         // Trailing tokens after numeric fields (optional on old saves):
         //   g:<name> <leader>   s:<score>

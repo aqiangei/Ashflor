@@ -60,6 +60,13 @@ void tick_entity_motion(Simulation *sim, Entity &ent) {
         ent.velocity = term_vel + v * (std::powf(f, dt));
     }
     ent.velocity += ent.collision_velocity * 0.5;
+    // Soft cap flower velocity so bubble / knockback stacks can't yeet across the map.
+    if (ent.has_component(kFlower)) {
+        float const kFlowerVelCap = PLAYER_ACCELERATION * 36.f;
+        float vm = ent.velocity.magnitude();
+        if (vm > kFlowerVelCap && is_finite(vm))
+            ent.velocity.set_magnitude(kFlowerVelCap);
+    }
     if (!ent.has_component(kPetal) && !ent.has_component(kWeb)) {
         float x = ent.get_x();
         float y = ent.get_y();

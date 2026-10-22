@@ -262,7 +262,7 @@ namespace PetalID {
         kTwinEpic,
         kTwinLegendary,
         kTwinMythic,
-        // Currency. Append-only. Not a combat petal and not a craft result.
+        // Currency. Append-only. Equippable combat petal; not a craft-ladder result.
         kCoin,
         // Jungle Monstera petal (append only; after kCoin so saved craft banks stay valid)
         kMonstera,
@@ -462,6 +462,13 @@ namespace PetalID {
         kMeteorUnique,
         kMeteorSuper,
         kMeteorUltra,
+        // Golden Leaf rarity ladder (same English name; CD reduction, multiplies)
+        kGoldenLeafEpic,
+        kGoldenLeafLegendary,
+        kGoldenLeafMythic,
+        kGoldenLeafUltra,
+        kGoldenLeafSuper,
+        kGoldenLeafUnique,
         kNumPetals
     };
 };

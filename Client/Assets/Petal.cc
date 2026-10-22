@@ -71,8 +71,15 @@ void draw_static_petal_single(PetalID::T id, Renderer &ctx) {
             break;
         }
         case PetalID::kGoldenLeaf:
+        case PetalID::kGoldenLeafEpic:
+        case PetalID::kGoldenLeafLegendary:
+        case PetalID::kGoldenLeafMythic:
+        case PetalID::kGoldenLeafUltra:
+        case PetalID::kGoldenLeafSuper:
+        case PetalID::kGoldenLeafUnique:
         case PetalID::kLeaf: 
-            if (id == PetalID::kLeaf) {
+            // green Leaf ladder vs gold Golden Leaf ladder (art_base usually collapses first)
+            if (art == PetalID::kLeaf) {
                 ctx.set_fill(0xff39b54a);
                 ctx.set_stroke(0xff2e933c);
             } else {
