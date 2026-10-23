@@ -106,6 +106,7 @@ public:
     std::string remote_ip;
     uint8_t conn_counted = 0;
     uint64_t last_rx_ms = 0;
+    uint64_t open_ms = 0;
     Client();
     void init();
     void remove();

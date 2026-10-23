@@ -1701,8 +1701,19 @@ void Client::on_message(WebSocket *ws, std::string_view message, uint64_t code) 
 }
 
 void Client::on_disconnect(WebSocket *ws, int code, std::string_view message) {
-    std::printf("disconnect: [%d]\n", code);
     Client *client = ws->getUserData();
+    {
+        uint64_t now_ms = (uint64_t) std::chrono::duration_cast<std::chrono::milliseconds>(
+            std::chrono::steady_clock::now().time_since_epoch()).count();
+        unsigned long long life_s = (client && client->open_ms && now_ms > client->open_ms)
+            ? (now_ms - client->open_ms) / 1000ull : 0ull;
+        unsigned long long idle_s = (client && client->last_rx_ms && now_ms > client->last_rx_ms)
+            ? (now_ms - client->last_rx_ms) / 1000ull : 0ull;
+        // idle ~= 104s with our idleTimeout=120 => uWS idle timeout (no close frame,
+        // browser sees 1006). Small idle => peer/edge/network dropped the tunnel.
+        std::printf("disconnect: [%d] life=%llus idle=%llus name=%s\n", code,
+            life_s, idle_s, client ? client->play_name.c_str() : "");
+    }
     if (client == nullptr) return;
     if (client->conn_counted) {
         RateLimit::on_disconnect(client->remote_ip);

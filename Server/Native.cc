@@ -14,6 +14,7 @@
 #include <cctype>
 #include <chrono>
 #include <csignal>
+#include <cstdio>
 #include <cstdlib>
 #include <fstream>
 #include <iostream>
@@ -330,7 +331,12 @@ uWS::App Server::server = uWS::App()
     .idleTimeout = 120,
     .maxBackpressure = 1024 * MAX_PACKET_LEN,
     .closeOnBackpressureLimit = false,
-    .resetIdleTimeoutOnSend = true,
+    // Only *received* data refreshes the idle timer. With this on, our 20 Hz
+    // update stream kept a half-open socket alive forever (client Wi-Fi dies
+    // silently -> nginx never notices -> zombie flower, "replaced stale player"),
+    // because every send reset the timeout before the auto-ping could probe it.
+    // Off: ~104 s of silence sends a ping, 16 s later the socket is dropped.
+    .resetIdleTimeoutOnSend = false,
     .sendPingsAutomatically = true,
     // Honor X-Forwarded-For so localhost load bots (unique XFF) are not capped
     // by kMaxConnPerIp=24 on a single 127.0.0.1 peer.
@@ -355,6 +361,8 @@ uWS::App Server::server = uWS::App()
         std::cout << "client connection\n";
         Client *client = ws->getUserData();
         client->ws = ws;
+        client->open_ms = (uint64_t) std::chrono::duration_cast<std::chrono::milliseconds>(
+            std::chrono::steady_clock::now().time_since_epoch()).count();
         if (client->remote_ip.empty()) {
             std::string_view addr = ws->getRemoteAddressAsText();
             client->remote_ip.assign(addr.data(), addr.size());
@@ -387,6 +395,10 @@ uWS::App Server::server = uWS::App()
 });
 
 void Server::run() {
+    // journald gets our stdout through a pipe, which is block-buffered by default:
+    // log lines then appear in bursts and their timestamps lie (made a live
+    // disconnect investigation nearly impossible). Line-buffer it.
+    std::setvbuf(stdout, nullptr, _IOLBF, 0);
     struct sigaction sa;
     sa.sa_handler = [](int){ Server::is_draining = 1; };
     sigemptyset(&sa.sa_mask);
