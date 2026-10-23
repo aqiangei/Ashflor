@@ -85,7 +85,6 @@ void Game::render_game() {
             renderer.translate(rand.x, rand.y);
         }
     }
-    uint32_t alpha = (uint32_t)(camera.get_fov() * 255 * 0.2) << 24;
     {
         RenderContext context(&renderer);
         renderer.reset_transform();
@@ -103,8 +102,8 @@ void Game::render_game() {
         float topY = camera.get_camera_y() - renderer.height * scale;
         float bottomY = camera.get_camera_y() + renderer.height * scale;
 
-        // Clip all ground / water / grid to the arena so edge-chunk padding and
-        // bake hole-fills cannot paint (or flash) into the void.
+        // Clip ground / water to the arena so edge-chunk padding and bake
+        // hole-fills cannot paint (or flash) into the void.
         {
             RenderContext arena_clip(&renderer);
             renderer.begin_path();
@@ -116,27 +115,6 @@ void Game::render_game() {
                                 leftX, topY, rightX, bottomY, Input::is_mobile);
             draw_animated_water(renderer, mid, leftX, topY, rightX, bottomY,
                                 Game::timestamp);
-
-            float grid_l = leftX < 0.f ? 0.f : leftX;
-            float grid_t = topY < 0.f ? 0.f : topY;
-            float grid_r = rightX > (float)ARENA_WIDTH ? (float)ARENA_WIDTH : rightX;
-            float grid_b = bottomY > (float)ARENA_HEIGHT ? (float)ARENA_HEIGHT : bottomY;
-            if (grid_r > grid_l && grid_b > grid_t) {
-                renderer.set_stroke(alpha);
-                renderer.set_line_width(0.5f);
-                float newLeftX = ceilf(grid_l / 50.f) * 50.f;
-                float newTopY = ceilf(grid_t / 50.f) * 50.f;
-                renderer.begin_path();
-                for (; newLeftX < grid_r; newLeftX += 50.f) {
-                    renderer.move_to(newLeftX, grid_t);
-                    renderer.line_to(newLeftX, grid_b);
-                }
-                for (; newTopY < grid_b; newTopY += 50.f) {
-                    renderer.move_to(grid_l, newTopY);
-                    renderer.line_to(grid_r, newTopY);
-                }
-                renderer.stroke();
-            }
         }
     }
     // Spin-rate hint ring around self while adjusting (Q/E hold or drag wheel)
@@ -205,13 +183,15 @@ void Game::render_game() {
         }
     }
 
-    Particle::tick_game(renderer, Ui::dt);
-
     // Rendering is independent of simulation: skip entities outside the camera
     // while retaining a margin for large sprites and labels.
     float const world_scale = Ui::scale * camera.get_fov() * Game::camera_zoom;
     float const view_half_w = renderer.width / (2 * world_scale);
     float const view_half_h = renderer.height / (2 * world_scale);
+    Particle::set_view(camera.get_camera_x() - view_half_w, camera.get_camera_y() - view_half_h,
+                       camera.get_camera_x() + view_half_w, camera.get_camera_y() + view_half_h,
+                       simulation.arena_info.map_id);
+    Particle::tick_game(renderer, Ui::dt);
     auto visible = [&](Entity const &ent) {
         float const margin = std::max(200.f, (float)ent.get_radius() * 2.f);
         return std::fabs((float)ent.get_x() - (float)camera.get_camera_x()) <= view_half_w + margin
@@ -283,6 +263,36 @@ void Game::render_game() {
         renderer.translate(ent.get_x(), ent.get_y());
         render_name(renderer, ent);
     });
+
+    // Physics collision radii (circles). Toggle: Settings / Pause → Show hitboxes.
+    if (Game::show_hitboxes) {
+        float const lw = 1.5f / world_scale;
+        RenderContext hitbox_ctx(&renderer);
+        auto stroke_hitbox = [&](Entity const &ent, uint32_t color) {
+            if (!visible(ent)) return;
+            renderer.set_stroke(color);
+            renderer.set_line_width(lw);
+            renderer.begin_path();
+            renderer.arc(ent.get_x(), ent.get_y(), ent.get_radius());
+            renderer.stroke();
+        };
+        simulation.for_each<kFlower>([&](Simulation *, Entity const &ent){
+            stroke_hitbox(ent, 0xcc44dd88);
+        });
+        simulation.for_each<kMob>([&](Simulation *, Entity const &ent){
+            if (ent.has_component(kFlower)) return; // drawn above
+            stroke_hitbox(ent, 0xccff4444);
+        });
+        simulation.for_each<kPetal>([&](Simulation *, Entity const &ent){
+            stroke_hitbox(ent, 0xccffcc44);
+        });
+        simulation.for_each<kDrop>([&](Simulation *, Entity const &ent){
+            stroke_hitbox(ent, 0xcc4488ff);
+        });
+        simulation.for_each<kWeb>([&](Simulation *, Entity const &ent){
+            stroke_hitbox(ent, 0xccaa66ff);
+        });
+    }
 }
 
 void Game::render_title_screen() {
@@ -294,6 +304,12 @@ void Game::render_title_screen() {
     renderer.reset_transform();
     renderer.set_fill(tm.ground);
     renderer.fill_rect(0, 0, renderer.width, renderer.height);
+
+    // During title→game circle wipe both screens paint each frame. A second
+    // MapChunkCache pass (title FOV + difficulty 0) fought the in-game bake and
+    // made the expanding circle hitch. Solid theme fill is enough behind the clip.
+    if (Game::should_render_game_ui())
+        return;
 
     // Slow pan over spawn plaza so the backdrop reads as that map's ThemeMaterial.
     // Half the in-game-ish FOV (0.62 → 0.31) so title preview shows ~2× the world.

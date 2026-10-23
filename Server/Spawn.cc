@@ -187,10 +187,13 @@ Entity &alloc_petal(Simulation *sim, PetalID::T petal_id, Entity const &parent) 
     petal.set_radius(petal_data.radius);
     if (petal_data.attributes.rotation_style == PetalAttributes::kPassiveRot)
         petal.set_angle(frand() * 2 * M_PI);
-    if (petal_id == PetalID::kMoon)
+    // gardn-master: Moon leaves the petal ring (other petals orbit it instead).
+    if (petal_is_moon(petal_id))
         BitMath::set(petal.flags, EntityFlags::kIsDetached);
     petal.mass = petal_data.attributes.mass;
-    petal.friction = DEFAULT_FRICTION * 1.5;
+    // Moon uses the same friction as other petals in gardn (no *1.5 drag) so it
+    // can seat on its detached path instead of sticking in the flower ring.
+    petal.friction = petal_is_moon(petal_id) ? DEFAULT_FRICTION : DEFAULT_FRICTION * 1.5;
     petal.add_component(kRelations);
     petal.set_parent(parent.id);
     petal.set_team(parent.get_team());

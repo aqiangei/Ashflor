@@ -1,6 +1,7 @@
 #include <Client/Particle.hh>
 
 #include <Client/Game.hh>
+#include <Client/Input.hh>
 #include <Client/ThemeMaterial.hh>
 #include <Client/Ui/Extern.hh>
 
@@ -39,6 +40,24 @@ struct FloatingText {
 std::vector<TitleParticleEntity> title_particles;
 std::vector<GameParticleEntity> game_particles;
 std::vector<FloatingText> floating_texts;
+constexpr size_t kMaxFloatingTexts = 96;
+float view_left = 0, view_top = 0, view_right = 0, view_bottom = 0;
+uint8_t view_map = 255;
+size_t frame_emissions = 0;
+
+bool in_view(float x, float y) {
+    return view_map == 255 || (x >= view_left && x <= view_right
+        && y >= view_top && y <= view_bottom);
+}
+
+bool accept_particle(float x, float y) {
+    // Bound both live drawing cost and bursts from many Unique split petals.
+    size_t limit = Input::is_mobile ? 192u : 384u;
+    size_t burst = Input::is_mobile ? 12u : 24u;
+    if (!in_view(x, y) || game_particles.size() >= limit || frame_emissions >= burst) return false;
+    ++frame_emissions;
+    return true;
+}
 
 // Throttle / accumulate damage pops per mob (ms).
 constexpr double kDmgCooldownMs = 90.0;
@@ -56,7 +75,9 @@ uint8_t map_title_petals_ready = 0;
 
 void ensure_map_title_petals() {
     if (map_title_petals_ready) return;
-    for (uint8_t mid = 0; mid < MapID::kNumMaps; ++mid) {
+    // Per open map only — each MapGen::ensure via map_zones(mid) separately
+    for (uint8_t oi = 0; oi < OPEN_MAP_COUNT; ++oi) {
+        uint8_t mid = OPEN_MAPS[oi];
         std::array<uint8_t, PetalID::kNumPetals> seen{};
         std::vector<PetalID::T> &out = map_title_petals[mid];
         out.clear();
@@ -83,12 +104,12 @@ void ensure_map_title_petals() {
 
 std::vector<PetalID::T> const &title_petal_pool_for_selected_map() {
     ensure_map_title_petals();
-    uint8_t mid = Game::selected_map;
-    if (mid >= MapID::kNumMaps) mid = MapID::kGarden;
+    uint8_t mid = clamp_to_open_map(Game::selected_map);
     return map_title_petals[mid];
 }
 
 void spawn_floating(float x, float y, std::string text, uint32_t fill, float size) {
+    if (!in_view(x, y) || floating_texts.size() >= kMaxFloatingTexts) return;
     FloatingText t;
     t.x = x + (float)(frand() * 18.0 - 9.0);
     t.y = y;
@@ -113,6 +134,24 @@ void flush_damage(uint32_t key, DmgBucket &b) {
 }
 
 } // namespace
+
+void Particle::reset() {
+    title_particles.clear();
+    game_particles.clear();
+    floating_texts.clear();
+    dmg_buckets.clear();
+    frame_emissions = 0;
+    view_map = 255;
+}
+
+void Particle::set_view(float left, float top, float right, float bottom, uint8_t map_id) {
+    if (map_id != view_map) reset();
+    view_map = map_id;
+    view_left = left - 100.f;
+    view_top = top - 100.f;
+    view_right = right + 100.f;
+    view_bottom = bottom + 100.f;
+}
 
 void Particle::tick_title(Renderer &ctx, double dt) {
     RenderContext c(&ctx);
@@ -179,6 +218,9 @@ void Particle::tick_title(Renderer &ctx, double dt) {
 }
 
 void Particle::tick_game(Renderer &ctx, double dt) {
+    frame_emissions = 0;
+    {
+    RenderContext particles_context(&ctx);
     size_t len = game_particles.size();
     for (size_t i = len; i > 0; --i) {
         GameParticleEntity &part = game_particles[i - 1];
@@ -187,7 +229,6 @@ void Particle::tick_game(Renderer &ctx, double dt) {
             game_particles.pop_back();
             continue;
         }
-        RenderContext c(&ctx);
         part.x += part.x_velocity * dt / 1000;
         part.y += part.y_velocity * dt / 1000;
         // Spirit motes: bright gold/white halo. Unique FX: ash→gold bloom via unique_fx.
@@ -198,6 +239,7 @@ void Particle::tick_game(Renderer &ctx, double dt) {
             : part.unique_fx ? (float) (dt / 1400.0)
             : (float) (dt / 1000.0);
         part.opacity = fclamp(part.opacity - fade, 0, 1);
+        if (!in_view(part.x, part.y)) continue;
         ctx.set_global_alpha(part.opacity);
         if (spirit) {
             ctx.set_fill(0x90ffe08a);
@@ -217,6 +259,7 @@ void Particle::tick_game(Renderer &ctx, double dt) {
         ctx.arc(part.x, part.y, part.radius);
         ctx.fill();
     }
+    }
 
     float const sec = (float)(dt / 1000.0);
     for (size_t i = floating_texts.size(); i > 0; --i) {
@@ -229,6 +272,7 @@ void Particle::tick_game(Renderer &ctx, double dt) {
         }
         t.y += t.vy * sec;
         t.vy *= (1.f - 2.2f * sec); // ease up
+        if (!in_view(t.x, t.y)) continue;
         float alpha = t.life > 0.35f ? 1.f : fclamp(t.life / 0.35f, 0.f, 1.f);
         RenderContext c(&ctx);
         ctx.set_global_alpha(alpha);
@@ -337,6 +381,7 @@ void Particle::tick_ambient_env(double dt) {
     }
 
     for (uint8_t i = 0; i < n; ++i) {
+        if (!accept_particle(px, py)) break;
         GameParticleEntity part;
         part.x = px + (frand() - 0.5f) * spread;
         part.y = py + (frand() - 0.5f) * (spread * 0.7f);
@@ -437,7 +482,7 @@ void Particle::tick_guide_sprite(double dt) {
 
     uint32_t col = (TerrainArt::theme(mid).ground_light & 0x00ffffff) | 0xc0000000;
     // Lead spirit (always when under particle budget)
-    if (game_particles.size() < 56) {
+    if (game_particles.size() < 56 && accept_particle(spirit_x, spirit_y)) {
         GameParticleEntity lead;
         lead.x = spirit_x + (frand() - 0.5f) * 6.f;
         lead.y = spirit_y + (frand() - 0.5f) * 6.f;
@@ -452,6 +497,7 @@ void Particle::tick_guide_sprite(double dt) {
     if (spark_cd_ms > 0) return;
     // Trail crumbs along player → spirit
     for (int n = 0; n < 2; ++n) {
+        if (!accept_particle(px, py)) break;
         float along = 60.f + n * 55.f + frand() * 12.f;
         GameParticleEntity part;
         part.x = px + ux * along + (frand() - 0.5f) * 16.f;
@@ -508,6 +554,7 @@ void Particle::add_unique_particle(float x, float y, uint32_t level) {
     float rad1 = 3.2f + t * 2.0f;
     float speed = 0.55f + t * 0.35f;
     for (int i = 0; i < n; ++i) {
+        if (!accept_particle(x, y)) break;
         GameParticleEntity part;
         Vector rand = Vector::rand(42);
         int idx = (int) (frand() * 5.f) % 5;
@@ -548,6 +595,7 @@ void Particle::add_spirit_trail(float x, float y, float back_dx, float back_dy) 
 
     // 1) Body sparkles like Unique petals (low scatter so they stay on the spirit).
     for (int i = 0; i < 4; ++i) {
+        if (!accept_particle(x, y)) break;
         GameParticleEntity part;
         Vector rand = Vector::rand(25);
         part.x = x + (frand() - 0.5f) * 22.f;
@@ -562,6 +610,7 @@ void Particle::add_spirit_trail(float x, float y, float back_dx, float back_dy) 
 
     // 2) Trail ribbon behind motion (still local to the spirit path).
     for (int i = 0; i < 5; ++i) {
+        if (!accept_particle(x, y)) break;
         GameParticleEntity part;
         float back = 6.f + (float) i * 12.f + frand() * 10.f;
         float side = (frand() - 0.5f) * 18.f;

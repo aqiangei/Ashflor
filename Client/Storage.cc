@@ -162,11 +162,13 @@ public:
     X(11, Game::guest_coins) \
     X(12, Input::invert_attack) \
     X(13, Input::invert_defend) \
+    X(22, Input::disable_auto_party) \
     X(19, Input::request_mobile) \
     X(20, Game::password) \
     X(15, Game::guest_talent_ranks) \
     X(17, Game::rot_speed_setting) \
-    X(21, Game::show_debug)
+    X(21, Game::show_debug) \
+    X(23, Game::show_hitboxes)
 
 #define X(ct, name) static auto checker_##ct = MutationObserver(name);
 STORED
@@ -177,12 +179,26 @@ using namespace StorageProtocol;
 void Storage::retrieve() {
     Game::seen_petals[PetalID::kBasic] = 1;
     {
-        uint32_t len = StorageProtocol::retrieve("mobs", 256);
+        // v2: 0xfe + (u8 id, u16 rarity_bits)* . Legacy: bare u8 ids.
+        uint32_t len = StorageProtocol::retrieve("mobs", 2048);
         Decoder reader(&StorageProtocol::buffer[0]);
-        while (reader.at < StorageProtocol::buffer + len) {
-            MobID::T mob_id = reader.read<uint8_t>();
-            if (mob_id >= MobID::kNumMobs) break;
-            Game::seen_mobs[mob_id] = 1;
+        if (len >= 1 && StorageProtocol::buffer[0] == 0xfe) {
+            reader.read<uint8_t>();
+            while (reader.at + 3 <= StorageProtocol::buffer + len) {
+                MobID::T mob_id = reader.read<uint8_t>();
+                uint16_t bits = reader.read<uint16_t>();
+                if (mob_id >= MobID::kNumMobs) break;
+                Game::seen_mobs[mob_id] = bits & ((uint16_t)((1u << RarityID::kNumRarities) - 1));
+            }
+        } else {
+            while (reader.at < StorageProtocol::buffer + len) {
+                MobID::T mob_id = reader.read<uint8_t>();
+                if (mob_id >= MobID::kNumMobs) break;
+                // Legacy: unlock only the baked rarity so higher cells stay to find.
+                uint8_t r = MOB_DATA[mob_id].rarity;
+                if (r < RarityID::kNumRarities)
+                    Game::seen_mobs[mob_id] |= (uint16_t)(1u << r);
+            }
         }
     }
     {
@@ -216,16 +232,19 @@ void Storage::retrieve() {
                 I18n::use_chinese = BitMath::at(opts, 2);
             else
                 I18n::use_chinese = 1;
-            // Either saved bit enables the full attack↔defend swap.
-            Input::invert_attack = BitMath::at(opts, 4) || BitMath::at(opts, 5);
-            Input::invert_defend = Input::invert_attack;
+            Input::invert_attack = BitMath::at(opts, 4);
+            Input::invert_defend = BitMath::at(opts, 5);
             // bit7 = request_mobile explicitly saved; else default to device probe
             if (BitMath::at(opts, 7))
                 Input::request_mobile = BitMath::at(opts, 6);
             else
                 Input::request_mobile = Input::is_mobile;
-            if (len >= 2)
-                Game::show_debug = reader.read<uint8_t>() ? 1 : 0;
+            if (len >= 2) {
+                uint8_t b2 = reader.read<uint8_t>();
+                Game::show_debug = BitMath::at(b2, 0);
+                Input::disable_auto_party = BitMath::at(b2, 1);
+                Game::show_hitboxes = BitMath::at(b2, 2);
+            }
         } else {
             Input::request_mobile = Input::is_mobile;
         }
@@ -463,7 +482,8 @@ void Storage::retrieve() {
     for (uint8_t i = 0; i < TalentID::kNum; ++i)
         Game::talent_ranks[i] = Game::guest_talent_ranks[i];
     #ifdef DEBUG
-    for (MobID::T i = 0; i < MobID::kNumMobs; ++i) Game::seen_mobs[i] = 1;
+    uint16_t const all_r = (uint16_t)((1u << RarityID::kNumRarities) - 1);
+    for (MobID::T i = 0; i < MobID::kNumMobs; ++i) Game::seen_mobs[i] = all_r;
     for (PetalID::T i = PetalID::kBasic; i < PetalID::kNumPetals; ++i) Game::seen_petals[i] = 1;
     #endif
 }
@@ -483,8 +503,12 @@ void Storage::set() {
     }
     {
         Encoder writer(&StorageProtocol::buffer[0]);
-        for (MobID::T id = 0; id < MobID::kNumMobs; ++id)
-            if (Game::seen_mobs[id]) writer.write<uint8_t>(id);
+        writer.write<uint8_t>(0xfe); // v2 rarity bitfields
+        for (MobID::T id = 0; id < MobID::kNumMobs; ++id) {
+            if (Game::seen_mobs[id] == 0) continue;
+            writer.write<uint8_t>(id);
+            writer.write<uint16_t>(Game::seen_mobs[id]);
+        }
         StorageProtocol::store("mobs", writer.at - writer.base);
     }
     {
@@ -519,7 +543,11 @@ void Storage::set() {
             | ((Input::request_mobile ? 1 : 0) << 6)
             | (1 << 7)
         );
-        writer.write<uint8_t>(Game::show_debug ? 1 : 0);
+        writer.write<uint8_t>(
+            (Game::show_debug ? 1 : 0)
+            | ((Input::disable_auto_party ? 1 : 0) << 1)
+            | ((Game::show_hitboxes ? 1 : 0) << 2)
+        );
         StorageProtocol::store("settings", writer.at - writer.base);
     }
     {

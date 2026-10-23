@@ -38,34 +38,14 @@ static TextInput *auth_password_input = nullptr;
 static void select_map_garden(Element *, uint8_t e) {
     if (e == Ui::kClick) Game::selected_map = MapID::kGarden;
 }
-static void select_map_desert(Element *, uint8_t e) {
-    if (e == Ui::kClick) Game::selected_map = MapID::kDesert;
-}
 static void select_map_ocean(Element *, uint8_t e) {
     if (e == Ui::kClick) Game::selected_map = MapID::kOcean;
-}
-static void select_map_polar(Element *, uint8_t e) {
-    if (e == Ui::kClick) Game::selected_map = MapID::kPolar;
-}
-static void select_map_jungle(Element *, uint8_t e) {
-    if (e == Ui::kClick) Game::selected_map = MapID::kJungle;
-}
-static void select_map_ant_hell(Element *, uint8_t e) {
-    if (e == Ui::kClick) Game::selected_map = MapID::kAntHell;
-}
-static void select_map_volcano(Element *, uint8_t e) {
-    if (e == Ui::kClick) Game::selected_map = MapID::kVolcano;
 }
 static void select_map_royal(Element *, uint8_t e) {
     if (e == Ui::kClick) Game::selected_map = MapID::kRoyalCapital;
 }
 static bool darken_map_garden() { return Game::selected_map != MapID::kGarden; }
-static bool darken_map_desert() { return Game::selected_map != MapID::kDesert; }
 static bool darken_map_ocean() { return Game::selected_map != MapID::kOcean; }
-static bool darken_map_polar() { return Game::selected_map != MapID::kPolar; }
-static bool darken_map_jungle() { return Game::selected_map != MapID::kJungle; }
-static bool darken_map_ant_hell() { return Game::selected_map != MapID::kAntHell; }
-static bool darken_map_volcano() { return Game::selected_map != MapID::kVolcano; }
 static bool darken_map_royal() { return Game::selected_map != MapID::kRoyalCapital; }
 
 // Soft title controls — rounded fill, no outer rim stroke
@@ -281,19 +261,11 @@ Element *Ui::make_title_input_box() {
                     return I18n::use_chinese ? std::string{"选择地图"} : std::string{"Choose map"};
                 }, { .fill = Chrome::kHint }),
                 new Ui::Element(0, 6),
-                new Ui::VContainer({
-                    new Ui::HContainer({
-                        make_map_select_button(MapID::kGarden, 0xff3dd68c, select_map_garden, darken_map_garden),
-                        make_map_select_button(MapID::kDesert, 0xffefd36a, select_map_desert, darken_map_desert),
-                        make_map_select_button(MapID::kOcean, 0xff3eb6e8, select_map_ocean, darken_map_ocean),
-                        make_map_select_button(MapID::kPolar, 0xff8ec8ef, select_map_polar, darken_map_polar)
-                    }, 0, 10, {}),
-                    new Ui::HContainer({
-                        make_map_select_button(MapID::kJungle, 0xff45b06a, select_map_jungle, darken_map_jungle),
-                        make_map_select_button(MapID::kAntHell, 0xffd4a574, select_map_ant_hell, darken_map_ant_hell),
-                        make_map_select_button(MapID::kVolcano, 0xffff6f4f, select_map_volcano, darken_map_volcano),
-                        make_map_select_button(MapID::kRoyalCapital, 0xffe8c45a, select_map_royal, darken_map_royal)
-                    }, 0, 10, {})
+                // Launch set only — Desert/Polar/Jungle/AntHell/Volcano closed for now
+                new Ui::HContainer({
+                    make_map_select_button(MapID::kGarden, 0xff3dd68c, select_map_garden, darken_map_garden),
+                    make_map_select_button(MapID::kOcean, 0xff3eb6e8, select_map_ocean, darken_map_ocean),
+                    make_map_select_button(MapID::kRoyalCapital, 0xffe8c45a, select_map_royal, darken_map_royal)
                 }, 0, 10, { .no_animation = 1 }),
                 new Ui::Element(0, 16),
                 new Ui::VContainer({
@@ -652,6 +624,32 @@ static void open_ashflor_repo(Element *, uint8_t e) {
     if (e == Ui::kClick) DOM::open_page("https://github.com/aqiangei/ashflor");
 }
 
+static void open_qq_group(Element *, uint8_t e) {
+    if (e != Ui::kClick) return;
+    // group_code=227990150 — same as Settings; opens join page / QQ client
+    DOM::open_page("https://qm.qq.com/cgi-bin/qm/qr?jump_from=webapi&group_code=227990150");
+}
+
+static Element *make_qq_group_icon(float size) {
+    return new Ui::StaticIcon([](Element *elt, Renderer &ctx){
+        ctx.scale(elt->width / 36);
+        // Simple QQ-like mark: round face + ears
+        ctx.set_fill(0xffffffff);
+        ctx.begin_path();
+        ctx.arc(0, 1.5f, 11.f);
+        ctx.fill();
+        ctx.begin_path();
+        ctx.arc(-8.5f, -6.f, 4.2f);
+        ctx.arc(8.5f, -6.f, 4.2f);
+        ctx.fill();
+        ctx.set_fill(0xff12b7f5);
+        ctx.begin_path();
+        ctx.arc(-3.5f, 0.f, 2.f);
+        ctx.arc(3.5f, 0.f, 2.f);
+        ctx.fill();
+    }, size, size);
+}
+
 static Element *make_labeled_github_button(
     char const *label_zh, char const *label_en,
     void (*on_click)(Element *, uint8_t), uint32_t fill
@@ -669,9 +667,24 @@ static Element *make_labeled_github_button(
     }, 0, 4, { .h_justify = Style::Center, .v_justify = Style::Top });
 }
 
+static Element *make_labeled_qq_button() {
+    return new Ui::VContainer({
+        new Ui::Button(46, 46,
+            make_qq_group_icon(36),
+            open_qq_group,
+            nullptr,
+            soft_btn(Chrome::kBtnSlate)
+        ),
+        new Ui::DynamicText(11, [](){
+            return std::string{I18n::use_chinese ? "QQ 群" : "QQ"};
+        }, { .fill = 0xffe8e8e8 })
+    }, 0, 4, { .h_justify = Style::Center, .v_justify = Style::Top });
+}
+
 Element *Ui::make_github_link_button() {
-    // Right: this fork. Left of it: upstream gardn (must stay credited).
+    // Right: this fork. Left of it: upstream gardn. Far left: QQ group.
     Element *elt = new Ui::HContainer({
+        make_labeled_qq_button(),
         make_labeled_github_button(
             "上游 gardn", "gardn", open_upstream_gardn, Chrome::kBtnMoss
         ),

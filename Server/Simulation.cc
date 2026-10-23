@@ -11,8 +11,14 @@
 #include <Shared/Map.hh>
 
 #include <algorithm>
+#include <chrono>
 #include <iostream>
 #include <vector>
+
+static double _tick_ms_since(std::chrono::steady_clock::time_point const &t0) {
+    return std::chrono::duration<double, std::milli>(
+        std::chrono::steady_clock::now() - t0).count();
+}
 
 static std::string resolve_player_name(Simulation *sim, Entity &camera, Entity &player) {
     if (!player.get_name().empty()) return player.get_name();
@@ -141,16 +147,21 @@ void Simulation::on_tick() {
     });
     uint8_t const occupied = flowers > 0;
 
+    auto t_hash0 = std::chrono::steady_clock::now();
     spatial_hash.refresh(ARENA_WIDTH, ARENA_HEIGHT);
+    Server::phase_hash_ms += _tick_ms_since(t_hash0);
     // Always — empty-map early-out used to skip this and bosses never spawned
     // at boot / never counted respawn CD (live "Boss 存活" all dead).
     ensure_boss(this);
 
     // Idle map (Server already ~1 Hz): thin wild mobs slowly, skip collide/AI.
+    // Only zone wildlife (kSpawnedFromZone). WorldEvent / Treasure / explore
+    // props are never zone-spawned — do not wipe them (chat-only bug).
     if (!occupied) {
         for_each_entity([](Simulation *sim, Entity &ent) {
             if (!ent.has_component(kMob)) return;
             if (ent.zone == 0xFF) return; // boss / special
+            if (!BitMath::at(ent.flags, EntityFlags::kSpawnedFromZone)) return;
             if (BitMath::at(ent.flags, EntityFlags::kIsDespawning)) return;
             // ~1.5% per idle tick → density drops without a stampede of deletes
             if (frand() < 0.015f) {
@@ -167,92 +178,119 @@ void Simulation::on_tick() {
     // Crowd scale: 32+ flowers on one map made spawn+collide the tick hog in
     // combat load tests — keep pockets filling for solo/small groups, throttle
     // when a hub is already packed.
-    float spawn_mul = 1.f;
-    if (flowers >= 16u) spawn_mul = 0.55f;
-    if (flowers >= 28u) spawn_mul = 0.35f;
-    if (frand() < (2.5f * spawn_mul) / (float) TPS) {
-        uint32_t extra = flowers;
-        if (extra > 3u) extra = 3u;
-        if (flowers >= 16u && extra > 1u) extra = 1u;
-        uint32_t batches = 4u + extra;
-        if (flowers >= 28u) batches = 2u;
-        for (uint32_t i = 0; i < batches; ++i)
-            Map::spawn_zone_mob(this);
-    }
-    // Underfilled player zones get a second burst so sparse rings/corners
-    // do not stay empty after unseen-despawn cleared the pack.
-    if (flowers < 16u && frand() < 3.0f / (float) TPS) {
-        for (uint32_t i = 0; i < 3u; ++i)
-            Map::spawn_zone_mob(this);
-    }
-    for_each_entity([](Simulation *sim, Entity &ent) {
-        if (ent.has_component(kPhysics))
-            sim->spatial_hash.insert(ent);
-        if (BitMath::at(ent.flags, EntityFlags::kHasCulling))
-            BitMath::set(ent.flags, EntityFlags::kIsCulled);
-    });
-    for_each<kCamera>(tick_culling_behavior);
-
-    // florr unseenDespawn: zone mobs still culled after AOI → delete, no loot.
-    // Stride ~5 ticks (~6Hz). unseen_ticks==0 = never in any camera AOI.
-    // Plaza/soft longer than wild 30s so solo circling doesn't blink packs out;
-    // not multi-minute — crowd AOIs keep mobs "seen" forever, so long timers
-    // only delayed cleanup when people leave a pocket.
-    if (tick_index % 5 == 0) {
-        for_each<kMob>([](Simulation *sim, Entity &ent) {
-            if (!BitMath::at(ent.flags, EntityFlags::kSpawnedFromZone)) return;
-            if (ent.zone == 0xFF) return; // boss / special
-            if (BitMath::at(ent.flags, EntityFlags::kIsDespawning)) return;
-            if (!BitMath::at(ent.flags, EntityFlags::kHasCulling)) return;
-
-            game_tick_t unseen_limit = (game_tick_t)(30 * TPS);
-            game_tick_t never_seen_life = (game_tick_t)(60 * TPS);
-            uint8_t in_plaza = Map::in_spawn_plaza(ent.get_x(), ent.get_y());
-            uint32_t zdiff = RarityID::kNumRarities;
-            if (ent.zone < MAX_ZONES_PER_MAP)
-                zdiff = map_zones(sim->map_id)[ent.zone].difficulty;
-            if (in_plaza) {
-                unseen_limit = (game_tick_t)(55 * TPS);
-                never_seen_life = (game_tick_t)(70 * TPS);
-            } else if (zdiff <= RarityID::kUnusual) {
-                unseen_limit = (game_tick_t)(40 * TPS);
-                never_seen_life = (game_tick_t)(75 * TPS);
+    {
+        auto t_spawn = std::chrono::steady_clock::now();
+        float spawn_mul = 1.f;
+        if (flowers >= 16u) spawn_mul = 0.55f;
+        if (flowers >= 28u) spawn_mul = 0.35f;
+        // Cap outer spawn calls per tick — each can still do 2 placement tries.
+        // Unbounded 4+extra+burst used to stack with corridor probes → 90ms spikes.
+        uint32_t budget = 5u;
+        if (flowers >= 16u) budget = 3u;
+        if (flowers >= 28u) budget = 2u;
+        if (frand() < (2.5f * spawn_mul) / (float) TPS) {
+            uint32_t extra = flowers;
+            if (extra > 2u) extra = 2u;
+            if (flowers >= 16u && extra > 1u) extra = 1u;
+            uint32_t batches = 2u + extra;
+            if (flowers >= 28u) batches = 2u;
+            for (uint32_t i = 0; i < batches && budget > 0; ++i) {
+                Map::spawn_zone_mob(this);
+                --budget;
             }
+        }
+        // Underfilled player zones get a second burst so sparse rings/corners
+        // do not stay empty after unseen-despawn cleared the pack.
+        if (flowers < 16u && budget > 0 && frand() < 3.0f / (float) TPS) {
+            uint32_t n = budget > 2u ? 2u : budget;
+            for (uint32_t i = 0; i < n; ++i)
+                Map::spawn_zone_mob(this);
+        }
+        Server::phase_spawn_ms += _tick_ms_since(t_spawn);
+    }
 
-            if (BitMath::at(ent.flags, EntityFlags::kIsCulled)) {
-                if (ent.unseen_ticks == 0) {
-                    if (ent.lifetime >= never_seen_life) {
+    {
+        auto t_hash = std::chrono::steady_clock::now();
+        for_each_entity([](Simulation *sim, Entity &ent) {
+            if (ent.has_component(kPhysics))
+                sim->spatial_hash.insert(ent);
+            if (BitMath::at(ent.flags, EntityFlags::kHasCulling))
+                BitMath::set(ent.flags, EntityFlags::kIsCulled);
+        });
+        for_each<kCamera>(tick_culling_behavior);
+
+        // florr unseenDespawn: zone mobs still culled after AOI → delete, no loot.
+        // Stride ~5 ticks (~6Hz). unseen_ticks==0 = never in any camera AOI.
+        // Plaza/soft longer than wild 30s so solo circling doesn't blink packs out;
+        // not multi-minute — crowd AOIs keep mobs "seen" forever, so long timers
+        // only delayed cleanup when people leave a pocket.
+        if (tick_index % 5 == 0) {
+            for_each<kMob>([](Simulation *sim, Entity &ent) {
+                if (!BitMath::at(ent.flags, EntityFlags::kSpawnedFromZone)) return;
+                if (ent.zone == 0xFF) return; // boss / special
+                if (BitMath::at(ent.flags, EntityFlags::kIsDespawning)) return;
+                if (!BitMath::at(ent.flags, EntityFlags::kHasCulling)) return;
+
+                game_tick_t unseen_limit = (game_tick_t)(30 * TPS);
+                game_tick_t never_seen_life = (game_tick_t)(60 * TPS);
+                uint8_t in_plaza = Map::in_spawn_plaza(ent.get_x(), ent.get_y());
+                uint32_t zdiff = RarityID::kNumRarities;
+                if (ent.zone < MAX_ZONES_PER_MAP)
+                    zdiff = map_zones(sim->map_id)[ent.zone].difficulty;
+                if (in_plaza) {
+                    unseen_limit = (game_tick_t)(55 * TPS);
+                    never_seen_life = (game_tick_t)(70 * TPS);
+                } else if (zdiff <= RarityID::kUnusual) {
+                    unseen_limit = (game_tick_t)(40 * TPS);
+                    never_seen_life = (game_tick_t)(75 * TPS);
+                }
+
+                if (BitMath::at(ent.flags, EntityFlags::kIsCulled)) {
+                    if (ent.unseen_ticks == 0) {
+                        if (ent.lifetime >= never_seen_life) {
+                            BitMath::set(ent.flags, EntityFlags::kNoDrops);
+                            sim->request_delete(ent.id);
+                        }
+                        return;
+                    }
+                    ent.unseen_ticks = (game_tick_t)(ent.unseen_ticks + 5);
+                    if (ent.unseen_ticks >= unseen_limit) {
                         BitMath::set(ent.flags, EntityFlags::kNoDrops);
                         sim->request_delete(ent.id);
                     }
-                    return;
+                } else {
+                    // Mark seen: any positive value arms the despawn clock when culled again.
+                    ent.unseen_ticks = 1;
                 }
-                ent.unseen_ticks = (game_tick_t)(ent.unseen_ticks + 5);
-                if (ent.unseen_ticks >= unseen_limit) {
-                    BitMath::set(ent.flags, EntityFlags::kNoDrops);
-                    sim->request_delete(ent.id);
-                }
-            } else {
-                // Mark seen: any positive value arms the despawn clock when culled again.
-                ent.unseen_ticks = 1;
-            }
-        });
-        // After unseen pass: drain soft-zone surplus under crowd dens_mul.
-        Map::thin_soft_zone_excess(this);
+            });
+            // After unseen pass: drain soft-zone surplus under crowd dens_mul.
+            Map::thin_soft_zone_excess(this);
+        }
+        Server::phase_hash_ms += _tick_ms_since(t_hash);
     }
 
-    // Magnet pulls rewrite drop acceleration each tick
-    for_each<kDrop>([](Simulation *, Entity &drop) {
-        drop.acceleration.set(0, 0);
-    });
-    for_each<kDrop>(tick_drop_behavior);
-    for_each<kFlower>(tick_player_behavior);
-    tick_ai_prepare(this);
-    for_each<kMob>(tick_ai_behavior);
-    for_each<kCamera>(tick_player_ai_behavior);
-    for_each<kPetal>(tick_petal_behavior);
-    for_each<kHealth>(tick_health_behavior);
-    spatial_hash.collide(on_collide);
+    {
+        auto t_ai = std::chrono::steady_clock::now();
+        // Magnet pulls rewrite drop acceleration each tick
+        for_each<kDrop>([](Simulation *, Entity &drop) {
+            drop.acceleration.set(0, 0);
+        });
+        for_each<kDrop>(tick_drop_behavior);
+        for_each<kFlower>(tick_player_behavior);
+        tick_ai_prepare(this);
+        for_each<kMob>(tick_ai_behavior);
+        for_each<kCamera>(tick_player_ai_behavior);
+        for_each<kPetal>(tick_petal_behavior);
+        for_each<kHealth>(tick_health_behavior);
+        Server::phase_ai_ms += _tick_ms_since(t_ai);
+    }
+
+    {
+        auto t_col = std::chrono::steady_clock::now();
+        spatial_hash.collide(on_collide);
+        Server::phase_collide_ms += _tick_ms_since(t_col);
+    }
+
     tick_curse_behavior(this);
     for_each<kPhysics>(tick_entity_motion);
     for_each<kSegmented>(tick_segment_behavior);

@@ -178,7 +178,9 @@ void inflict_damage(Simulation *sim, EntityID const atk_id, EntityID const def_i
     }
     defender.last_damaged_by = attacker.base_entity;
 
-    // Private loot: accumulate damage per team (survives player respawn; filtered at death).
+    // Private loot: accumulate damage per player camera (not shared party team).
+    // Party members each get their own ground piles at death; visibility is
+    // camera-tagged so mates cannot see or steal each other's drops.
     if (defender.has_component(kMob) && type != DamageType::kReflect && damage_dealt > 0.f) {
         EntityID flower_id = NULL_ENTITY;
         if (attacker.has_component(kFlower))
@@ -188,11 +190,13 @@ void inflict_damage(Simulation *sim, EntityID const atk_id, EntityID const def_i
         if (sim->ent_alive(flower_id)) {
             Entity &flower = sim->get_ent(flower_id);
             if (flower.has_component(kFlower)) {
-                EntityID team = flower.get_team();
-                if (!team.null()) {
+                // Prefer personal camera id — party flowers share leader team.
+                EntityID claim = flower.get_parent();
+                if (claim.null()) claim = flower.get_team();
+                if (!claim.null()) {
                     uint8_t found = 0;
                     for (uint8_t i = 0; i < defender.loot_claim_n; ++i) {
-                        if (defender.loot_claim_teams[i] == team) {
+                        if (defender.loot_claim_teams[i] == claim) {
                             defender.loot_claim_damage[i] += damage_dealt;
                             found = 1;
                             break;
@@ -200,7 +204,7 @@ void inflict_damage(Simulation *sim, EntityID const atk_id, EntityID const def_i
                     }
                     if (!found && defender.loot_claim_n < 16) {
                         uint8_t i = defender.loot_claim_n++;
-                        defender.loot_claim_teams[i] = team;
+                        defender.loot_claim_teams[i] = claim;
                         defender.loot_claim_damage[i] = damage_dealt;
                     }
                 }

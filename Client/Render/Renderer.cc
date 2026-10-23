@@ -68,6 +68,13 @@ Renderer::Renderer() : context() {
             idx = Module.availableCtxs.pop();
         else
             idx = Module.ctxs.length;
+#ifdef ART_STANDALONE
+        // Codex / art module: never bind #canvas (page may not have one).
+        {
+            const canvas = new OffscreenCanvas(1,1);
+            Module.ctxs[idx] = canvas.getContext('2d', { alpha: true });
+        }
+#else
         if (idx === 0) {
             // Opaque: cleared frames composite as solid (still fill void after resize).
             Module.ctxs[idx] = document.getElementById('canvas').getContext('2d', { alpha: false });
@@ -75,6 +82,7 @@ Renderer::Renderer() : context() {
             const canvas = new OffscreenCanvas(1,1);
             Module.ctxs[idx] = canvas.getContext('2d');
         }
+#endif
         return idx;
     });
     DEBUG_ONLY(std::cout << "created canvas " << id << '\n';)

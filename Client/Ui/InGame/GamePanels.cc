@@ -52,11 +52,28 @@ static bool petal_equipped(PetalID::T id) {
     return false;
 }
 
+// Unique with account level: first primary copy is the leveled instance.
+static uint8_t petal_has_level(PetalID::T id) {
+    return id != PetalID::kNone && id < PetalID::kNumPetals
+        && Craft::can_level_petal(id) && Game::petal_levels[id] > 0;
+}
+
+static uint8_t petal_leveled_equipped(PetalID::T id) {
+    return petal_has_level(id) && petal_equipped(id);
+}
+
 // Layout: primary [0,n) · inventory [n,n+MAX), whose first n entries
 // are also shown in the secondary quick-swap row.
 
 static std::string bag_search_text;
-static Element *bag_cells[PetalID::kNumPetals] = {};
+// Leveled Unique can occupy an extra cell → up to 2× catalog size.
+static constexpr uint16_t kBagCellCap = (PetalID::kNumPetals - 1) * 2;
+static Element *bag_cells[kBagCellCap] = {};
+
+struct BagEntry {
+    PetalID::T id = PetalID::kNone;
+    uint8_t leveled = 0; // 1 = singleton Lv cell; 0 = base stack
+};
 
 static uint8_t bag_ui_open() {
     return Game::game_panel == Game::kPanelInventory
@@ -70,6 +87,14 @@ static uint32_t bag_stack_count(PetalID::T id) {
     uint32_t n = Game::craft_bank[id];
     for (uint8_t i = 0; i < MAX_SLOT_COUNT; ++i)
         if (Game::cached_loadout[Game::loadout_count + i] == id) ++n;
+    return n;
+}
+
+// Base-stack count shown on the non-Lv bag cell (excludes the leveled singleton).
+static uint32_t bag_base_stack_count(PetalID::T id) {
+    uint32_t n = bag_stack_count(id);
+    if (petal_has_level(id) && !petal_leveled_equipped(id) && n > 0)
+        return n - 1;
     return n;
 }
 
@@ -118,27 +143,57 @@ static std::vector<PetalID::T> const &bag_sorted_ids() {
     return order;
 }
 
-static PetalID::T bag_display_id(uint16_t idx) {
-    // Layout, visibility and painting query every cell repeatedly. Filter once
-    // per frame so a full backpack does not rescan the whole catalog per cell.
+static std::vector<BagEntry> const &bag_visible_entries() {
+    // Layout / paint query every cell repeatedly — rebuild once per frame.
     static double cached_at = -1;
     static std::string cached_search;
-    static std::vector<PetalID::T> visible_ids;
+    static std::vector<BagEntry> visible;
     if (cached_at != Game::timestamp || cached_search != bag_search_text) {
         cached_at = Game::timestamp;
         cached_search = bag_search_text;
-        visible_ids.clear();
-        // Stacks remain visible while loadout_count is briefly 0 during sync.
+        visible.clear();
         for (PetalID::T id : bag_sorted_ids()) {
-            if (bag_stack_count(id) && bag_name_matches(id))
-                visible_ids.push_back(id);
+            uint32_t stack = bag_stack_count(id);
+            if (!stack || !bag_name_matches(id)) continue;
+            if (petal_has_level(id)) {
+                if (!petal_leveled_equipped(id)) {
+                    // Lv singleton in bag, then remaining base stack behind it.
+                    visible.push_back({ id, 1 });
+                    if (stack > 1) visible.push_back({ id, 0 });
+                } else {
+                    // Leveled copy is on primary — bag only shows base stacks.
+                    visible.push_back({ id, 0 });
+                }
+            } else {
+                visible.push_back({ id, 0 });
+            }
         }
     }
-    return idx < visible_ids.size() ? visible_ids[idx] : PetalID::kNone;
+    return visible;
+}
+
+static BagEntry bag_display_entry(uint16_t idx) {
+    auto const &v = bag_visible_entries();
+    return idx < v.size() ? v[idx] : BagEntry{};
+}
+
+static PetalID::T bag_display_id(uint16_t idx) {
+    return bag_display_entry(idx).id;
+}
+
+static uint8_t bag_display_leveled(uint16_t idx) {
+    return bag_display_entry(idx).leveled;
 }
 
 static uint8_t bag_slot_visible(uint16_t idx) {
     return bag_ui_open() && bag_display_id(idx) != PetalID::kNone;
+}
+
+static Element *bag_petal_tooltip(PetalID::T id, uint8_t leveled) {
+    if (id == PetalID::kNone || id >= PetalID::kNumPetals) return nullptr;
+    if (leveled && Ui::UiLoadout::petal_tooltips_leveled[id] != nullptr)
+        return Ui::UiLoadout::petal_tooltips_leveled[id];
+    return Ui::UiLoadout::petal_tooltips[id];
 }
 
 // Bag cell: press shows tooltip; move past slop → drag; tiny release → equip.
@@ -184,6 +239,9 @@ public:
     }
     PetalID::T id() const {
         return bag_display_id(bag_index);
+    }
+    uint8_t leveled() const {
+        return bag_display_leveled(bag_index);
     }
     void on_render(Renderer &ctx) override {
         if (Input::is_mobile && holding) {
@@ -246,8 +304,10 @@ public:
             ctx.stroke_text(I18n::rarity_name(rarity));
             ctx.fill_text(I18n::rarity_name(rarity));
         }
-        uint32_t stack = bag_stack_count(pid);
-        if (stack > 1) {
+        uint8_t const is_lv = leveled();
+        // Lv singleton never shows a stack badge; base cell uses remaining count.
+        uint32_t stack = is_lv ? 1u : bag_base_stack_count(pid);
+        if (!is_lv && stack > 1) {
             std::string badge = format_stack(stack);
             float const sz = 13.f;
             ctx.set_text_size(sz);
@@ -269,8 +329,8 @@ public:
                 });
             }
         }
-        // Same as craft Unique column: gold Lv on the petal once leveled.
-        if (Craft::can_level_petal(pid) && Game::petal_levels[pid] > 0) {
+        // Gold Lv only on the leveled singleton cell (not the base stack behind it).
+        if (is_lv && Game::petal_levels[pid] > 0) {
             RenderContext c(&ctx);
             std::string lv = std::format("Lv.{}", Game::petal_levels[pid]);
             ctx.set_fill(Chrome::kGold);
@@ -312,7 +372,7 @@ public:
                     begin_bag_gesture((uint8_t) -1, press_x, press_y, drag_touch, pid);
             }
             rendering_tooltip = 1;
-            tooltip = Ui::UiLoadout::petal_tooltips[pid];
+            tooltip = bag_petal_tooltip(pid, leveled());
             return;
         }
         if (event == kClick) {
@@ -324,23 +384,29 @@ public:
             return;
         }
         if (event == kFocusLost) {
+            // Always dismiss the tip on leave — sticky tips were common when
+            // scroll/gesture stole focus without a clean mouse-out.
+            rendering_tooltip = 0;
             // Leaving the cell must not cancel an in-flight bag→slot drag.
             if (holding && Ui::bag_gesture_busy()) {
                 if (Ui::UiLoadout::num_petals_selected != 0
                     || Ui::bag_gesture_ghost_petal() != PetalID::kNone)
-                    rendering_tooltip = 0;
-                return;
+                    return;
             }
             holding = 0;
             dragging = 0;
             drag_touch = (uint32_t)-1;
+            return;
+        }
+        if (event == kMouseUp) {
             rendering_tooltip = 0;
             return;
         }
+        // Hover (desktop): show tip while the pointer rests on the cell.
         if (pid != PetalID::kNone && pid < PetalID::kNumPetals) {
             if (!holding) {
                 rendering_tooltip = 1;
-                tooltip = Ui::UiLoadout::petal_tooltips[pid];
+                tooltip = bag_petal_tooltip(pid, leveled());
             }
         } else {
             rendering_tooltip = 0;
@@ -350,7 +416,7 @@ public:
 
 uint8_t Ui::bag_drop_target(float x, float y) {
     if (!bag_ui_open()) return (uint8_t)-1;
-    for (uint16_t i = 0; i < PetalID::kNumPetals; ++i) {
+    for (uint16_t i = 0; i < kBagCellCap; ++i) {
         Element *cell = bag_cells[i];
         if (cell == nullptr || !cell->visible || !bag_slot_visible(i)) continue;
         float half_w = cell->width * Ui::scale / 2;
@@ -477,17 +543,18 @@ public:
 };
 
 static Element *make_bag_scroll() {
-    // Mobile: 4 cols + taller cells; desktop keeps denser 5-col grid
+    // Mobile: 4 cols + taller cells; desktop keeps denser 5-col grid.
+    // Extra capacity for Unique Lv singleton + base stack pairs.
     std::vector<Element *> rows;
     uint8_t const kCols = Input::is_mobile ? 4 : 5;
     float const scroll_h = Input::is_mobile ? kBagScrollHMobile : kBagScrollH;
     float const content_w = Input::is_mobile ? kBagPanelWMobile : kBagPanelW;
-    uint16_t row_count = (PetalID::kNumPetals - 1 + kCols - 1) / kCols;
+    uint16_t row_count = (kBagCellCap + kCols - 1) / kCols;
     for (uint16_t row = 0; row < row_count; ++row) {
         std::vector<Element *> cells;
         for (uint8_t col = 0; col < kCols; ++col) {
             uint16_t idx = (uint16_t) (row * kCols + col);
-            if (idx < PetalID::kNumPetals - 1)
+            if (idx < kBagCellCap)
                 cells.push_back(new InventoryBagSlot(idx));
         }
         rows.push_back(new BagGridRow(cells, (uint16_t)(row * kCols)));
@@ -1375,8 +1442,8 @@ class CraftMatCell final : public Element {
         if (level_slot) {
             PetalID::T slot = resolve_craft_family_slot(family_name, RarityID::kUnique);
             if (slot == PetalID::kNone) return PetalID::kNone;
-            // Show current Unique version if owned or already leveled.
-            if (Game::craft_owned(slot) > 0 || Game::petal_levels[slot] > 0)
+            // Last column: only once Unique has reached Lv.1+.
+            if (Game::petal_levels[slot] >= 1)
                 return slot;
             return PetalID::kNone;
         }
@@ -1408,7 +1475,7 @@ public:
             if (slot_id != PetalID::kNone && screen_x > 1.f)
                 CraftFx::remember_mat(slot_id, screen_x, screen_y);
             uint32_t avail = (petal_id == PetalID::kNone) ? 0 : Game::craft_available(petal_id);
-            // Level slot stays visible while owned/leveled even if mats are on the tray.
+            // Level slot fades in only at Lv.1+ (current_id already gated).
             float target = 0.f;
             if (level_slot)
                 target = (petal_id != PetalID::kNone) ? 1.f : 0.f;
@@ -1492,6 +1559,21 @@ public:
             ctx.round_rect(-width / 2, -height / 2, width, height, 10);
             ctx.stroke();
         }
+        // Level column: gold double frame so it reads apart from mat cells.
+        if (level_slot && show_icon && empty_anim > 0.5f) {
+            RenderContext t(&ctx);
+            ctx.set_global_alpha(empty_anim);
+            ctx.set_stroke(0xff5a3a10);
+            ctx.set_line_width(4.5f);
+            ctx.begin_path();
+            ctx.round_rect(-width / 2 + 1, -height / 2 + 1, width - 2, height - 2, 10);
+            ctx.stroke();
+            ctx.set_stroke(Chrome::kGold);
+            ctx.set_line_width(2.4f);
+            ctx.begin_path();
+            ctx.round_rect(-width / 2 + 1, -height / 2 + 1, width - 2, height - 2, 10);
+            ctx.stroke();
+        }
         // Material columns show stack; level column is the current Unique version (no qty).
         if (!level_slot && shown > 0 && empty_anim > 0.5f) {
             RenderContext t(&ctx);
@@ -1506,7 +1588,7 @@ public:
             ctx.fill_text(qty.c_str());
         }
         // Level lives on the last column only (≥Lv.1).
-        if (level_slot && empty_anim > 0.5f && Game::petal_levels[draw_id] > 0) {
+        if (level_slot && empty_anim > 0.5f && Game::petal_levels[draw_id] >= 1) {
             RenderContext t(&ctx);
             std::string lv = std::format("Lv.{}", Game::petal_levels[draw_id]);
             ctx.set_global_alpha(empty_anim);
@@ -1546,7 +1628,9 @@ public:
             }
             if (event != kFocusLost && petal_id < PetalID::kNumPetals) {
                 rendering_tooltip = 1;
-                tooltip = Ui::UiLoadout::petal_tooltips[petal_id];
+                tooltip = Ui::UiLoadout::petal_tooltips_leveled[petal_id] != nullptr
+                    ? Ui::UiLoadout::petal_tooltips_leveled[petal_id]
+                    : Ui::UiLoadout::petal_tooltips[petal_id];
             } else {
                 rendering_tooltip = 0;
             }
@@ -1613,6 +1697,14 @@ static int craft_family_best_owned_rarity(char const *name) {
     return best;
 }
 
+// Unique account level for a family (0 if no Unique / not leveled).
+static int craft_family_unique_level(char const *name) {
+    if (name == nullptr) return 0;
+    PetalID::T slot = resolve_craft_family_slot(name, RarityID::kUnique);
+    if (slot == PetalID::kNone || slot >= PetalID::kNumPetals) return 0;
+    return (int) Game::petal_levels[slot];
+}
+
 class CraftFamilyRow final : public Ui::HContainer {
 public:
     char const *family_name;
@@ -1621,8 +1713,8 @@ public:
           family_name(name) {}
 };
 
-// Re-sort rows while the craft panel is open so newly owned high-rarity
-// petals float to the top without rebuilding the whole tree.
+// Re-sort rows while the craft panel is open: Unique Lv high → low,
+// then owned rarity, then name — without rebuilding the whole tree.
 class CraftFamilyList final : public Ui::VContainer {
 public:
     CraftFamilyList(std::vector<Element *> rows)
@@ -1633,6 +1725,9 @@ public:
                 [](Element *ea, Element *eb){
                     auto *a = static_cast<CraftFamilyRow *>(ea);
                     auto *b = static_cast<CraftFamilyRow *>(eb);
+                    int la = craft_family_unique_level(a->family_name);
+                    int lb = craft_family_unique_level(b->family_name);
+                    if (la != lb) return la > lb;
                     int ra = craft_family_best_owned_rarity(a->family_name);
                     int rb = craft_family_best_owned_rarity(b->family_name);
                     uint8_t oa = ra >= 0 ? 1 : 0;
@@ -1662,7 +1757,7 @@ public:
 static Element *make_craft_material_grid() {
     // One row per petal name. Columns: Common…Unique (absorb mats) → Unique Lv (current).
     // Cells resolve the owned id at draw time (name collisions like Dahlia/RoseRare).
-    // Row order: owned high-rarity first (see CraftFamilyList::refactor).
+    // Row order: Unique Lv high→low (see CraftFamilyList::refactor).
     std::vector<char const *> family_names;
     for (uint32_t raw = 1; raw < (uint32_t) PetalID::kNumPetals; ++raw) {
         PetalID::T id = (PetalID::T) raw;
@@ -2724,8 +2819,8 @@ Element *Ui::make_craft_panel() {
                 }, { .fill = Chrome::kTitle, .h_justify = Style::Left }),
                 new Ui::DynamicText(15, [](){
                     return I18n::use_chinese
-                        ? "升阶；唯一栏放材料，末格为当前等级（失败损失1–4）"
-                        : "rank up; Unique col=mats, last=current Lv (miss loses 1–4)";
+                        ? "升阶；唯一栏放材料，末格Lv.1起显示（失败损失1–4）"
+                        : "rank up; Unique=mats, last cell from Lv.1 (miss loses 1–4)";
                 }, { .fill = Chrome::kTitle, .h_justify = Style::Left }),
                 new Ui::DynamicText(13, [](){
                     if (Game::craft_tray_id == PetalID::kNone) return std::string{};
@@ -3044,12 +3139,13 @@ public:
     void on_render(Renderer &ctx) override {
         uint32_t owned = (petal_id < PetalID::kNumPetals) ? Game::craft_owned(petal_id) : 0;
         uint8_t enough = !show_need || owned >= need;
-        uint32_t fill = 0xff4a4a4a; // missing mat — dark grey like mockup
+        // Plate follows rarity (same as bag / result chip). Ready/short is
+        // shown by the count text (green/red), not by swapping to Common green.
+        uint32_t fill = 0xff4a4a4a;
         if (petal_id != PetalID::kNone && petal_id < PetalID::kNumPetals) {
-            if (enough) {
-                // Light green plate when mats are ready
-                fill = show_need ? 0xff7dff9a : RARITY_COLORS[PETAL_DATA[petal_id].rarity];
-            }
+            fill = RARITY_COLORS[PETAL_DATA[petal_id].rarity];
+            if (show_need && !enough)
+                fill = (fill & 0x00ffffffu) | 0x99000000u;
         }
         Chrome::draw_plate(ctx, width, height, fill, Chrome::kRadius, 0.f);
         if (petal_id == PetalID::kNone || petal_id >= PetalID::kNumPetals) return;
@@ -3085,6 +3181,43 @@ public:
 
 class RecipeRow final : public Element {
     uint16_t recipe_index;
+    // Last laid-out chip centers (row-local) for hover tip hit-tests.
+    PetalID::T tip_ids[Recipe::kMaxIngredients + 1] = {};
+    float tip_xs[Recipe::kMaxIngredients + 1] = {};
+    float tip_chip_w = 68.f;
+    float tip_chip_h = 80.f;
+    uint8_t tip_n = 0;
+
+    void layout_chips(float &chip_w, float &chip_h, float &step, float &op_pad,
+                      float &x0, uint8_t n_in) const {
+        uint8_t mobile = Input::is_mobile;
+        chip_w = mobile ? 52.f : 68.f;
+        chip_h = mobile ? 72.f : 80.f;
+        step = mobile ? 60.f : 78.f;
+        op_pad = mobile ? 14.f : 18.f;
+        if (n_in >= 4) {
+            chip_w = mobile ? 36.f : 50.f;
+            chip_h = mobile ? 56.f : 68.f;
+            step = mobile ? 40.f : 56.f;
+            op_pad = mobile ? 9.f : 12.f;
+        } else if (n_in >= 3) {
+            chip_w = mobile ? 42.f : 56.f;
+            chip_h = mobile ? 62.f : 72.f;
+            step = mobile ? 48.f : 64.f;
+            op_pad = mobile ? 11.f : 14.f;
+        }
+        x0 = -width / 2 + chip_w * 0.55f + (mobile ? 6.f : 12.f);
+    }
+
+    PetalID::T hit_chip(float local_x, float local_y) const {
+        if (tip_n == 0) return PetalID::kNone;
+        if (fabsf(local_y) > tip_chip_h * 0.55f) return PetalID::kNone;
+        for (uint8_t i = 0; i < tip_n; ++i) {
+            if (fabsf(local_x - tip_xs[i]) <= tip_chip_w * 0.5f)
+                return tip_ids[i];
+        }
+        return PetalID::kNone;
+    }
 public:
     explicit RecipeRow(uint16_t idx)
         : Element(580, 96, { .no_animation = 1 }), recipe_index(idx) {
@@ -3128,35 +3261,27 @@ public:
         // with extras buried in a clipped "Also …" footnote).
         uint8_t n_in = rec.ingredient_count;
         if (n_in > Recipe::kMaxIngredients) n_in = Recipe::kMaxIngredients;
-        uint8_t mobile = Input::is_mobile;
-        // Leave ~70px on the right for the hammer button.
-        float chip_w = mobile ? 52.f : 68.f;
-        float chip_h = mobile ? 72.f : 80.f;
-        float step = mobile ? 60.f : 78.f;
-        float op_pad = mobile ? 14.f : 18.f;
-        if (n_in >= 4) {
-            chip_w = mobile ? 36.f : 50.f;
-            chip_h = mobile ? 56.f : 68.f;
-            step = mobile ? 40.f : 56.f;
-            op_pad = mobile ? 9.f : 12.f;
-        } else if (n_in >= 3) {
-            chip_w = mobile ? 42.f : 56.f;
-            chip_h = mobile ? 62.f : 72.f;
-            step = mobile ? 48.f : 64.f;
-            op_pad = mobile ? 11.f : 14.f;
-        }
-        float x = -width / 2 + chip_w * 0.55f + (mobile ? 6.f : 12.f);
+        float chip_w, chip_h, step, op_pad, x;
+        layout_chips(chip_w, chip_h, step, op_pad, x, n_in);
+        tip_chip_w = chip_w;
+        tip_chip_h = chip_h;
+        tip_n = 0;
         auto draw_op = [&](char const *op) {
             RenderContext c(&ctx);
             ctx.translate(x - 4.f, 0);
             ctx.draw_text(op, {
                 .fill = 0xffffffff,
-                .size = mobile ? 20.f : 28.f,
+                .size = Input::is_mobile ? 20.f : 28.f,
                 .stroke_scale = 0.08f
             });
             x += op_pad;
         };
         auto draw_chip = [&](PetalID::T id, uint16_t need, uint8_t show_need) {
+            if (tip_n < Recipe::kMaxIngredients + 1) {
+                tip_ids[tip_n] = id;
+                tip_xs[tip_n] = x;
+                ++tip_n;
+            }
             RenderContext c(&ctx);
             ctx.translate(x, 0);
             RecipePetalChip chip(id, need, show_need);
@@ -3253,10 +3378,23 @@ public:
         }
     }
     void on_event(uint8_t event) override {
+        float local_x = (Input::mouse_x - screen_x) / (float) Ui::scale;
+        float local_y = (Input::mouse_y - screen_y) / (float) Ui::scale;
+        if (event == kFocusLost) {
+            rendering_tooltip = 0;
+            return;
+        }
+        PetalID::T tip = hit_chip(local_x, local_y);
+        if (tip != PetalID::kNone && tip < PetalID::kNumPetals) {
+            rendering_tooltip = 1;
+            // Assemble mats/results: base tip (leveled Unique is its own bag cell).
+            tooltip = Ui::UiLoadout::petal_tooltips[tip];
+        } else {
+            rendering_tooltip = 0;
+        }
         if (event != kClick) return;
         recipe_selected = recipe_index;
         // Only the hammer zone crafts (right ~70px), like the mockup.
-        float local_x = (Input::mouse_x - screen_x) / (float) Ui::scale;
         if (local_x > width / 2 - 70.f && recipe_can_craft(recipe_index))
             Game::craft_recipe(recipe_index, recipe_filter_rarity);
     }

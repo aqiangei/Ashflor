@@ -6,6 +6,7 @@
 #include <Shared/StaticDefinitions.hh>
 
 #include <cstdint>
+#include <algorithm>
 #include <memory>
 #include <unordered_map>
 
@@ -17,10 +18,12 @@ constexpr float kPadY = 4.f;
 
 struct Entry {
     std::unique_ptr<Renderer> canvas;
+    uint64_t used = 0;
 };
 
 std::unordered_map<uint32_t, Entry> cache;
 uint8_t cached_lang = 255;
+uint64_t access_clock = 0;
 
 uint32_t make_key(uint8_t layout, uint8_t mob_id, uint8_t rarity) {
     return ((uint32_t)layout << 24) | ((uint32_t)mob_id << 8) | (uint32_t)rarity;
@@ -101,11 +104,22 @@ Renderer *get(uint8_t layout, uint8_t mob_id, uint8_t rarity,
 
     uint32_t key = make_key(layout, mob_id, rarity);
     auto it = cache.find(key);
-    if (it != cache.end()) return it->second.canvas.get();
+    if (it != cache.end()) {
+        it->second.used = ++access_clock;
+        return it->second.canvas.get();
+    }
 
-    if (cache.size() >= kMaxEntries) cache.clear();
+    // Keep hot labels when exploring new species/rarities. Clearing everything
+    // at capacity repeatedly rebaked all the labels in a crowded viewport.
+    if (cache.size() >= kMaxEntries) {
+        auto oldest = std::min_element(cache.begin(), cache.end(), [](auto const &a, auto const &b) {
+            return a.second.used < b.second.used;
+        });
+        cache.erase(oldest);
+    }
 
     Entry e;
+    e.used = ++access_clock;
     e.canvas = std::make_unique<Renderer>();
     if (layout == 0)
         bake_row(*e.canvas, name, rarity_label, rarity_color);

@@ -40,4 +40,7 @@ namespace Party {
     uint8_t same_party(Client *, Client *);
     // Drop claim window: same team, or same party (team desync fallback).
     uint8_t can_take_drop(Client *picker, Simulation *, EntityID drop_team);
+    // Alive mates on the same map instance (includes self). Solo → just self.
+    // Returns count written to out[0..cap).
+    uint8_t collect_alive_mates(Client *, Client **out, uint8_t cap);
 };

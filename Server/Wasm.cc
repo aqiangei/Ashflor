@@ -42,6 +42,10 @@ extern "C" {
         return heap_strdup_std(Server::live_catalog_json());
     }
 
+    EMSCRIPTEN_KEEPALIVE char *live_codex_json() {
+        return heap_strdup_std(Server::live_codex_json());
+    }
+
     EMSCRIPTEN_KEEPALIVE char *live_map_layout_json() {
         return heap_strdup_std(Server::live_map_layout_json());
     }
@@ -255,6 +259,10 @@ WebSocketServer::WebSocketServer() {
                 sendJson(200, fromWasm(_live_catalog_json()));
                 return;
             }
+            if (path === "/api/codex") {
+                sendJson(200, fromWasm(_live_codex_json()));
+                return;
+            }
             if (path === "/api/map-layout") {
                 // Static terrain — allow short browser cache
                 const text = fromWasm(_live_map_layout_json());
@@ -427,6 +435,10 @@ WebSocketServer::WebSocketServer() {
                 case "/live.html":
                     file = "live.html";
                     break;
+                case "/codex":
+                case "/codex.html":
+                    file = "codex.html";
+                    break;
                 case "/deploy-info.json":
                     encodeType = "application/json; charset=utf-8";
                     file = "deploy-info.json";
@@ -438,6 +450,14 @@ WebSocketServer::WebSocketServer() {
                 case "/gardn-client.wasm":
                     encodeType = "application/wasm";
                     file = "gardn-client.wasm";
+                    break;
+                case "/gardn-art.js":
+                    encodeType = "application/javascript; charset=utf-8";
+                    file = "gardn-art.js";
+                    break;
+                case "/gardn-art.wasm":
+                    encodeType = "application/wasm";
+                    file = "gardn-art.wasm";
                     break;
                 case "/sw.js":
                     encodeType = "application/javascript; charset=utf-8";

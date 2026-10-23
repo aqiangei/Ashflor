@@ -104,7 +104,19 @@ namespace Game {
     extern uint8_t pending_kick_notice;
     extern std::string disconnect_message;
     extern std::array<uint8_t, PetalID::kNumPetals> seen_petals;
-    extern std::array<uint8_t, MobID::kNumMobs> seen_mobs;
+    // Per-mob rarity bitfield: bit r set ⇒ seen that mob at rarity r.
+    extern std::array<uint16_t, MobID::kNumMobs> seen_mobs;
+    inline uint8_t mob_seen_at(MobID::T id, uint8_t rarity) {
+        if (id >= MobID::kNumMobs || rarity >= RarityID::kNumRarities) return 0;
+        return (seen_mobs[id] & (uint16_t)(1u << rarity)) != 0;
+    }
+    inline uint8_t mob_seen_any(MobID::T id) {
+        return id < MobID::kNumMobs && seen_mobs[id] != 0;
+    }
+    inline void mark_mob_seen(MobID::T id, uint8_t rarity) {
+        if (id >= MobID::kNumMobs || rarity >= RarityID::kNumRarities) return;
+        seen_mobs[id] |= (uint16_t)(1u << rarity);
+    }
 
     // This-life summary (filled by kLifeSummary on death; shown top-right).
     struct LifeEntry {
@@ -139,6 +151,7 @@ namespace Game {
     extern uint8_t on_game_screen;
     extern uint8_t leaving_to_title; // soft-leave in progress — don't force game UI / auto-respawn
     extern uint8_t show_debug;
+    extern uint8_t show_hitboxes;
     extern uint8_t selected_map; // MapID for title-screen world select
     extern uint8_t minimap_expanded; // 0 compact full-map, 1 larger full-map (toggle M)
     struct OnlineRosterEntry {
@@ -286,6 +299,7 @@ namespace Game {
     void render_game();
     void render_title_screen();
     void send_inputs();
+    void sync_auto_party_opt();
     void send_chat();
     void open_chat();
     void close_chat();

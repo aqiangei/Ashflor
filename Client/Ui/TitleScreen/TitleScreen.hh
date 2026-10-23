@@ -5,17 +5,6 @@
 #include <Shared/StaticData.hh>
 
 namespace Ui {
-    class StatPetalSlot final : public Element {
-    public:
-        uint8_t pos;
-        StatPetalSlot(uint8_t);
-
-        virtual void on_render(Renderer &) override;
-        virtual void refactor() override;
-
-        virtual void on_event(uint8_t) override;
-    };
-
     class DeadFlowerIcon final : public Element {
     public:
         DeadFlowerIcon(float);
@@ -44,14 +33,17 @@ namespace Ui {
     class GalleryMob final : public Element {
     public:
         MobID::T id;
+        uint8_t display_rarity = 0; // live rarity (may exceed baked MOB_DATA rarity)
         uint32_t tip_touch = (uint32_t) -1;
         GalleryMob(MobID::T, float);
+        GalleryMob(MobID::T, uint8_t rarity, float);
 
         virtual void on_render(Renderer &) override;
         virtual void on_event(uint8_t) override;
     };
 
-    extern Element *mob_tooltips[MobID::kNumMobs];
+    // [mob][rarity] — virtual ladder cells share one MobID across rarities
+    extern Element *mob_tooltips[MobID::kNumMobs][RarityID::kNumRarities];
     void make_mob_tooltips();
 
     Element *make_title_input_box();

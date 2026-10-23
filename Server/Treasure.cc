@@ -3,6 +3,7 @@
 #include <Server/Chat.hh>
 #include <Server/Client.hh>
 #include <Server/Game.hh>
+#include <Server/Party.hh>
 #include <Server/Server.hh>
 #include <Server/Spawn.hh>
 
@@ -66,6 +67,8 @@ static Entity &spawn_prop(Simulation *sim, MobID::T id, float x, float y,
     Entity &m = alloc_mob(sim, id, x, y, NULL_ENTITY, [&](Entity &ent) {
         BitMath::set(ent.flags, EntityFlags::kNoDrops);
         BitMath::set(ent.flags, EntityFlags::kHasCulling);
+        BitMath::unset(ent.flags, EntityFlags::kSpawnedFromZone);
+        ent.zone = 0xFF; // idle-map thin + zone despawn skip
         ent.score_reward = 0;
         ent.damage = 0;
         if (id == MobID::kPushCrate) {
@@ -138,6 +141,51 @@ static void soft_snap_crates(Simulation *sim, SiteRuntime &rt) {
             crate.set_y(crate.get_y() + dy * 0.10f);
             crate.velocity *= 0.8f;
         }
+    }
+}
+
+static void ensure_site_props(Simulation *sim, uint8_t mid, SiteRuntime &rt) {
+    if (rt.kind == TreasureSites::kRitual) {
+        if (!sim->ent_alive(rt.npc)) {
+            float nx = rt.cx - 40.f, ny = rt.cy - 120.f;
+            place_xy(mid, nx, ny);
+            rt.npc = spawn_prop(sim, MobID::kTreasureNpc, nx, ny, rt.name_zh).id;
+        }
+        for (uint8_t p = 0; p < 2; ++p) {
+            if (!sim->ent_alive(rt.pads[p])) {
+                float px = rt.cx + (p ? 80.f : -80.f);
+                float py = rt.cy + (p ? 60.f : -40.f);
+                place_xy(mid, px, py);
+                rt.pads[p] = spawn_prop(sim, MobID::kYahahaPad, px, py).id;
+            }
+            if (!sim->ent_alive(rt.crates[p])) {
+                float bx = rt.cx + (p ? 120.f : -120.f);
+                float by = rt.cy + (p ? -80.f : 90.f);
+                place_xy(mid, bx, by);
+                rt.crates[p] = spawn_prop(sim, MobID::kPushCrate, bx, by).id;
+            }
+        }
+        if (rt.chest_idx < TreasureSites::kMaxChestsPerMap && !sim->ent_alive(rt.chest)) {
+            float hx = rt.cx + 220.f, hy = rt.cy - 160.f;
+            place_xy(mid, hx, hy);
+            rt.chest = spawn_prop(sim, MobID::kLootChest, hx, hy, "宝箱").id;
+        }
+        return;
+    }
+    if (rt.kind == TreasureSites::kGuide) {
+        if (!sim->ent_alive(rt.npc)) {
+            float nx = rt.cx, ny = rt.cy;
+            place_xy(mid, nx, ny);
+            rt.npc = spawn_prop(sim, MobID::kTreasureNpc, nx, ny, rt.name_zh).id;
+        }
+        return;
+    }
+    if (rt.kind == TreasureSites::kChestOnly
+        && rt.chest_idx < TreasureSites::kMaxChestsPerMap
+        && !sim->ent_alive(rt.chest)) {
+        float hx = rt.cx, hy = rt.cy;
+        place_xy(mid, hx, hy);
+        rt.chest = spawn_prop(sim, MobID::kLootChest, hx, hy, "宝箱").id;
     }
 }
 
@@ -225,6 +273,9 @@ void Treasure::tick(GameInstance *game) {
     if (!mr.spawned) return;
     Simulation *sim = &game->simulation;
 
+    for (uint8_t si = 0; si < mr.site_count; ++si)
+        ensure_site_props(sim, mid, mr.sites[si]);
+
     // Only soft-snap rituals that have a living player nearby (not all sites × always).
     constexpr float kSnapInterestR = 700.f;
     constexpr float kSnapInterestR2 = kSnapInterestR * kSnapInterestR;
@@ -287,15 +338,9 @@ void Treasure::tick(GameInstance *game) {
                     float cdx = px - chest.get_x();
                     float cdy = py - chest.get_y();
                     if (cdx * cdx + cdy * cdy <= kChestOpenR * kChestOpenR) {
-                        client->treasure_chest_claimed[mid] |= bit;
-                        // Sparse population → generous chest loot (existing channels only)
                         uint32_t coins = 220 + mid * 55 + rt.chest_idx * 70;
-                        client_award_coins(client, coins);
                         std::string chest_title =
                             std::string{"神秘宝箱 · "} + (rt.name_zh ? rt.name_zh : "");
-                        client_send_loot_toast(client, PetalID::kCoin, (uint16_t) coins,
-                            chest_title);
-                        // Sensory pile: 5–8 petals, Ultra/Super/Unique full pool.
                         uint8_t mat_n = 5 + (((uint32_t) (px + py) + mid * 17
                             + rt.chest_idx * 31) % 4); // 5–8
                         uint8_t mat_tier = (rt.chest_idx >= 2)
@@ -303,31 +348,44 @@ void Treasure::tick(GameInstance *game) {
                         static char const *const kRarityZh[RarityID::kNumRarities] = {
                             "普通", "罕见", "稀有", "史诗", "传奇", "神话", "究极", "超凡", "唯一"
                         };
-                        uint8_t given_mat = 0;
-                        std::string mat_line;
-                        for (uint8_t i = 0; i < mat_n; ++i) {
-                            PetalID::T mat = TreasureSites::pick_explore_mat(mid, mat_tier);
-                            if (mat == PetalID::kNone) continue;
-                            if (!client_award_petal(client, mat)) continue;
-                            ++given_mat;
-                            client_send_loot_toast(client, mat, 1, chest_title);
-                            char const *pname = (mat < PetalID::kNumPetals && PETAL_DATA[mat].name)
-                                ? PETAL_DATA[mat].name : "残片";
-                            if (!mat_line.empty()) mat_line += "、";
-                            mat_line += pname;
-                            if (mat < PetalID::kNumPetals) {
-                                uint8_t rr = PETAL_DATA[mat].rarity;
-                                if (rr < RarityID::kNumRarities) {
-                                    mat_line += "(";
-                                    mat_line += kRarityZh[rr];
-                                    mat_line += ")";
+                        Client *mates[Party::MAX_SIZE];
+                        uint8_t mate_n = Party::collect_alive_mates(
+                            client, mates, Party::MAX_SIZE);
+                        if (mate_n == 0) { mates[0] = client; mate_n = 1; }
+                        for (uint8_t mi = 0; mi < mate_n; ++mi) {
+                            Client *m = mates[mi];
+                            if (m == nullptr) continue;
+                            if (m->treasure_chest_claimed[mid] & bit) continue;
+                            m->treasure_chest_claimed[mid] |= bit;
+                            client_award_coins(m, coins);
+                            client_send_loot_toast(m, PetalID::kCoin, (uint16_t) coins,
+                                chest_title);
+                            uint8_t given_mat = 0;
+                            std::string mat_line;
+                            for (uint8_t i = 0; i < mat_n; ++i) {
+                                PetalID::T mat = TreasureSites::pick_explore_mat(mid, mat_tier);
+                                if (mat == PetalID::kNone) continue;
+                                if (!client_award_petal(m, mat)) continue;
+                                ++given_mat;
+                                client_send_loot_toast(m, mat, 1, chest_title);
+                                char const *pname = (mat < PetalID::kNumPetals && PETAL_DATA[mat].name)
+                                    ? PETAL_DATA[mat].name : "残片";
+                                if (!mat_line.empty()) mat_line += "、";
+                                mat_line += pname;
+                                if (mat < PetalID::kNumPetals) {
+                                    uint8_t rr = PETAL_DATA[mat].rarity;
+                                    if (rr < RarityID::kNumRarities) {
+                                        mat_line += "(";
+                                        mat_line += kRarityZh[rr];
+                                        mat_line += ")";
+                                    }
                                 }
                             }
+                            Chat::send_to(m, ChatChannel::kChatSystem, "",
+                                std::string{"【宝箱】钱币 +"} + std::to_string(coins)
+                                + (given_mat ? "，花瓣 ×" + std::to_string(given_mat)
+                                    + "：" + mat_line : ""));
                         }
-                        Chat::send_to(client, ChatChannel::kChatSystem, "",
-                            std::string{"【宝箱】钱币 +"} + std::to_string(coins)
-                            + (given_mat ? "，花瓣 ×" + std::to_string(given_mat)
-                                + "：" + mat_line : ""));
                     }
                 }
             }
@@ -339,47 +397,52 @@ void Treasure::tick(GameInstance *game) {
             if (client->treasure_ritual_claimed[mid] & rbit) continue;
             if (!puzzle_done(sim, rt)) continue;
 
-            client->treasure_ritual_claimed[mid] |= rbit;
-            uint16_t given = 0;
-            PetalID::T last_mat = PetalID::kNone;
-            // Thematic rolls + generous full-pool bonus so ritual feels like a haul.
             uint16_t thematic_n = rt.reward_n;
             if (thematic_n < 3) thematic_n = 3;
-            if (rt.reward != PetalID::kNone) {
-                for (uint16_t n = 0; n < thematic_n; ++n) {
-                    PetalID::T mat = TreasureSites::pick_ritual_mat(rt.reward);
-                    if (mat == PetalID::kNone) mat = rt.reward;
-                    if (!client_award_petal(client, mat)) continue;
-                    ++given;
-                    last_mat = mat;
-                }
-            }
-            for (uint8_t b = 0; b < 4; ++b) {
-                PetalID::T bonus = TreasureSites::pick_bonus_pool_petal(
-                    TreasureSites::kTierRitual);
-                if (bonus == PetalID::kNone) continue;
-                if (!client_award_petal(client, bonus)) continue;
-                ++given;
-                last_mat = bonus;
-            }
             uint32_t coins = rt.coins + (rt.coins / 2) + 120;
-            if (coins > 0) client_award_coins(client, coins);
-
             std::string title = std::string{"宝藏 · "} + rt.name_zh;
-            if (last_mat != PetalID::kNone)
-                client_send_loot_toast(client, last_mat, given, title);
-            else
-                client_send_loot_toast(client, PetalID::kCoin, (uint16_t) coins, title);
-
-            char const *rname = (last_mat != PetalID::kNone
-                    && last_mat < PetalID::kNumPetals && PETAL_DATA[last_mat].name)
-                ? PETAL_DATA[last_mat].name
-                : ((rt.reward < PetalID::kNumPetals && PETAL_DATA[rt.reward].name)
-                    ? PETAL_DATA[rt.reward].name : "?");
-            Chat::send_to(client, ChatChannel::kChatSystem, "",
-                std::string{"【宝藏】完成推箱："}
-                + rname + " ×" + std::to_string(given)
-                + "（含稀有度阶梯），钱币 +" + std::to_string(coins));
+            Client *mates[Party::MAX_SIZE];
+            uint8_t mate_n = Party::collect_alive_mates(client, mates, Party::MAX_SIZE);
+            if (mate_n == 0) { mates[0] = client; mate_n = 1; }
+            for (uint8_t mi = 0; mi < mate_n; ++mi) {
+                Client *m = mates[mi];
+                if (m == nullptr) continue;
+                if (m->treasure_ritual_claimed[mid] & rbit) continue;
+                m->treasure_ritual_claimed[mid] |= rbit;
+                uint16_t given = 0;
+                PetalID::T last_mat = PetalID::kNone;
+                if (rt.reward != PetalID::kNone) {
+                    for (uint16_t n = 0; n < thematic_n; ++n) {
+                        PetalID::T mat = TreasureSites::pick_ritual_mat(rt.reward);
+                        if (mat == PetalID::kNone) mat = rt.reward;
+                        if (!client_award_petal(m, mat)) continue;
+                        ++given;
+                        last_mat = mat;
+                    }
+                }
+                for (uint8_t b = 0; b < 4; ++b) {
+                    PetalID::T bonus = TreasureSites::pick_bonus_pool_petal(
+                        TreasureSites::kTierRitual);
+                    if (bonus == PetalID::kNone) continue;
+                    if (!client_award_petal(m, bonus)) continue;
+                    ++given;
+                    last_mat = bonus;
+                }
+                if (coins > 0) client_award_coins(m, coins);
+                if (last_mat != PetalID::kNone)
+                    client_send_loot_toast(m, last_mat, given, title);
+                else
+                    client_send_loot_toast(m, PetalID::kCoin, (uint16_t) coins, title);
+                char const *rname = (last_mat != PetalID::kNone
+                        && last_mat < PetalID::kNumPetals && PETAL_DATA[last_mat].name)
+                    ? PETAL_DATA[last_mat].name
+                    : ((rt.reward < PetalID::kNumPetals && PETAL_DATA[rt.reward].name)
+                        ? PETAL_DATA[rt.reward].name : "?");
+                Chat::send_to(m, ChatChannel::kChatSystem, "",
+                    std::string{"【宝藏】完成推箱："}
+                    + rname + " ×" + std::to_string(given)
+                    + "（含稀有度阶梯），钱币 +" + std::to_string(coins));
+            }
         }
     }
 }

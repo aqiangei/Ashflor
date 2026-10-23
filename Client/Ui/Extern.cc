@@ -73,6 +73,12 @@ namespace Ui {
             && std::abs(y - elt->screen_y) <= elt->height * Ui::scale / 2;
     }
 
+    uint8_t game_panel_blocks_loadout(float x, float y) {
+        if (Game::game_panel == Game::kPanelNone) return 0;
+        if (Game::game_panel >= Game::kPanelCount) return 0;
+        return hit_element(game_panel_roots[Game::game_panel], x, y) ? 1 : 0;
+    }
+
     static uint8_t read_outside_press(float &x, float &y) {
         x = Input::mouse_x;
         y = Input::mouse_y;

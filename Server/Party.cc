@@ -166,6 +166,7 @@ static uint8_t auto_join_into(Client *host, Client *joiner) {
     if (!host->alive() || !joiner->alive() || host->game == nullptr) return 0;
     if (joiner->party_id != 0) return 0;
     if (joiner->auto_party_cd > 0 || host->auto_party_cd > 0) return 0;
+    if (joiner->disable_auto_party || host->disable_auto_party) return 0;
     if (party_count(host) >= Party::MAX_SIZE) return 0;
     if (!party_level_gap_ok(host, joiner)) return 0;
     if (host->party_id == 0) {
@@ -245,24 +246,27 @@ uint8_t Party::same_party(Client *a, Client *b) {
 }
 
 uint8_t Party::can_take_drop(Client *picker, Simulation *sim, EntityID drop_team) {
+    // Drops are tagged to a personal camera id — only that camera may take them.
+    // Party mates each get their own piles; they do not share visibility/pickup.
     if (picker == nullptr || sim == nullptr || drop_team.null()) return 0;
-    if (!sim->ent_exists(picker->camera)) return 0;
-    if (sim->get_ent(picker->camera).get_team() == drop_team) return 1;
-    // Team id is usually the leader camera; match any party mate on that claim.
-    Client *owner = Server::client_by_camera(sim, drop_team);
-    if (owner == nullptr) {
-        GameInstance *game = picker->game;
-        if (game == nullptr) return 0;
-        for (Client *c : game->clients) {
-            if (c == nullptr || c->game != game) continue;
-            if (!sim->ent_exists(c->camera)) continue;
-            if (sim->get_ent(c->camera).get_team() == drop_team) {
-                owner = c;
-                break;
-            }
-        }
+    return picker->camera == drop_team ? 1 : 0;
+}
+
+uint8_t Party::collect_alive_mates(Client *c, Client **out, uint8_t cap) {
+    if (c == nullptr || out == nullptr || cap == 0) return 0;
+    uint8_t n = 0;
+    if (c->party_id == 0 || c->game == nullptr) {
+        if (c->alive()) out[n++] = c;
+        return n;
     }
-    return same_party(picker, owner);
+    for (Client *m : c->game->clients) {
+        if (m == nullptr || m->party_id != c->party_id) continue;
+        if (m->game != c->game) continue;
+        if (!m->alive()) continue;
+        out[n++] = m;
+        if (n >= cap) break;
+    }
+    return n;
 }
 
 static Client *find_by_name(GameInstance *game, std::string const &name) {
@@ -561,11 +565,13 @@ void Party::tick(GameInstance *game) {
             if (c != nullptr && c->alive()) alive.push_back(c);
         }
         for (Client *a : alive) {
-            if (a->party_id != 0 || a->auto_party_cd > 0) continue;
+            if (a->party_id != 0 || a->auto_party_cd > 0 || a->disable_auto_party)
+                continue;
             Client *best = nullptr;
             float best_d2 = join_r2;
             for (Client *b : alive) {
-                if (b == a || b->auto_party_cd > 0) continue;
+                if (b == a || b->auto_party_cd > 0 || b->disable_auto_party)
+                    continue;
                 // Prefer joining an existing party; otherwise another solo
                 if (b->party_id != 0 && party_count(b) >= MAX_SIZE) continue;
                 if (a->party_id != 0) continue;

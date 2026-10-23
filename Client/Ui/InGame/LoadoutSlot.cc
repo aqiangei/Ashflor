@@ -168,6 +168,14 @@ UiLoadoutSlot::UiLoadoutSlot(uint8_t pos) : Element(70, 70, { .fill = 0xffeeeeee
     Ui::UiLoadout::petal_backgrounds[pos] = this;
 }
 
+void UiLoadoutSlot::poll_events(ScreenEvent const &event) {
+    // Don't steal focus from the open bottom-left drawer sitting over the bar.
+    float const px = Input::is_mobile ? event.x : Input::mouse_x;
+    float const py = Input::is_mobile ? event.y : Input::mouse_y;
+    if (Ui::game_panel_blocks_loadout(px, py)) return;
+    Element::poll_events(event);
+}
+
 void UiLoadoutSlot::on_event(uint8_t event) {
     // Empty primaries have no petal widget — pick mode lands here.
     if (event != kClick && event != kMouseDown) return;
@@ -325,7 +333,9 @@ Element *Ui::make_loadout_backgrounds() {
     Element *base = new Ui::HContainer(
         { slots_col, make_rotation_wheel() },
         0, 14,
-        { .should_render = [](){ return Game::alive(); } }
+        { .should_render = [](){
+            return Game::alive() || Game::on_game_screen;
+        } }
     );
     base->style.v_justify = Style::Bottom;
     base->style.animate = [](Element *elt, Renderer &ctx) {

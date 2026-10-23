@@ -13,6 +13,7 @@ namespace Ui {
 
         virtual void on_render(Renderer &) override;
         virtual void on_event(uint8_t) override;
+        virtual void poll_events(ScreenEvent const &) override;
     };
 
     class UiDeleteSlot final : public UiLoadoutSlot {
@@ -60,6 +61,8 @@ namespace Ui {
         extern UiLoadoutPetal *petal_slots[2 * MAX_SLOT_COUNT];
         extern UiLoadoutSlot *petal_backgrounds[2 * MAX_SLOT_COUNT + 1];
         extern Element *petal_tooltips[PetalID::kNumPetals];
+        // Unique with account level: boosted stats (first equipped / bag Lv cell)
+        extern Element *petal_tooltips_leveled[PetalID::kNumPetals];
         extern uint8_t selected_with_keys;
         extern double last_key_select;
         extern uint32_t num_petals_selected;

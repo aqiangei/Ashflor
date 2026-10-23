@@ -137,75 +137,45 @@ static void _alloc_drops(Simulation *sim, std::vector<PetalID::T> &success_drops
     }
 }
 
-// Sensory drop rarity. Rare+ mobs (and all bosses) use Ultra/Super/Unique
-// shares so kills feel like collecting the game's petal roster. Soft-zone
-// mobs still lean up so early maps aren't only Common scraps.
-static uint8_t _roll_drop_rarity(uint8_t mob_rarity, uint8_t boss) {
+// Drop rarity band: mob's own tier (20%), one below (60%), two below (20%).
+// Floor at Common. Boss flag does not inflate rarity past the mob's tier.
+static uint8_t _roll_drop_rarity(uint8_t mob_rarity, uint8_t /*boss*/) {
     if (mob_rarity >= RarityID::kNumRarities) mob_rarity = RarityID::kCommon;
     float r = frand();
-    // Bosses + Rare+: Ultra 55 · Super 35 · Unique 10
-    if (boss || mob_rarity >= RarityID::kRare) {
-        if (r < 0.55f) return RarityID::kUltra;
-        if (r < 0.90f) return RarityID::kSuper;
-        return RarityID::kUnique;
+    if (r < 0.20f) return mob_rarity;
+    if (r < 0.80f) {
+        if (mob_rarity > RarityID::kCommon) return (uint8_t)(mob_rarity - 1);
+        return mob_rarity;
     }
-    // Common / Unusual live: still exciting — Rare 25 · Epic 35 · Ultra 30 · Super 10
-    if (r < 0.25f) return RarityID::kRare;
-    if (r < 0.60f) return RarityID::kEpic;
-    if (r < 0.90f) return RarityID::kUltra;
-    return RarityID::kSuper;
+    if (mob_rarity >= 2) return (uint8_t)(mob_rarity - 2);
+    return RarityID::kCommon;
 }
 
-// Table family (biome seed) OR full petal pool. High full-pool rate so every
-// petal family can appear from play — not only from a few drop-table rows.
+// Always pick from the mob's own drop table; ladder family seeds to the
+// banded rarity. Full petal pool only as empty-table fallback (should be rare).
 static PetalID::T _roll_mob_drop(Simulation *sim, MobID::T mob_id, uint8_t mob_rarity,
                                  uint8_t boss = 0) {
     struct MobData const &mob_data = MOB_DATA[mob_id];
     uint8_t drop_r = _roll_drop_rarity(mob_rarity, boss);
 
-    // Full-pool majority: content must be feelable. Unique gated by tracker.
-    float pool_p = boss ? 0.70f : 0.60f;
-    if (mob_data.drops.size() == 0 || frand() < pool_p) {
+    if (mob_data.drops.size() == 0) {
         for (uint32_t attempt = 0; attempt < 8; ++attempt) {
             PetalID::T got = Craft::random_petal_of_rarity(drop_r);
             if (got == PetalID::kNone || got >= PetalID::kNumPetals) continue;
             if (PETAL_DATA[got].rarity != RarityID::kUnique
                 || PetalTracker::get_count(sim, got) == 0)
                 return got;
-            drop_r = RarityID::kSuper; // Unique taken → retry as Super
+            drop_r = drop_r > RarityID::kCommon
+                ? (uint8_t)(drop_r - 1) : RarityID::kCommon;
         }
-        return Craft::random_petal_of_rarity(
-            drop_r >= RarityID::kUnique ? RarityID::kSuper : drop_r);
+        return Craft::random_petal_of_rarity(drop_r);
     }
 
-    float base[MAX_DROPS_PER_MOB] = {};
-    compute_mob_drop_weights(mob_id, mob_rarity, base);
     float weights[MAX_DROPS_PER_MOB] = {};
-    float total_weight = 0.f;
-    for (uint32_t i = 0; i < mob_data.drops.size(); ++i) {
-        float w = base[i];
-        PetalID::T drop_id = mob_data.drops[i];
-        // Chase specials already carry a flat 10% — do not crush them again.
-        if (!is_chase_loot_petal(drop_id))
-            w *= Craft::drop_weight_mult(drop_id);
-        uint8_t r = PETAL_DATA[drop_id].rarity;
-        if (boss && !is_chase_loot_petal(drop_id)) {
-            if (r <= RarityID::kUnusual)
-                w *= 0.18f;
-            else if (r == RarityID::kRare)
-                w *= 0.85f;
-            else if (r >= RarityID::kEpic && r < RarityID::kUnique)
-                w *= 2.0f;
-        }
-        // Family seed still gets weight even if baked ID is below the band —
-        // rarity is resolved after pick via petal_at_rarity.
-        if (w <= 0.f && !is_chase_loot_petal(drop_id))
-            w = 0.15f;
-        weights[i] = w;
-        total_weight += w;
-    }
+    float total_weight = Craft::mob_loot_weights(mob_id, mob_rarity, weights);
     if (total_weight <= 0.f) {
         PetalID::T fam = mob_data.drops[0];
+        if (is_chase_loot_petal(fam)) return fam;
         PetalID::T resolved = Craft::petal_at_rarity(fam, drop_r);
         return resolved != PetalID::kNone ? resolved : fam;
     }
@@ -229,6 +199,12 @@ static PetalID::T _roll_mob_drop(Simulation *sim, MobID::T mob_id, uint8_t mob_r
             return out;
     }
     for (PetalID::T id : mob_data.drops) {
+        if (is_chase_loot_petal(id)) {
+            if (PETAL_DATA[id].rarity != RarityID::kUnique
+                || PetalTracker::get_count(sim, id) == 0)
+                return id;
+            continue;
+        }
         PetalID::T resolved = Craft::petal_at_rarity(id, drop_r);
         PetalID::T out = resolved != PetalID::kNone ? resolved : id;
         if (PETAL_DATA[out].rarity != RarityID::kUnique)
@@ -323,55 +299,89 @@ void entity_on_death(Simulation *sim, Entity const &ent) {
             uint8_t const live_rarity = ent.get_rarity() < RarityID::kNumRarities
                 ? ent.get_rarity() : mob_data.rarity;
 
-            // Private loot: need ≥5% max HP damage (≥1% for bosses). Totals persist
-            // across player respawns. Same-party claims coalesce. Party XP in _add_score.
-            EntityID claim_teams[16];
+            // Private loot per camera. Party: if party damage sum ≥ threshold,
+            // every alive mate gets their own roll tagged to their camera.
+            EntityID claim_cams[16];
             float claim_dmg[16];
             uint8_t claim_n = 0;
             {
-                float const max_hp = ent.max_health > 1.f ? ent.max_health : 1.f;
-                uint8_t const boss = spawn_class(ent.get_mob_id()) == SpawnClass::kBoss;
-                float const need = max_hp * (boss ? 0.01f : 0.05f);
                 uint8_t raw_n = ent.loot_claim_n;
                 if (raw_n > 16) raw_n = 16;
                 for (uint8_t i = 0; i < raw_n; ++i) {
                     if (ent.loot_claim_teams[i].null()) continue;
-                    if (ent.loot_claim_damage[i] + 1e-3f < need) continue;
-                    claim_teams[claim_n] = ent.loot_claim_teams[i];
+                    claim_cams[claim_n] = ent.loot_claim_teams[i];
                     claim_dmg[claim_n] = ent.loot_claim_damage[i];
                     ++claim_n;
                 }
             }
-            // Merge claim slots that belong to the same party (stale team ids after invite).
             GameInstance *game = Server::game_for(sim);
-            auto client_for_team = [&](EntityID team) -> Client * {
-                if (game == nullptr || team.null()) return nullptr;
-                Client *c = Server::client_by_camera(sim, team);
+            auto client_for_cam = [&](EntityID cam) -> Client * {
+                if (game == nullptr || cam.null()) return nullptr;
+                Client *c = Server::client_by_camera(sim, cam);
                 if (c != nullptr) return c;
                 for (Client *x : game->clients) {
                     if (x == nullptr || x->game == nullptr) continue;
                     if (&x->game->simulation != sim) continue;
-                    if (!sim->ent_exists(x->camera)) continue;
-                    if (sim->get_ent(x->camera).get_team() == team) return x;
+                    if (x->camera == cam) return x;
                 }
                 return nullptr;
             };
+            float const max_hp = ent.max_health > 1.f ? ent.max_health : 1.f;
+            uint8_t const boss_loot = spawn_class(ent.get_mob_id()) == SpawnClass::kBoss;
+            float const need = max_hp * (boss_loot ? 0.01f : 0.05f);
+
+            EntityID recipients[32];
+            uint8_t recip_n = 0;
+            auto add_recipient = [&](EntityID cam) {
+                if (cam.null() || recip_n >= 32) return;
+                for (uint8_t i = 0; i < recip_n; ++i)
+                    if (recipients[i] == cam) return;
+                recipients[recip_n++] = cam;
+            };
+            auto party_sum = [&](Client *a) -> float {
+                float s = 0.f;
+                if (a == nullptr) return s;
+                for (uint8_t i = 0; i < claim_n; ++i) {
+                    Client *b = client_for_cam(claim_cams[i]);
+                    if (b == a || Party::same_party(a, b))
+                        s += claim_dmg[i];
+                }
+                return s;
+            };
+            uint8_t party_done[16] = {};
             for (uint8_t i = 0; i < claim_n; ++i) {
-                Client *a = client_for_team(claim_teams[i]);
-                for (uint8_t j = i + 1; j < claim_n; ) {
-                    Client *b = client_for_team(claim_teams[j]);
-                    if (Party::same_party(a, b)) {
-                        claim_dmg[i] += claim_dmg[j];
-                        claim_teams[j] = claim_teams[claim_n - 1];
-                        claim_dmg[j] = claim_dmg[claim_n - 1];
-                        --claim_n;
-                    } else {
-                        ++j;
+                Client *c = client_for_cam(claim_cams[i]);
+                float dmg = (c != nullptr && c->party_id != 0)
+                    ? party_sum(c) : claim_dmg[i];
+                if (dmg + 1e-3f < need) continue;
+                if (c != nullptr && c->party_id != 0) {
+                    uint8_t already = 0;
+                    for (uint8_t p = 0; p < i; ++p) {
+                        if (!party_done[p]) continue;
+                        if (Party::same_party(c, client_for_cam(claim_cams[p]))) {
+                            already = 1;
+                            break;
+                        }
                     }
+                    if (already) continue;
+                    party_done[i] = 1;
+                    if (game != nullptr) {
+                        for (Client *m : game->clients) {
+                            if (m == nullptr || m->party_id != c->party_id) continue;
+                            if (!m->alive() || m->game == nullptr) continue;
+                            if (&m->game->simulation != sim) continue;
+                            if (!sim->ent_exists(m->camera)) continue;
+                            add_recipient(m->camera);
+                        }
+                    } else {
+                        add_recipient(claim_cams[i]);
+                    }
+                } else {
+                    add_recipient(claim_cams[i]);
                 }
             }
 
-            // Boss：全服播报造成最高伤害的小队/个人，排行榜击杀同步计入
+            // Boss announce: highest personal camera damage among claimers.
             if (spawn_class(ent.get_mob_id()) == SpawnClass::kBoss
                 && !ent.has_component(kSegmented)) {
                 Client *mvp = nullptr;
@@ -380,7 +390,7 @@ void entity_on_death(Simulation *sim, Entity const &ent) {
                     for (uint8_t i = 1; i < claim_n; ++i) {
                         if (claim_dmg[i] > claim_dmg[bi]) bi = i;
                     }
-                    mvp = client_for_team(claim_teams[bi]);
+                    mvp = client_for_cam(claim_cams[bi]);
                 }
                 if (mvp == nullptr && sim->ent_exists(ent.last_damaged_by)) {
                     EntityID kid = sim->get_ent(ent.last_damaged_by).base_entity;
@@ -399,38 +409,27 @@ void entity_on_death(Simulation *sim, Entity const &ent) {
                     std::string text = is_party
                         ? ("小队「" + who + "」合力击败了 " + mob_nm + "！")
                         : (who + " 击败了 " + mob_nm + "！");
-                    // Origin map of the kill (broadcast is cross-map; map ≠ 全服标签)
                     uint8_t mid = (game != nullptr) ? game->map_id : sim->map_id;
                     Chat::broadcast_server("系统", text, {}, Chat::kKill, who, mid);
                 }
             }
 
-            auto team_has_bonus = [&](EntityID team) -> uint8_t {
-                GameInstance *game = Server::game_for(sim);
-                if (game == nullptr) return 0;
-                for (Client *c : game->clients) {
-                    if (c == nullptr || c->game == nullptr) continue;
-                    if (&c->game->simulation != sim) continue;
-                    if (!sim->ent_exists(c->camera)) continue;
-                    if (!(sim->get_ent(c->camera).get_team() == team)) continue;
-                    if (!c->account_name.empty() && c->bonus_enabled
-                        && (c->daily_bonus_seconds || c->offline_bonus_seconds))
-                        return 1;
-                }
-                return 0;
+            // drop_team is the owner's camera id (personal, not shared party team).
+            auto owner_has_bonus = [&](EntityID cam) -> uint8_t {
+                Client *c = client_for_cam(cam);
+                if (c == nullptr || c->account_name.empty()) return 0;
+                return c->bonus_enabled
+                    && (c->daily_bonus_seconds || c->offline_bonus_seconds) ? 1 : 0;
             };
 
             uint8_t const is_boss_kill =
                 spawn_class(ent.get_mob_id()) == SpawnClass::kBoss;
 
-            auto roll_for_team = [&](EntityID drop_team, float angle_off) {
+            auto roll_for_owner = [&](EntityID owner_cam, float angle_off) {
                 std::vector<PetalID::T> success_drops = {};
-                // Weights follow the killed mob's live rarity (same 20% / −1 60% /
-                // −2 20%; Moon/Ygg/Golden Leaf flat 10% each).
                 auto roll_one = [&]() {
                     return _roll_mob_drop(sim, ent.get_mob_id(), live_rarity, is_boss_kill);
                 };
-                // Sensory density: normals guarantee 2 piles, bosses fill toward cap.
                 auto push_roll = [&]() {
                     if (success_drops.size() >= MAX_DROPS_PER_MOB) return;
                     PetalID::T extra = roll_one();
@@ -438,11 +437,11 @@ void entity_on_death(Simulation *sim, Entity const &ent) {
                         success_drops.push_back(extra);
                 };
                 push_roll();
-                push_roll(); // always at least 2
+                push_roll();
                 if (is_boss_kill) {
-                    for (uint32_t n = 0; n < 4; ++n) push_roll(); // → often 6
+                    for (uint32_t n = 0; n < 4; ++n) push_roll();
                     if (frand() < 0.70f) push_roll();
-                    if (frand() < 0.45f) push_roll(); // toward MAX 8
+                    if (frand() < 0.45f) push_roll();
                 } else {
                     if (frand() < 0.72f) push_roll();
                     if (live_rarity >= RarityID::kUnusual && frand() < 0.55f)
@@ -454,7 +453,7 @@ void entity_on_death(Simulation *sim, Entity const &ent) {
                     if (live_rarity >= RarityID::kLegendary && frand() < 0.35f)
                         push_roll();
                 }
-                if (team_has_bonus(drop_team)) {
+                if (owner_has_bonus(owner_cam)) {
                     size_t bonus_rolls = std::min<size_t>(success_drops.size() * 2, 12);
                     for (size_t i = 0; i < bonus_rolls; ++i) {
                         PetalID::T extra = roll_one();
@@ -465,7 +464,7 @@ void entity_on_death(Simulation *sim, Entity const &ent) {
                 }
                 float ox = ent.get_x() + std::cos(angle_off) * 12.f;
                 float oy = ent.get_y() + std::sin(angle_off) * 12.f;
-                _alloc_drops(sim, success_drops, ox, oy, drop_team);
+                _alloc_drops(sim, success_drops, ox, oy, owner_cam);
                 uint32_t coins = Craft::coins_from_mob(live_rarity);
                 {
                     MapZones const &zones = map_zones(sim->map_id);
@@ -479,7 +478,7 @@ void entity_on_death(Simulation *sim, Entity const &ent) {
                 }
                 if (coins > 0) {
                     uint16_t pile = coins > 65535 ? (uint16_t) 65535 : (uint16_t) coins;
-                    Entity &drop = alloc_drop(sim, PetalID::kCoin, drop_team, pile);
+                    Entity &drop = alloc_drop(sim, PetalID::kCoin, owner_cam, pile);
                     float cx = ox, cy = oy;
                     Map::resolve_circle_terrain(sim->map_id, cx, cy, drop.get_radius() + 8.f);
                     cx = fclamp(cx, drop.get_radius(), ARENA_WIDTH - drop.get_radius());
@@ -491,14 +490,13 @@ void entity_on_death(Simulation *sim, Entity const &ent) {
                 }
             };
 
-            if (claim_n == 0) {
-                // No player credit — unowned brief lock then FFA (rare edge).
-                roll_for_team(NULL_ENTITY, 0.f);
+            if (recip_n == 0) {
+                roll_for_owner(NULL_ENTITY, 0.f);
             } else {
-                for (uint8_t i = 0; i < claim_n; ++i) {
-                    float ang = (claim_n == 1) ? 0.f
-                        : (float) i * (2.f * (float) M_PI / (float) claim_n);
-                    roll_for_team(claim_teams[i], ang);
+                for (uint8_t i = 0; i < recip_n; ++i) {
+                    float ang = (recip_n == 1) ? 0.f
+                        : (float) i * (2.f * (float) M_PI / (float) recip_n);
+                    roll_for_owner(recipients[i], ang);
                 }
             }
         }

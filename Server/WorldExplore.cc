@@ -3,6 +3,7 @@
 #include <Server/Chat.hh>
 #include <Server/Client.hh>
 #include <Server/Game.hh>
+#include <Server/Party.hh>
 #include <Server/Spawn.hh>
 
 #include <Shared/Entity.hh>
@@ -166,6 +167,8 @@ static Entity &spawn_pad(Simulation *sim, float x, float y) {
         BitMath::set(ent.flags, EntityFlags::kNoDrops);
         BitMath::set(ent.flags, EntityFlags::kHasCulling);
         BitMath::set(ent.flags, EntityFlags::kNoFriendlyCollision);
+        BitMath::unset(ent.flags, EntityFlags::kSpawnedFromZone);
+        ent.zone = 0xFF; // idle-map thin + zone despawn skip
         ent.score_reward = 0;
         ent.damage = 0;
         ent.mass = 10000.f;
@@ -230,10 +233,42 @@ static void despawn_spirit(Simulation *sim, MapRuntime &rt) {
     rt.spirit = NULL_ENTITY;
 }
 
+static void award_explore_spirit_one(Client *client, MapExploreDef const &def, uint8_t mid) {
+    if (client == nullptr) return;
+    uint32_t coins = 320;
+    client_award_coins(client, coins);
+    client_send_loot_toast(client, PetalID::kCoin, (uint16_t) coins, def.spirit_zh);
+    uint8_t mats = 0;
+    std::string mat_line;
+    for (uint8_t i = 0; i < 6; ++i) {
+        PetalID::T mat = TreasureSites::pick_explore_mat(mid, TreasureSites::kTierNormal);
+        if (mat == PetalID::kNone) continue;
+        if (!client_award_petal(client, mat)) continue;
+        ++mats;
+        client_send_loot_toast(client, mat, 1, def.spirit_zh);
+        char const *pname = (mat < PetalID::kNumPetals && PETAL_DATA[mat].name)
+            ? PETAL_DATA[mat].name : "残片";
+        if (!mat_line.empty()) mat_line += "、";
+        mat_line += pname;
+    }
+    Chat::send_to(client, ChatChannel::kChatSystem, "", def.arrive_zh);
+    Chat::send_to(client, ChatChannel::kChatSystem, "", def.arrive_en);
+    Chat::send_to(client, ChatChannel::kChatSystem, "",
+        std::string{"【指引】钱币 +"} + std::to_string(coins)
+        + (mats ? "，" + mat_line : ""));
+}
+
 static void award_followers_near(GameInstance *game, MapExploreDef const &def,
                                  uint8_t mid, float x, float y) {
     Simulation *sim = &game->simulation;
     float const r2 = kRewardNearR * kRewardNearR;
+    Client *done[32];
+    uint8_t done_n = 0;
+    auto already = [&](Client *c) -> uint8_t {
+        for (uint8_t i = 0; i < done_n; ++i)
+            if (done[i] == c) return 1;
+        return 0;
+    };
     for (Client *client : game->clients) {
         if (client == nullptr || !client->alive()) continue;
         if (!sim->ent_exists(client->camera)) continue;
@@ -242,28 +277,15 @@ static void award_followers_near(GameInstance *game, MapExploreDef const &def,
         Entity &player = sim->get_ent(cam.get_player());
         float dx = player.get_x() - x, dy = player.get_y() - y;
         if (dx * dx + dy * dy > r2) continue;
-
-        uint32_t coins = 320;
-        client_award_coins(client, coins);
-        client_send_loot_toast(client, PetalID::kCoin, (uint16_t) coins, def.spirit_zh);
-        uint8_t mats = 0;
-        std::string mat_line;
-        for (uint8_t i = 0; i < 6; ++i) {
-            PetalID::T mat = TreasureSites::pick_explore_mat(mid, TreasureSites::kTierNormal);
-            if (mat == PetalID::kNone) continue;
-            if (!client_award_petal(client, mat)) continue;
-            ++mats;
-            client_send_loot_toast(client, mat, 1, def.spirit_zh);
-            char const *pname = (mat < PetalID::kNumPetals && PETAL_DATA[mat].name)
-                ? PETAL_DATA[mat].name : "残片";
-            if (!mat_line.empty()) mat_line += "、";
-            mat_line += pname;
+        Client *mates[Party::MAX_SIZE];
+        uint8_t mate_n = Party::collect_alive_mates(client, mates, Party::MAX_SIZE);
+        if (mate_n == 0) { mates[0] = client; mate_n = 1; }
+        for (uint8_t i = 0; i < mate_n; ++i) {
+            Client *m = mates[i];
+            if (m == nullptr || already(m)) continue;
+            if (done_n < 32) done[done_n++] = m;
+            award_explore_spirit_one(m, def, mid);
         }
-        Chat::send_to(client, ChatChannel::kChatSystem, "", def.arrive_zh);
-        Chat::send_to(client, ChatChannel::kChatSystem, "", def.arrive_en);
-        Chat::send_to(client, ChatChannel::kChatSystem, "",
-            std::string{"【指引】钱币 +"} + std::to_string(coins)
-            + (mats ? "，" + mat_line : ""));
     }
 }
 
@@ -325,6 +347,12 @@ void WorldExplore::tick(GameInstance *game) {
     MapExploreDef const &def = kDefs[rt.def_index];
     Simulation *sim = &game->simulation;
     ++g_tick;
+
+    // Pads wiped by idle-map thin — restore so ThemeArt stays visible.
+    for (uint8_t i = 0; i < 3; ++i) {
+        if (sim->ent_alive(rt.pads[i])) continue;
+        rt.pads[i] = spawn_pad(sim, rt.px[i], rt.py[i]).id;
+    }
 
     if (rt.spirit_cd > 0) --rt.spirit_cd;
 
@@ -445,29 +473,40 @@ void WorldExplore::tick(GameInstance *game) {
             if (tdx * tdx + tdy * tdy <= kTouchR * kTouchR) {
                 ++client->explore_puzzle_step;
                 if (client->explore_puzzle_step >= 3) {
-                    client->explore_puzzle_done[mid] = 1;
                     uint32_t coins = 400;
-                    client_award_coins(client, coins);
-                    client_send_loot_toast(client, PetalID::kCoin, (uint16_t) coins, "探索印记");
-                    uint8_t mats = 0;
-                    std::string mat_line;
-                    for (uint8_t i = 0; i < 7; ++i) {
-                        PetalID::T mat = TreasureSites::pick_explore_mat(mid, TreasureSites::kTierHard);
-                        if (mat == PetalID::kNone) continue;
-                        if (!client_award_petal(client, mat)) continue;
-                        ++mats;
-                        client_send_loot_toast(client, mat, 1, "探索印记");
-                        char const *pname = (mat < PetalID::kNumPetals && PETAL_DATA[mat].name)
-                            ? PETAL_DATA[mat].name : "残片";
-                        if (!mat_line.empty()) mat_line += "、";
-                        mat_line += pname;
+                    Client *mates[Party::MAX_SIZE];
+                    uint8_t mate_n = Party::collect_alive_mates(
+                        client, mates, Party::MAX_SIZE);
+                    if (mate_n == 0) { mates[0] = client; mate_n = 1; }
+                    for (uint8_t mi = 0; mi < mate_n; ++mi) {
+                        Client *m = mates[mi];
+                        if (m == nullptr) continue;
+                        if (m->explore_puzzle_done[mid]) continue;
+                        m->explore_puzzle_done[mid] = 1;
+                        m->explore_puzzle_step = 3;
+                        client_award_coins(m, coins);
+                        client_send_loot_toast(m, PetalID::kCoin, (uint16_t) coins, "探索印记");
+                        uint8_t mats = 0;
+                        std::string mat_line;
+                        for (uint8_t i = 0; i < 7; ++i) {
+                            PetalID::T mat = TreasureSites::pick_explore_mat(
+                                mid, TreasureSites::kTierHard);
+                            if (mat == PetalID::kNone) continue;
+                            if (!client_award_petal(m, mat)) continue;
+                            ++mats;
+                            client_send_loot_toast(m, mat, 1, "探索印记");
+                            char const *pname = (mat < PetalID::kNumPetals && PETAL_DATA[mat].name)
+                                ? PETAL_DATA[mat].name : "残片";
+                            if (!mat_line.empty()) mat_line += "、";
+                            mat_line += pname;
+                        }
+                        Chat::send_to(m, ChatChannel::kChatSystem, "", def.touch_done_zh);
+                        Chat::send_to(m, ChatChannel::kChatSystem, "", def.touch_done_en);
+                        if (mats)
+                            Chat::send_to(m, ChatChannel::kChatSystem, "",
+                                std::string{"【探索】钱币 +"} + std::to_string(coins)
+                                + "，" + mat_line);
                     }
-                    Chat::send_to(client, ChatChannel::kChatSystem, "", def.touch_done_zh);
-                    Chat::send_to(client, ChatChannel::kChatSystem, "", def.touch_done_en);
-                    if (mats)
-                        Chat::send_to(client, ChatChannel::kChatSystem, "",
-                            std::string{"【探索】钱币 +"} + std::to_string(coins)
-                            + "，" + mat_line);
                 } else {
                     Chat::send_to(client, ChatChannel::kChatSystem, "",
                         std::string{"【探索】印记 "}

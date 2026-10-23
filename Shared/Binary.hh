@@ -66,7 +66,8 @@ enum Serverbound {
     kBankDeposit, // unequip primary/secondary → backpack stacks
     kBoostToggle, // arg = 0/1 — pause or resume triple-drop bonus timers
     kGuildSetAnno, // announcement text (leader only)
-    kTalentSetRank // u8 talent_id, u8 target_rank — jump / rollback on one branch
+    kTalentSetRank, // u8 talent_id, u8 target_rank — jump / rollback on one branch
+    kAutoPartyOpt // u8 1 = disable nearby auto-join (manual invite still ok)
 };
 
 // Categories shown as separate columns on the leaderboard board.

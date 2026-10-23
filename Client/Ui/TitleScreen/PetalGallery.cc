@@ -4,6 +4,7 @@
 #include <Client/Ui/Button.hh>
 #include <Client/Ui/Container.hh>
 #include <Client/Ui/InGame/GameInfo.hh>
+#include <Client/Ui/InGame/Loadout.hh>
 #include <Client/Ui/ScrollContainer.hh>
 #include <Client/Ui/DynamicText.hh>
 #include <Client/Ui/StaticText.hh>
@@ -13,6 +14,8 @@
 #include <Client/Input.hh>
 #include <Client/StaticData.hh>
 #include <Client/Assets/Assets.hh>
+
+#include <Shared/Craft.hh>
 
 #include <algorithm>
 #include <array>
@@ -50,7 +53,12 @@ void GalleryPetal::on_event(uint8_t event) {
     if (event != kFocusLost && id != PetalID::kNone && id < PetalID::kNumPetals
         && (always_show || Game::seen_petals[id])) {
         rendering_tooltip = 1;
-        tooltip = Ui::UiLoadout::petal_tooltips[id];
+        // Gallery: show leveled stats when this Unique has an account level.
+        if (Craft::can_level_petal(id) && Game::petal_levels[id] > 0
+            && Ui::UiLoadout::petal_tooltips_leveled[id] != nullptr)
+            tooltip = Ui::UiLoadout::petal_tooltips_leveled[id];
+        else
+            tooltip = Ui::UiLoadout::petal_tooltips[id];
     } else
         rendering_tooltip = 0;
 }

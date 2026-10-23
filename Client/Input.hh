@@ -39,9 +39,11 @@ namespace Input {
     extern uint8_t freeze_input;
     extern uint8_t movement_helper;
     extern uint8_t keyboard_movement;
-    // Either flag = full swap of attack↔defend bindings (kept in sync each tick).
+    // Hold attack/defend key = normal; release = always attack/defend.
     extern uint8_t invert_attack;
     extern uint8_t invert_defend;
+    // 1 = skip nearby auto-party join (manual invite still works).
+    extern uint8_t disable_auto_party;
     extern uint8_t is_mobile;       // UA / device probe
     // User preference (florr_clone "Request Mobile"): show touch HUD even on desktop
     extern uint8_t request_mobile;

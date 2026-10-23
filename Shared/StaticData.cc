@@ -548,15 +548,16 @@ std::array<struct PetalData, PetalID::kNumPetals> const PETAL_DATA = {{
         }
     },
     {
+        // gardn-master: density=10 tank; ashflor uses mass. HP kept very high per balance.
         .name = "Moon",
         .description = "Where did this come from?",
-        .health = 200.0,
-        .damage = 120.0,
+        .health = 1000000.0,
+        .damage = 3.0,
         .radius = 50.0,
         .reload = 10.0,
         .count = 1,
         .rarity = RarityID::kUnique,
-        .attributes = { .mass = 220.0 }
+        .attributes = { .mass = 10.0 }
     },
     {
         .name = "Lotus",
@@ -16381,93 +16382,94 @@ std::array<struct PetalData, PetalID::kNumPetals> const PETAL_DATA = {{
         .rarity = RarityID::kUnusual,
         .attributes = { .aura_heal = 6.25, .aura_radius = 175.0, .aura_duration = 14.0, .secondary_reload = 0.6562, .defend_only = 1, .icon_angle = -0.35f }
     },
+    // Moon ladder: high HP; mass ≈ gardn-master density=10 scale. Detached orbit center.
     {
         .name = "Moon",
         .description = "Where did this come from?",
-        .health = 0.1029,
-        .damage = 0.0617,
+        .health = 500.0,
+        .damage = 0.3,
         .radius = 50.0,
         .reload = 10.0,
         .count = 1,
         .rarity = RarityID::kCommon,
-        .attributes = { .mass = 50.0 }
+        .attributes = { .mass = 4.0 }
     },
     {
         .name = "Moon",
         .description = "Where did this come from?",
-        .health = 0.3086,
-        .damage = 0.1852,
+        .health = 1500.0,
+        .damage = 0.45,
         .radius = 50.0,
         .reload = 10.0,
         .count = 1,
         .rarity = RarityID::kUnusual,
-        .attributes = { .mass = 71.25 }
+        .attributes = { .mass = 5.0 }
     },
     {
         .name = "Moon",
         .description = "Where did this come from?",
-        .health = 0.9259,
-        .damage = 0.5556,
+        .health = 4500.0,
+        .damage = 0.7,
         .radius = 50.0,
         .reload = 10.0,
         .count = 1,
         .rarity = RarityID::kRare,
-        .attributes = { .mass = 92.5 }
+        .attributes = { .mass = 6.0 }
     },
     {
         .name = "Moon",
         .description = "Where did this come from?",
-        .health = 2.7778,
-        .damage = 1.6667,
+        .health = 13500.0,
+        .damage = 1.0,
         .radius = 50.0,
         .reload = 10.0,
         .count = 1,
         .rarity = RarityID::kEpic,
-        .attributes = { .mass = 113.75 }
+        .attributes = { .mass = 7.0 }
     },
     {
         .name = "Moon",
         .description = "Where did this come from?",
-        .health = 8.3333,
-        .damage = 5.0,
+        .health = 40000.0,
+        .damage = 1.4,
         .radius = 50.0,
         .reload = 10.0,
         .count = 1,
         .rarity = RarityID::kLegendary,
-        .attributes = { .mass = 135.0 }
+        .attributes = { .mass = 8.0 }
     },
     {
         .name = "Moon",
         .description = "Where did this come from?",
-        .health = 25.0,
-        .damage = 15.0,
+        .health = 120000.0,
+        .damage = 1.8,
         .radius = 50.0,
         .reload = 10.0,
         .count = 1,
         .rarity = RarityID::kMythic,
-        .attributes = { .mass = 156.25 }
+        .attributes = { .mass = 9.0 }
     },
     {
         .name = "Moon",
         .description = "Where did this come from?",
-        .health = 50.0,
-        .damage = 30.0,
+        .health = 250000.0,
+        .damage = 2.2,
         .radius = 50.0,
         .reload = 10.0,
         .count = 1,
         .rarity = RarityID::kUltra,
-        .attributes = { .mass = 177.5 }
+        .attributes = { .mass = 9.5 }
     },
     {
         .name = "Moon",
         .description = "Where did this come from?",
-        .health = 100.0,
-        .damage = 60.0,
+        .health = 500000.0,
+        .damage = 2.6,
         .radius = 50.0,
         .reload = 10.0,
         .count = 1,
         .rarity = RarityID::kSuper,
-        .attributes = { .mass = 198.75 }
+        .attributes = { .mass = 9.75 }
     },
     {
         .name = "Observer",

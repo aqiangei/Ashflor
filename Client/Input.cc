@@ -17,6 +17,7 @@ namespace Input {
     uint8_t keyboard_movement = 0;
     uint8_t invert_attack = 0;
     uint8_t invert_defend = 0;
+    uint8_t disable_auto_party = 0;
     uint8_t is_mobile = 0;
     uint8_t request_mobile = 0;
     std::unordered_set<char> keys_held;

@@ -29,6 +29,8 @@ public:
     WebSocket *ws;
     uint8_t verified = 0;
     uint8_t seen_arena = 0;
+    uint16_t view_half_w = 0;
+    uint16_t view_half_h = 0;
     std::string account_name;
     // Display name claimed on last spawn (empty = unnamed); used for unique-name checks
     std::string play_name;
@@ -84,6 +86,7 @@ public:
     std::string pending_party_from;
     uint32_t pending_party_ttl = 0;
     uint32_t auto_party_cd = 0; // ticks until nearby auto-join can fire again
+    uint8_t disable_auto_party = 0; // client opt-out of nearby auto-join
     std::string guild_name;
     uint8_t guild_leader = 0;
     std::string pending_guild_from;

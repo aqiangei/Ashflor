@@ -99,8 +99,8 @@ void render_mob(Renderer &ctx, Entity const &ent) {
             prev.ok = 1;
         }
     }
-    if (ent.deletion_animation > 0)
-        Game::seen_mobs[ent.get_mob_id()] = 1;
+    // Unlock gallery cell for this live rarity (spotting or death).
+    Game::mark_mob_seen(ent.get_mob_id(), ent.get_rarity());
     /*
     #ifdef DEBUG
     ctx.set_stroke(0x80ff0000);

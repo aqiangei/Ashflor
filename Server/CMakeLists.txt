@@ -29,6 +29,7 @@ set(SOURCES
     AdminGiveLog.cc
     Chat.cc
     Client.cc
+    Codex.cc
     DevCheats.cc
     Game.cc
     LeaderboardStore.cc

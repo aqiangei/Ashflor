@@ -118,6 +118,7 @@ static std::string fmtf(char const *fmt, float v) {
 }
 
 std::string format_pct(float pct) {
+    if (pct <= 0) return "0%";
     if (pct >= 0.9) return fmtf("%.0f%%", pct);
     if (pct >= 0.09) return fmtf(".%.0f%%", pct * 10);
     if (pct >= 0.009) return fmtf(".0%.0f%%", pct * 100);

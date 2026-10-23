@@ -3,7 +3,6 @@
 #include <Server/AccountStore.hh>
 #include <Server/Client.hh>
 #include <Server/EntityFunctions.hh>
-#include <Server/Party.hh>
 #include <Server/Server.hh>
 #include <Server/Spawn.hh>
 #include <Shared/Craft.hh>
@@ -47,6 +46,16 @@ static float _owner_level_mult(std::array<uint32_t, PetalID::kNumPetals> const *
     return Craft::level_stat_mult((*levels)[id]);
 }
 
+// Only the earliest primary slot holding this PetalID receives Unique level stats.
+static uint8_t _slot_is_leveled_copy(Entity const &player, uint32_t slot_i, PetalID::T id) {
+    if (id == PetalID::kNone || id >= PetalID::kNumPetals) return 0;
+    if (slot_i >= player.get_loadout_count()) return 0;
+    for (uint32_t i = 0; i < slot_i; ++i) {
+        if (player.loadout[i].get_petal_id() == id) return 0;
+    }
+    return 1;
+}
+
 static struct PlayerBuffs _get_petal_passive_buffs(
     Simulation *sim, Entity &player,
     std::array<uint32_t, PetalID::kNumPetals> const *petal_levels) {
@@ -60,7 +69,8 @@ static struct PlayerBuffs _get_petal_passive_buffs(
         PetalID::T slot_petal_id = slot.get_petal_id();
         struct PetalData const &petal_data = PETAL_DATA[slot_petal_id];
         struct PetalAttributes const &attrs = petal_data.attributes;
-        float lv_mult = _owner_level_mult(petal_levels, slot_petal_id);
+        float lv_mult = _slot_is_leveled_copy(player, i, slot_petal_id)
+            ? _owner_level_mult(petal_levels, slot_petal_id) : 1.f;
         if (attrs.equipment != EquipmentFlags::kNone)
             player.set_equip_flags(player.get_equip_flags() | (1 << attrs.equipment));
         buffs.vision_factor = std::min(buffs.vision_factor, attrs.vision_factor);
@@ -125,6 +135,7 @@ static uint32_t _get_petal_rotation_count(Simulation *sim, Entity &player) {
     return count;
 }
 
+// gardn-master: if a Moon is out, every other petal orbits the moon entity.
 static RotationCenter const _get_petal_rotation_center(Simulation *sim, Entity const &player) {
     RotationCenter rotation_center = { 
         .x = player.get_x(), 
@@ -133,11 +144,13 @@ static RotationCenter const _get_petal_rotation_center(Simulation *sim, Entity c
     };
     for (uint32_t i = 0; i < player.get_loadout_count(); ++i) {
         LoadoutSlot const &slot = player.loadout[i];
-        if (slot.get_petal_id() != PetalID::kMoon) continue;
+        if (!petal_is_moon(slot.get_petal_id())) continue;
         for (uint32_t j = 0; j < slot.size(); ++j) {
             LoadoutPetal const &petal_slot = slot.petals[j];
             if (!sim->ent_alive(petal_slot.ent_id)) continue;
             Entity &moon = sim->get_ent(petal_slot.ent_id);
+            // Must stay detached or Flower will treat it like a normal ring petal.
+            BitMath::set(moon.flags, EntityFlags::kIsDetached);
             rotation_center.x = moon.get_x();
             rotation_center.y = moon.get_y();
             rotation_center.r = moon.get_radius();
@@ -208,24 +221,19 @@ void tick_player_behavior(Simulation *sim, Entity &player) {
     if (buffs.move_speed_factor != 1.f &&
         (player.acceleration.x != 0.f || player.acceleration.y != 0.f))
         player.acceleration *= buffs.move_speed_factor;
-    // Proximity pickup always (spatial-hash collide can miss edge cases).
-    // Magnet optionally pulls from farther away. Query local cells only —
-    // same pull/pickup math as the former full-drop scan (gardn-style AOI).
+    // Magnet (二创): proximity scoop + soft pull toward flower. No speed boost.
     {
         float pickup_r = player.get_radius() + 30.f + 12.f;
         float pickup_r2 = pickup_r * pickup_r;
         float magnet_r = buffs.magnet_radius;
         float magnet_r2 = magnet_r > 0.f ? magnet_r * magnet_r : 0.f;
         float query_r = magnet_r > pickup_r ? magnet_r : pickup_r;
-        Client *owner = Server::client_by_camera(sim, player.get_parent());
         sim->spatial_hash.query(
             player.get_x(), player.get_y(), query_r, query_r,
             [&](Simulation *, Entity &drop) {
             if (!drop.has_component(kDrop) || drop.pending_delete) return;
-            // Team piles: owner/party only. Unowned: brief immunity then FFA.
             if (drop.get_team() != NULL_ENTITY) {
-                if (!(drop.get_team() == player.get_team())
-                    && !Party::can_take_drop(owner, sim, drop.get_team()))
+                if (!(drop.get_team() == player.get_parent()))
                     return;
             } else if (drop.immunity_ticks > 0) {
                 return;
@@ -237,7 +245,7 @@ void tick_player_behavior(Simulation *sim, Entity &player) {
                 drop.velocity.set(0, 0);
                 drop.acceleration.set(0, 0);
                 drop.collision_velocity.set(0, 0);
-                on_collide(sim, player, drop);
+                pickup_drop(sim, player, drop);
                 return;
             }
             if (magnet_r2 <= 0.f || d2 > magnet_r2) return;
@@ -285,8 +293,9 @@ void tick_player_behavior(Simulation *sim, Entity &player) {
                     Entity &spawned = sim->get_ent(petal_slot.ent_id);
                     spawned.damage *= buffs.damage_factor;
                     float hp_mult = talent_petal_hp;
-                    // Infinite craft level (Unique): scale contact + DoT + armor.
-                    float lv_mult = _owner_level_mult(petal_levels, slot_petal_id);
+                    // Unique level: only the first primary copy of this ID.
+                    float lv_mult = _slot_is_leveled_copy(player, i, slot_petal_id)
+                        ? _owner_level_mult(petal_levels, slot_petal_id) : 1.f;
                     if (lv_mult != 1.f) {
                         spawned.damage *= lv_mult;
                         spawned.poison_damage.damage *= lv_mult;

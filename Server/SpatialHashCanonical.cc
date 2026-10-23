@@ -4,12 +4,10 @@
 #include <Shared/Entity.hh>
 #include <Helpers/Math.hh>
 
-#include <algorithm>
 #include <cstring>
 
 // florr_clone enemyGrid: NaN/huge radius → whole-grid loops / 100% CPU hang.
 static float const kMaxMobRadius = 4096.f;
-static float const kMaxQueryHalf = 8192.f;
 
 static float _safe_radius(float r) {
     if (!is_finite(r) || r < 0.f) return 1.f;
@@ -64,15 +62,34 @@ static uint8_t _is_big(EntityID const &id) {
     return id.id < ENTITY_CAP && big_stamp[id.id] == big_gen;
 }
 
-SpatialHash::SpatialHash(Simulation *sim) : simulation(sim), width(1), height(1) {}
+SpatialHash::SpatialHash(Simulation *sim) : simulation(sim), width(1), height(1) {
+    active.reserve(256);
+    big.reserve(32);
+}
+
+void SpatialHash::_push_cell(uint32_t cx, uint32_t cy, EntityID id) {
+    SpatialHashCell &cell = cells[cx][cy];
+    if (cell.count == 0)
+        active.push_back((cx << 16) | cy);
+    if (cell.count >= CELL_ENTITY_CAP) {
+        DEBUG_ONLY(assert(!"SpatialHash cell overflow");)
+        return;
+    }
+    cell.entities[cell.count++] = id;
+}
 
 void SpatialHash::refresh(uint32_t _width, uint32_t _height) {
     DEBUG_ONLY(assert(_width <= ARENA_WIDTH && _height <= ARENA_HEIGHT));
     width = div_round_up(_width, GRID_SIZE);
     height = div_round_up(_height, GRID_SIZE);
-    for (uint32_t x = 0; x < MAX_GRID_X; ++x)
-        for (uint32_t y = 0; y < MAX_GRID_Y; ++y)
-            cells[x][y].clear();
+    // O(active): rrolf count=0 / florr_clone epoch — not full-grid vector.clear.
+    for (uint32_t i = 0; i < active.size(); ++i) {
+        uint32_t const key = active[i];
+        uint32_t const cx = key >> 16;
+        uint32_t const cy = key & 0xffffu;
+        cells[cx][cy].count = 0;
+    }
+    active.clear();
     big.clear();
     if (++big_gen == 0) {
         std::memset(big_stamp, 0, sizeof(big_stamp));
@@ -93,16 +110,15 @@ void SpatialHash::insert(Entity const &ent) {
         _fat_range(ent.get_x(), ent.get_y(), r, sx, sy, ex, ey);
         for (uint32_t x = sx; x <= ex; ++x)
             for (uint32_t y = sy; y <= ey; ++y)
-                cells[x][y].push_back(ent.id);
+                _push_cell(x, y, ent.id);
         return;
     }
     uint32_t cx, cy;
     _center_cell(ent.get_x(), ent.get_y(), cx, cy);
-    cells[cx][cy].push_back(ent.id);
+    _push_cell(cx, cy, ent.id);
 }
 
-static void _pair(Simulation *sim,
-    std::function<void(Simulation *, Entity &, Entity &)> const &on_collide,
+static void _pair(Simulation *sim, SpatialHashCollideFn on_collide,
     EntityID a_id, EntityID b_id)
 {
     if (a_id.id == b_id.id) return;
@@ -113,38 +129,38 @@ static void _pair(Simulation *sim,
     on_collide(sim, a, b);
 }
 
-// Pair cell[i] with every small entity in `other` (big ones handled below).
-static void _pair_cell(Simulation *sim,
-    std::function<void(Simulation *, Entity &, Entity &)> const &on_collide,
-    EntityID a_id, std::vector<EntityID> const &other)
+static void _pair_cell(Simulation *sim, SpatialHashCollideFn on_collide,
+    EntityID a_id, SpatialHashCell const &other)
 {
-    for (uint32_t j = 0; j < other.size(); ++j)
-        if (!_is_big(other[j])) _pair(sim, on_collide, a_id, other[j]);
+    for (uint32_t j = 0; j < other.count; ++j)
+        if (!_is_big(other.entities[j])) _pair(sim, on_collide, a_id, other.entities[j]);
 }
 
-void SpatialHash::collide(std::function<void(Simulation *, Entity &, Entity &)> on_collide) {
-    // Small × small — rrolf half-neighbourhood: same cell + (x-1,y) + (x-1,y-1)
-    // + (x,y-1) + (x+1,y-1). Small entities live in exactly one cell, so each
-    // unordered pair fires exactly once. Fat-inserted big entries are skipped:
-    // a duplicate on_collide means duplicate inflict_damage (×N boss damage).
-    for (uint32_t x = 0; x < MAX_GRID_X; ++x) {
-        for (uint32_t y = 0; y < MAX_GRID_Y; ++y) {
-            std::vector<EntityID> const &cell = cells[x][y];
-            uint32_t const n = (uint32_t) cell.size();
-            for (uint32_t i = 0; i < n; ++i) {
-                if (_is_big(cell[i])) continue;
-                for (uint32_t j = i + 1; j < n; ++j)
-                    if (!_is_big(cell[j])) _pair(simulation, on_collide, cell[i], cell[j]);
-                if (x > 0) {
-                    _pair_cell(simulation, on_collide, cell[i], cells[x - 1][y]);
-                    if (y > 0)
-                        _pair_cell(simulation, on_collide, cell[i], cells[x - 1][y - 1]);
-                }
-                if (y > 0) {
-                    _pair_cell(simulation, on_collide, cell[i], cells[x][y - 1]);
-                    if (x + 1 < MAX_GRID_X)
-                        _pair_cell(simulation, on_collide, cell[i], cells[x + 1][y - 1]);
-                }
+void SpatialHash::collide(SpatialHashCollideFn on_collide) {
+    // Small × small — only cells that received inserts this tick.
+    for (uint32_t ai = 0; ai < active.size(); ++ai) {
+        uint32_t const key = active[ai];
+        uint32_t const x = key >> 16;
+        uint32_t const y = key & 0xffffu;
+        SpatialHashCell const &cell = cells[x][y];
+        uint32_t const n = cell.count;
+        if (n == 0) continue;
+        for (uint32_t i = 0; i < n; ++i) {
+            if (_is_big(cell.entities[i])) continue;
+            for (uint32_t j = i + 1; j < n; ++j)
+                if (!_is_big(cell.entities[j]))
+                    _pair(simulation, on_collide, cell.entities[i], cell.entities[j]);
+            // Half-neighbourhood: same cell already done; adjacent may be empty
+            // (count==0) — safe to read without being on active list.
+            if (x > 0) {
+                _pair_cell(simulation, on_collide, cell.entities[i], cells[x - 1][y]);
+                if (y > 0)
+                    _pair_cell(simulation, on_collide, cell.entities[i], cells[x - 1][y - 1]);
+            }
+            if (y > 0) {
+                _pair_cell(simulation, on_collide, cell.entities[i], cells[x][y - 1]);
+                if (x + 1 < MAX_GRID_X)
+                    _pair_cell(simulation, on_collide, cell.entities[i], cells[x + 1][y - 1]);
             }
         }
     }
@@ -160,54 +176,7 @@ void SpatialHash::collide(std::function<void(Simulation *, Entity &, Entity &)> 
         for (uint32_t x = sx; x <= ex; ++x)
             for (uint32_t y = sy; y <= ey; ++y)
                 _pair_cell(simulation, on_collide, big_id, cells[x][y]);
-        // Big × big — few of these (bosses / high-rarity giants), brute force.
         for (uint32_t j = k + 1; j < big.size(); ++j)
             _pair(simulation, on_collide, big_id, big[j]);
-    }
-}
-
-void SpatialHash::query(float x, float y, float w, float h, std::function<void(Simulation *, Entity &)> cb) {
-    static uint32_t seen_stamp[ENTITY_CAP] = {};
-    static uint32_t query_gen = 0;
-    if (++query_gen == 0) {
-        std::memset(seen_stamp, 0, sizeof(seen_stamp));
-        query_gen = 1;
-    }
-    if (!_safe_pos(x, y)) return;
-    if (!is_finite(w) || !is_finite(h) || w < 0.f || h < 0.f) return;
-    if (w > kMaxQueryHalf) w = kMaxQueryHalf;
-    if (h > kMaxQueryHalf) h = kMaxQueryHalf;
-    // Center-insert: pad by one cell so entities whose edge enters the box
-    // but center sits just outside are still candidates (rrolf does the same).
-    float const pad = (float)GRID_SIZE;
-    uint32_t sx = (uint32_t) (fclamp(x - w - pad, 0, ARENA_WIDTH - 1) / GRID_SIZE);
-    uint32_t sy = (uint32_t) (fclamp(y - h - pad, 0, ARENA_HEIGHT - 1) / GRID_SIZE);
-    uint32_t ex = (uint32_t) (fclamp(x + w + pad, 0, ARENA_WIDTH - 1) / GRID_SIZE);
-    uint32_t ey = (uint32_t) (fclamp(y + h + pad, 0, ARENA_HEIGHT - 1) / GRID_SIZE);
-    _clamp_cell(sx, sy);
-    _clamp_cell(ex, ey);
-    if (ex < sx) ex = sx;
-    if (ey < sy) ey = sy;
-    for (uint32_t _x = sx; _x <= ex; ++_x) {
-        for (uint32_t _y = sy; _y <= ey; ++_y) {
-            std::vector<EntityID> const &cell = cells[_x][_y];
-            for (uint32_t i = 0; i < cell.size(); ++i) {
-                EntityID::id_type id = cell[i].id;
-                if (id >= ENTITY_CAP || seen_stamp[id] == query_gen) continue;
-                if (!simulation->ent_exists(cell[i])) continue;
-                Entity &ent = simulation->get_ent(cell[i]);
-                if (!ent.has_component(kPhysics)) continue;
-                float er = _safe_radius(ent.get_radius());
-                float ex_ = ent.get_x();
-                float ey_ = ent.get_y();
-                if (!_safe_pos(ex_, ey_)) continue;
-                if (ex_ + er < x - w) continue;
-                if (ex_ - er > x + w) continue;
-                if (ey_ + er < y - h) continue;
-                if (ey_ - er > y + h) continue;
-                seen_stamp[id] = query_gen;
-                cb(simulation, ent);
-            }
-        }
     }
 }

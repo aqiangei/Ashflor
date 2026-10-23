@@ -42,11 +42,12 @@ Element *Ui::make_settings_panel() {
         row(&I18n::use_chinese, I18n::kLanguage),
         row(&Input::keyboard_movement, I18n::kKeyboardMovement),
         row(&Input::movement_helper, I18n::kMovementHelper),
-        // Same flag: either label is a full attack↔defend swap (see Game.cc).
         row(&Input::invert_attack, I18n::kInvertAttack),
-        row(&Input::invert_attack, I18n::kInvertDefend),
+        row(&Input::invert_defend, I18n::kInvertDefend),
+        row(&Input::disable_auto_party, I18n::kDisableAutoParty),
         row(&Input::request_mobile, I18n::kRequestMobile),
         row(&Game::show_debug, I18n::kDebugStats),
+        row(&Game::show_hitboxes, I18n::kShowHitboxes),
     };
 
     Element *toggles_block = nullptr;

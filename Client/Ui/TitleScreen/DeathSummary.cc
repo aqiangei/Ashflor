@@ -166,6 +166,7 @@ namespace {
             .round_radius = Chrome::kRadius,
             .h_justify = Style::Right,
             .v_justify = Style::Top,
+            .should_render = [](){ return Game::life_summary_ready; },
             .no_animation = 1
         });
         body->width = kPanelW;
@@ -174,13 +175,34 @@ namespace {
 }
 
 Element *Ui::make_death_life_summary() {
+    // Score / level (was bottom-left StatScreen; petals row removed — overlaps side UI)
+    Element *score_panel = new Ui::VContainer({
+        new Ui::DynamicText(16, [](){ return I18n::tr(I18n::kStats); }, {
+            .fill = Chrome::kTitle, .h_justify = Style::Left
+        }),
+        new Ui::DynamicText(14, [](){
+            return I18n::format_score_line(format_score(Game::score));
+        }, { .fill = Chrome::kBody, .h_justify = Style::Left }),
+        new Ui::DynamicText(14, [](){
+            return I18n::format_level_line(score_to_level(Game::score));
+        }, { .fill = Chrome::kBody, .h_justify = Style::Left }),
+    }, 10, 6, {
+        .fill = 0xcc2a1c14,
+        .line_width = 0,
+        .round_radius = Chrome::kRadius,
+        .h_justify = Style::Right,
+        .v_justify = Style::Top,
+        .no_animation = 1
+    });
+    score_panel->width = kPanelW;
+
     Element *elt = new Ui::VContainer({
         make_summary_panel(0),
-        make_summary_panel(1)
+        make_summary_panel(1),
+        score_panel
     }, 0, 10, {
         .should_render = [](){
-            return Game::life_summary_ready
-                && !Game::alive()
+            return !Game::alive()
                 && Game::on_game_screen
                 && !Game::leaving_to_title
                 && Game::spawn_request_at <= 0

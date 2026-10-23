@@ -13,12 +13,26 @@
 
 #include <cmath>
 
-static float owner_petal_level_mult(Simulation *sim, Entity const &player, PetalID::T id) {
+// Unique level bonus only for petals from the first primary slot holding this ID.
+static float owner_petal_level_mult(Simulation *sim, Entity const &player, Entity const &petal) {
+    PetalID::T id = petal.get_petal_id();
     if (player.has_component(kMob) || id == PetalID::kNone || id >= PetalID::kNumPetals)
         return 1.f;
     Client *owner = Server::client_by_camera(sim, player.get_parent());
-    if (owner == nullptr) return 1.f;
-    return Craft::level_stat_mult(owner->petal_levels[id]);
+    if (owner == nullptr || owner->petal_levels[id] == 0) return 1.f;
+    uint8_t seen_earlier_slot = 0;
+    uint32_t n = player.get_loadout_count();
+    for (uint32_t i = 0; i < n; ++i) {
+        LoadoutSlot const &slot = player.loadout[i];
+        if (slot.get_petal_id() != id) continue;
+        for (uint32_t j = 0; j < slot.size(); ++j) {
+            if (slot.petals[j].ent_id != petal.id) continue;
+            return seen_earlier_slot ? 1.f
+                : Craft::level_stat_mult(owner->petal_levels[id]);
+        }
+        seen_earlier_slot = 1;
+    }
+    return 1.f;
 }
 
 void tick_petal_behavior(Simulation *sim, Entity &petal) {
@@ -49,13 +63,16 @@ void tick_petal_behavior(Simulation *sim, Entity &petal) {
         } else if (pid == PetalID::kPoisonPeas || pid == PetalID::kPeas
                    || pid == PetalID::kGlassStorm) {
             petal.acceleration.unit_normal(petal.heading_angle).set_magnitude(2.0 * PLAYER_ACCELERATION);
-        } else if (pid == PetalID::kMoon) {
-            float wanting_angle = petal.get_angle() * 2.5;
-            float wanting_radius = 100 + player.get_radius();
+        } else if (petal_is_moon(pid)) {
+            // Orbit the flower: advance angle every tick (all Moon ladder IDs).
+            float dir = (petal.id.id % 2) ? 1.f : -1.f;
+            petal.set_angle(petal.get_angle() + dir * 2.5f / TPS);
+            float wanting_angle = petal.get_angle();
+            float wanting_radius = 100.f + player.get_radius();
             float wanting_x = player.get_x() + wanting_radius * (float) std::cos(wanting_angle);
             float wanting_y = player.get_y() + wanting_radius * (float) std::sin(wanting_angle);
             Vector delta(wanting_x - petal.get_x(), wanting_y - petal.get_y());
-            petal.acceleration.set(delta.x * 0.5, delta.y * 0.5);
+            petal.acceleration.set(delta.x * 0.5f, delta.y * 0.5f);
         } else {
             petal.acceleration.set(0,0);
         }
@@ -63,7 +80,7 @@ void tick_petal_behavior(Simulation *sim, Entity &petal) {
         if (petal_data.attributes.aura_radius > 0
             && (petal_data.attributes.aura_heal > 0 || petal_data.attributes.aura_slow_seconds > 0)) {
             float const R = petal_data.attributes.aura_radius;
-            float const lv_mult = owner_petal_level_mult(sim, player, pid);
+            float const lv_mult = owner_petal_level_mult(sim, player, petal);
             float const heal = petal_data.attributes.aura_heal * lv_mult / TPS;
             float const px = petal.get_x();
             float const py = petal.get_y();
@@ -91,7 +108,7 @@ void tick_petal_behavior(Simulation *sim, Entity &petal) {
         ++petal.secondary_reload;
         return;
     }
-    float const lv_mult = owner_petal_level_mult(sim, player, petal.get_petal_id());
+    float const lv_mult = owner_petal_level_mult(sim, player, petal);
     // Radial pulse: damage enemies around the flower when attacking.
     if (petal_data.attributes.radial_pulse_damage > 0
         && petal_data.attributes.radial_pulse_radius > 0

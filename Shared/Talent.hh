@@ -27,7 +27,8 @@ namespace Talent {
     inline constexpr uint8_t kMaxGradeRank = 9; // Ultra
     inline constexpr uint8_t kMaxSlotRanks = 5; // 5 + 5 = 10
 
-    inline float health_bonus(uint8_t rank) { return 20.f * (float) rank; }
+    // Was 20/rank (~+180 at max) — too weak vs level HP curve; 50 → +450 at r9.
+    inline float health_bonus(uint8_t rank) { return 50.f * (float) rank; }
     inline float rot_bonus(uint8_t rank) { return 0.4f * (float) rank; }
     inline float range_bonus(uint8_t rank) { return 8.f * (float) rank; }
     // Stacking multiplier < 1 → shorter reload

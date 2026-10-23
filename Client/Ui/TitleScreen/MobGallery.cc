@@ -13,7 +13,11 @@
 #include <Client/Input.hh>
 #include <Client/StaticData.hh>
 
+#include <Shared/Craft.hh>
 #include <Shared/RarityScale.hh>
+#include <Shared/StaticData.hh>
+
+#include <Helpers/Math.hh>
 
 #include <algorithm>
 #include <array>
@@ -23,10 +27,17 @@
 
 using namespace Ui;
 
-Element *Ui::mob_tooltips[MobID::kNumMobs] = {nullptr};
+Element *Ui::mob_tooltips[MobID::kNumMobs][RarityID::kNumRarities] = {};
 
-GalleryMob::GalleryMob(MobID::T id, float w) : 
-    Element(w,w,{ .fill=RARITY_COLORS[MOB_DATA[id].rarity], .stroke_hsv=1, .line_width=3, .round_radius=6, .v_justify=Style::Top }), id(id) {}
+GalleryMob::GalleryMob(MobID::T id, float w) :
+    GalleryMob(id, MOB_DATA[id].rarity, w) {}
+
+GalleryMob::GalleryMob(MobID::T id, uint8_t rarity, float w) :
+    Element(w, w, {
+        .fill = RARITY_COLORS[rarity < RarityID::kNumRarities ? rarity : 0],
+        .stroke_hsv = 1, .line_width = 3, .round_radius = 6, .v_justify = Style::Top
+    }), id(id),
+    display_rarity(rarity < RarityID::kNumRarities ? rarity : 0) {}
 
 static GalleryMob *s_mobile_mob_tip = nullptr;
 
@@ -39,8 +50,8 @@ void GalleryMob::on_render(Renderer &ctx) {
         rendering_tooltip = 0;
         if (s_mobile_mob_tip == this) s_mobile_mob_tip = nullptr;
     }
-    bool seen = Game::seen_mobs[id] != 0;
-    style.fill = seen ? RARITY_COLORS[MOB_DATA[id].rarity] : 0xffaeaa3d;
+    bool seen = Game::mob_seen_at(id, display_rarity);
+    style.fill = seen ? RARITY_COLORS[display_rarity] : 0xffaeaa3d;
     style.stroke_hsv = seen ? 1.f : 0.f;
     style.line_width = seen ? 3.f : 0.f;
     Element::on_render(ctx);
@@ -56,6 +67,7 @@ void GalleryMob::on_render(Renderer &ctx) {
     if (id == MobID::kBeetle || id == MobID::kMassiveBeetle || id == MobID::kFlowerGuardian)
         ctx.translate(-5,0);
     float radius = (data.radius.upper + data.radius.lower) / 2;
+    radius *= mob_rarity_radius_mult(display_rarity);
     if (radius > width * 0.5) ctx.scale(0.5 * width / radius);
     ctx.scale(0.5);
     draw_static_mob(id, ctx, { .radius = radius, .flower_attrs = { .color = ColorID::kGray } });
@@ -67,12 +79,13 @@ void GalleryMob::on_render(Renderer &ctx) {
 }
 
 void GalleryMob::on_event(uint8_t event) {
-    if (!Game::seen_mobs[id]) {
+    if (!Game::mob_seen_at(id, display_rarity)) {
         rendering_tooltip = 0;
         tip_touch = (uint32_t) -1;
         if (s_mobile_mob_tip == this) s_mobile_mob_tip = nullptr;
         return;
     }
+    Element *tip = Ui::mob_tooltips[id][display_rarity];
     // Mobile: keep the tip up while the finger is still down. Scroll jitter
     // clears Element::touch_id before kFocusLost, so track tip_touch separately.
     if (Input::is_mobile) {
@@ -84,14 +97,14 @@ void GalleryMob::on_event(uint8_t event) {
             s_mobile_mob_tip = this;
             tip_touch = touch_id;
             rendering_tooltip = 1;
-            tooltip = Ui::mob_tooltips[id];
+            tooltip = tip;
             return;
         }
         if (event == kFocusLost || event == kClick) {
             if (event == kFocusLost && tip_touch != (uint32_t) -1
                 && Input::touches.contains(tip_touch)) {
                 rendering_tooltip = 1;
-                tooltip = Ui::mob_tooltips[id];
+                tooltip = tip;
                 return;
             }
             tip_touch = (uint32_t) -1;
@@ -102,28 +115,38 @@ void GalleryMob::on_event(uint8_t event) {
     }
     if (event != kFocusLost) {
         rendering_tooltip = 1;
-        tooltip = Ui::mob_tooltips[id];
+        tooltip = tip;
     } else
         rendering_tooltip = 0;
 }
 
-static Element *make_mob_drops(MobID::T id, float petal_size = 40) {
+static PetalID::T resolve_gallery_drop(PetalID::T seed, uint8_t rarity) {
+    if (seed == PetalID::kNone || seed >= PetalID::kNumPetals) return PetalID::kNone;
+    if (is_chase_loot_petal(seed)) return seed;
+    PetalID::T resolved = Craft::petal_at_rarity(seed, rarity);
+    return resolved != PetalID::kNone ? resolved : seed;
+}
+
+static Element *make_mob_drops(MobID::T id, uint8_t rarity, float petal_size = 40) {
     Element *elt = new Ui::HContainer({}, 0, 6, { .h_justify = Style::Left });
     struct MobData const &data = MOB_DATA[id];
-    StaticArray<float, MAX_DROPS_PER_MOB> const &drop_chances = MOB_DROP_CHANCES[id];
+    // Same weights Death rolls (tilt + out-of-band floor), then % = w/total.
+    float weights[MAX_DROPS_PER_MOB] = {};
+    float total = Craft::mob_loot_weights(id, rarity, weights);
     std::vector<uint8_t> order;
     for (uint32_t i = 0; i < data.drops.size(); ++i)
         order.push_back(i);
-    
+
     std::sort(order.begin(), order.end(), [&](uint8_t a, uint8_t b) {
-        return drop_chances[a] > drop_chances[b];
+        return weights[a] > weights[b];
     });
 
     for (uint32_t i = 0; i < data.drops.size(); ++i) {
         uint32_t j = order[i];
-        PetalID::T drop = data.drops[j];
+        PetalID::T seed = data.drops[j];
+        PetalID::T drop = resolve_gallery_drop(seed, rarity);
         if (drop == PetalID::kNone || drop >= PetalID::kNumPetals) continue;
-        float chance = j < drop_chances.size() ? drop_chances[j] : 0.f;
+        float chance = total > 0.f ? weights[j] / total : 0.f;
         elt->add_child(new Ui::VContainer({
             // always_show: bestiary should list drops even before the petal is owned
             new GalleryPetal(drop, petal_size, 1),
@@ -133,26 +156,33 @@ static Element *make_mob_drops(MobID::T id, float petal_size = 40) {
     return elt;
 }
 
-static Element *make_mob_stat_container(MobID::T id) {
+static Element *make_mob_stat_container(MobID::T id, uint8_t rarity) {
     std::vector<Ui::Element *> stats;
     struct MobData const &mob_data = MOB_DATA[id];
     struct MobAttributes const &attrs = mob_data.attributes;
+    uint8_t base_r = mob_data.rarity;
+    float hp_m = mob_spawn_threat_mult(base_r, rarity);
+    float dmg_m = mob_spawn_damage_mult(base_r, rarity);
+    float xp_m = mob_spawn_xp_mult(base_r, rarity);
+
+    RangeValue scaled_hp(mob_data.health.lower * hp_m, mob_data.health.upper * hp_m);
     stats.push_back(new Ui::HContainer({
         new Ui::DynamicText(12, [](){ return I18n::tr(I18n::kHealth); }, { .fill = 0xff77ff77 }),
-        new Ui::StaticText(12, mob_data.health.to_string())
+        new Ui::StaticText(12, scaled_hp.to_string())
     }, 0, 5, { .h_justify = Style::Left }));
     stats.push_back(new Ui::HContainer({
         new Ui::DynamicText(12, [](){ return I18n::tr(I18n::kDamage); }, { .fill = 0xffff7777 }),
-        new Ui::StaticText(12, format_number(mob_data.damage))
+        new Ui::StaticText(12, format_number(mob_data.damage * dmg_m))
     }, 0, 5, { .h_justify = Style::Left }));
     if (attrs.poison_damage.damage > 0) {
+        float pd = attrs.poison_damage.damage * dmg_m;
         stats.push_back(new Ui::HContainer({
             new Ui::DynamicText(12, [](){ return I18n::tr(I18n::kPoison); }, { .fill = 0xffce76db }),
-            new Ui::StaticText(12, format_number(attrs.poison_damage.damage * attrs.poison_damage.time) + " (" + format_number(attrs.poison_damage.damage) + "/s)")
+            new Ui::StaticText(12, format_number(pd * attrs.poison_damage.time) + " (" + format_number(pd) + "/s)")
         }, 0, 5, { .h_justify = Style::Left }));
     }
     {
-        uint32_t grant_xp = (uint32_t)(mob_data.xp * kill_xp_grant_mult() + 0.5f);
+        uint32_t grant_xp = (uint32_t)(mob_data.xp * xp_m * kill_xp_grant_mult() + 0.5f);
         if (grant_xp == 0 && mob_data.xp > 0) grant_xp = 1;
         stats.push_back(new Ui::HContainer({
             new Ui::DynamicText(12, [](){ return I18n::tr(I18n::kXp); }, { .fill = 0xff7777ff }),
@@ -162,73 +192,43 @@ static Element *make_mob_stat_container(MobID::T id) {
     return new Ui::VContainer(stats, 0, 2, { .h_justify = Style::Left });
 }
 
-static void make_mob_tooltip(MobID::T id) {
+static void make_mob_tooltip(MobID::T id, uint8_t rarity) {
     std::vector<Ui::Element *> children = {
         new Ui::DynamicText(20, [id](){ return I18n::mob_name(id); }, { .fill = 0xffffffff, .h_justify = Style::Left }),
-        new Ui::DynamicText(14, [id](){ return I18n::rarity_name(MOB_DATA[id].rarity); }, { .fill = RARITY_COLORS[MOB_DATA[id].rarity], .h_justify = Style::Left }),
+        new Ui::DynamicText(14, [rarity](){ return I18n::rarity_name(rarity); },
+            { .fill = RARITY_COLORS[rarity], .h_justify = Style::Left }),
         new Ui::Element(0, 6),
         new Ui::DynamicText(12, [id](){ return I18n::mob_desc(id); }, { .fill = 0xffffffff, .h_justify = Style::Left }),
         new Ui::Element(0, 6),
-        make_mob_stat_container(id),
+        make_mob_stat_container(id, rarity),
     };
     if (MOB_DATA[id].drops.size() > 0) {
         children.push_back(new Ui::Element(0, 8));
         children.push_back(new Ui::DynamicText(12, [](){
             return I18n::use_chinese ? std::string("掉落") : std::string("Drops");
         }, { .fill = 0xffffffff, .h_justify = Style::Left }));
-        children.push_back(make_mob_drops(id, 36));
+        children.push_back(make_mob_drops(id, rarity, 36));
     }
     Element *tooltip = new Ui::VContainer(children, 5, 2);
     tooltip->style.fill = 0xb01c2418;
     tooltip->style.round_radius = 12;
     tooltip->refactor();
-    Ui::mob_tooltips[id] = tooltip;
+    Ui::mob_tooltips[id][rarity] = tooltip;
 }
 
 void Ui::make_mob_tooltips() {
     for (MobID::T i = 0; i < MobID::kNumMobs; ++i)
-        make_mob_tooltip(i);
-}
-
-static Element *make_mob_card(MobID::T id) {
-    Element *elt = new Ui::VContainer({
-        new Ui::Element(300,0),
-        new Ui::HFlexContainer(
-            new Ui::VContainer({
-                new Ui::DynamicText(18, [id](){ return I18n::mob_name(id); }, { .fill = 0xffffffff, .h_justify = Style::Left }),
-                new Ui::DynamicText(14, [id](){ return I18n::rarity_name(MOB_DATA[id].rarity); }, { .fill = RARITY_COLORS[MOB_DATA[id].rarity], .h_justify = Style::Left }),
-                new Ui::Element(0,2),
-                new Ui::DynamicText(14, [id](){ return I18n::mob_desc(id); }, { .fill = 0xffffffff, .h_justify = Style::Left })
-            }, 0, 5),
-            new GalleryMob(id, 60),
-            10, 10
-        ),
-        new Ui::Element(0,10),
-        make_mob_stat_container(id),
-        new Ui::Element(0,10),
-        make_mob_drops(id, 45)
-    }, 10, 0, { .fill = 0x33000000, .stroke_hsv = 1, .line_width = 3, .round_radius = 6, .v_justify = Style::Top, .no_animation = 1 });
-    Element *chooser = new Ui::Choose(
-        new Ui::VContainer({
-            new Ui::Element(300,5),
-            new Ui::StaticText(16, "?"),
-            new Ui::Element(300,5)
-        }, 10, 0, { .fill = 0x33000000, .stroke_hsv = 1, .line_width = 3, .round_radius = 6, .v_justify = Style::Top, .no_animation = 1 }),
-        elt,
-        [=](){ return Game::seen_mobs[id]; }
-    );
-    chooser->style.v_justify = Style::Top;
-    chooser->style.no_animation = 1;
-    return chooser;
+        for (uint8_t r = 0; r < RarityID::kNumRarities; ++r)
+            make_mob_tooltip(i, r);
 }
 
 static Element *make_scroll() {
     // Desktop was 110×1050 — oversized on 1080p; keep mobile compact.
     float const kCell = Input::is_mobile ? 46.f : 72.f;
-    constexpr uint16_t kEmpty = 0xffffu;
     struct Family {
         char const *name;
-        std::array<uint16_t, RarityID::kNumRarities> ids;
+        MobID::T base_id; // canonical draw/drop seed (lowest baked rarity)
+        uint8_t base_rarity;
     };
     std::vector<Family> families;
     for (uint16_t id = 0; id < MobID::kNumMobs; ++id) {
@@ -237,26 +237,26 @@ static Element *make_scroll() {
         if (rarity >= RarityID::kNumRarities) continue;
         Family *target = nullptr;
         for (Family &family : families)
-            if (std::strcmp(family.name, name) == 0 && family.ids[rarity] == kEmpty) {
+            if (std::strcmp(family.name, name) == 0) {
                 target = &family;
                 break;
             }
         if (!target) {
-            Family family{name, {}};
-            family.ids.fill(kEmpty);
-            families.push_back(family);
-            target = &families.back();
+            families.push_back({ name, (MobID::T)id, rarity });
+            continue;
         }
-        target->ids[rarity] = id;
+        // Prefer the lowest baked rarity as the family seed (spawn floor).
+        if (rarity < target->base_rarity) {
+            target->base_id = (MobID::T)id;
+            target->base_rarity = rarity;
+        }
     }
     std::vector<Element *> rows;
     for (Family const &family : families) {
         std::vector<Element *> cards;
-        for (uint16_t id : family.ids)
-            cards.push_back(id == kEmpty
-                ? static_cast<Element *>(new Element(kCell, kCell,
-                    { .fill = 0xffaeaa3d, .round_radius = 5.f }))
-                : static_cast<Element *>(new GalleryMob((MobID::T)id, kCell)));
+        // Full Common→Unique row: same MobID, live rarity for color/stats/drops.
+        for (uint8_t r = 0; r < RarityID::kNumRarities; ++r)
+            cards.push_back(new GalleryMob(family.base_id, r, kCell));
         rows.push_back(new Ui::HContainer(cards, 0, 5,
             { .h_justify = Style::Left, .no_animation = 1 }));
     }

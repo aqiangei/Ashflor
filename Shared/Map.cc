@@ -11,6 +11,7 @@
 #include <algorithm>
 #include <cmath>
 #include <iostream>
+#include <unordered_map>
 #include <vector>
 
 #ifndef M_PI
@@ -140,8 +141,8 @@ void Map::spiral_center_at(TerrainFeature const &f, float t, float &x, float &y)
 
 // Cheap conservative broad phase. Pads include jagged protrusions so we never
 // miss a hit outside the smooth AABB/ellipse while art extends past it.
-static bool feature_near_circle(TerrainFeature const &f, float x, float y, float radius) {
-    float x0, y0, x1, y1;
+static void feature_bounds(TerrainFeature const &f, float radius,
+                           float &x0, float &y0, float &x1, float &y1) {
     if (f.shape == TerrainShape::kRiver) {
         float pad = feature_half_width(f) * 1.12f + 240.f + radius;
         x0 = std::min(f.left, f.right) - pad;
@@ -168,6 +169,11 @@ static bool feature_near_circle(TerrainFeature const &f, float x, float y, float
         x0 = f.left - pad; x1 = f.right + pad;
         y0 = f.top - pad; y1 = f.bottom + pad;
     }
+}
+
+static bool feature_near_circle(TerrainFeature const &f, float x, float y, float radius) {
+    float x0, y0, x1, y1;
+    feature_bounds(f, radius, x0, y0, x1, y1);
     return x >= x0 && x <= x1 && y >= y0 && y <= y1;
 }
 
@@ -198,12 +204,62 @@ static float dist2_point_seg(float px, float py, float ax, float ay, float bx, f
 }
 
 // Closest point on the river/spiral centerline polyline (matches drawn ribbon).
+namespace {
+struct PathSegment {
+    float ax, ay, bx, by, tx, ty, hw[2];
+};
+struct CachedPath {
+    TerrainFeature source{};
+    uint32_t count = 0;
+    std::array<PathSegment, 48> segments;
+};
+std::unordered_map<TerrainFeature const *, CachedPath> path_cache;
+
+CachedPath const &cached_path(TerrainFeature const &f) {
+    auto it = path_cache.find(&f);
+    if (it != path_cache.end()) {
+        TerrainFeature const &s = it->second.source;
+        if (s.left == f.left && s.top == f.top && s.right == f.right && s.bottom == f.bottom
+            && s.shape == f.shape && s.kind == f.kind && s.seed == f.seed && s.param == f.param)
+            return it->second;
+    } else {
+        // Normally at most one entry per static map feature. Keep this bounded
+        // even if a future caller passes temporary terrain objects.
+        if (path_cache.size() >= MapID::kNumMaps * MAX_TERRAIN_PER_MAP)
+            path_cache.erase(path_cache.begin());
+        it = path_cache.emplace(&f, CachedPath{}).first;
+    }
+    CachedPath &path = it->second;
+    path.source = f;
+    path.count = f.shape == TerrainShape::kSpiral ? 48u : 36u;
+    float ax, ay;
+    if (f.shape == TerrainShape::kSpiral) Map::spiral_center_at(f, 0.f, ax, ay);
+    else Map::river_center_at(f, 0.f, ax, ay);
+    float base_hw = Map::feature_half_width(f);
+    uint32_t seed = feature_seed(f);
+    for (uint32_t i = 1; i <= path.count; ++i) {
+        PathSegment &s = path.segments[i - 1];
+        s.ax = ax; s.ay = ay;
+        float t = (float)i / (float)path.count;
+        if (f.shape == TerrainShape::kSpiral) Map::spiral_center_at(f, t, s.bx, s.by);
+        else Map::river_center_at(f, t, s.bx, s.by);
+        s.tx = s.bx - ax; s.ty = s.by - ay;
+        float len = std::sqrt(s.tx * s.tx + s.ty * s.ty);
+        if (len < 1e-3f) { s.tx = 1.f; s.ty = 0.f; }
+        else { s.tx /= len; s.ty /= len; }
+        s.hw[0] = base_hw * path_width_scale(seed, i - 1, 0);
+        s.hw[1] = base_hw * path_width_scale(seed, i - 1, 1);
+        ax = s.bx; ay = s.by;
+    }
+    return path;
+}
+} // namespace
+
 // Old circle-around-nearest-sample blew past meander bends as invisible air walls.
 static void closest_on_path(TerrainFeature const &f, float x, float y,
                             float &qx, float &qy, float &hw,
                             float &nx, float &ny, float &dist) {
-    uint32_t const samples = (f.shape == TerrainShape::kSpiral) ? 48u : 36u;
-    uint32_t seed = feature_seed(f);
+    CachedPath const &path = cached_path(f);
     float base_hw = feature_half_width(f);
     float best_d2 = 1e12f;
     qx = f.left; qy = f.top;
@@ -211,44 +267,26 @@ static void closest_on_path(TerrainFeature const &f, float x, float y,
     nx = 1.f; ny = 0.f;
     dist = 0.f;
 
-    float ax, ay;
-    if (f.shape == TerrainShape::kSpiral)
-        spiral_center_at(f, 0.f, ax, ay);
-    else
-        river_center_at(f, 0.f, ax, ay);
-
-    for (uint32_t i = 1; i <= samples; ++i) {
-        float t = (float)i / (float)samples;
-        float bx, by;
-        if (f.shape == TerrainShape::kSpiral)
-            spiral_center_at(f, t, bx, by);
-        else
-            river_center_at(f, t, bx, by);
-
+    for (uint32_t i = 0; i < path.count; ++i) {
+        PathSegment const &s = path.segments[i];
         float pqx = 0.f, pqy = 0.f;
-        float d2 = dist2_point_seg(x, y, ax, ay, bx, by, pqx, pqy);
+        float d2 = dist2_point_seg(x, y, s.ax, s.ay, s.bx, s.by, pqx, pqy);
         if (d2 < best_d2) {
             best_d2 = d2;
             qx = pqx; qy = pqy;
-            float tx = bx - ax, ty = by - ay;
-            float tlen = std::sqrt(tx * tx + ty * ty);
-            if (tlen < 1e-3f) { tx = 1.f; ty = 0.f; tlen = 1.f; }
-            else { tx /= tlen; ty /= tlen; }
+            float tx = s.tx, ty = s.ty;
             // Bank scale matches terrain_outline (+n = side 0, -n = side 1)
             float nnx = -ty, nny = tx;
             float rx = x - pqx, ry = y - pqy;
             float cross = tx * ry - ty * rx;
             uint8_t side = cross >= 0.f ? 0 : 1;
-            uint32_t si = i > 0 ? i - 1 : 0;
-            if (si >= samples) si = samples - 1;
-            hw = base_hw * path_width_scale(seed, si, side);
+            hw = s.hw[side];
             // Push normal: from centerline toward the query (stable for eject).
             float rlen = std::sqrt(rx * rx + ry * ry);
             if (rlen > 1e-3f) { nx = rx / rlen; ny = ry / rlen; }
             else if (side == 0) { nx = nnx; ny = nny; }
             else { nx = -nnx; ny = -nny; }
         }
-        ax = bx; ay = by;
     }
     dist = std::sqrt(best_d2);
 }
@@ -345,15 +383,73 @@ static uint8_t circle_hits_feature(TerrainFeature const &f, float x, float y, fl
     return circle_hits_jagged_box(f, x, y, radius);
 }
 
+namespace {
+// Immutable terrain gets its own broad phase, like florr_clone's enemyGrid.
+// CCD asks this many times per moving entity; scanning the entire map made
+// server tick cost grow with every mob and loot pile left in the world.
+constexpr int kTerrainCell = 512;
+constexpr int kTerrainCols = (ARENA_WIDTH + kTerrainCell - 1) / kTerrainCell;
+constexpr int kTerrainRows = (ARENA_HEIGHT + kTerrainCell - 1) / kTerrainCell;
+struct TerrainIndex {
+    uint32_t feature_count = 0xffffffffu;
+    std::array<std::vector<uint16_t>, kTerrainCols * kTerrainRows> cells;
+    std::array<uint32_t, MAX_TERRAIN_PER_MAP> seen{};
+    uint32_t generation = 0;
+};
+std::array<TerrainIndex, MapID::kNumMaps> terrain_indices;
+
+int terrain_cell(float v, int count) {
+    return (int)(fclamp(v, 0.f, (float)(count * kTerrainCell - 1)) / kTerrainCell);
+}
+
+TerrainIndex &terrain_index(uint8_t map_id, MapTerrain const &terrain) {
+    TerrainIndex &index = terrain_indices[map_id];
+    if (index.feature_count == terrain.size()) return index;
+    // MapGen appends gates while validating connectivity; refresh the index
+    // during those passes too, so newly carved corridors are immediately usable.
+    for (auto &cell : index.cells) cell.clear();
+    for (uint16_t i = 0; i < terrain.size(); ++i) {
+        TerrainFeature const &f = terrain[i];
+        if (f.kind != TerrainKind::kChannel && !(f.flags & TerrainFlags::kImpassable)) continue;
+        float x0, y0, x1, y1;
+        feature_bounds(f, 0.f, x0, y0, x1, y1);
+        for (int cy = terrain_cell(y0, kTerrainRows); cy <= terrain_cell(y1, kTerrainRows); ++cy)
+            for (int cx = terrain_cell(x0, kTerrainCols); cx <= terrain_cell(x1, kTerrainCols); ++cx)
+                index.cells[cy * kTerrainCols + cx].push_back(i);
+    }
+    index.feature_count = terrain.size();
+    return index;
+}
+} // namespace
+
 uint8_t Map::circle_hits_impassable(uint8_t map_id, float x, float y, float radius) {
     MapTerrain const &terrain = map_terrain(map_id);
+    TerrainIndex &index = terrain_index(map_id, terrain);
+    if (++index.generation == 0) {
+        index.seen.fill(0);
+        index.generation = 1;
+    }
+    StaticArray<uint16_t, MAX_TERRAIN_PER_MAP> candidates;
+    int x0 = terrain_cell(x - radius, kTerrainCols), x1 = terrain_cell(x + radius, kTerrainCols);
+    int y0 = terrain_cell(y - radius, kTerrainRows), y1 = terrain_cell(y + radius, kTerrainRows);
+    for (int cy = y0; cy <= y1; ++cy) {
+        for (int cx = x0; cx <= x1; ++cx) {
+            for (uint16_t i : index.cells[cy * kTerrainCols + cx]) {
+                if (index.seen[i] == index.generation) continue;
+                index.seen[i] = index.generation;
+                candidates.push(i);
+            }
+        }
+    }
     // Safe arteries carve walkable corridors through hills/water.
     // Use circle vs channel (not just center point) so edges don't trap players.
-    for (TerrainFeature const &f : terrain) {
+    for (uint16_t i : candidates) {
+        TerrainFeature const &f = terrain[i];
         if (f.kind != TerrainKind::kChannel) continue;
         if (circle_hits_feature(f, x, y, radius)) return 0;
     }
-    for (TerrainFeature const &f : terrain) {
+    for (uint16_t i : candidates) {
+        TerrainFeature const &f = terrain[i];
         if (!(f.flags & TerrainFlags::kImpassable)) continue;
         if (circle_hits_feature(f, x, y, radius)) return 1;
     }
@@ -993,13 +1089,19 @@ static float soft_zone_density_mul(Simulation *sim, uint32_t difficulty) {
 
 static constexpr uint32_t kPlazaMobCap = 16;
 // dens×area alone is not safe: Common hub ≈ 29e6 units² → hundreds of heads.
+// Rare+ used to return ~unlimited and never ran thin_soft → ring inflation.
 static constexpr uint32_t kSoftAbsCapCommon = 64;
 static constexpr uint32_t kSoftAbsCapUnusual = 80;
+static constexpr uint32_t kSoftAbsCapRare = 96;
+static constexpr uint32_t kSoftAbsCapEpic = 120;
+static constexpr uint32_t kSoftAbsCapLegendaryPlus = 160;
 
 static uint32_t soft_zone_abs_cap(uint32_t difficulty) {
     if (difficulty == 0) return kSoftAbsCapCommon;
     if (difficulty <= RarityID::kUnusual) return kSoftAbsCapUnusual;
-    return 0xffffffffu;
+    if (difficulty <= RarityID::kRare) return kSoftAbsCapRare;
+    if (difficulty <= RarityID::kEpic) return kSoftAbsCapEpic;
+    return kSoftAbsCapLegendaryPlus;
 }
 
 static float soft_zone_spawn_target(Simulation *sim, uint32_t zone_id,
@@ -1015,7 +1117,7 @@ void Map::thin_soft_zone_excess(Simulation *sim) {
     MapZones const &zones = map_zones(sim->map_id);
     for (uint32_t z = 0; z < zones.size(); ++z) {
         ZoneDefinition const &zone = zones[z];
-        if (zone.difficulty > RarityID::kUnusual) continue;
+        // All rarity rings now have abs caps; drain surplus (prefer culled).
         float target = soft_zone_spawn_target(sim, z, zone);
         float count = (float)sim->zone_mob_counts[z];
         if (count <= target + 3.f) continue;
@@ -1061,14 +1163,8 @@ void Map::spawn_random_mob(Simulation *sim, float x, float y) {
         if (zone.difficulty != 0) return;
         if (sim->plaza_mob_count >= kPlazaMobCap) return;
     }
-    if (zone.difficulty <= RarityID::kUnusual) {
-        if ((float)sim->zone_mob_counts[zone_id] >= soft_zone_spawn_target(sim, zone_id, zone))
-            return;
-    } else {
-        float dens = zone.density * soft_zone_density_mul(sim, zone.difficulty);
-        if (dens * zone_exclusive_area(sim->map_id, zone_id) / (500 * 500) < sim->zone_mob_counts[zone_id])
-            return;
-    }
+    if ((float)sim->zone_mob_counts[zone_id] >= soft_zone_spawn_target(sim, zone_id, zone))
+        return;
     float sum = 0;
     for (SpawnChance const &s : zone.spawns)
         sum += s.chance;
@@ -1200,6 +1296,24 @@ uint32_t Map::pick_spawn_zone(uint8_t map_id) {
     return n - 1;
 }
 
+// Network-AOI half-extents (must match _spawn_zone_mob_once). Reject candidates
+// before corridor/clearance probes — those were the ~90ms spawn_max spikes.
+static void spawn_aoi_half(float &hw, float &hh) {
+    constexpr float kMinClientZoom = 0.55f;
+    hw = 960.f / (BASE_FOV * kMinClientZoom) + 420.f;
+    hh = 540.f / (BASE_FOV * kMinClientZoom) + 420.f;
+}
+
+static uint8_t point_near_flower_aoi(Simulation *sim, float x, float y, float hw, float hh) {
+    uint8_t near = 0;
+    sim->for_each<kFlower>([&](Simulation *, Entity &f) {
+        if (near || f.has_component(kMob)) return;
+        if (std::fabs(f.get_x() - x) <= hw && std::fabs(f.get_y() - y) <= hh)
+            near = 1;
+    });
+    return near;
+}
+
 // 在指定 Zone 内按落点类别采样合法落点（clearance 含稀有度体型）。
 uint8_t Map::sample_spawn_point(Simulation *sim, uint32_t zone_id, uint8_t mob_id, float &ox, float &oy, uint8_t spawn_rarity) {
     MapZones const &zones = map_zones(sim->map_id);
@@ -1214,6 +1328,8 @@ uint8_t Map::sample_spawn_point(Simulation *sim, uint32_t zone_id, uint8_t mob_i
     float zw = zone.right - zone.left - 2.f * margin;
     float zh = zone.bottom - zone.top - 2.f * margin;
     if (zw <= 0.f || zh <= 0.f) return 0;
+    float aoi_hw = 0.f, aoi_hh = 0.f;
+    spawn_aoi_half(aoi_hw, aoi_hh);
 
     for (uint32_t attempt = 0; attempt < 12; ++attempt) {
         float x = 0.f, y = 0.f;
@@ -1223,6 +1339,8 @@ uint8_t Map::sample_spawn_point(Simulation *sim, uint32_t zone_id, uint8_t mob_i
         case SpawnClass::kNearWall: {
             float bx = zone.left + margin + frand() * zw;
             float by = zone.top + margin + frand() * zh;
+            // Cheap AOI reject before wall probes.
+            if (!point_near_flower_aoi(sim, bx, by, aoi_hw, aoi_hh)) { ok = false; break; }
             if (circle_hits_impassable(sim->map_id, bx, by, clearance)) { ok = false; break; }
             // Find a real wall within reach — a direction that stays open for the
             // whole probe distance does not count as "attached to a wall".
@@ -1247,15 +1365,18 @@ uint8_t Map::sample_spawn_point(Simulation *sim, uint32_t zone_id, uint8_t mob_i
         case SpawnClass::kCorridor: {
             float bx = zone.left + margin + frand() * zw;
             float by = zone.top + margin + frand() * zh;
+            if (!point_near_flower_aoi(sim, bx, by, aoi_hw, aoi_hh)) { ok = false; break; }
             if (circle_hits_impassable(sim->map_id, bx, by, clearance)) { ok = false; break; }
             float best = 0.f, bdx = 1.f, bdy = 0.f;
+            // Cap probe — full 2000×4 was the main spawn hitch on failed attempts.
+            float const kCorridorMax = 900.f;
             for (uint32_t k = 0; k < 4; ++k) {
                 float ang = (float)k * (float)M_PI * 0.5f;
                 float dx = std::cos(ang), dy = std::sin(ang);
-                float reach = corridor_reach(sim->map_id, bx, by, dx, dy, clearance, 2000.f);
+                float reach = corridor_reach(sim->map_id, bx, by, dx, dy, clearance, kCorridorMax);
                 if (reach > best) { best = reach; bdx = dx; bdy = dy; }
             }
-            if (best < 800.f) { ok = false; break; }
+            if (best < 400.f) { ok = false; break; }
             // Spread along the corridor instead of stacking on its midpoint
             float along = best * (0.25f + 0.5f * frand());
             x = bx + bdx * along;
@@ -1288,6 +1409,8 @@ uint8_t Map::sample_spawn_point(Simulation *sim, uint32_t zone_id, uint8_t mob_i
         if (!ok) continue;
         if (x < zone.left + margin || x > zone.right - margin) continue;
         if (y < zone.top + margin || y > zone.bottom - margin) continue;
+        // Default/anchor picks: reject far-from-player before clearance probes.
+        if (!point_near_flower_aoi(sim, x, y, aoi_hw, aoi_hh)) continue;
         if (circle_hits_impassable(sim->map_id, x, y, clearance)) continue;
         float need_clear = rule.min_clear > 0.f ? rule.min_clear
             : (cls == SpawnClass::kAnchor ? (attempt < 8 ? 700.f : 300.f) : 0.f);
@@ -1311,9 +1434,8 @@ uint8_t Map::sample_spawn_point(Simulation *sim, uint32_t zone_id, uint8_t mob_i
 
 // 主刷怪入口：选区 → 选点 → 抽怪 → 生成。
 void Map::spawn_zone_mob(Simulation *sim) {
-    // A placement can fail (no wall nearby, no open ground). Retry a few times
-    // with a fresh pick so the global spawn rate is not silently reduced.
-    for (uint32_t attempt = 0; attempt < 4; ++attempt) {
+    // Two tries — was 4× full placement; failed corridor probes blew the tick.
+    for (uint32_t attempt = 0; attempt < 2; ++attempt) {
         if (_spawn_zone_mob_once(sim)) return;
     }
 }
@@ -1322,15 +1444,9 @@ uint8_t Map::_spawn_zone_mob_once(Simulation *sim) {
     MapZones const &zones = map_zones(sim->map_id);
     if (zones.size() == 0) return 0;
 
-    // Match network AOI (Game.cc): spawn inside the box the player can actually see.
-    // Wider than AI cull so mobs near the edge are visible but might be culled for
-    // 1-2 ticks; unseenDespawn will clean them up ~30s later if they stay outside.
-    // This keeps refill aligned with what the client renders, not just AI behavior.
-    constexpr float kMinClientZoom = 0.55f;
-    // Slightly wider than render AOI so corner pockets still get refill attempts
-    // while the player is standing near the edge of a zone.
-    float const near_hw = 960.f / (BASE_FOV * kMinClientZoom) + 420.f;
-    float const near_hh = 540.f / (BASE_FOV * kMinClientZoom) + 420.f;
+    // AOI half-extents shared with sample_spawn_point (cheap reject first).
+    float near_hw = 0.f, near_hh = 0.f;
+    spawn_aoi_half(near_hw, near_hh);
 
     // Prefer a zone that already contains a flower (human or bot) so random
     // global pick_spawn_zone isn't mostly wasted on far biomes.
@@ -1353,14 +1469,9 @@ uint8_t Map::_spawn_zone_mob_once(Simulation *sim) {
     }
     if (zone_id >= zones.size()) return 0;
     ZoneDefinition const &zone = zones[zone_id];
-    if (zone.difficulty <= RarityID::kUnusual) {
-        if ((float)sim->zone_mob_counts[zone_id] >= soft_zone_spawn_target(sim, zone_id, zone))
-            return 0;
-    } else {
-        float dens = zone.density * soft_zone_density_mul(sim, zone.difficulty);
-        if (dens * zone_exclusive_area(sim->map_id, zone_id) / (500 * 500) < sim->zone_mob_counts[zone_id])
-            return 0;
-    }
+    // dens×area + per-rarity abs_cap (Rare+ used to skip abs_cap → ring bloat).
+    if ((float)sim->zone_mob_counts[zone_id] >= soft_zone_spawn_target(sim, zone_id, zone))
+        return 0;
 
     float total = 0.f;
     for (SpawnChance const &s : zone.spawns) total += s.chance;
@@ -1380,18 +1491,9 @@ uint8_t Map::_spawn_zone_mob_once(Simulation *sim) {
     uint8_t spawn_r = resolve_zone_spawn_rarity(base_r, zone.difficulty);
 
     float x = 0.f, y = 0.f;
+    // sample_spawn_point already rejects outside flower AOI before heavy probes.
     if (!Map::sample_spawn_point(sim, zone_id, mob_id, x, y, spawn_r)) return 0;
-    // Only accept points inside at least one flower's network-AOI box.
-    {
-        bool near_player = false;
-        sim->for_each<kFlower>([&](Simulation *, Entity &f) {
-            if (near_player || f.has_component(kMob)) return;
-            float dx = f.get_x() - x, dy = f.get_y() - y;
-            if (std::fabs(dx) <= near_hw && std::fabs(dy) <= near_hh)
-                near_player = true;
-        });
-        if (!near_player) return 0;
-    }
+    if (!point_near_flower_aoi(sim, x, y, near_hw, near_hh)) return 0;
     if (cls == SpawnClass::kAnchor) {
         // 同款精英 1500 单位半径内至多 1 只（跨 Zone，总纲 R6）。
         // Must use for_each: spawn runs before spatial_hash.insert this tick.

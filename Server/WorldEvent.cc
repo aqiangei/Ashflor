@@ -3,6 +3,7 @@
 #include <Server/Chat.hh>
 #include <Server/Client.hh>
 #include <Server/Game.hh>
+#include <Server/Party.hh>
 #include <Server/Spawn.hh>
 
 #include <Shared/Entity.hh>
@@ -504,6 +505,8 @@ static Entity &spawn_pad(Simulation *sim, float x, float y, char const *name, ui
         BitMath::set(ent.flags, EntityFlags::kNoDrops);
         BitMath::set(ent.flags, EntityFlags::kHasCulling);
         BitMath::set(ent.flags, EntityFlags::kNoFriendlyCollision);
+        BitMath::unset(ent.flags, EntityFlags::kSpawnedFromZone);
+        ent.zone = 0xFF; // idle-map thin + zone despawn skip
         ent.score_reward = 0;
         ent.damage = 0;
         ent.mass = 10000.f;
@@ -520,6 +523,8 @@ static Entity &spawn_sleep_mob(Simulation *sim, MobID::T mob_id, float x, float 
                                char const *name) {
     return alloc_mob(sim, mob_id, x, y, NULL_ENTITY, [&](Entity &ent) {
         BitMath::set(ent.flags, EntityFlags::kHasCulling);
+        BitMath::unset(ent.flags, EntityFlags::kSpawnedFromZone);
+        ent.zone = 0xFF;
         ent.detection_radius = 0.f;
         ent.acceleration.set(0, 0);
         ent.velocity = Vector(0, 0);
@@ -535,6 +540,8 @@ static Entity &spawn_mirage_chest(Simulation *sim, float x, float y, char const 
         BitMath::set(ent.flags, EntityFlags::kNoDrops);
         BitMath::set(ent.flags, EntityFlags::kHasCulling);
         BitMath::set(ent.flags, EntityFlags::kNoFriendlyCollision);
+        BitMath::unset(ent.flags, EntityFlags::kSpawnedFromZone);
+        ent.zone = 0xFF;
         ent.score_reward = 0;
         ent.damage = 0;
         ent.mass = 10000.f;
@@ -564,15 +571,14 @@ static char const *rarity_zh(uint8_t r) {
     return r < RarityID::kNumRarities ? kZh[r] : "?";
 }
 
-static void grant_explore(Client *client, uint8_t mid, uint32_t coins, uint8_t mat_n,
-                          char const *toast, uint8_t tier = TreasureSites::kTierNormal) {
+static void grant_explore_one(Client *client, uint8_t mid, uint32_t coins, uint8_t mat_n,
+                              char const *toast, uint8_t tier) {
     if (client == nullptr) return;
     char const *title = toast != nullptr ? toast : "探索";
     if (coins > 0) {
         client_award_coins(client, coins);
         client_send_loot_toast(client, PetalID::kCoin, (uint16_t) coins, title);
     }
-    // Full petal pool / map mats at Ultra·Super·Unique (see roll_mat_rarity).
     uint8_t given = 0;
     std::string mat_line;
     for (uint8_t i = 0; i < mat_n; ++i) {
@@ -595,6 +601,28 @@ static void grant_explore(Client *client, uint8_t mid, uint32_t coins, uint8_t m
     }
 }
 
+// Party: each alive mate gets their own roll; claim bit marked so they cannot double-dip.
+static void grant_explore(Client *trigger, uint8_t mid, uint32_t coins, uint8_t mat_n,
+                          char const *toast, uint8_t tier = TreasureSites::kTierNormal,
+                          uint16_t claim_bit = 0) {
+    if (trigger == nullptr) return;
+    Client *mates[Party::MAX_SIZE];
+    uint8_t n = Party::collect_alive_mates(trigger, mates, Party::MAX_SIZE);
+    if (n == 0) {
+        mates[0] = trigger;
+        n = 1;
+    }
+    for (uint8_t i = 0; i < n; ++i) {
+        Client *m = mates[i];
+        if (m == nullptr) continue;
+        if (claim_bit) {
+            if (m->world_event_claimed[mid] & claim_bit) continue;
+            m->world_event_claimed[mid] |= claim_bit;
+        }
+        grant_explore_one(m, mid, coins, mat_n, toast, tier);
+    }
+}
+
 static char const *height_pad_name(uint8_t mid, uint8_t p) {
     static char const *kMush[3] = { "矮菇", "中菇", "高菇" };
     static char const *kCact[3] = { "淡花仙人掌", "暖花仙人掌", "艳花仙人掌" };
@@ -614,6 +642,41 @@ static char const *height_pad_name(uint8_t mid, uint8_t p) {
     case MapID::kRoyalCapital: return kCrest[p];
     default: return kMush[p];
     }
+}
+
+// Re-create visuals wiped by idle-map thin (or other unexpected deletes).
+// Mirage intentionally nulls prop after pop — leave those alone.
+static void ensure_event_props(Simulation *sim, uint8_t mid, EventRuntime &ev) {
+    if (ev.def_index >= kDefCount) return;
+    EventDef const &def = kDefs[ev.def_index];
+    if (def.kind == kTimedTouch || def.kind == kHeightOrder || def.kind == kAmbush) {
+        for (uint8_t p = 0; p < 3; ++p) {
+            if (sim->ent_alive(ev.pads[p])) continue;
+            char const *nm = (def.kind == kHeightOrder) ? height_pad_name(mid, p) : nullptr;
+            ev.pads[p] = spawn_pad(sim, ev.pad_x[p], ev.pad_y[p], nm, nm != nullptr).id;
+        }
+        if (!sim->ent_alive(ev.prop)) {
+            float mx = ev.pad_x[0], my = ev.pad_y[0] - 50.f;
+            place_xy(mid, mx, my);
+            ev.prop = spawn_pad(sim, mx, my, def.name_zh, 1).id;
+        }
+        return;
+    }
+    if (def.kind == kSleepMob) {
+        // Only restore while still asleep — don't revive a killed awake mob.
+        if (ev.sleep_phase == kAsleep && !sim->ent_alive(ev.prop))
+            ev.prop = spawn_sleep_mob(sim, def.sleep_mob, ev.x, ev.y, def.name_zh).id;
+        return;
+    }
+    if (def.kind == kMirage) {
+        // Intentional pop sets prop = NULL_ENTITY; idle thin leaves a stale id.
+        if (!ev.prop.null() && !sim->ent_alive(ev.prop))
+            ev.prop = spawn_mirage_chest(sim, ev.x, ev.y, def.name_zh).id;
+        return;
+    }
+    // lore / flee bush markers
+    if (!sim->ent_alive(ev.prop))
+        ev.prop = spawn_pad(sim, ev.x, ev.y, def.name_zh, 1).id;
 }
 
 } // namespace
@@ -685,6 +748,7 @@ void WorldEvent::tick(GameInstance *game) {
 
     for (uint8_t ei = 0; ei < mr.count; ++ei) {
         EventRuntime &ev = mr.events[ei];
+        ensure_event_props(sim, mid, ev);
         if (ev.flee_cd > 0) --ev.flee_cd;
 
         if (ev.kind == kSleepMob && sim->ent_alive(ev.prop)) {
@@ -758,10 +822,9 @@ void WorldEvent::tick(GameInstance *game) {
             if (def.kind == kLoreSeed) {
                 if (client->world_event_claimed[mid] & bit) continue;
                 if (ed2 > kTouchR2) continue;
-                client->world_event_claimed[mid] |= bit;
                 Chat::send_to(client, ChatChannel::kChatSystem, "", def.lore_zh);
                 Chat::send_to(client, ChatChannel::kChatSystem, "", def.lore_en);
-                grant_explore(client, mid, 120, 5, def.name_zh, TreasureSites::kTierLore);
+                grant_explore(client, mid, 120, 5, def.name_zh, TreasureSites::kTierLore, bit);
                 continue;
             }
 
@@ -790,10 +853,9 @@ void WorldEvent::tick(GameInstance *game) {
                     continue;
                 }
                 if (d2 > kTouchR2) continue;
-                client->world_event_claimed[mid] |= bit;
                 Chat::send_to(client, ChatChannel::kChatSystem, "", def.lore_zh);
                 Chat::send_to(client, ChatChannel::kChatSystem, "", def.lore_en);
-                grant_explore(client, mid, 280, 6, def.name_zh, TreasureSites::kTierNormal);
+                grant_explore(client, mid, 280, 6, def.name_zh, TreasureSites::kTierNormal, bit);
                 continue;
             }
 
@@ -809,10 +871,8 @@ void WorldEvent::tick(GameInstance *game) {
                     if (def.alert_zh && def.alert_zh[0]) bug.set_name(def.alert_zh);
                     Chat::send_to(client, ChatChannel::kChatSystem, "", def.lore_zh);
                     Chat::send_to(client, ChatChannel::kChatSystem, "", def.lore_en);
-                    if (!(client->world_event_claimed[mid] & bit)) {
-                        client->world_event_claimed[mid] |= bit;
-                        grant_explore(client, mid, 220, 5, def.name_zh, TreasureSites::kTierNormal);
-                    }
+                    if (!(client->world_event_claimed[mid] & bit))
+                        grant_explore(client, mid, 220, 5, def.name_zh, TreasureSites::kTierNormal, bit);
                 } else if (ev.sleep_phase == kAwake && !sim->ent_alive(bug.target)
                            && d2 <= kSleepWakeR2) {
                     bug.target = player.id;
@@ -831,8 +891,7 @@ void WorldEvent::tick(GameInstance *game) {
                 }
                 if (ev.ambush_phase >= 1 && !(client->world_event_claimed[mid] & bit)
                     && ed2 <= kAmbushArmR2) {
-                    client->world_event_claimed[mid] |= bit;
-                    grant_explore(client, mid, 240, 5, def.name_zh, TreasureSites::kTierNormal);
+                    grant_explore(client, mid, 240, 5, def.name_zh, TreasureSites::kTierNormal, bit);
                 }
                 continue;
             }
@@ -846,10 +905,9 @@ void WorldEvent::tick(GameInstance *game) {
                 if (ed2 > kTouchR2) continue;
                 sim->request_delete(ev.prop);
                 ev.prop = NULL_ENTITY;
-                client->world_event_claimed[mid] |= bit;
                 Chat::send_to(client, ChatChannel::kChatSystem, "", def.lore_zh);
                 Chat::send_to(client, ChatChannel::kChatSystem, "", def.lore_en);
-                grant_explore(client, mid, 100, 4, def.name_zh, TreasureSites::kTierLore);
+                grant_explore(client, mid, 100, 4, def.name_zh, TreasureSites::kTierLore, bit);
                 continue;
             }
 
@@ -869,12 +927,11 @@ void WorldEvent::tick(GameInstance *game) {
                     if (p == client->height_order_step) {
                         ++client->height_order_step;
                         if (client->height_order_step >= 3) {
-                            client->world_event_claimed[mid] |= bit;
                             client->height_order_step = 0;
                             client->height_order_event = 255;
                             Chat::send_to(client, ChatChannel::kChatSystem, "",
                                 "【机关】顺序正确——印记依次亮起。");
-                            grant_explore(client, mid, 360, 7, def.name_zh, TreasureSites::kTierHard);
+                            grant_explore(client, mid, 360, 7, def.name_zh, TreasureSites::kTierHard, bit);
                         } else {
                             Chat::send_to(client, ChatChannel::kChatSystem, "",
                                 std::string{"【机关】"}
@@ -917,13 +974,12 @@ void WorldEvent::tick(GameInstance *game) {
                         std::string{"【印记】"} + std::to_string(n) + "/3");
                     continue;
                 }
-                client->world_event_claimed[mid] |= bit;
                 client->timed_touch_ticks = 0;
                 client->timed_touch_mask = 0;
                 client->timed_touch_event = 255;
                 Chat::send_to(client, ChatChannel::kChatSystem, "",
                     "【印记】三枚印记同时记得你。");
-                grant_explore(client, mid, 340, 7, def.name_zh, TreasureSites::kTierHard);
+                grant_explore(client, mid, 340, 7, def.name_zh, TreasureSites::kTierHard, bit);
             }
         }
     }

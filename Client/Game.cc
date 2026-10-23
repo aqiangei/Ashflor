@@ -66,7 +66,7 @@ namespace Game {
     uint8_t pending_kick_notice = 0;
     std::string disconnect_message;
     std::array<uint8_t, PetalID::kNumPetals> seen_petals;
-    std::array<uint8_t, MobID::kNumMobs> seen_mobs;
+    std::array<uint16_t, MobID::kNumMobs> seen_mobs;
     std::vector<LifeEntry> life_mob_kills;
     std::vector<LifeEntry> life_petal_picks;
     uint8_t life_summary_ready = 0;
@@ -91,6 +91,7 @@ namespace Game {
     uint8_t on_game_screen = 0;
     uint8_t leaving_to_title = 0;
     uint8_t show_debug = 0;
+    uint8_t show_hitboxes = 0;
     uint8_t selected_map = MapID::kGarden;
     uint8_t minimap_expanded = 0;
     std::vector<OnlineRosterEntry> online_roster;
@@ -406,6 +407,7 @@ void Game::init() {
 }
 
 void Game::reset() {
+    Particle::reset();
     simulation_ready = 0;
     on_game_screen = 0;
     leaving_to_title = 0;
@@ -1064,10 +1066,11 @@ uint8_t Game::should_render_game_ui() {
 
 void Game::poll_ui_event(Ui::ScreenEvent const &event) {
     Ui::focused = nullptr;
-    if (Game::should_render_title_ui())
-        title_ui_window.poll_events(event);
+    // Prefer game UI while both would be live (circle wipe).
     if (Game::should_render_game_ui())
         game_ui_window.poll_events(event);
+    else if (Game::should_render_title_ui())
+        title_ui_window.poll_events(event);
     other_ui_window.poll_events(event);
     if (Ui::focused != nullptr)
         Ui::focused->focused = 1;
@@ -1221,8 +1224,13 @@ void Game::tick(double time) {
 
     if (should_render_title_ui()) {
         render_title_screen();
-        Particle::tick_title(renderer, Ui::dt);
-        title_ui_window.render(renderer);
+        // During title↔game circle wipe, skip title UI tree + particles —
+        // game path already paints; dual UI was a spawn-enter hitch.
+        if (!should_render_game_ui()) {
+            Particle::tick_title(renderer, Ui::dt);
+            title_ui_window.render(renderer);
+        } else
+            title_ui_window.on_render_skip(renderer);
     } else
         title_ui_window.on_render_skip(renderer);
 
@@ -1303,7 +1311,8 @@ void Game::tick(double time) {
         
     if (Game::timestamp - Ui::UiLoadout::last_key_select > 5000)
         Ui::UiLoadout::selected_with_keys = MAX_SLOT_COUNT;
-    if (!alive()) {
+    // Keep K/L preset ghost while dead on the continue screen (loadout still editable).
+    if (!alive() && !on_game_screen) {
         mobile_l_preset_pick = 0;
         preset_ghost_bank = 0;
     }
@@ -1347,29 +1356,28 @@ void Game::tick(double time) {
                 Input::game_inputs.y = my * s;
             }
         }
-        // primary = Space / LMB; secondary = Shift / RMB (RMB suppressed while chat RMB menu open)
+        // primary = Space / LMB (attack); secondary = Shift / RMB (defend).
+        // Invert: hold = normal stance, release = always attack/defend.
         uint8_t primary = Input::keys_held.contains(' ')
             || BitMath::at(Input::mouse_buttons_state, Input::LeftMouse);
         uint8_t secondary = Input::keys_held.contains('\x10')
             || (BitMath::at(Input::mouse_buttons_state, Input::RightMouse) && !chat_menu_open);
-        // Full swap only (LMB↔RMB, Space↔Shift). Both settings toggles share
-        // invert_attack; keep invert_defend mirrored for save bits / old UI.
-        uint8_t const swap = Input::invert_attack;
-        Input::invert_defend = swap;
-        uint8_t attack = swap ? secondary : primary;
-        uint8_t defend = swap ? primary : secondary;
+        uint8_t attack = Input::invert_attack ? !primary : primary;
+        uint8_t defend = Input::invert_defend ? !secondary : secondary;
         Input::game_inputs.flags = (attack << InputFlags::kAttacking) | (defend << InputFlags::kDefending);
     } else if (Input::mobile_controls()) {
-        // Touch A/B write flags directly; apply the same full swap here.
-        uint8_t const swap = Input::invert_attack;
-        Input::invert_defend = swap;
-        if (swap) {
-            uint8_t atk = BitMath::at(Input::game_inputs.flags, InputFlags::kAttacking);
-            uint8_t def = BitMath::at(Input::game_inputs.flags, InputFlags::kDefending);
-            Input::game_inputs.flags &=
-                ~((1u << InputFlags::kAttacking) | (1u << InputFlags::kDefending));
-            if (atk) BitMath::set(Input::game_inputs.flags, InputFlags::kDefending);
-            if (def) BitMath::set(Input::game_inputs.flags, InputFlags::kAttacking);
+        // Touch A/B write held flags; invert flips hold→cancel always-on.
+        if (Input::invert_attack) {
+            if (BitMath::at(Input::game_inputs.flags, InputFlags::kAttacking))
+                BitMath::unset(Input::game_inputs.flags, InputFlags::kAttacking);
+            else
+                BitMath::set(Input::game_inputs.flags, InputFlags::kAttacking);
+        }
+        if (Input::invert_defend) {
+            if (BitMath::at(Input::game_inputs.flags, InputFlags::kDefending))
+                BitMath::unset(Input::game_inputs.flags, InputFlags::kDefending);
+            else
+                BitMath::set(Input::game_inputs.flags, InputFlags::kDefending);
         }
     }
 
@@ -1380,7 +1388,10 @@ void Game::tick(double time) {
         Input::game_inputs.y = 0;
         Input::game_inputs.flags = 0;
     }
-    if (socket.ready && alive()) send_inputs();
+    if (socket.ready) {
+        sync_auto_party_opt();
+        if (alive()) send_inputs();
+    }
 
     if (Input::keys_held_this_tick.contains(';'))
         show_debug = !show_debug;

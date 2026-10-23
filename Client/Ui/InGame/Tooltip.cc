@@ -11,6 +11,7 @@
 
 #include <Shared/Craft.hh>
 #include <Shared/Recipe.hh>
+#include <Shared/Talent.hh>
 
 #include <format>
 #include <string>
@@ -77,14 +78,24 @@ static std::string petal_acquisition_hint(PetalID::T id) {
 }
 
 Element *Ui::UiLoadout::petal_tooltips[PetalID::kNumPetals] = {nullptr};
+Element *Ui::UiLoadout::petal_tooltips_leveled[PetalID::kNumPetals] = {nullptr};
 
 static float get_reload_factor() {
-    if (!Game::alive()) return 1;
-    float factor = 1;
-    Entity &player = Game::simulation.get_ent(Game::player_id);
-    for (uint32_t i = 0; i < player.get_loadout_count(); ++i) {
-        factor *= PETAL_DATA[player.get_loadout_ids(i)].attributes.extra_reload_factor;
+    // Matches server: product of loadout extra_reload_factor (Golden Leaf etc.)
+    // then talent cooldown mult — both stack multiplicatively.
+    float factor = 1.f;
+    if (Game::alive()) {
+        Entity &player = Game::simulation.get_ent(Game::player_id);
+        for (uint32_t i = 0; i < player.get_loadout_count(); ++i)
+            factor *= PETAL_DATA[player.get_loadout_ids(i)].attributes.extra_reload_factor;
+    } else {
+        for (uint32_t i = 0; i < Game::loadout_count; ++i) {
+            PetalID::T id = Game::cached_loadout[i];
+            if (id != PetalID::kNone && id < PetalID::kNumPetals)
+                factor *= PETAL_DATA[id].attributes.extra_reload_factor;
+        }
     }
+    factor *= Talent::reload_mult(Game::talent_ranks[TalentID::kCooldown]);
     return factor;
 }
 
@@ -98,37 +109,38 @@ static float get_damage_factor() {
     return factor;
 }
 
-static float tooltip_level_mult(PetalID::T id) {
-    if (id == PetalID::kNone || id >= PetalID::kNumPetals) return 1.f;
+static float tooltip_level_mult(PetalID::T id, uint8_t apply_level) {
+    if (!apply_level || id == PetalID::kNone || id >= PetalID::kNumPetals) return 1.f;
     return Craft::level_stat_mult(Game::petal_levels[id]);
 }
 
-static Ui::Element *make_petal_stat_container(PetalID::T id) {
+static Ui::Element *make_petal_stat_container(PetalID::T id, uint8_t apply_level) {
     std::vector<Ui::Element *> stats = {new Ui::Element(0,10)};
     struct PetalData const &petal_data = PETAL_DATA[id];
     struct PetalAttributes const &attrs = petal_data.attributes;
     if (petal_data.health > 0) {
         stats.push_back(new Ui::HContainer({
             new Ui::DynamicText(12, [](){ return I18n::tr(I18n::kHealth); }, { .fill = 0xff77ff77 }),
-            new Ui::DynamicText(12, [id](){
-                return format_number(PETAL_DATA[id].health * tooltip_level_mult(id));
+            new Ui::DynamicText(12, [id, apply_level](){
+                return format_number(PETAL_DATA[id].health * tooltip_level_mult(id, apply_level));
             })
         }, 0, 5, { .h_justify = Style::Left }));
     }
     if (petal_data.damage > 0) {
         stats.push_back(new Ui::HContainer({
             new Ui::DynamicText(12, [](){ return I18n::tr(I18n::kDamage); }, { .fill = 0xffff7777 }),
-            new Ui::DynamicText(12, [id](){
+            new Ui::DynamicText(12, [id, apply_level](){
                 return format_number(PETAL_DATA[id].damage * get_damage_factor()
-                    * tooltip_level_mult(id));
+                    * tooltip_level_mult(id, apply_level));
             })
         }, 0, 5, { .h_justify = Style::Left }));
     }
     if (attrs.armor > 0) {
         stats.push_back(new Ui::HContainer({
             new Ui::DynamicText(12, [](){ return I18n::tr(I18n::kArmor); }, { .fill = 0xff777777 }),
-            new Ui::DynamicText(12, [id](){
-                return format_number(PETAL_DATA[id].attributes.armor * tooltip_level_mult(id));
+            new Ui::DynamicText(12, [id, apply_level](){
+                return format_number(PETAL_DATA[id].attributes.armor
+                    * tooltip_level_mult(id, apply_level));
             })
         }, 0, 5, { .h_justify = Style::Left }));
     }
@@ -141,27 +153,27 @@ static Ui::Element *make_petal_stat_container(PetalID::T id) {
     if (attrs.constant_heal > 0) {
         stats.push_back(new Ui::HContainer({
             new Ui::DynamicText(12, [](){ return I18n::tr(I18n::kHeal); }, { .fill = 0xffff96cb }),
-            new Ui::DynamicText(12, [id](){
+            new Ui::DynamicText(12, [id, apply_level](){
                 return format_number(PETAL_DATA[id].attributes.constant_heal
-                    * tooltip_level_mult(id)) + "/s";
+                    * tooltip_level_mult(id, apply_level)) + "/s";
             })
         }, 0, 5, { .h_justify = Style::Left }));
     }
     if (attrs.burst_heal > 0) {
         stats.push_back(new Ui::HContainer({
             new Ui::DynamicText(12, [](){ return I18n::tr(I18n::kHeal); }, { .fill = 0xffff96cb }),
-            new Ui::DynamicText(12, [id](){
+            new Ui::DynamicText(12, [id, apply_level](){
                 return format_number(PETAL_DATA[id].attributes.burst_heal
-                    * tooltip_level_mult(id));
+                    * tooltip_level_mult(id, apply_level));
             })
         }, 0, 5, { .h_justify = Style::Left }));
     }
     if (attrs.poison_damage.damage > 0) {
         stats.push_back(new Ui::HContainer({
             new Ui::DynamicText(12, [](){ return I18n::tr(I18n::kPoison); }, { .fill = 0xffce76db }),
-            new Ui::DynamicText(12, [id](){
+            new Ui::DynamicText(12, [id, apply_level](){
                 auto const &p = PETAL_DATA[id].attributes.poison_damage;
-                float m = tooltip_level_mult(id);
+                float m = tooltip_level_mult(id, apply_level);
                 return format_number(p.time * p.damage * m) + " ("
                     + format_number(p.damage * m) + "/s)";
             })
@@ -170,9 +182,9 @@ static Ui::Element *make_petal_stat_container(PetalID::T id) {
     if (attrs.burn_damage.damage > 0) {
         stats.push_back(new Ui::HContainer({
             new Ui::DynamicText(12, [](){ return I18n::tr(I18n::kBurn); }, { .fill = 0xffff8844 }),
-            new Ui::DynamicText(12, [id](){
+            new Ui::DynamicText(12, [id, apply_level](){
                 auto const &b = PETAL_DATA[id].attributes.burn_damage;
-                float m = tooltip_level_mult(id);
+                float m = tooltip_level_mult(id, apply_level);
                 return format_number(b.time * b.damage * m) + " ("
                     + format_number(b.damage * m) + "/s)";
             })
@@ -207,27 +219,27 @@ static Ui::Element *make_petal_stat_container(PetalID::T id) {
     if (attrs.extra_health > 0) {
         stats.push_back(new Ui::HContainer({
             new Ui::DynamicText(12, [](){ return I18n::tr(I18n::kFlowerHealth); }, { .fill = 0xff77ff77 }),
-            new Ui::DynamicText(12, [id](){
+            new Ui::DynamicText(12, [id, apply_level](){
                 return format_number(PETAL_DATA[id].attributes.extra_health
-                    * tooltip_level_mult(id));
+                    * tooltip_level_mult(id, apply_level));
             })
         }, 0, 5, { .h_justify = Style::Left }));
     }
     if (attrs.extra_body_damage > 0) {
         stats.push_back(new Ui::HContainer({
             new Ui::DynamicText(12, [](){ return I18n::tr(I18n::kBodyDamage); }, { .fill = 0xffff7777 }),
-            new Ui::DynamicText(12, [id](){
+            new Ui::DynamicText(12, [id, apply_level](){
                 return format_number(PETAL_DATA[id].attributes.extra_body_damage
-                    * tooltip_level_mult(id));
+                    * tooltip_level_mult(id, apply_level));
             })
         }, 0, 5, { .h_justify = Style::Left }));
     }
     if (attrs.poison_armor > 0) {
         stats.push_back(new Ui::HContainer({
             new Ui::DynamicText(12, [](){ return I18n::tr(I18n::kPoisonArmor); }, { .fill = 0xffce76db }),
-            new Ui::DynamicText(12, [id](){
+            new Ui::DynamicText(12, [id, apply_level](){
                 return format_number(PETAL_DATA[id].attributes.poison_armor
-                    * tooltip_level_mult(id)) + "/s";
+                    * tooltip_level_mult(id, apply_level)) + "/s";
             })
         }, 0, 5, { .h_justify = Style::Left }));
     }
@@ -301,9 +313,9 @@ static Ui::Element *make_petal_stat_container(PetalID::T id) {
             new Ui::DynamicText(12, [](){
                 return I18n::use_chinese ? "光环治疗：" : "Aura Heal:";
             }, { .fill = 0xff6fdc8c }),
-            new Ui::DynamicText(12, [id](){
+            new Ui::DynamicText(12, [id, apply_level](){
                 return format_number(PETAL_DATA[id].attributes.aura_heal
-                    * tooltip_level_mult(id)) + "/s";
+                    * tooltip_level_mult(id, apply_level)) + "/s";
             })
         }, 0, 5, { .h_justify = Style::Left }));
     }
@@ -336,9 +348,9 @@ static Ui::Element *make_petal_stat_container(PetalID::T id) {
             new Ui::DynamicText(12, [](){
                 return I18n::use_chinese ? "溅射伤害：" : "Splash Dmg:";
             }, { .fill = 0xffff9966 }),
-            new Ui::DynamicText(12, [id](){
+            new Ui::DynamicText(12, [id, apply_level](){
                 auto const &a = PETAL_DATA[id].attributes;
-                return format_number(a.splash_damage * tooltip_level_mult(id))
+                return format_number(a.splash_damage * tooltip_level_mult(id, apply_level))
                     + (a.splash_radius > 0
                         ? (" (" + format_number(a.splash_radius) + ")")
                         : std::string{});
@@ -350,9 +362,9 @@ static Ui::Element *make_petal_stat_container(PetalID::T id) {
             new Ui::DynamicText(12, [](){
                 return I18n::use_chinese ? "脉冲伤害：" : "Pulse Dmg:";
             }, { .fill = 0xffffaa55 }),
-            new Ui::DynamicText(12, [id](){
+            new Ui::DynamicText(12, [id, apply_level](){
                 auto const &a = PETAL_DATA[id].attributes;
-                return format_number(a.radial_pulse_damage * tooltip_level_mult(id))
+                return format_number(a.radial_pulse_damage * tooltip_level_mult(id, apply_level))
                     + (a.radial_pulse_radius > 0
                         ? (" (" + format_number(a.radial_pulse_radius) + ")")
                         : std::string{});
@@ -459,7 +471,7 @@ static Ui::Element *make_petal_stat_container(PetalID::T id) {
     return new Ui::VContainer(stats, 0, 2, { .h_justify = Style::Left });
 }
 
-static void make_petal_tooltip(PetalID::T id) {
+static Element *make_petal_tooltip_body(PetalID::T id, uint8_t apply_level) {
     Element *tooltip = new Ui::VContainer({
         new Ui::HFlexContainer(
             new Ui::DynamicText(20, [id](){ return I18n::petal_name(id); }, { .fill = 0xffffffff, .h_justify = Style::Left }),
@@ -473,9 +485,9 @@ static void make_petal_tooltip(PetalID::T id) {
             }, { .fill = 0xffffffff, .v_justify = Style::Top }),
             5, 10, {}
         ),
-        new Ui::DynamicText(14, [id](){
+        new Ui::DynamicText(14, [id, apply_level](){
             uint8_t r = PETAL_DATA[id].rarity;
-            if (r == RarityID::kUnique && Game::petal_levels[id] > 0)
+            if (apply_level && r == RarityID::kUnique && Game::petal_levels[id] > 0)
                 return std::format("{} · Lv.{}", I18n::rarity_name(r), Game::petal_levels[id]);
             return std::string{I18n::rarity_name(r)};
         }, { .fill = RARITY_COLORS[PETAL_DATA[id].rarity], .h_justify = Style::Left }),
@@ -483,15 +495,17 @@ static void make_petal_tooltip(PetalID::T id) {
         new Ui::DynamicText(12, [id](){ return I18n::petal_desc(id); }, { .fill = 0xffffffff, .h_justify = Style::Left }),
         new Ui::DynamicText(11, [id](){ return petal_acquisition_hint(id); }, { .fill = 0xff9ec9a8, .h_justify = Style::Left }),
         new Ui::Element(0, 6),
-        make_petal_stat_container(id)
+        make_petal_stat_container(id, apply_level)
     }, 5, 2);
     tooltip->style.fill = 0xb01c2418;
     tooltip->style.round_radius = 12;
     tooltip->refactor();
-    Ui::UiLoadout::petal_tooltips[id] = tooltip;
+    return tooltip;
 }
 
 void Ui::make_petal_tooltips() {
-    for (PetalID::T i = 0; i < PetalID::kNumPetals; ++i)
-        make_petal_tooltip(i);
+    for (PetalID::T i = 0; i < PetalID::kNumPetals; ++i) {
+        Ui::UiLoadout::petal_tooltips[i] = make_petal_tooltip_body(i, 0);
+        Ui::UiLoadout::petal_tooltips_leveled[i] = make_petal_tooltip_body(i, 1);
+    }
 }

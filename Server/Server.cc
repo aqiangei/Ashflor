@@ -19,6 +19,7 @@
 #include <Shared/Craft.hh>
 #include <Shared/Entity.hh>
 #include <Shared/Map.hh>
+#include <Shared/MapGen.hh>
 #include <Shared/RarityScale.hh>
 #include <Shared/StaticData.hh>
 #include <Shared/StaticDefinitions.hh>
@@ -49,6 +50,14 @@ namespace Server {
     double max_tick_ms_window = 0;
     uint32_t tick_overruns_window = 0;
     uint32_t tick_count_window = 0;
+    double phase_spawn_ms = 0;
+    double phase_hash_ms = 0;
+    double phase_ai_ms = 0;
+    double phase_collide_ms = 0;
+    double phase_spawn_ms_max = 0;
+    double phase_hash_ms_max = 0;
+    double phase_ai_ms_max = 0;
+    double phase_collide_ms_max = 0;
 }
 
 using namespace Server;
@@ -70,13 +79,18 @@ Client *Server::client_by_camera(Simulation *sim, EntityID const &id) {
 void Server::tick() {
     using namespace std::chrono_literals;
     auto start = std::chrono::steady_clock::now();
+    Server::phase_spawn_ms = 0;
+    Server::phase_hash_ms = 0;
+    Server::phase_ai_ms = 0;
+    Server::phase_collide_ms = 0;
     static uint32_t tick_n = 0;
     ++tick_n;
     if ((tick_n % 60) == 0) // ~3s at 20 TPS
         RateLimit::tick_prune();
     uint32_t online = 0;
-    for (uint8_t i = 0; i < MapID::kNumMaps; ++i) {
-        // Empty maps: ~1 Hz. Full collide on 8 packed biomes was the tick hog
+    for (uint8_t oi = 0; oi < OPEN_MAP_COUNT; ++oi) {
+        uint8_t i = OPEN_MAPS[oi];
+        // Empty maps: ~1 Hz. Full collide on packed biomes was the tick hog
         // (segmented swarms × radius scale); occupied maps still tick every frame.
         if (Server::games[i].clients.empty() && ((tick_n + i) % 20) != 0) {
             continue;
@@ -193,13 +207,29 @@ void Server::tick() {
     ++win_ticks;
     Server::tick_count_window = win_ticks;
     if (ms > Server::max_tick_ms_window) Server::max_tick_ms_window = ms;
+    if (Server::phase_spawn_ms > Server::phase_spawn_ms_max)
+        Server::phase_spawn_ms_max = Server::phase_spawn_ms;
+    if (Server::phase_hash_ms > Server::phase_hash_ms_max)
+        Server::phase_hash_ms_max = Server::phase_hash_ms;
+    if (Server::phase_ai_ms > Server::phase_ai_ms_max)
+        Server::phase_ai_ms_max = Server::phase_ai_ms;
+    if (Server::phase_collide_ms > Server::phase_collide_ms_max)
+        Server::phase_collide_ms_max = Server::phase_collide_ms;
     // 20 TPS budget ≈ 50ms; log only when we actually miss the frame
     if (tick_time > 40ms) {
         ++Server::tick_overruns_window;
-        std::cout << "tick took " << tick_time << '\n';
+        std::cout << "tick took " << tick_time
+            << " spawn=" << Server::phase_spawn_ms
+            << "ms hash=" << Server::phase_hash_ms
+            << "ms ai=" << Server::phase_ai_ms
+            << "ms collide=" << Server::phase_collide_ms << "ms\n";
     }
     if (win_ticks >= 1200) { // reset window each ~60s
         win_ticks = 0;
+        Server::phase_spawn_ms_max = 0;
+        Server::phase_hash_ms_max = 0;
+        Server::phase_ai_ms_max = 0;
+        Server::phase_collide_ms_max = 0;
     }
 
     if (Server::is_draining && !was_draining) {
@@ -305,19 +335,26 @@ std::string Server::live_status_json() {
     out += std::to_string(now_ms);
     // Tick telemetry (same fields as /health) for ops dashboards.
     {
-        char buf[128];
+        char buf[384];
         std::snprintf(buf, sizeof(buf),
-            ",\"tick\":{\"last_ms\":%.2f,\"max_ms_60s\":%.2f,\"overruns_60s\":%u,\"samples_60s\":%u}",
+            ",\"tick\":{\"last_ms\":%.2f,\"max_ms_60s\":%.2f,\"overruns_60s\":%u,\"samples_60s\":%u,"
+            "\"phases\":{\"spawn_ms\":%.2f,\"hash_ms\":%.2f,\"ai_ms\":%.2f,\"collide_ms\":%.2f,"
+            "\"spawn_max_ms\":%.2f,\"hash_max_ms\":%.2f,\"ai_max_ms\":%.2f,\"collide_max_ms\":%.2f}}",
             Server::last_tick_ms, Server::max_tick_ms_window,
-            Server::tick_overruns_window, Server::tick_count_window);
+            Server::tick_overruns_window, Server::tick_count_window,
+            Server::phase_spawn_ms, Server::phase_hash_ms,
+            Server::phase_ai_ms, Server::phase_collide_ms,
+            Server::phase_spawn_ms_max, Server::phase_hash_ms_max,
+            Server::phase_ai_ms_max, Server::phase_collide_ms_max);
         out += buf;
     }
 
-    // --- Bosses ---
+    // --- Bosses (open maps only — boss_anchor would otherwise generate closed biomes) ---
     out += ",\"bosses\":[";
     if (Server::games != nullptr) {
-        for (uint8_t mi = 0; mi < MapID::kNumMaps; ++mi) {
-            if (mi) out += ',';
+        for (uint8_t oi = 0; oi < OPEN_MAP_COUNT; ++oi) {
+            uint8_t mi = OPEN_MAPS[oi];
+            if (oi) out += ',';
             float bx = 0.f, by = 0.f;
             uint8_t mob_id = 0;
             uint8_t has = Map::boss_anchor(mi, bx, by, mob_id);
@@ -431,14 +468,15 @@ std::string Server::live_status_json() {
         out += ']';
     }
 
-    // --- Maps + players (with inventory) ---
+    // --- Maps + players (with inventory); open maps only ---
     out += ",\"maps\":[";
     std::string players_json = "[";
     uint8_t first_player = 1;
     if (Server::games != nullptr) {
-        for (uint8_t mi = 0; mi < MapID::kNumMaps; ++mi) {
+        for (uint8_t oi = 0; oi < OPEN_MAP_COUNT; ++oi) {
+            uint8_t mi = OPEN_MAPS[oi];
             map_counts[mi] = (uint32_t) Server::games[mi].clients.size();
-            if (mi) out += ',';
+            if (oi) out += ',';
             out += "{\"id\":";
             out += std::to_string(mi);
             out += ",\"name\":\"";
@@ -584,10 +622,12 @@ std::string Server::health_json() {
     uint8_t ok = 1;
     if (Server::is_draining) ok = 0;
     if (Server::last_tick_ms >= 100.0) ok = 0;
-    char buf[384];
+    char buf[512];
     std::snprintf(buf, sizeof(buf),
         "{\"ok\":%s,\"status\":\"%s\",\"online\":%u,\"draining\":%s,"
-        "\"tick\":{\"last_ms\":%.2f,\"max_ms_60s\":%.2f,\"overruns_60s\":%u,\"samples_60s\":%u}}",
+        "\"tick\":{\"last_ms\":%.2f,\"max_ms_60s\":%.2f,\"overruns_60s\":%u,\"samples_60s\":%u,"
+        "\"phases\":{\"spawn_ms\":%.2f,\"hash_ms\":%.2f,\"ai_ms\":%.2f,\"collide_ms\":%.2f,"
+        "\"spawn_max_ms\":%.2f,\"hash_max_ms\":%.2f,\"ai_max_ms\":%.2f,\"collide_max_ms\":%.2f}}}",
         ok ? "true" : "false",
         ok ? "ok" : "bad",
         Server::player_count,
@@ -595,7 +635,11 @@ std::string Server::health_json() {
         Server::last_tick_ms,
         Server::max_tick_ms_window,
         Server::tick_overruns_window,
-        Server::tick_count_window);
+        Server::tick_count_window,
+        Server::phase_spawn_ms, Server::phase_hash_ms,
+        Server::phase_ai_ms, Server::phase_collide_ms,
+        Server::phase_spawn_ms_max, Server::phase_hash_ms_max,
+        Server::phase_ai_ms_max, Server::phase_collide_ms_max);
     return std::string(buf);
 }
 
@@ -634,7 +678,8 @@ std::string Server::live_positions_json() {
     uint8_t first_map = 1;
     uint8_t first_player = 1;
     if (Server::games != nullptr) {
-        for (uint8_t mi = 0; mi < MapID::kNumMaps; ++mi) {
+        for (uint8_t oi = 0; oi < OPEN_MAP_COUNT; ++oi) {
+            uint8_t mi = OPEN_MAPS[oi];
             if (!first_map) maps_json += ',';
             first_map = 0;
             maps_json += "{\"id\":";
@@ -693,8 +738,9 @@ std::string Server::live_positions_json() {
     out += players_json;
     out += "],\"bosses\":[";
     if (Server::games != nullptr) {
-        for (uint8_t mi = 0; mi < MapID::kNumMaps; ++mi) {
-            if (mi) out += ',';
+        for (uint8_t oi = 0; oi < OPEN_MAP_COUNT; ++oi) {
+            uint8_t mi = OPEN_MAPS[oi];
+            if (oi) out += ',';
             float bx = 0.f, by = 0.f;
             uint8_t mob_id = 0;
             uint8_t has = Map::boss_anchor(mi, bx, by, mob_id);
@@ -756,8 +802,9 @@ std::string Server::live_map_layout_json() {
     }
     out += "],\"flower_colors\":[\"#ffe763\",\"#999999\",\"#689ce2\",\"#ec6869\"]";
     out += ",\"maps\":[";
-    for (uint8_t mi = 0; mi < MapID::kNumMaps; ++mi) {
-        if (mi) out += ',';
+    for (uint8_t oi = 0; oi < OPEN_MAP_COUNT; ++oi) {
+        uint8_t mi = OPEN_MAPS[oi];
+        if (oi) out += ',';
         MapZones const &zones = map_zones(mi);
         MapTerrain const &terrain = map_terrain(mi);
         out += "{\"id\":";
@@ -945,7 +992,8 @@ std::string Server::live_admin_give(std::string const &who, uint32_t petal_id, u
 std::string Server::live_admin_spawn(uint8_t map_id, uint32_t mob_id, float x, float y,
                                     std::string const &near_who) {
     if (Server::games == nullptr) return live_admin_err("服务器未就绪");
-    if (map_id >= MapID::kNumMaps) return live_admin_err("无效地图");
+    if (map_id >= MapID::kNumMaps || !map_is_open(map_id))
+        return live_admin_err("无效或未开放地图");
     if (mob_id == 0 || mob_id >= MobID::kNumMobs) return live_admin_err("无效怪物 id");
     float sx = x, sy = y;
     if (!near_who.empty()) {
@@ -994,7 +1042,13 @@ void Server::init() {
     LeaderboardStore::flush();
     if (Server::games == nullptr)
         Server::games = new GameInstance[MapID::kNumMaps];
-    for (uint8_t i = 0; i < MapID::kNumMaps; ++i)
-        Server::games[i].init(i);
+    // Each open map: layout ensure + GameInstance::init, called separately
+    // (not a kNumMaps loop — closed biomes stay cold).
+    MapGen::ensure(MapID::kGarden);
+    Server::games[MapID::kGarden].init(MapID::kGarden);
+    MapGen::ensure(MapID::kOcean);
+    Server::games[MapID::kOcean].init(MapID::kOcean);
+    MapGen::ensure(MapID::kRoyalCapital);
+    Server::games[MapID::kRoyalCapital].init(MapID::kRoyalCapital);
     Server::run();
 }

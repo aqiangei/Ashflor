@@ -10,8 +10,10 @@
 
 #include <Shared/Binary.hh>
 #include <Shared/Config.hh>
+#include <Shared/NetworkView.hh>
 #include <Shared/Craft.hh>
 #include <Shared/Recipe.hh>
+#include <Shared/Simulation.hh>
 #include <Shared/StaticData.hh>
 #include <Shared/StaticDefinitions.hh>
 #include <Shared/Talent.hh>
@@ -341,6 +343,14 @@ void Game::on_message(uint8_t *ptr, uint32_t len) {
                     simulation._delete_ent(curr_id);
                 curr_id = reader.read<EntityID>();
             }
+            // Invariant after a successful snapshot: local ents == this
+            // packet's in_view. Generation stamp avoids zeroing 8KB every packet.
+            static uint32_t snap_gen = 1;
+            static uint32_t seen_gen[ENTITY_CAP] = {};
+            if (++snap_gen == 0) {
+                std::memset(seen_gen, 0, sizeof(seen_gen));
+                snap_gen = 1;
+            }
             curr_id = reader.read<EntityID>();
             while(!(curr_id == NULL_ENTITY)) {
                 uint8_t create = reader.read<uint8_t>();
@@ -349,8 +359,16 @@ void Game::on_message(uint8_t *ptr, uint32_t len) {
                 Entity &ent = simulation.get_ent(curr_id);
                 ent.read(&reader, BitMath::at(create, 0));
                 if (BitMath::at(create, 1)) ent.pending_delete = 1;
+                if (curr_id.id < ENTITY_CAP)
+                    seen_gen[curr_id.id] = snap_gen;
                 curr_id = reader.read<EntityID>();
             }
+            uint32_t const gen = snap_gen;
+            simulation.for_each_entity([&](Simulation *sim, Entity &ent) {
+                if (ent.id.id >= ENTITY_CAP) return;
+                if (seen_gen[ent.id.id] == gen) return;
+                sim->_delete_ent(ent.id);
+            });
             simulation.arena_info.read(&reader, reader.read<uint8_t>());
             simulation.map_id = simulation.arena_info.map_id;
             if (simulation.map_id >= MapID::kNumMaps)
@@ -513,6 +531,20 @@ void Game::request_leaderboard_board() {
     socket.send(writer.packet, writer.at - writer.packet);
 }
 
+void Game::sync_auto_party_opt() {
+    static uint8_t last_sent = 255;
+    if (!socket.ready) {
+        last_sent = 255;
+        return;
+    }
+    if (Input::disable_auto_party == last_sent) return;
+    last_sent = Input::disable_auto_party;
+    Writer writer(static_cast<uint8_t *>(OUTGOING_PACKET));
+    writer.write<uint8_t>(Serverbound::kAutoPartyOpt);
+    writer.write<uint8_t>(Input::disable_auto_party ? 1 : 0);
+    socket.send(writer.packet, writer.at - writer.packet);
+}
+
 void Game::send_inputs() {
     // Desktop: chat stays open while moving (mouse aim). Mobile chat freezes.
     // Any clicked popup stops the flower.
@@ -528,9 +560,13 @@ void Game::send_inputs() {
     static double last_sent_at = -1000;
     static float last_x = 0, last_y = 0;
     static uint8_t last_flags = 0, last_rot = 0;
+    uint16_t view_w = NetworkView::screen_half(renderer.width, Ui::scale, camera_zoom);
+    uint16_t view_h = NetworkView::screen_half(renderer.height, Ui::scale, camera_zoom);
+    static uint16_t last_view_w = 0, last_view_h = 0;
     // Send starts, stops, attacks, and large direction changes immediately.
     // Steady input only needs one packet per 25 TPS server step.
     uint8_t changed = flags != last_flags || rot_speed_setting != last_rot
+        || view_w != last_view_w || view_h != last_view_h
         || (x == 0.f) != (last_x == 0.f)
         || (y == 0.f) != (last_y == 0.f)
         || std::abs(x - last_x) > 24.f || std::abs(y - last_y) > 24.f;
@@ -541,12 +577,16 @@ void Game::send_inputs() {
     writer.write<float>(y);
     writer.write<uint8_t>(flags);
     writer.write<uint8_t>(rot_speed_setting);
+    writer.write<uint16_t>(view_w);
+    writer.write<uint16_t>(view_h);
     socket.send(writer.packet, writer.at - writer.packet);
     last_sent_at = Game::timestamp;
     last_x = x;
     last_y = y;
     last_flags = flags;
     last_rot = rot_speed_setting;
+    last_view_w = view_w;
+    last_view_h = view_h;
 }
 
 void Game::talent_spend(uint8_t talent_id) {
@@ -643,8 +683,7 @@ void Game::send_spawn_request() {
     writer.write<uint8_t>(Serverbound::kClientSpawn);
     std::string name = Game::account_logged_in ? Game::username : Game::guest_play_name();
     writer.write<std::string>(name);
-    uint8_t map_id = Game::selected_map;
-    if (map_id >= MapID::kNumMaps) map_id = MapID::kGarden;
+    uint8_t map_id = clamp_to_open_map(Game::selected_map);
     writer.write<uint8_t>(map_id);
     socket.send(writer.packet, writer.at - writer.packet);
     spawn_request_at = Game::timestamp;
@@ -912,7 +951,8 @@ PetalID::T Game::preset_ghost_petal(uint8_t primary_index) {
 
 void Game::swap_all_petals() {
     // One-key / mobile R: every primary ↔ paired secondary with cross-fly.
-    if (!Game::alive()) return;
+    // Allowed on the death screen so loadout can still be rearranged.
+    if (!Game::alive() && !Game::on_game_screen) return;
     for (uint32_t i = 0; i < Game::loadout_count; ++i) {
         uint8_t p = (uint8_t) i;
         uint8_t s = (uint8_t) (i + Game::loadout_count);

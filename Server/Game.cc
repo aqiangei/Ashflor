@@ -16,6 +16,7 @@
 #include <Shared/Binary.hh>
 #include <Shared/Entity.hh>
 #include <Shared/Map.hh>
+#include <Shared/NetworkView.hh>
 #include <Shared/StaticData.hh>
 
 #include <algorithm>
@@ -60,14 +61,9 @@ static void _update_client(Simulation *sim, Client *client) {
     Writer writer(Server::OUTGOING_PACKET);
     writer.write<uint8_t>(Clientbound::kClientUpdate);
     writer.write<EntityID>(client->camera);
-    // Net AOI is slightly tighter than the client's max zoom-out (0.55).
-    // Load test: 48 clients × oversized FOV dominated tick (serialize + WS).
-    // Visual still uses 0.55 locally; entities just outside net FOV appear on
-    // the next tick as the camera moves — acceptable vs 100ms+ stalls.
-    constexpr float kNetMinZoom = 0.68f;
-    float net_fov = fclamp(camera.get_fov(), BASE_FOV * 0.08f, BASE_FOV);
-    float half_w = 960.f / (net_fov * kNetMinZoom) + 160.f;
-    float half_h = 540.f / (net_fov * kNetMinZoom) + 160.f;
+    float half_w, half_h;
+    NetworkView::half_extents(camera.get_fov(), BASE_FOV,
+        client->view_half_w, client->view_half_h, half_w, half_h);
     sim->spatial_hash.query(camera.get_camera_x(), camera.get_camera_y(),
         half_w, half_h,
         [&](Simulation *, Entity &ent){
@@ -213,7 +209,7 @@ static void process_map_portals(GameInstance *game) {
             float dx = px - p.x;
             float dy = py - p.y;
             if (dx * dx + dy * dy > p.radius * p.radius) continue;
-            if (p.to_map >= MapID::kNumMaps) continue;
+            if (p.to_map >= MapID::kNumMaps || !map_is_open(p.to_map)) continue;
             GameInstance *dest = &Server::games[p.to_map];
             std::string name = player.get_name();
             // Do NOT reuse old-map team EntityID — teams are per-simulation.

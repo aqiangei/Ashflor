@@ -29,8 +29,8 @@ namespace Craft {
         uint8_t announce;      // 1 = paid full-server screen banner
     };
 
-    // Coin cost for one shop screen-announce purchase
-    constexpr uint32_t kShopAnnounceCost = 2500;
+    // Coin cost for one shop screen-announce purchase (~Rare mid-chase)
+    constexpr uint32_t kShopAnnounceCost = 5000;
 
     float success_chance(uint8_t from_rarity);
     // Guaranteed-exchange price: ceil(5 / chance) copies (ignores miss refunds,
@@ -39,7 +39,8 @@ namespace Craft {
     uint32_t exchange_cost(uint8_t from_rarity);
 
     // Infinite petal levels: Unique petals keep merging 5 → Lv.L+1. Level is
-    // per account per PetalID; every equipped copy gets the stat bonus.
+    // per account per PetalID; only the first primary loadout copy of that ID
+    // gets the stat bonus (other copies stay at base stats).
     constexpr uint32_t kMaxPetalLevel = 65535;
     constexpr float kLevelStatPerLevel = 0.03f; // +3% damage & health per level
     uint8_t can_level_petal(PetalID::T id);
@@ -82,4 +83,10 @@ namespace Craft {
 
     // Drop-table tilt: shop chase petals down (mats are normal petals)
     float drop_weight_mult(PetalID::T id);
+
+    // Live loot weights for a mob kill (same path Death rolls). Applies
+    // compute_mob_drop_weights + drop_weight_mult + out-of-band 0.15 floor.
+    // Writes drops.size() entries; returns sum (0 if empty / invalid).
+    float mob_loot_weights(MobID::T mob_id, uint8_t mob_rarity,
+                           float out[MAX_DROPS_PER_MOB]);
 }

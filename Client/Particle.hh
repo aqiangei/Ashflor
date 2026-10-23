@@ -34,6 +34,8 @@ namespace Particle {
 
     void tick_title(Renderer &, double);
     void tick_game(Renderer &, double);
+    void reset();
+    void set_view(float left, float top, float right, float bottom, uint8_t map_id);
     // Unique sparkles: Lv.0 charcoal grit → higher levels increasingly gold.
     void add_unique_particle(float x, float y, uint32_t level = 0);
     // Escort spirit trail: spawn behind the spirit, drift back and fade.

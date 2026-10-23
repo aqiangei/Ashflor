@@ -590,6 +590,9 @@ void Client::on_message(WebSocket *ws, std::string_view message, uint64_t code) 
                 validator.validate_uint8() &&
                 validator.validate_uint8()
             )) return;
+            bool has_view = validator.at < validator.end;
+            if (has_view && client->check_invalid(
+                validator.validate_uint16() && validator.validate_uint16())) return;
             float x = reader.read<float>();
             float y = reader.read<float>();
             // Reject NaN/Inf: comparisons alone let NaN into acceleration and
@@ -609,6 +612,10 @@ void Client::on_message(WebSocket *ws, std::string_view message, uint64_t code) 
             uint8_t rot_set = reader.read<uint8_t>();
             if (rot_set > Talent::kRotSettingMax) rot_set = Talent::kRotSettingMax;
             client->rot_speed_setting = rot_set;
+            if (has_view) {
+                client->view_half_w = reader.read<uint16_t>();
+                client->view_half_h = reader.read<uint16_t>();
+            }
             break;
         }
         case Serverbound::kClientSpawn: {
@@ -635,8 +642,7 @@ void Client::on_message(WebSocket *ws, std::string_view message, uint64_t code) 
             )) return;
             reader.read<std::string>(name);
             if (client->check_invalid(UTF8Parser::is_valid_utf8(name))) return;
-            uint8_t map_id = reader.read<uint8_t>();
-            if (map_id >= MapID::kNumMaps) map_id = MapID::kGarden;
+            uint8_t map_id = clamp_to_open_map(reader.read<uint8_t>());
             uint8_t guest_id_reassigned = 0;
             if (!client->account_name.empty()) {
                 name = client->account_name;
@@ -1697,6 +1703,11 @@ void Client::on_message(WebSocket *ws, std::string_view message, uint64_t code) 
         case Serverbound::kLeaderboardRequest:
             send_leaderboard_stats(client);
             break;
+        case Serverbound::kAutoPartyOpt: {
+            if (client->check_invalid(validator.validate_uint8())) return;
+            client->disable_auto_party = reader.read<uint8_t>() ? 1 : 0;
+            break;
+        }
     }
 }
 

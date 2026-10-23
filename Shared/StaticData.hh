@@ -51,6 +51,11 @@ inline uint8_t petal_is_honey(PetalID::T id) {
         || (id >= PetalID::kHoneyCommon && id <= PetalID::kHoneyUltra);
 }
 
+inline uint8_t petal_is_moon(PetalID::T id) {
+    return id == PetalID::kMoon
+        || (id >= PetalID::kMoonCommon && id <= PetalID::kMoonSuper);
+}
+
 using MapZones = StaticArray<struct ZoneDefinition, MAX_ZONES_PER_MAP>;
 using MapTerrain = StaticArray<struct TerrainFeature, MAX_TERRAIN_PER_MAP>;
 
@@ -455,25 +460,22 @@ struct MapPortalDef {
 };
 
 inline std::array const MAP_PORTALS = std::to_array<MapPortalDef>({
-    // Garden east �?Royal Capital outer plaza (center, away from royal side gates)
+    // Open maps only (Garden / Ocean / Royal). Closed biomes omitted.
+    // Garden east → Royal Capital plaza
     { MapID::kGarden, MapID::kRoyalCapital,
       ARENA_WIDTH * 0.88f, ARENA_HEIGHT * 0.50f, 220.f,
       MAP_SPAWN_X, MAP_SPAWN_Y },
-    // Desert west �?Royal Capital plaza
-    { MapID::kDesert, MapID::kRoyalCapital,
+    // Ocean west → Royal Capital plaza
+    { MapID::kOcean, MapID::kRoyalCapital,
       ARENA_WIDTH * 0.12f, ARENA_HEIGHT * 0.50f, 220.f,
       MAP_SPAWN_X, MAP_SPAWN_Y },
-    // Royal west gate �?Garden hub (center, not near Garden east portal)
+    // Royal west gate → Garden hub
     { MapID::kRoyalCapital, MapID::kGarden,
       ARENA_WIDTH * 0.10f, ARENA_HEIGHT * 0.50f, 240.f,
       MAP_SPAWN_X, MAP_SPAWN_Y },
-    // Royal east gate �?Desert hub (center, not near Desert west portal)
-    { MapID::kRoyalCapital, MapID::kDesert,
+    // Royal east gate → Ocean hub
+    { MapID::kRoyalCapital, MapID::kOcean,
       ARENA_WIDTH * 0.90f, ARENA_HEIGHT * 0.50f, 240.f,
-      MAP_SPAWN_X, MAP_SPAWN_Y },
-    // Royal north �?Volcano hub
-    { MapID::kRoyalCapital, MapID::kVolcano,
-      ARENA_WIDTH * 0.50f, ARENA_HEIGHT * 0.10f, 240.f,
       MAP_SPAWN_X, MAP_SPAWN_Y },
 });
 
@@ -493,9 +495,11 @@ std::array const ANTHOLE_SPAWNS = std::to_array<StaticArray<MobID::T, 3>>({
 
 extern std::array<StaticArray<float, MAX_DROPS_PER_MOB>, MobID::kNumMobs> const MOB_DROP_CHANCES;
 
-// Per-kill drop weights vs the mob's live rarity. Normals: same 20% / −1 60% /
+// Band-only base shares vs the mob's live rarity. Normals: same 20% / −1 60% /
 // −2 20% (renormalized among bands present). Chase specials (Moon / Ygg /
-// Golden Leaf): flat 10% each. Writes drops.size() entries; sums ≈ 1.
+// Golden Leaf): flat 10% each. Seeds >2 below mob rarity get 0 here — live
+// loot uses Craft::mob_loot_weights (0.15 floor + tilt) instead.
+// Writes drops.size() entries; sums ≈ 1.
 void compute_mob_drop_weights(MobID::T mob_id, uint8_t mob_rarity,
                               float out[MAX_DROPS_PER_MOB]);
 uint8_t is_chase_loot_petal(PetalID::T id);

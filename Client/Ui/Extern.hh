@@ -44,4 +44,6 @@ namespace Ui {
     void toggle_panel(uint8_t panel);
     // Close any open popup/drawer when pressing outside it
     void try_close_popups_outside_click();
+    // 1 if (x,y) is over the open X/Z/C/V/… drawer — loadout must not steal it
+    uint8_t game_panel_blocks_loadout(float x, float y);
 };

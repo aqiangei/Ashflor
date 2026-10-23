@@ -129,7 +129,7 @@ SINGLE(Name, guild, std::string)
     SINGLE(poison_armor, float, =0) \
     SINGLE(damage_reflection, float, =0) \
     SINGLE(last_damaged_by, EntityID, =NULL_ENTITY) \
-    /* Teams (solo / party leader camera) + cumulative damage for loot eligibility.
+    /* Per-player camera ids + cumulative damage for private loot eligibility.
        Damage persists for the mob's life (player respawn does not clear it). */ \
     SINGLE(loot_claim_n, uint8_t, =0) \
     MULTIPLE(loot_claim_teams, EntityID, 16, =NULL_ENTITY) \

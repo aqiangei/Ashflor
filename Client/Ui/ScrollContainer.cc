@@ -83,11 +83,15 @@ void ScrollContainer::on_render(Renderer &ctx) {
                     // when the swipe is mostly up/down inside this viewport.
                     float adx = std::fabs(mx - touch_press_x);
                     float ady = std::fabs(my - touch_press_y);
+                    float press_dy = my - touch_press_y;
                     uint8_t vertical_bias = ady >= adx * 0.85f
                         && ady >= Input::pointer_slop() * 0.55f;
                     // Bag→loadout (down toward the bar) must not become scroll.
                     uint8_t aiming_equip = Ui::bag_gesture_busy()
-                        && Ui::bag_gesture_wants_equip(mx, my);
+                        && (Ui::bag_gesture_wants_equip(mx, my)
+                            // Early downward intent before wants_equip edge logic.
+                            || (press_dy >= Input::pointer_slop() * 0.4f
+                                && press_dy >= adx * 0.7f));
                     if (!aiming_equip && (dist >= Input::pointer_slop() || vertical_bias)) {
                         scroll_dragging = 1;
                         if (Ui::bag_gesture_busy() || Ui::UiLoadout::num_petals_selected != 0)

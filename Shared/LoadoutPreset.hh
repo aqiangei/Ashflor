@@ -76,24 +76,16 @@ inline bool arrange_loadout_preset(
             --available[id];
         }
     }
-    // Reuse the old inventory order for leftover copies.
-    uint8_t next = count;
+    // Leftovers → secondary/bag only. Never refill intentionally blank primaries
+    // (that stole gear into the wrong bar and looked like "lost" petals).
+    uint8_t next = active_slots;
     for (uint8_t i = 0; i < end; ++i) {
         PetalID::T id = inventory[i];
         if (id == PetalID::kNone || id >= PetalID::kNumPetals || !available[id]) continue;
         while (next < end && arranged[next] != PetalID::kNone) ++next;
-        // The saved primary slots intentionally left blank must stay blank.
-        if (next < count) next = count;
-        while (next < end && arranged[next] != PetalID::kNone) ++next;
         if (next < end) arranged[next++] = id;
-        else {
-            // A completely full inventory can have a missing preset slot.
-            // Keep the owned petal there instead of creating hidden storage.
-            uint8_t hole = 0;
-            while (hole < count && arranged[hole] != PetalID::kNone) ++hole;
-            if (hole < count) arranged[hole] = id;
-            else ++overflow[id];
-        }
+        else
+            ++overflow[id];
         --available[id];
     }
     inventory = arranged;

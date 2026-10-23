@@ -154,6 +154,12 @@ void Simulation::on_tick() {
 
 void Simulation::post_tick() {
     for_each_entity([](Simulation *sim, Entity &ent) {
+        // Death fade finished: reap locally even if the next delete list is
+        // delayed (backpressure park). Next create bit re-force_allocs safely.
+        if (ent.pending_delete && ent.deletion_animation >= 1.f) {
+            sim->_delete_ent(ent.id);
+            return;
+        }
         ent.reset_protocol();
     });
 }

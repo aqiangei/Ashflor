@@ -44,6 +44,28 @@ namespace MapID {
     };
 }
 
+// Launch set: only these maps boot / tick / appear in title select.
+// Re-enable others by adding IDs here (and a title button). Call each map
+// separately (MapGen::ensure / GameInstance::init) — do not batch all kNumMaps.
+inline constexpr uint8_t OPEN_MAPS[] = {
+    MapID::kGarden,
+    MapID::kOcean,
+    MapID::kRoyalCapital,
+};
+inline constexpr uint8_t OPEN_MAP_COUNT =
+    (uint8_t)(sizeof(OPEN_MAPS) / sizeof(OPEN_MAPS[0]));
+
+inline uint8_t map_is_open(uint8_t map_id) {
+    for (uint8_t i = 0; i < OPEN_MAP_COUNT; ++i)
+        if (OPEN_MAPS[i] == map_id) return 1;
+    return 0;
+}
+
+inline uint8_t clamp_to_open_map(uint8_t map_id) {
+    if (map_is_open(map_id)) return map_id;
+    return MapID::kGarden;
+}
+
 namespace TerrainKind {
     enum : uint8_t {
         kHill = 0,

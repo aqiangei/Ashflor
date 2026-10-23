@@ -61,6 +61,7 @@ static std::string map_static_path(std::string_view url) {
     if (q != std::string::npos) path.resize(q);
     if (path.empty() || path == "/") return "index.html";
     if (path == "/live" || path == "/live.html") return "live.html";
+    if (path == "/codex" || path == "/codex.html") return "codex.html";
     if (path == "/favicon.ico") return "favicon-32.png";
     // Strip leading slash; reject traversal
     if (path[0] == '/') path.erase(0, 1);
@@ -233,6 +234,9 @@ uWS::App Server::server = uWS::App()
 .get("/api/catalog", [](auto *res, auto * /*req*/) {
     send_json(res, 200, Server::live_catalog_json());
 })
+.get("/api/codex", [](auto *res, auto * /*req*/) {
+    send_json(res, 200, Server::live_codex_json());
+})
 .get("/api/map-layout", [](auto *res, auto * /*req*/) {
     std::string body = Server::live_map_layout_json();
     res->writeHeader("Content-Type", "application/json; charset=utf-8");
@@ -326,7 +330,7 @@ uWS::App Server::server = uWS::App()
     send_file(res, file);
 })
 .ws<Client>("/*", {
-    .compression = uWS::DISABLED,
+    .compression = uWS::SHARED_COMPRESSOR,
     .maxPayloadLength = 64 * 1024,
     .idleTimeout = 120,
     .maxBackpressure = 1024 * MAX_PACKET_LEN,
@@ -437,13 +441,19 @@ void Server::stop() {
 
 uint8_t Client::can_accept_update() {
     if (ws == nullptr) return 0;
-    return ws->getBufferedAmount() <= 128 * 1024 ? 1 : 0;
+    // Match Wasm.cc (256KiB). Tighter 128KiB parked snapshots more often and
+    // skipped deletes, leaving client ghosts. Slightly larger backlog can keep
+    // a half-open socket alive longer — RX silence (>4s) + idleTimeout still
+    // park/drop zombies; do not rely on a smaller send buffer for that.
+    return ws->getBufferedAmount() <= 256 * 1024 ? 1 : 0;
 }
 
 void Client::send_packet(uint8_t const *packet, size_t size) {
     if (ws == nullptr) return;
     if (!can_accept_update()) return;
     std::string_view message(reinterpret_cast<char const *>(packet), size);
-    ws->send(message, uWS::OpCode::BINARY, 0);
+    // Browser-negotiated permessage-deflate keeps busy arenas from filling a
+    // slow link with stale snapshots. Small control packets stay uncompressed.
+    ws->send(message, uWS::OpCode::BINARY, size >= 512);
 }
 #endif

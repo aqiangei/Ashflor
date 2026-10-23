@@ -3,14 +3,37 @@
 #include <Client/Assets/Assets.hh>
 #include <Client/Game.hh>
 #include <Client/Input.hh>
+#include <Client/Ui/Chrome.hh>
 #include <Client/Ui/Extern.hh>
 
 #include <Helpers/Bits.hh>
+#include <Shared/Craft.hh>
 #include <Shared/Recipe.hh>
+#include <Shared/StaticData.hh>
 
 #include <cmath>
+#include <format>
+#include <string>
 
 using namespace Ui;
+
+// First primary slot holding this Unique receives the account level bonus.
+static uint8_t loadout_slot_is_leveled(uint8_t static_pos, PetalID::T id) {
+    if (id == PetalID::kNone || id >= PetalID::kNumPetals) return 0;
+    if (static_pos >= Game::loadout_count) return 0;
+    if (!Craft::can_level_petal(id) || Game::petal_levels[id] == 0) return 0;
+    for (uint8_t i = 0; i < static_pos; ++i)
+        if (Game::cached_loadout[i] == id) return 0;
+    return 1;
+}
+
+static Element *loadout_petal_tooltip(uint8_t static_pos, PetalID::T id) {
+    if (id == PetalID::kNone || id >= PetalID::kNumPetals) return nullptr;
+    if (loadout_slot_is_leveled(static_pos, id)
+        && Ui::UiLoadout::petal_tooltips_leveled[id] != nullptr)
+        return Ui::UiLoadout::petal_tooltips_leveled[id];
+    return Ui::UiLoadout::petal_tooltips[id];
+}
 
 UiLoadoutPetal *Ui::UiLoadout::petal_slots[2 * MAX_SLOT_COUNT] = {nullptr};
 uint8_t Ui::UiLoadout::selected_with_keys = MAX_SLOT_COUNT;
@@ -358,6 +381,8 @@ static uint8_t dynamic_to_static(uint8_t dynamic_pos) {
 
 
 uint8_t Ui::find_loadout_drop_target(float x, float y) {
+    // Drawer sits over the left of the loadout bar — don't drop onto slots under it.
+    if (Ui::game_panel_blocks_loadout(x, y)) return (uint8_t)-1;
     float min_dist = 10000;
     uint8_t min_index = (uint8_t)-1;
     float const pad = Input::is_mobile ? 36.f : 20.f;
@@ -399,14 +424,18 @@ uint8_t Ui::bag_gesture_wants_equip(float x, float y) {
     if (Ui::loadout_bar_hit(x, y)) return 1;
     // Left the inventory drawer — equip drag, not list scroll.
     if (!Ui::loadout_drag_over_bag(x, y)) return 1;
-    // Still inside the bag: near the bottom edge moving downward toward the
-    // loadout bar (drawer sits above it). Do not let ScrollContainer cancel.
+    // Still inside the bag: any clear downward swipe toward the loadout bar
+    // (drawer sits above it) is an equip drag — do not let ScrollContainer cancel.
+    float dy = y - bag_gesture_y;
+    float dx = x - bag_gesture_x;
+    float slop = Input::pointer_slop() * 0.45f;
+    if (dy >= slop && dy >= std::fabs(dx) * 0.65f)
+        return 1;
     Element *panel = Ui::game_panel_roots[Game::kPanelInventory];
     if (panel == nullptr || !panel->visible) return 0;
     float bag_bottom = panel->screen_y + panel->height * Ui::scale * 0.5f;
-    float edge = 96.f * Ui::scale;
-    float dy = y - bag_gesture_y;
-    if (dy >= Input::pointer_slop() * 0.55f && y >= bag_bottom - edge)
+    float edge = 140.f * Ui::scale;
+    if (dy >= slop && y >= bag_bottom - edge)
         return 1;
     return 0;
 }
@@ -523,7 +552,8 @@ void Ui::finish_bag_gesture() {
     }
     float dist = std::hypot(mx - bag_gesture_x, my - bag_gesture_y);
     uint8_t over_slot = find_loadout_drop_target(mx, my) != (uint8_t) -1;
-    float drag_slop = Input::is_mobile ? Input::pointer_slop() * 1.6f : Input::pointer_slop();
+    // Mobile: promote sooner when aiming at loadout so scroll does not win first.
+    float drag_slop = Input::is_mobile ? Input::pointer_slop() * 1.15f : Input::pointer_slop();
     uint8_t from_bank = bag_gesture_pos == (uint8_t) -1;
     // Inside open bag: vertical swipe scrolls the list. Promote to a loadout
     // drag once the finger leaves the panel, aims at the bar, or lands on a slot.
@@ -531,7 +561,7 @@ void Ui::finish_bag_gesture() {
     uint8_t aim_equip = Ui::bag_gesture_wants_equip(mx, my);
     if (!bag_gesture_dragging
         && (!keep_soft || aim_equip)
-        && dist >= Input::pointer_slop()
+        && dist >= Input::pointer_slop() * (aim_equip && Input::is_mobile ? 0.55f : 1.f)
         && (over_slot || aim_equip || dist >= drag_slop)) {
         bag_gesture_dragging = 1;
         // Collapse backpack while aiming at loadout slots so the bar is clear.
@@ -636,7 +666,7 @@ UiLoadoutPetal::UiLoadoutPetal(uint8_t pos) : Element(60, 60),
     reload = 1;
     health = 1;
     style.should_render = [&](){
-        if (!Game::alive()) return false;
+        if (!loadout_editable()) return false;
         //coincidentally also works for trashing
         if (static_pos >= MAX_SLOT_COUNT + Game::loadout_count) return false;
         if (curr_pos == 2 * MAX_SLOT_COUNT) return false;
@@ -702,7 +732,7 @@ UiLoadoutPetal::UiLoadoutPetal(uint8_t pos) : Element(60, 60),
         UiLoadoutSlot *parent_slot = curr_pos < 2 * MAX_SLOT_COUNT + 1
             ? Ui::UiLoadout::petal_backgrounds[curr_pos] : nullptr;
         if (parent_slot == nullptr) return;
-        if (selected && Game::alive()) {
+        if (selected && loadout_editable()) {
             style.layer = 1;
             float drag_dist = std::hypot(mouse_x - press_x, mouse_y - press_y);
             float const kClickSlop = Input::pointer_slop();
@@ -712,7 +742,7 @@ UiLoadoutPetal::UiLoadoutPetal(uint8_t pos) : Element(60, 60),
                 rendering_tooltip = 0;
             else if (last_id != PetalID::kNone) {
                 rendering_tooltip = 1;
-                tooltip = Ui::UiLoadout::petal_tooltips[last_id];
+                tooltip = loadout_petal_tooltip(static_pos, last_id);
             }
             // Bag-origin drags: InventoryBagSlot owns click + drop (avoids
             // double-swap when this widget runs before the bag cell).
@@ -771,7 +801,7 @@ UiLoadoutPetal::UiLoadoutPetal(uint8_t pos) : Element(60, 60),
                     ctx.rotate(sin(Game::timestamp / 150) * 0.1);
                 }
             }
-        } else if (Ui::UiLoadout::selected_with_keys + Game::loadout_count == static_pos && Game::alive()) {
+        } else if (Ui::UiLoadout::selected_with_keys + Game::loadout_count == static_pos && loadout_editable()) {
             if (!showed) lerp_amt = 1;
             x = lerp(x, (parent_slot->screen_x - Ui::window_width / 2) / Ui::scale, lerp_amt);
             y = lerp(y, (parent_slot->screen_y - Ui::window_height / 2) / Ui::scale, lerp_amt);
@@ -838,6 +868,20 @@ void UiLoadoutPetal::on_render(Renderer &ctx) {
         draw_loadout_background(ctx, last_id, (float) reload, 1, (float) health);
     else
         draw_loadout_background(ctx, last_id);
+    // Unique level badge — top of the plate so it doesn't cover the petal name.
+    if (loadout_slot_is_leveled(static_pos, last_id)) {
+        RenderContext c(&ctx);
+        std::string lv = std::format("Lv.{}", Game::petal_levels[last_id]);
+        ctx.set_fill(Chrome::kGold);
+        ctx.set_stroke(0xff111111);
+        ctx.set_text_size(10);
+        ctx.set_line_width(1.1f);
+        float tw = (float) ctx.get_text_size(lv.c_str());
+        // 60×60 cell centered at origin: top-right of the plate (name is at bottom).
+        ctx.translate(28.f - tw, -26.f);
+        ctx.stroke_text(lv.c_str());
+        ctx.fill_text(lv.c_str());
+    }
 }
 
 void UiLoadoutPetal::on_render_skip(Renderer &ctx) {
@@ -861,6 +905,10 @@ void UiLoadoutPetal::poll_events(ScreenEvent const &event) {
     uint8_t n = Game::loadout_count;
     if (n > 0 && static_pos >= 2 * n && static_pos < n + MAX_SLOT_COUNT)
         return;
+    // Open X/Z/C/V drawer covers part of the bar — clicks belong to the panel.
+    float const px = Input::is_mobile ? event.x : Input::mouse_x;
+    float const py = Input::is_mobile ? event.y : Input::mouse_y;
+    if (!selected && Ui::game_panel_blocks_loadout(px, py)) return;
     if (Input::is_mobile) {
         // Capture the starting finger against the fixed slot, not the petal's
         // animated position. Keep ownership while it moves across the bag.
@@ -884,7 +932,7 @@ void UiLoadoutPetal::poll_events(ScreenEvent const &event) {
 }
 
 void UiLoadoutPetal::on_event(uint8_t event) {
-    if (Game::alive() && event == kMouseDown) {
+    if (loadout_editable() && event == kMouseDown) {
         // Sticky L-pick (mobile long-press R): slot index → L bank, no drag.
         if (Game::mobile_l_preset_pick && static_pos < Game::loadout_count) {
             Game::try_mobile_l_preset_slot(static_pos);
@@ -909,7 +957,7 @@ void UiLoadoutPetal::on_event(uint8_t event) {
         // stays until the pointer moves past slop (see animate).
         if (last_id != PetalID::kNone) {
             rendering_tooltip = 1;
-            tooltip = Ui::UiLoadout::petal_tooltips[last_id];
+            tooltip = loadout_petal_tooltip(static_pos, last_id);
         } else {
             rendering_tooltip = 0;
         }
@@ -922,7 +970,7 @@ void UiLoadoutPetal::on_event(uint8_t event) {
     // Desktop hover / mobile hold without drag
     if ((!selected || Input::is_mobile) && last_id != PetalID::kNone) {
         rendering_tooltip = 1;
-        tooltip = Ui::UiLoadout::petal_tooltips[last_id];
+        tooltip = loadout_petal_tooltip(static_pos, last_id);
     } else {
         rendering_tooltip = 0;
     }
@@ -933,7 +981,7 @@ public:
     BagDragGhost() : Element(60, 60, { .no_animation = 1, .no_polling = 1 }) {
         style.layer = 1;
         style.should_render = [](){
-            if (!Game::alive()) return false;
+            if (!Game::alive() && !Game::on_game_screen) return false;
             return Ui::bag_gesture_ghost_petal() != PetalID::kNone
                 || bag_bounce_ghost_petal() != PetalID::kNone;
         };

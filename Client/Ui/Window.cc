@@ -49,8 +49,22 @@ void Window::on_render(Renderer &ctx) {
 void Window::poll_events(ScreenEvent const &event) {
     if (style.no_polling) return;
     Element::poll_events(event);
-    for (Element *elt : children)
-        if (elt->visible) elt->poll_events(event);
+    // Later children sit on top (drawers over loadout). Poll reverse so the
+    // topmost hit claims focus; then stop so lower UI cannot steal it.
+    for (size_t i = children.size(); i > 0; --i) {
+        Element *elt = children[i - 1];
+        if (!elt->visible) continue;
+        Element *before = Ui::focused;
+        elt->poll_events(event);
+        if (Input::is_mobile) {
+            auto touch = Input::touches.find(event.id);
+            if (touch != Input::touches.end() && touch->second.saturated
+                && Ui::focused != nullptr)
+                break;
+        } else if (Ui::focused != nullptr && Ui::focused != before) {
+            break;
+        }
+    }
 }
 
 void Window::on_event(uint8_t event) {

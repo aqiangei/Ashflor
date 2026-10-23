@@ -37,6 +37,15 @@ namespace Server {
     extern double max_tick_ms_window;
     extern uint32_t tick_overruns_window;
     extern uint32_t tick_count_window;
+    // Per-tick phase sums across maps (ms) — diagnose collide vs AI vs spawn.
+    extern double phase_spawn_ms;
+    extern double phase_hash_ms;    // refresh + insert + cull setup
+    extern double phase_ai_ms;      // flower/mob/petal/health AI
+    extern double phase_collide_ms; // spatial_hash.collide(+on_collide)
+    extern double phase_spawn_ms_max;
+    extern double phase_hash_ms_max;
+    extern double phase_ai_ms_max;
+    extern double phase_collide_ms_max;
     extern void init();
     extern void run();
     extern void tick();
@@ -53,6 +62,8 @@ namespace Server {
     extern std::string live_map_layout_json();
     // Petal / mob id→name lists for the live admin UI
     extern std::string live_catalog_json();
+    // Encyclopedia: worlds, mechanics, petals, mobs, art kinds
+    extern std::string live_codex_json();
     // Live admin actions — return compact JSON {ok,msg,...}
     extern std::string live_admin_announce(std::string const &text);
     // rarity: 0..kNumRarities-1 resolve same-name ladder; 255 = use petal_id as-is

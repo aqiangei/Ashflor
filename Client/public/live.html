@@ -214,12 +214,63 @@
   .combo-empty { padding: 10px; color: var(--muted); font-size: 0.82rem; }
   .link-hint { color: var(--accent); font-size: 0.75rem; margin: 4px 0 0; min-height: 1.1em; }
   select:focus, .combo input:focus { outline: 2px solid #9fd4a8; outline-offset: 1px; }
+  .codex-gate { margin-bottom: 18px; }
+  .codex-gate .gate-head {
+    display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px 14px; margin-bottom: 10px;
+  }
+  .codex-gate .gate-head h2 { margin: 0; }
+  .codex-gate .gate-head a {
+    margin-left: auto; color: var(--accent); font-size: 0.85rem; font-weight: 600; text-decoration: none;
+  }
+  .codex-gate .gate-head a:hover { text-decoration: underline; }
+  .codex-gate .gate-hint { color: var(--muted); font-size: 0.8rem; margin: 0 0 10px; }
+  .codex-gate .gate-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(118px, 1fr));
+    gap: 8px;
+  }
+  .codex-gate .gate-grid.mech {
+    grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+    margin-top: 8px;
+  }
+  .codex-gate .gate-tile {
+    display: block; text-decoration: none; color: inherit;
+    background: var(--card); border: 1px solid var(--line); border-radius: 10px;
+    padding: 10px 11px; min-height: 72px;
+    transition: border-color .15s, transform .15s, box-shadow .15s;
+  }
+  .codex-gate .gate-tile:hover {
+    border-color: var(--accent); transform: translateY(-1px);
+    box-shadow: 0 6px 16px rgba(26,46,26,0.1);
+  }
+  .codex-gate .gate-tile .gt {
+    font-weight: 700; font-size: 0.9rem; line-height: 1.25;
+  }
+  .codex-gate .gate-tile .gs {
+    color: var(--muted); font-size: 0.7rem; margin-top: 4px; line-height: 1.3;
+    display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+  }
+  .codex-gate .gate-tile .gk {
+    display: inline-block; font-size: 0.62rem; font-weight: 700; letter-spacing: .03em;
+    color: var(--accent); margin-bottom: 4px;
+  }
+  .codex-gate .gate-tile.world { border-left: 3px solid var(--tile-c, var(--accent)); }
 </style>
 </head>
 <body>
 <main>
   <h1>Ashflor Live</h1>
   <p class="sub">游戏内实时数据 · 每秒刷新 · <span id="ago">—</span></p>
+
+  <div class="panel codex-gate" id="codexGate">
+    <div class="gate-head">
+      <h2>世界介绍 · 游戏机制</h2>
+      <a href="/codex">打开完整图鉴 →</a>
+    </div>
+    <p class="gate-hint">点任意卡片进入图文详情（八域世界与机制放最前）。</p>
+    <div class="gate-grid" id="codexWorlds"><div class="empty-msg">加载中…</div></div>
+    <div class="gate-grid mech" id="codexMechs"></div>
+  </div>
 
   <div class="stats">
     <div class="stat"><b id="online">—</b><span>在线</span></div>
@@ -837,6 +888,44 @@ async function loadCatalog() {
   catalog = await r.json();
   refreshPetalSelect();
   refreshMobSelect();
+}
+
+async function loadCodexGate() {
+  const worlds = $("codexWorlds");
+  const mechs = $("codexMechs");
+  if (!worlds || !mechs) return;
+  try {
+    const r = await fetch("/api/codex", { cache: "force-cache" });
+    if (!r.ok) throw new Error("codex " + r.status);
+    const data = await r.json();
+    worlds.innerHTML = "";
+    (data.maps || []).forEach((m) => {
+      const a = document.createElement("a");
+      a.className = "gate-tile world";
+      a.href = "/codex?map=" + encodeURIComponent(m.id);
+      a.style.setProperty("--tile-c", m.color || "#2d8a4e");
+      a.innerHTML =
+        `<span class="gk">世界</span><div class="gt">${esc(m.name_zh || m.name_en || "")}</div>` +
+        `<div class="gs">${esc(m.tagline || "")}</div>`;
+      worlds.appendChild(a);
+    });
+    mechs.innerHTML = "";
+    (data.mechanics || []).forEach((c) => {
+      const a = document.createElement("a");
+      a.className = "gate-tile";
+      a.href = "/codex?mech=" + encodeURIComponent(c.id);
+      a.innerHTML =
+        `<span class="gk">机制</span><div class="gt">${esc(c.title || "")}</div>` +
+        `<div class="gs">${esc(c.summary || "")}</div>`;
+      mechs.appendChild(a);
+    });
+    if (!worlds.childElementCount) {
+      worlds.innerHTML = `<div class="empty-msg">暂无世界数据</div>`;
+    }
+  } catch (e) {
+    worlds.innerHTML =
+      `<div class="empty-msg">图鉴入口加载失败 · <a href="/codex">仍可打开 /codex</a></div>`;
+  }
 }
 
 function argbToCss(hex) {
@@ -1707,6 +1796,7 @@ function bindHistoryFeeds() {
 }
 
 loadCatalog().catch((e) => flashErr("目录加载失败：" + e.message));
+loadCodexGate();
 loadMapLayout();
 bindHistoryFeeds();
 fetchBcPage(0, false);

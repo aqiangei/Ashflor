@@ -13,7 +13,6 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdint>
-#include <limits>
 #include <memory>
 #include <vector>
 
@@ -29,13 +28,18 @@ struct Chunk {
     int x = 0;
     int y = 0;
     uint64_t used = 0;
+    // Fog depends on player difficulty; stale canvases stay blit-able until rebake.
+    uint32_t baked_difficulty = 0xffffffffu;
     std::unique_ptr<Renderer> canvas;
 };
 
 std::vector<Chunk> chunks;
 uint8_t cached_map = 255;
-uint32_t cached_difficulty = std::numeric_limits<uint32_t>::max();
+uint32_t cached_difficulty = 0xffffffffu;
 uint64_t frame = 0;
+// Hysteresis so FOV/zoom near the chunk-count limit does not thrash between
+// full-viewport paint_static and chunk blit (visible as a periodic flash).
+uint8_t full_paint_mode = 0;
 
 bool feature_intersects(TerrainFeature const &f, float left, float top, float right, float bottom) {
     float x0, y0, x1, y1;
@@ -222,6 +226,8 @@ void paint_static(Renderer &renderer, uint8_t mid, uint32_t difficulty,
             col = Renderer::MIX(tm.ground, tm.wall_mid, 0.08f + tint * 0.5f);
         renderer.set_fill(col);
         renderer.fill_rect(def.left, def.top, def.right - def.left, def.bottom - def.top);
+        // Fog must be painted with the zone fill (later rings overwrite earlier).
+        // A separate live fog pass stacked alpha on overlapping AABBs → near-black.
         if (difficulty > def.difficulty) {
             renderer.set_fill(0x40000000);
             renderer.fill_rect(def.left, def.top, def.right - def.left, def.bottom - def.top);
@@ -361,20 +367,28 @@ void render_chunk(Chunk &chunk, uint8_t map_id, uint32_t difficulty) {
     r.translate(-left + kChunkPad, -top + kChunkPad);
     paint_static(r, map_id, difficulty, left - kChunkPad, top - kChunkPad,
                  left + kChunkSize + kChunkPad, top + kChunkSize + kChunkPad);
+    chunk.baked_difficulty = difficulty;
 }
 } // namespace
 
 void MapChunkCache::clear() {
     chunks.clear();
     cached_map = 255;
-    cached_difficulty = std::numeric_limits<uint32_t>::max();
+    cached_difficulty = 0xffffffffu;
+    full_paint_mode = 0;
 }
 
 void MapChunkCache::draw(Renderer &target, uint8_t map_id, uint32_t difficulty,
                          float left, float top, float right, float bottom, bool mobile) {
-    if (map_id != cached_map || difficulty != cached_difficulty) {
+    // Map change: terrain differs — drop canvases.
+    // Difficulty change: fog is baked into zone fills; NEVER clear() here
+    // (emptied every chunk → whole-viewport flash when level crosses
+    // LEVELS_PER_EXTRA_SLOT). Keep old canvases blit-able; rebake lazily.
+    if (map_id != cached_map) {
         clear();
         cached_map = map_id;
+        cached_difficulty = difficulty;
+    } else if (difficulty != cached_difficulty) {
         cached_difficulty = difficulty;
     }
     ++frame;
@@ -396,16 +410,70 @@ void MapChunkCache::draw(Renderer &target, uint8_t map_id, uint32_t difficulty,
     float const paint_b = std::min(bottom, (float)ARENA_HEIGHT);
     if (paint_r <= paint_l || paint_b <= paint_t) return;
 
-    size_t limit = mobile ? 40u : 64u;
+    // Larger desktop cache stays in blit mode longer (full paint_static every
+    // frame under zoom-out was a steady hitch).
+    size_t limit = mobile ? 48u : 96u;
+    size_t leave_limit = mobile ? 32u : 72u;
     size_t needed = (size_t)(x1 - x0 + 1) * (size_t)(y1 - y0 + 1);
-    if (needed > limit) {
+    if (needed > limit) full_paint_mode = 1;
+    else if (needed <= leave_limit) full_paint_mode = 0;
+    if (full_paint_mode) {
+        // Still bake a few chunks so leaving full-paint is cheaper next frames.
+        size_t const warm = mobile ? 2u : 4u;
+        size_t warmed = 0;
+        for (int y = y0; y <= y1 && warmed < warm; ++y) {
+            for (int x = x0; x <= x1 && warmed < warm; ++x) {
+                auto it = std::find_if(chunks.begin(), chunks.end(), [=](Chunk const &c) {
+                    return c.x == x && c.y == y;
+                });
+                if (it != chunks.end()) {
+                    it->used = frame;
+                    if (it->baked_difficulty != difficulty) {
+                        render_chunk(*it, map_id, difficulty);
+                        ++warmed;
+                    }
+                    continue;
+                }
+                if (chunks.size() == limit) {
+                    it = std::min_element(chunks.begin(), chunks.end(),
+                        [](Chunk const &a, Chunk const &b) { return a.used < b.used; });
+                    it->x = x; it->y = y;
+                    it->baked_difficulty = 0xffffffffu;
+                } else {
+                    Chunk fresh;
+                    fresh.x = x; fresh.y = y;
+                    fresh.canvas = std::make_unique<Renderer>();
+                    chunks.push_back(std::move(fresh));
+                    it = chunks.end() - 1;
+                }
+                render_chunk(*it, map_id, difficulty);
+                it->used = frame;
+                ++warmed;
+            }
+        }
         paint_static(target, map_id, difficulty, paint_l, paint_t, paint_r, paint_b);
         return;
     }
 
-    size_t const bake_budget = mobile ? 3u : 6u;
+    // Cold cache (spawn / map change): more first-frame canvas allocs stall the
+    // title→game circle wipe; keep budget modest but above steady-state.
+    size_t missing_pre = 0;
+    for (int y = y0; y <= y1; ++y) {
+        for (int x = x0; x <= x1; ++x) {
+            auto it = std::find_if(chunks.begin(), chunks.end(), [=](Chunk const &c) {
+                return c.x == x && c.y == y;
+            });
+            if (it == chunks.end()) ++missing_pre;
+        }
+    }
+    size_t bake_budget = mobile ? 3u : 6u;
+    if (missing_pre * 2u >= needed)
+        bake_budget = mobile ? 5u : 10u;
     size_t baked = 0;
+    size_t missing = 0;
 
+    // Prefer refreshing existing canvases (stale fog) over allocating holes so
+    // a difficulty-band change never leaves an empty frame.
     for (int y = y0; y <= y1; ++y) {
         for (int x = x0; x <= x1; ++x) {
             auto it = std::find_if(chunks.begin(), chunks.end(), [=](Chunk const &c) {
@@ -413,8 +481,13 @@ void MapChunkCache::draw(Renderer &target, uint8_t map_id, uint32_t difficulty,
             });
             if (it != chunks.end()) {
                 it->used = frame;
+                if (it->baked_difficulty != difficulty && baked < bake_budget) {
+                    render_chunk(*it, map_id, difficulty);
+                    ++baked;
+                }
                 continue;
             }
+            ++missing;
             if (baked >= bake_budget) continue;
             if (chunks.size() == limit) {
                 it = std::min_element(chunks.begin(), chunks.end(), [](Chunk const &a, Chunk const &b) {
@@ -422,18 +495,33 @@ void MapChunkCache::draw(Renderer &target, uint8_t map_id, uint32_t difficulty,
                 });
                 it->x = x;
                 it->y = y;
+                it->baked_difficulty = 0xffffffffu;
             } else {
-                chunks.push_back({x, y, 0, std::make_unique<Renderer>()});
+                Chunk fresh;
+                fresh.x = x;
+                fresh.y = y;
+                fresh.used = 0;
+                fresh.baked_difficulty = 0xffffffffu;
+                fresh.canvas = std::make_unique<Renderer>();
+                chunks.push_back(std::move(fresh));
                 it = chunks.end() - 1;
             }
             render_chunk(*it, map_id, difficulty);
             it->used = frame;
             ++baked;
+            --missing;
         }
     }
 
-    // Composite: draw ready chunks; fill holes with a per-tile paint so we never
-    // alternate full-viewport paint_static ↔ chunk blit (that was the flicker).
+    // Many holes: one viewport paint_static (zone/terrain loops once) instead of
+    // N per-tile paints — that N× cost made the spawn circle hitch every frame
+    // until the cache filled. Keep baking above so later frames blit.
+    if (missing > 1u) {
+        paint_static(target, map_id, difficulty, paint_l, paint_t, paint_r, paint_b);
+        return;
+    }
+
+    // Steady: blit existing canvases (stale fog OK); hole-fill at most one miss.
     for (int y = y0; y <= y1; ++y) {
         for (int x = x0; x <= x1; ++x) {
             auto it = std::find_if(chunks.begin(), chunks.end(), [=](Chunk const &c) {
@@ -443,7 +531,7 @@ void MapChunkCache::draw(Renderer &target, uint8_t map_id, uint32_t difficulty,
             float const cy0 = (float)(y * kChunkSize);
             float const cx1 = cx0 + (float)kChunkSize;
             float const cy1 = cy0 + (float)kChunkSize;
-            if (it != chunks.end()) {
+            if (it != chunks.end() && it->canvas) {
                 target.draw_image_at(*it->canvas,
                                      cx0 - (float)kChunkPad,
                                      cy0 - (float)kChunkPad);

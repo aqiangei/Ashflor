@@ -2,13 +2,16 @@
   "name": "Ashflor",
   "summary": "开源 florr.io 风格多地图服：花园/沙漠/海洋/雪原/丛林/蚁穴/火山/王城；花瓣合成与唯一无限升级、公会组队、Boss 锚点与全服播报；八域探索与指引精灵；原生 uWS 服务端。",
   "updated_at": "2026-10-23",
-  "cache_v": "21702",
+  "cache_v": "21717",
   "highlights": [
-    "服务端原生 uWebSockets：降低 tick 卡顿，多人更稳",
-    "唯一花瓣无限升级 + 期望直兑；等级加成伤害/生命/治疗/毒素",
-    "唯一主题灰黑钢色与炭灰粒子；合成栏/信息显示 Lv≥1",
-    "花瓣稀有度阶梯大规模补齐至唯一档",
-    "八域探索与指引精灵；装载槽花瓣生命同步；存档脏写节流"
+    "延迟：按实际视口同步实体，并压缩较大的状态包，降低拥挤场景的网络传输量",
+    "流畅：优化地形检测与实体碰撞，降低多人对局的计算开销",
+    "流畅：控制密集特效数量并保留常用怪物标签缓存，减轻持续游玩的渲染负担",
+    "流畅：刷怪先做 AOI 便宜拒绝，砍走廊探测与每 tick 预算，降 spawn 尖刺",
+    "流畅：区块缓存更大、远距仍后台预烤；进图跳过标题 UI 双开",
+    "流畅：快照收口用代数戳，避免每包清 8KB",
+    "地图闪屏：难度档惰性重烤，不整表清空",
+    "实体堆积：孤儿实体 GC + Native 256KiB 背压"
   ],
-  "notes": "协议变更时客户端与服务端须同发；发版后建议 Ctrl+F5。线上为 native 二进制（gardn-server-native）。鉴权默认关闭，设 ASHFLOR_LIVE_AUTH=1 并配置 USER/PASS 后启用。deploy-info 随 deploy-update.ps1 自动戳记日期与 cacheV。"
+  "notes": "本版须 Client WASM + 北京 gardn-server-native 同发（Map/Simulation/Native 改动）。协议/VERSION_HASH 未改。发版：根目录 .\\deploy-update.ps1；禁止覆盖 accounts.dat；发版后 Ctrl+F5。"
 }

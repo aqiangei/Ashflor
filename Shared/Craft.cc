@@ -38,14 +38,16 @@ namespace Craft {
         2, 4, 10, 22, 55, 110, 280, 630, 1500
     };
 
-    // Random-rarity packs: intentionally worse EV than focused farming (~1.6–2×).
+    // Random-rarity packs — shop-economy anchor. 2026-10-23 combat-calibrated:
+    // sustained ~4–10 kill/min × zone coins so pack ≈ half of named-chase farm time
+    // (chase targets ~8–15m soft Unusual … ~1–2.5h Unique outer). Growth ~3–4.5× mid.
     static uint32_t const BUY_RARITY[RarityID::kNumRarities] = {
-        40, 140, 480, 1600, 5200, 16000, 55000, 180000, 500000
+        50, 350, 1600, 6000, 26000, 86000, 270000, 450000, 750000
     };
 
-    // Material shop by petal rarity (convenience > farm EV for that mat).
+    // Material shop ≈ 0.40× pack (farm mats still better; Ultra+ blocked).
     static uint32_t const MAT_COST[RarityID::kNumRarities] = {
-        28, 65, 160, 420, 1100, 2800, 999999, 999999, 999999
+        35, 140, 640, 2400, 10400, 34400, 999999, 999999, 999999
     };
 
     static PetalID::T const kSpecials[] = {
@@ -78,9 +80,19 @@ namespace Craft {
         return std::strcmp(n, "Honey") == 0 || std::strcmp(n, "Meteor") == 0;
     }
 
+    // Named Honey/Meteor ladder: always 2× same-rarity pack (== chase mid-time band).
     static uint32_t const HONEY_METEOR_COST[RarityID::kNumRarities] = {
-        90, 220, 560, 1400, 3600, 9000, 24000, 70000, 180000
+        100, 700, 3200, 12000, 52000, 172000, 540000, 900000, 1500000
     };
+
+    // chase_price = round(BUY_RARITY[r] * util). util encodes relative chase power.
+    static uint32_t chase_price(uint8_t rarity, double util) {
+        if (rarity >= RarityID::kNumRarities) return 999999;
+        double v = (double) BUY_RARITY[rarity] * util;
+        if (v < 1.0) return 1;
+        if (v >= 999999.0) return 999999;
+        return (uint32_t) std::lround(v);
+    }
 
     static PetalID::T const kCombos[] = {
         PetalID::kLeafBlade, PetalID::kBeeSting, PetalID::kHealingBloom,
@@ -187,12 +199,19 @@ namespace Craft {
         if (from == PetalID::kNone || from >= PetalID::kNumPetals) return PetalID::kNone;
         char const *name = PETAL_DATA[from].name;
         if (name == nullptr) return PetalID::kNone;
+        // Prefer the id nearest to `from` so duplicate English names cannot
+        // jump to an unrelated family that happens to share the string.
         PetalID::T best = PetalID::kNone;
+        uint32_t best_dist = 0xffffffffu;
         for (uint32_t id = 1; id < (uint32_t) PetalID::kNumPetals; ++id) {
             if (PETAL_DATA[id].rarity != rarity) continue;
             if (PETAL_DATA[id].name == nullptr) continue;
             if (std::strcmp(PETAL_DATA[id].name, name) != 0) continue;
-            if (best == PetalID::kNone || id > best) best = (PetalID::T) id;
+            uint32_t d = id >= (uint32_t) from ? id - (uint32_t) from : (uint32_t) from - id;
+            if (best == PetalID::kNone || d < best_dist) {
+                best = (PetalID::T) id;
+                best_dist = d;
+            }
         }
         return best;
     }
@@ -274,38 +293,41 @@ namespace Craft {
             if (unit >= 999999) unit = 200;
             sum += unit * (uint32_t) rec.ingredients[i].count;
         }
-        // Convenience premium vs farming mats + hammer (~35%).
-        return (uint32_t) std::lround((double) sum * 1.35) + 40;
+        // Convenience premium vs farming mats + hammer (~40%).
+        return (uint32_t) std::lround((double) sum * 1.40) + 40;
     }
 
     uint32_t buy_special_cost(PetalID::T id) {
-        switch (id) {
-            // Entry utility — affordable after a short soft-zone run
-            case PetalID::kAccelerator: return 150;
-            case PetalID::kMagnet: return 220;
-            case PetalID::kFaster: return 280;
-            case PetalID::kBubble: return 320;
-            case PetalID::kWeb: return 380;
-            case PetalID::kYinYang: return 520;
-            case PetalID::kCutter: return 600;
-            case PetalID::kBone: return 720;
-            case PetalID::kSalt: return 800;
-            case PetalID::kObserver: return 1100;
-            case PetalID::kMonstera: return 1400;
-            case PetalID::kAntennae: return 1800;
-            case PetalID::kHeaviest: return 2400;
-            case PetalID::kMoon: return 3200;
-            case PetalID::kGoldenLeaf: return 48000; // rare CD utility — shop Rare only; Ultra from boss
-            case PetalID::kLotus: return 4800;
-            case PetalID::kThirdEye: return 5600;
-            case PetalID::kYggdrasil: return 7200;
-            case PetalID::kHoney: return HONEY_METEOR_COST[RarityID::kRare];
-            case PetalID::kMeteor: return HONEY_METEOR_COST[RarityID::kLegendary];
-            default: break;
-        }
-        if (is_honey_or_meteor_family(id) && id < PetalID::kNumPetals) {
+        if (id == PetalID::kNone || id >= PetalID::kNumPetals) return 999999;
+        // Honey/Meteor family: rarity ladder table (== 2× BUY_RARITY).
+        if (is_honey_or_meteor_family(id)) {
             uint8_t r = PETAL_DATA[id].rarity;
             if (r < RarityID::kNumRarities) return HONEY_METEOR_COST[r];
+            return 999999;
+        }
+        uint8_t r = PETAL_DATA[id].rarity;
+        // Fixed chase SKUs: util × pack. Minutes from DPS/HP/coin model — see
+        // todo/shop-economy-rebalance-2026-10-23.md §Batch C.
+        switch (id) {
+            case PetalID::kAccelerator: return chase_price(r, 1.40); // ~8m soft Unusual
+            case PetalID::kMagnet: return chase_price(r, 1.85);      // ~11m soft Unusual
+            case PetalID::kFaster: return chase_price(r, 1.15);
+            case PetalID::kBubble: return chase_price(r, 1.25);
+            case PetalID::kWeb: return chase_price(r, 1.35);
+            case PetalID::kSalt: return chase_price(r, 1.75);
+            case PetalID::kMonstera: return chase_price(r, 2.50);
+            case PetalID::kGoldenLeaf: return chase_price(r, 30.0); // ~4h soft Rare CD sink
+            case PetalID::kYinYang: return chase_price(r, 1.45);
+            case PetalID::kCutter: return chase_price(r, 1.55);
+            case PetalID::kHeaviest: return chase_price(r, 1.85);
+            case PetalID::kLotus: return chase_price(r, 2.80);
+            case PetalID::kBone: return chase_price(r, 1.45);
+            case PetalID::kAntennae: return chase_price(r, 1.85);
+            case PetalID::kObserver: return chase_price(r, 2.00);   // ~40m Mythic belt
+            case PetalID::kThirdEye: return chase_price(r, 2.40);   // ~48m Mythic belt
+            case PetalID::kMoon: return chase_price(r, 1.20);       // ~90m Unique outer
+            case PetalID::kYggdrasil: return chase_price(r, 1.50);  // ~110m Unique outer
+            default: break;
         }
         if (is_shop_material(id)) return buy_material_cost(id);
         if (is_shop_combo(id)) return buy_combo_cost(id);
@@ -331,6 +353,31 @@ namespace Craft {
         if (id == PetalID::kBasic || id == PetalID::kLight || id == PetalID::kHeavy)
             return 0.45f;
         return 1.f;
+    }
+
+    float mob_loot_weights(MobID::T mob_id, uint8_t mob_rarity,
+                           float out[MAX_DROPS_PER_MOB]) {
+        for (uint32_t i = 0; i < MAX_DROPS_PER_MOB; ++i) out[i] = 0.f;
+        if (mob_id >= MobID::kNumMobs) return 0.f;
+        auto const &drops = MOB_DATA[mob_id].drops;
+        if (drops.size() == 0) return 0.f;
+        float base[MAX_DROPS_PER_MOB] = {};
+        compute_mob_drop_weights(mob_id, mob_rarity, base);
+        float total = 0.f;
+        for (uint32_t i = 0; i < drops.size(); ++i) {
+            float w = base[i];
+            PetalID::T drop_id = drops[i];
+            // Chase specials already carry a flat share — do not crush them again.
+            if (!is_chase_loot_petal(drop_id))
+                w *= drop_weight_mult(drop_id);
+            // Family seed still gets weight even if baked ID is below the band —
+            // rarity is resolved after pick via petal_at_rarity.
+            if (w <= 0.f && !is_chase_loot_petal(drop_id))
+                w = 0.15f;
+            out[i] = w;
+            total += w;
+        }
+        return total;
     }
 
     static std::vector<ShopOffer> g_offers;

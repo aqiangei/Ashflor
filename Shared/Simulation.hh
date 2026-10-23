@@ -52,3 +52,7 @@ public:
     template <uint8_t>
     void for_each(std::function<void (Simulation *, Entity &)>);
 };
+
+#ifdef SERVERSIDE
+#include <Server/SpatialHash.inl>
+#endif

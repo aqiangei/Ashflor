@@ -50,11 +50,12 @@ Element *Ui::make_pause_menu() {
     std::vector<Element *> toggles = {
         pause_toggle_row(&Input::keyboard_movement, I18n::kKeyboardMovement),
         pause_toggle_row(&Input::movement_helper, I18n::kMovementHelper),
-        // Same flag: either label is a full attack↔defend swap (see Game.cc).
         pause_toggle_row(&Input::invert_attack, I18n::kInvertAttack),
-        pause_toggle_row(&Input::invert_attack, I18n::kInvertDefend),
+        pause_toggle_row(&Input::invert_defend, I18n::kInvertDefend),
+        pause_toggle_row(&Input::disable_auto_party, I18n::kDisableAutoParty),
         pause_toggle_row(&Input::request_mobile, I18n::kRequestMobile),
         pause_toggle_row(&Game::show_debug, I18n::kDebugStats),
+        pause_toggle_row(&Game::show_hitboxes, I18n::kShowHitboxes),
     };
     Element *toggles_block = nullptr;
     if (m) {

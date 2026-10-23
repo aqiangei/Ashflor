@@ -2,7 +2,6 @@
 #include <Server/AccountStore.hh>
 #include <Server/Client.hh>
 #include <Server/Game.hh>
-#include <Server/Party.hh>
 #include <Server/Server.hh>
 
 #include <Shared/Simulation.hh>
@@ -20,10 +19,13 @@ static bool _should_interact(Entity const &ent1, Entity const &ent2) {
     //if (ent1.has_component(kFlower) || ent2.has_component(kFlower)) return false;
     //if (ent1.has_component(kPetal) || ent2.has_component(kPetal)) return false;
     if (ent1.pending_delete || ent2.pending_delete) return false;
-    // Drops must collide with flowers so pickup can run (team/immunity checked in _pickup_drop)
+    // Drops must collide with flowers so pickup can run (team/immunity checked in pickup_drop)
     if ((ent1.has_component(kDrop) && ent2.has_component(kFlower))
         || (ent2.has_component(kDrop) && ent1.has_component(kFlower)))
         return true;
+    // Loot has no push/damage/web interaction. Discard these pairs before
+    // distance normalization when a battle leaves many private piles behind.
+    if (ent1.has_component(kDrop) || ent2.has_component(kDrop)) return false;
     // Planted meteors may overlap each other (AFK stacking).
     if (ent1.has_component(kPetal) && ent2.has_component(kPetal)
         && petal_is_meteor(ent1.get_petal_id())
@@ -46,20 +48,20 @@ static bool _should_interact(Entity const &ent1, Entity const &ent2) {
 // Overflow into backpack stacks when inventory slots are full.
 static void _add_to_backpack_stack(Client *client, PetalID::T id) {
     if (client == nullptr || id == PetalID::kNone || id >= PetalID::kNumPetals) return;
-    if (client->craft_bank[id] < 1000000)
+    uint32_t const cap = Recipe::bank_stack_cap(id);
+    if (client->craft_bank[id] < cap)
         ++client->craft_bank[id];
     AccountStore::capture_nosave(client);
     client_sync_craft(client);
 }
 
-static void _pickup_drop(Simulation *sim, Entity &player, Entity &drop) {
+void pickup_drop(Simulation *sim, Entity &player, Entity &drop) {
     if (!sim->ent_alive(player.get_parent())) return;
-    // Private loot: team-tagged piles are owner/party only (never FFA).
-    // Unowned piles: brief immunity then anyone. Party shares mob XP (Death::_add_score).
+    // Private loot: tagged piles belong to one camera only (not party-shared).
+    // Unowned piles: brief immunity then anyone. Party still shares mob XP.
     Client *client = Server::client_by_camera(sim, player.get_parent());
     if (drop.get_team() != NULL_ENTITY) {
-        if (!(drop.get_team() == player.get_team())
-            && !Party::can_take_drop(client, sim, drop.get_team()))
+        if (!(drop.get_team() == player.get_parent()))
             return;
     } else if (drop.immunity_ticks > 0) {
         return;
@@ -89,10 +91,11 @@ static void _pickup_drop(Simulation *sim, Entity &player, Entity &drop) {
         }
         if (!placed) {
             if (client != nullptr) {
-                if (client->craft_bank[drop_id] < 1000000 - (qty - q))
-                    client->craft_bank[drop_id] += (uint32_t) (qty - q);
-                else
-                    client->craft_bank[drop_id] = 1000000;
+                uint32_t const cap = Recipe::bank_stack_cap(drop_id);
+                uint32_t add = (uint32_t) (qty - q);
+                uint64_t sum = (uint64_t) client->craft_bank[drop_id] + add;
+                if (sum > cap) sum = cap;
+                client->craft_bank[drop_id] = (uint32_t) sum;
                 craft_dirty = 1;
                 for (uint16_t c = q; c < qty; ++c)
                     client_credit_petal_pick(client, drop_id);
@@ -106,8 +109,9 @@ static void _pickup_drop(Simulation *sim, Entity &player, Entity &drop) {
         if (craft_dirty || Recipe::is_bag_only(drop_id))
             client_sync_craft(client);
     }
-    drop.set_x(player.get_x());
-    drop.set_y(player.get_y());
+    // Do not teleport the pile onto the flower before delete — the client
+    // lerps that position update, so a moving player looks like drops slowly
+    // chase them. Instant absorb = delete in place.
     BitMath::unset(drop.flags, EntityFlags::kIsDespawning);
     sim->request_delete(drop.id);
 }
@@ -150,13 +154,17 @@ void on_collide(Simulation *sim, Entity &ent1, Entity &ent2) {
     if (!_should_interact(ent1, ent2)) return;
     //finer distance check
     Vector separation(ent1.get_x() - ent2.get_x(), ent1.get_y() - ent2.get_y());
-    float dist = min_dist - separation.magnitude();
-    if (dist < 0) return;
+    float distance_squared = separation.x * separation.x + separation.y * separation.y;
+    if (distance_squared > min_dist * min_dist) return;
+    float distance = std::sqrt(distance_squared);
+    float dist = min_dist - distance;
     if (NO(kDrop) && NO(kWeb)) {
         if (separation.x == 0 && separation.y == 0)
             separation.unit_normal(frand() * 2 * M_PI);
-        else
-            separation.normalize();
+        else if (!is_finite(distance))
+            separation.set(0.f, 0.f);
+        else if (distance > 0.f)
+            separation *= 1.f / distance;
         float ratio = ent2.mass / (ent1.mass + ent2.mass);
         // Players still block each other (soft push / overlap resolve), but no
         // knockback shove — that was the only PvP feel to remove.
@@ -207,9 +215,9 @@ void on_collide(Simulation *sim, Entity &ent1, Entity &ent2) {
     }
 
     if (ent1.has_component(kDrop) && ent2.has_component(kFlower)) 
-        _pickup_drop(sim, ent2, ent1);
+        pickup_drop(sim, ent2, ent1);
     if (ent2.has_component(kDrop) && ent1.has_component(kFlower))
-        _pickup_drop(sim, ent1, ent2);
+        pickup_drop(sim, ent1, ent2);
 
     if (ent1.has_component(kWeb) && !ent2.has_component(kPetal) && !ent2.has_component(kDrop))
         ent2.speed_ratio = 0.5;
