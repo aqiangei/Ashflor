@@ -239,6 +239,8 @@ static ArtKind const ARTS[] = {
     { "lore", "传说印记", "Lore mark", "种子、石碑、足迹等轻叙事点", "Seeds, steles, footprints — light lore" },
 };
 
+#include "CodexWorld.inc"
+
 static void emit_petal_attrs(std::string &out, PetalAttributes const &a) {
     out += ",\"attrs\":{";
     uint8_t f = 1;
@@ -516,6 +518,56 @@ std::string Server::live_codex_json() {
         esc(out, ARTS[i].role_zh);
         out += "\",\"role_en\":\"";
         esc(out, ARTS[i].role_en);
+        out += "\"}";
+    }
+
+    out += "],\"processes\":[";
+    for (size_t i = 0; i < sizeof(kCodexProcesses) / sizeof(kCodexProcesses[0]); ++i) {
+        if (i) out += ',';
+        CodexProcess const &p = kCodexProcesses[i];
+        out += "{\"id\":\"";
+        esc(out, p.id);
+        out += "\",\"title\":\"";
+        esc(out, p.title_zh);
+        out += "\",\"title_en\":\"";
+        esc(out, p.title_en);
+        out += "\",\"detail\":\"";
+        esc(out, p.detail_zh);
+        out += "\",\"detail_en\":\"";
+        esc(out, p.detail_en);
+        out += "\"}";
+    }
+
+    out += "],\"world_entities\":[";
+    for (size_t i = 0; i < sizeof(kCodexWorld) / sizeof(kCodexWorld[0]); ++i) {
+        if (i) out += ',';
+        CodexWorldEnt const &e = kCodexWorld[i];
+        out += "{\"map_id\":";
+        out += std::to_string(e.map_id);
+        out += ",\"visual\":";
+        out += std::to_string(e.visual);
+        out += ",\"art_id\":\"";
+        esc(out, e.art_id);
+        out += "\",\"group\":\"";
+        esc(out, e.group);
+        out += "\",\"kind\":\"";
+        esc(out, e.kind);
+        out += "\",\"name_zh\":\"";
+        esc(out, e.name_zh);
+        out += "\",\"name_en\":\"";
+        esc(out, e.name_en);
+        out += "\",\"flow_zh\":\"";
+        esc(out, e.flow_zh);
+        out += "\",\"flow_en\":\"";
+        esc(out, e.flow_en);
+        out += "\",\"lore_zh\":\"";
+        esc(out, e.lore_zh);
+        out += "\",\"lore_en\":\"";
+        esc(out, e.lore_en);
+        out += "\",\"alert_zh\":\"";
+        esc(out, e.alert_zh);
+        out += "\",\"awake_zh\":\"";
+        esc(out, e.awake_zh);
         out += "\"}";
     }
 
