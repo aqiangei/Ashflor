@@ -125,6 +125,7 @@ void Socket::connect(std::string const url) {
         let reconnectTimer = 0;
         let intentionalClose = false;
         let reconnectDelayOverride = 0; // ms; 0 = default
+        let reconnectAttempt = 0;       // exponential backoff: 400ms → 15s cap
         let socketGen = 0; // ignore onclose from sockets we replaced
 
         function clearReconnectTimer() {
@@ -167,10 +168,17 @@ void Socket::connect(std::string const url) {
                 if (gen !== socketGen) return;
                 _on_message(2, a.code, stringToNewUTF8(a.reason || ""));
                 if (intentionalClose) return;
+                // Exponential backoff with jitter. A server that keeps rejecting us
+                // (4003 outdated / 4001 too many connections / 1006 storms) must not
+                // be hammered every 400ms: a stale tab used to reconnect ~2900
+                // times a night and flood the access log.
+                reconnectAttempt = Math.min(reconnectAttempt + 1, 8);
+                let base = (typeof document !== "undefined" && document.visibilityState === "visible")
+                    ? 400 : 1200;
                 let delay = reconnectDelayOverride > 0
                     ? reconnectDelayOverride
-                    : ((typeof document !== "undefined" && document.visibilityState === "visible")
-                        ? 400 : 1200);
+                    : Math.min(base * Math.pow(2, reconnectAttempt - 1), 15000);
+                delay = Math.round(delay * (0.85 + Math.random() * 0.3));
                 clearReconnectTimer();
                 reconnectTimer = setTimeout(connect, delay);
             };
@@ -184,9 +192,12 @@ void Socket::connect(std::string const url) {
 
         Module._ashflorSetReconnectDelay = function(ms) {
             reconnectDelayOverride = ms | 0;
+            // Server accepted the session — next drop starts from the fast retry again
+            if (reconnectDelayOverride === 0) reconnectAttempt = 0;
         };
         Module._ashflorReconnectNow = function() {
             intentionalClose = false;
+            reconnectAttempt = 0;
             clearReconnectTimer();
             connect();
         };

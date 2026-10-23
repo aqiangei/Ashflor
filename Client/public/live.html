@@ -481,7 +481,7 @@ const mmUi = {}; // map_id -> { card, canvas, title, count }
 let mmSnapA = null; // older
 let mmSnapB = null; // newer
 let mmSnapAt = 0;
-let mmPollMs = 50; // ~game TPS
+let mmPollMs = 200; // 5 Hz: /api/live-pos 之前 20Hz 轮询把 API 打得太碎
 let mmPosBusy = false;
 let mmRafStarted = false;
 
@@ -1059,6 +1059,8 @@ function startMinimapLoop() {
   requestAnimationFrame(frame);
   const poll = async () => {
     if (mmPosBusy) return;
+    // 后台标签页不轮询：切回来由 visibilitychange 立即补齐
+    if (document.visibilityState === "hidden") return;
     mmPosBusy = true;
     try {
       const r = await fetch("/api/live-pos", { cache: "no-store" });
@@ -1068,6 +1070,9 @@ function startMinimapLoop() {
   };
   poll();
   setInterval(poll, mmPollMs);
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "visible") poll();
+  });
 }
 
 async function loadMapLayout() {
@@ -1076,7 +1081,7 @@ async function loadMapLayout() {
     if (!r.ok) throw new Error("HTTP " + r.status);
     mapLayout = await r.json();
     ensureMinimapUi();
-    $("mmStatus").textContent = "地形已就绪 · 20Hz 平滑刷新";
+    $("mmStatus").textContent = "地形已就绪 · 5Hz 平滑刷新";
     startMinimapLoop();
   } catch (e) {
     $("mmStatus").textContent = "地形加载失败：" + e.message;
