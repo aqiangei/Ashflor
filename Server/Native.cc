@@ -326,7 +326,7 @@ uWS::App Server::server = uWS::App()
 })
 .ws<Client>("/*", {
     .compression = uWS::DISABLED,
-    .maxPayloadLength = 1024,
+    .maxPayloadLength = 64 * 1024,
     .idleTimeout = 120,
     .maxBackpressure = 1024 * MAX_PACKET_LEN,
     .closeOnBackpressureLimit = false,

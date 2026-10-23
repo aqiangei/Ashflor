@@ -52,8 +52,8 @@ void tick_petal_behavior(Simulation *sim, Entity &petal) {
         } else if (pid == PetalID::kMoon) {
             float wanting_angle = petal.get_angle() * 2.5;
             float wanting_radius = 100 + player.get_radius();
-            float wanting_x = player.get_x() + wanting_radius * std::cosf(wanting_angle); 
-            float wanting_y = player.get_y() + wanting_radius * std::sinf(wanting_angle); 
+            float wanting_x = player.get_x() + wanting_radius * (float) std::cos(wanting_angle);
+            float wanting_y = player.get_y() + wanting_radius * (float) std::sin(wanting_angle);
             Vector delta(wanting_x - petal.get_x(), wanting_y - petal.get_y());
             petal.acceleration.set(delta.x * 0.5, delta.y * 0.5);
         } else {
