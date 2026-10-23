@@ -357,46 +357,41 @@ namespace TreasureSites {
         return v != PetalID::kNone ? v : base;
     }
 
+    // Sensory reward rarity (events / chests / rituals). Among the pile:
+    // Ultra ~55% · Super ~35% · Unique ~10%. Hard/Ritual nudge Unique up.
     inline uint8_t roll_mat_rarity(uint8_t tier) {
         float r = frand();
-        switch (tier) {
-        case kTierLore:
-            // Common 68 · Unusual 27 · Rare 5
-            if (r < 0.68f) return RarityID::kCommon;
-            if (r < 0.95f) return RarityID::kUnusual;
-            return RarityID::kRare;
-        case kTierNormal:
-            // Common 38 · Unusual 42 · Rare 17 · Epic 3
-            if (r < 0.38f) return RarityID::kCommon;
-            if (r < 0.80f) return RarityID::kUnusual;
-            if (r < 0.97f) return RarityID::kRare;
-            return RarityID::kEpic;
-        case kTierHard:
-            // Common 18 · Unusual 38 · Rare 32 · Epic 10 · Legendary 2
-            if (r < 0.18f) return RarityID::kCommon;
-            if (r < 0.56f) return RarityID::kUnusual;
-            if (r < 0.88f) return RarityID::kRare;
-            if (r < 0.98f) return RarityID::kEpic;
-            return RarityID::kLegendary;
-        case kTierRitual:
-        default:
-            // Unusual 22 · Rare 40 · Epic 28 · Legendary 8 · Mythic 2
-            if (r < 0.22f) return RarityID::kUnusual;
-            if (r < 0.62f) return RarityID::kRare;
-            if (r < 0.90f) return RarityID::kEpic;
-            if (r < 0.98f) return RarityID::kLegendary;
-            return RarityID::kMythic;
-        }
+        float unique_p = 0.10f;
+        if (tier == kTierLore) unique_p = 0.08f;
+        else if (tier == kTierHard) unique_p = 0.12f;
+        else if (tier == kTierRitual) unique_p = 0.14f;
+        float ultra_p = 0.55f;
+        float super_p = 1.f - ultra_p - unique_p;
+        if (r < ultra_p) return RarityID::kUltra;
+        if (r < ultra_p + super_p) return RarityID::kSuper;
+        return RarityID::kUnique;
     }
 
-    // Explore / world-event drops: map craft pool × rarity ladder.
+    // World-event / chest / explore: almost always full petal pool so every
+    // family can show up. Tiny map-mat chance keeps biome flavour.
     inline PetalID::T pick_explore_mat(uint8_t mid, uint8_t tier = kTierNormal) {
-        return mat_at_rarity(pick_mat_family(mid), roll_mat_rarity(tier));
+        uint8_t rarity = roll_mat_rarity(tier);
+        if (frand() < 0.88f)
+            return Craft::random_petal_of_rarity(rarity);
+        return mat_at_rarity(pick_mat_family(mid), rarity);
     }
 
-    // Ritual thematic scrap: keep SiteDef family, roll rarity on the ladder.
+    // Ritual: thematic family OR full pool (prefer pool for variety).
     inline PetalID::T pick_ritual_mat(PetalID::T base_family) {
-        return mat_at_rarity(base_family, roll_mat_rarity(kTierRitual));
+        uint8_t rarity = roll_mat_rarity(kTierRitual);
+        if (frand() < 0.75f)
+            return Craft::random_petal_of_rarity(rarity);
+        return mat_at_rarity(base_family, rarity);
+    }
+
+    // Extra sensory bonus pile (always full-pool Ultra/Super/Unique).
+    inline PetalID::T pick_bonus_pool_petal(uint8_t tier = kTierNormal) {
+        return Craft::random_petal_of_rarity(roll_mat_rarity(tier));
     }
 
     inline MapPack pack(uint8_t map_id) {

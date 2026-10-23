@@ -1,6 +1,8 @@
-set(CMAKE_SYSTEM_NAME Generic)
-
 cmake_minimum_required(VERSION 3.16)
+# Only pin Generic toolchain for Emscripten; native needs a real host system.
+if(WASM_SERVER)
+    set(CMAKE_SYSTEM_NAME Generic)
+endif()
 project(gardn-server)
 
 include_directories(..)
@@ -24,6 +26,7 @@ set(SOURCES
     Process/Score.cc
     Process/Segment.cc
     AccountStore.cc
+    AdminGiveLog.cc
     Chat.cc
     Client.cc
     DevCheats.cc
@@ -71,6 +74,8 @@ else()
     set(SOURCES ${SOURCES} SpatialHashUniform.cc)
 endif()
 set(CMAKE_CXX_FLAGS "-std=c++20 -DSERVERSIDE=1")
+# Petal attribute tables use 1.0 for uint8_t flags in places; don't fail Release.
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-narrowing")
 
 if (TDM)
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DGAMEMODE_TDM=1")
@@ -110,13 +115,16 @@ if(WASM_SERVER)
     add_executable(gardn-server ${SOURCES})
     set(CMAKE_EXECUTABLE_SUFFIX ".js")
 else()
-    set(CMAKE_CXX_COMPILER "g++")
+    # Native builds should use clang++ (-DCMAKE_CXX_COMPILER=clang++): g++ rejects
+    # out-of-order designated initializers in StaticData as hard C++20 errors.
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-reorder-init-list")
     add_executable(gardn-server ${SOURCES})
     target_include_directories(gardn-server PRIVATE ${CMAKE_SOURCE_DIR}/uWebSockets/src)
     target_include_directories(gardn-server PRIVATE ${CMAKE_SOURCE_DIR}/uWebSockets/uSockets/src)
-    target_link_directories(gardn-server PRIVATE ${CMAKE_SOURCE_DIR}/uWebSockets/uSockets)
-    target_link_libraries(gardn-server uv z)
-    target_link_libraries(gardn-server -l:uSockets.a)
+    # Link archive by path (avoids -l: name quirks); uSockets must be built WITHOUT -flto
+    # when using clang++ (GCC LTO bitcode will not resolve).
+    set(USOCKETS_A "${CMAKE_SOURCE_DIR}/uWebSockets/uSockets/uSockets.a")
+    target_link_libraries(gardn-server "${USOCKETS_A}" uv z pthread dl)
     if(CMAKE_HOST_WIN32)
         target_link_libraries(gardn-server ws2_32)
     endif()

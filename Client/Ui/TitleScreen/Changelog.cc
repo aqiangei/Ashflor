@@ -45,6 +45,8 @@ static Element *make_changelog_contents() {
     Element *elt = new Ui::VContainer({
         make_date("2026年10月23日", "October 23rd 2026"),
         make_entries({
+            {"服务端切原生 uWebSockets（非 Node/WASM）：空载 tick 显著下降；同负载流间隔与 API 延迟明显改善",
+             "Native uWebSockets server (not Node/WASM): idle ticks much lower; stream gaps & API latency better under load"},
             {"唯一花瓣无限升级：托盘 5 合 1 赌等级；失败损失 1–4；等级挂账号，同种装备全吃加成（每级 +3% 伤害/生命等）",
              "Unique infinite levels: craft 5 for Lv+1; miss loses 1–4; per-account level buffs all equipped copies (+3% dmg/HP per Lv)"},
             {"合成面板新增「期望直兑」：按期望消耗必成（普通升稀有度 / 唯一升等级）；成功率整体上调与直兑对齐",
@@ -55,6 +57,8 @@ static Element *make_changelog_contents() {
              "Craft Unique column + petal tooltip show Lv≥1; tooltips/combat scale heal/poison with level"},
             {"大量花瓣补齐稀有度阶梯（含唯一档）；组装/探索残片与存档同步完善",
              "Many petals filled through Unique ladders; assemble/explore scrap + account save sync"},
+            {"装载槽同步花瓣剩余生命；背包叠加上限按种类；存档/排行榜脏写节流减轻磁盘卡顿",
+             "Loadout petal HP sync; per-petal bank caps; dirty account/LB flush to cut disk stalls"},
         }),
         make_divider(),
         make_date("2026年10月22日", "October 22nd 2026"),

@@ -88,8 +88,13 @@ void render_petal(Renderer &ctx, Entity const &ent) {
     else
         draw_static_petal_single(id, ctx);
     // Highest rarity is Unique — sparkle only for Unique petals (not Super/Ultra).
-    if (data.rarity == RarityID::kUnique && frand() < fclamp(0.25 * Ui::dt/16.67, 0, 1))
-        Particle::add_unique_particle(ent.get_x(), ent.get_y());
+    // Higher account level → denser, more golden particles.
+    if (data.rarity == RarityID::kUnique) {
+        uint32_t lv = (id < PetalID::kNumPetals) ? Game::petal_levels[id] : 0;
+        float rate = 0.22f + fclamp((float) lv * 0.012f, 0.f, 0.35f);
+        if (frand() < fclamp(rate * Ui::dt / 16.67, 0, 1))
+            Particle::add_unique_particle(ent.get_x(), ent.get_y(), lv);
+    }
 
     // Fill-only label (strokeText is the main hitch). Cap count via small petals skip.
     if (show_tier && ent.get_radius() >= 8.f) {

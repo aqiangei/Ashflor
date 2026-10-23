@@ -28,4 +28,8 @@ namespace Recipe {
     // True for ids that must never sit in a primary loadout slot.
     // Coins are equippable (combat petal); only invalid ids are barred.
     uint8_t is_bag_only(PetalID::T id);
+
+    // Soft stack ceiling for craft_bank / bag deposits. Coins allow 1e9; others 1e6.
+    // At/over cap, unequip still clears the loadout slot (do not block the bar).
+    uint32_t bank_stack_cap(PetalID::T id);
 }

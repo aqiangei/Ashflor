@@ -1327,8 +1327,10 @@ uint8_t Map::_spawn_zone_mob_once(Simulation *sim) {
     // 1-2 ticks; unseenDespawn will clean them up ~30s later if they stay outside.
     // This keeps refill aligned with what the client renders, not just AI behavior.
     constexpr float kMinClientZoom = 0.55f;
-    float const near_hw = 960.f / (BASE_FOV * kMinClientZoom) + 280.f;
-    float const near_hh = 540.f / (BASE_FOV * kMinClientZoom) + 280.f;
+    // Slightly wider than render AOI so corner pockets still get refill attempts
+    // while the player is standing near the edge of a zone.
+    float const near_hw = 960.f / (BASE_FOV * kMinClientZoom) + 420.f;
+    float const near_hh = 540.f / (BASE_FOV * kMinClientZoom) + 420.f;
 
     // Prefer a zone that already contains a flower (human or bot) so random
     // global pick_spawn_zone isn't mostly wasted on far biomes.

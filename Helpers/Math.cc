@@ -1,7 +1,8 @@
 #include <Helpers/Math.hh>
 
 #include <cmath>
-#include <format>
+#include <cstdio>
+#include <string>
 
 float fclamp(float v, float s, float e) {
     if (!(v >= s)) return s;
@@ -110,30 +111,36 @@ std::string const RangeValue::to_string() const {
     return format_score(lower) + '~' + format_score(upper);
 }
 
+static std::string fmtf(char const *fmt, float v) {
+    char buf[64];
+    std::snprintf(buf, sizeof(buf), fmt, (double)v);
+    return std::string(buf);
+}
+
 std::string format_pct(float pct) {
-    if (pct >= 0.9) return std::format("{:.0f}%", pct);
-    if (pct >= 0.09) return std::format(".{:.0f}%", pct * 10);
-    if (pct >= 0.009) return std::format(".0{:.0f}%", pct * 100);
-    return std::format(".00{:.0}%", pct * 1000);
+    if (pct >= 0.9) return fmtf("%.0f%%", pct);
+    if (pct >= 0.09) return fmtf(".%.0f%%", pct * 10);
+    if (pct >= 0.009) return fmtf(".0%.0f%%", pct * 100);
+    return fmtf(".00%.0f%%", pct * 1000);
 }
 
 std::string format_score(float score) {
-    if (score < 1000.f) return std::format("{:.0f}", score);
+    if (score < 1000.f) return fmtf("%.0f", score);
     if (score < 1000000.f) {
         float k = score / 1000.f;
         if (std::fabs(k - std::round(k)) < 0.05f)
-            return std::format("{:.0f}k", std::round(k));
-        return std::format("{:.1f}k", k);
+            return fmtf("%.0fk", std::round(k));
+        return fmtf("%.1fk", k);
     }
     float m = score / 1000000.f;
     if (std::fabs(m - std::round(m)) < 0.05f)
-        return std::format("{:.0f}m", std::round(m));
-    return std::format("{:.1f}m", m);
+        return fmtf("%.0fm", std::round(m));
+    return fmtf("%.1fm", m);
 }
 
 std::string format_number(float num) {
-    if (num < 0.1) return std::format("{:.2f}", num);
-    if (num < 10 && num != std::floorf(num)) return std::format("{:.1f}", num);
+    if (num < 0.1) return fmtf("%.2f", num);
+    if (num < 10 && num != ::floorf(num)) return fmtf("%.1f", num);
     return format_score(num);
 }
 

@@ -39,7 +39,7 @@ namespace Input {
     extern uint8_t freeze_input;
     extern uint8_t movement_helper;
     extern uint8_t keyboard_movement;
-    // Either flag means full swap: attack↔defend bindings (kept in sync in Game.cc)
+    // Either flag = full swap of attack↔defend bindings (kept in sync each tick).
     extern uint8_t invert_attack;
     extern uint8_t invert_defend;
     extern uint8_t is_mobile;       // UA / device probe

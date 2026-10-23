@@ -5740,7 +5740,7 @@ void draw_static_petal(PetalID::T id, Renderer &ctx) {
     }
 }
 
-void draw_loadout_background(Renderer &ctx, PetalID::T id, float reload, uint8_t draw_name) {
+void draw_loadout_background(Renderer &ctx, PetalID::T id, float reload, uint8_t draw_name, float health) {
     RenderContext c(&ctx);
     ctx.set_fill(Renderer::HSV(RARITY_COLORS[PETAL_DATA[id].rarity], 0.8));
     ctx.round_line_join();
@@ -5753,6 +5753,20 @@ void draw_loadout_background(Renderer &ctx, PetalID::T id, float reload, uint8_t
     ctx.rect(-25, -25, 50, 50);
     ctx.fill();
     ctx.clip();
+    // Live durability: pale wash on the missing bottom portion only. Drawn under
+    // the petal icon so the art stays sharp while the slot still reads as worn.
+    if (health < 0.995f) {
+        float missing = 1.f - health;
+        if (missing < 0.f) missing = 0.f;
+        if (missing > 1.f) missing = 1.f;
+        float h = 50.f * missing;
+        float y = 25.f - h;
+        RenderContext wash(&ctx);
+        ctx.set_fill(0x55ffffff);
+        ctx.begin_path();
+        ctx.rect(-25, y, 50, h);
+        ctx.fill();
+    }
     if (reload < 1) {
         float rld =  1 - (float) reload;
         {

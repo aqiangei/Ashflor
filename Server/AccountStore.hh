@@ -36,7 +36,7 @@ struct Account {
     uint64_t session_hash = 0;
     uint32_t bonus_day = 0;             // Beijing calendar day
     uint32_t daily_bonus_seconds = 0;   // up to one hour per day
-    uint32_t offline_bonus_seconds = 0; // earned at 1:10, capped at three hours
+    uint32_t offline_bonus_seconds = 0; // earned at 1:10, capped at six hours
     uint64_t last_seen_epoch = 0;
     // Guild membership (no spaces in name). "-" in the file means none.
     std::string guild_name;

@@ -60,12 +60,14 @@ static void _update_client(Simulation *sim, Client *client) {
     Writer writer(Server::OUTGOING_PACKET);
     writer.write<uint8_t>(Clientbound::kClientUpdate);
     writer.write<EntityID>(client->camera);
-    // Match client viewport including max zoom-out (camera_zoom floor 0.55) so
-    // Antenna/Observer wide FOV never leaves empty gaps where mobs should show.
-    constexpr float kMinClientZoom = 0.55f;
+    // Net AOI is slightly tighter than the client's max zoom-out (0.55).
+    // Load test: 48 clients × oversized FOV dominated tick (serialize + WS).
+    // Visual still uses 0.55 locally; entities just outside net FOV appear on
+    // the next tick as the camera moves — acceptable vs 100ms+ stalls.
+    constexpr float kNetMinZoom = 0.68f;
     float net_fov = fclamp(camera.get_fov(), BASE_FOV * 0.08f, BASE_FOV);
-    float half_w = 960.f / (net_fov * kMinClientZoom) + 280.f;
-    float half_h = 540.f / (net_fov * kMinClientZoom) + 280.f;
+    float half_w = 960.f / (net_fov * kNetMinZoom) + 160.f;
+    float half_h = 540.f / (net_fov * kNetMinZoom) + 160.f;
     sim->spatial_hash.query(camera.get_camera_x(), camera.get_camera_y(),
         half_w, half_h,
         [&](Simulation *, Entity &ent){
@@ -80,6 +82,25 @@ static void _update_client(Simulation *sim, Client *client) {
         });
     std::sort(in_view.begin(), in_view.end());
     in_view.erase(std::unique(in_view.begin(), in_view.end()), in_view.end());
+    // Hard cap entities per snapshot so one Antenna crowd cannot explode packet CPU.
+    constexpr size_t kMaxViewEntities = 280;
+    if (in_view.size() > kMaxViewEntities) {
+        // Keep camera + player (first two pushes), drop the farthest IDs by
+        // truncating the sorted tail — stable and cheap vs distance sort.
+        EntityID cam_id = client->camera;
+        EntityID pl_id = sim->ent_exists(camera.get_player())
+            ? camera.get_player() : NULL_ENTITY;
+        in_view.resize(kMaxViewEntities);
+        // Ensure camera/player survived truncation.
+        auto ensure = [&](EntityID id) {
+            if (id == NULL_ENTITY) return;
+            if (std::binary_search(in_view.begin(), in_view.end(), id)) return;
+            in_view.back() = id;
+            std::sort(in_view.begin(), in_view.end());
+        };
+        ensure(cam_id);
+        ensure(pl_id);
+    }
 
     for (EntityID const &i: client->in_view) {
         if (!std::binary_search(in_view.begin(), in_view.end(), i)) {

@@ -276,4 +276,9 @@ namespace Recipe {
         if (id >= PetalID::kNumPetals) return 1;
         return 0;
     }
+
+    uint32_t bank_stack_cap(PetalID::T id) {
+        if (id == PetalID::kCoin) return 1000000000u;
+        return 1000000u;
+    }
 }

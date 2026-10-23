@@ -1352,11 +1352,25 @@ void Game::tick(double time) {
             || BitMath::at(Input::mouse_buttons_state, Input::LeftMouse);
         uint8_t secondary = Input::keys_held.contains('\x10')
             || (BitMath::at(Input::mouse_buttons_state, Input::RightMouse) && !chat_menu_open);
-        // Invert attack → fire attack on secondary binds; invert defend → defend on primary.
-        // Turning both on is a full swap (LMB↔RMB, Space↔Shift).
-        uint8_t attack = Input::invert_attack ? secondary : primary;
-        uint8_t defend = Input::invert_defend ? primary : secondary;
+        // Full swap only (LMB↔RMB, Space↔Shift). Both settings toggles share
+        // invert_attack; keep invert_defend mirrored for save bits / old UI.
+        uint8_t const swap = Input::invert_attack;
+        Input::invert_defend = swap;
+        uint8_t attack = swap ? secondary : primary;
+        uint8_t defend = swap ? primary : secondary;
         Input::game_inputs.flags = (attack << InputFlags::kAttacking) | (defend << InputFlags::kDefending);
+    } else if (Input::mobile_controls()) {
+        // Touch A/B write flags directly; apply the same full swap here.
+        uint8_t const swap = Input::invert_attack;
+        Input::invert_defend = swap;
+        if (swap) {
+            uint8_t atk = BitMath::at(Input::game_inputs.flags, InputFlags::kAttacking);
+            uint8_t def = BitMath::at(Input::game_inputs.flags, InputFlags::kDefending);
+            Input::game_inputs.flags &=
+                ~((1u << InputFlags::kAttacking) | (1u << InputFlags::kDefending));
+            if (atk) BitMath::set(Input::game_inputs.flags, InputFlags::kDefending);
+            if (def) BitMath::set(Input::game_inputs.flags, InputFlags::kAttacking);
+        }
     }
 
     // Talent editing takes the pointer and keyboard focus. Mouse-aim movement

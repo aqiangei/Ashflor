@@ -31,7 +31,7 @@ extern std::array<struct PetalData, PetalID::kNumPetals> const PETAL_DATA;
 extern std::array<struct MobData, MobID::kNumMobs> const MOB_DATA;
 
 // World mob size / population. RadiusÃ—2 + dense multi-segment packs (centipede/
-// leech) blew spatial-hash collide to ~100â€?00ms/tick â€?keep mild scale only.
+// leech) blew spatial-hash collide to ~100ï¿½?00ms/tick ï¿½?keep mild scale only.
 inline constexpr float MOB_RADIUS_MULTIPLIER = 1.25f;
 inline constexpr float MOB_DENSITY_MULTIPLIER = 1.0f;
 
@@ -55,7 +55,7 @@ using MapZones = StaticArray<struct ZoneDefinition, MAX_ZONES_PER_MAP>;
 using MapTerrain = StaticArray<struct TerrainFeature, MAX_TERRAIN_PER_MAP>;
 
 // Spawn / difficulty templates. Geometry rewritten by MapGen (seeded per map_id).
-// Outer â†?harder. Difficulty 0 hub is fixed spawn for new players.
+// Outer ï¿½?harder. Difficulty 0 hub is fixed spawn for new players.
 inline std::array const MAPS = std::to_array<MapZones>({
     // ---- Garden ----
     MapZones({
@@ -89,7 +89,7 @@ inline std::array const MAPS = std::to_array<MapZones>({
             .difficulty = 1, .color = MapTheme::GARDEN_GROUND, .name = "Garden"
         },
         {
-            // Spawn hub â€?rich low-tier mix (periphery packs).
+            // Spawn hub ï¿½?rich low-tier mix (periphery packs).
             .left = 7200, .top = 7200, .right = 10800, .bottom = 10800,
             .density = 2.55f, .drop_multiplier = 0.02,
             .spawns = {
@@ -134,7 +134,7 @@ inline std::array const MAPS = std::to_array<MapZones>({
             .difficulty = 1, .color = 0xffd4a84b, .name = "Desert"
         },
         {
-            // Spawn hub â€?rich low-tier desert pack.
+            // Spawn hub ï¿½?rich low-tier desert pack.
             .left = 7200, .top = 7200, .right = 10800, .bottom = 10800,
             .density = 2.55f, .drop_multiplier = 0.02,
             .spawns = {
@@ -178,7 +178,7 @@ inline std::array const MAPS = std::to_array<MapZones>({
             .difficulty = 1, .color = 0xff00669c, .name = "Ocean"
         },
         {
-            // Spawn hub â€?rich low-tier ocean pack.
+            // Spawn hub ï¿½?rich low-tier ocean pack.
             .left = 7200, .top = 7200, .right = 10800, .bottom = 10800,
             .density = 2.55f, .drop_multiplier = 0.02,
             .spawns = {
@@ -222,7 +222,7 @@ inline std::array const MAPS = std::to_array<MapZones>({
             .difficulty = 1, .color = 0xff9aa3ab, .name = "Snow"
         },
         {
-            // Spawn hub â€?rich low-tier snow pack.
+            // Spawn hub ï¿½?rich low-tier snow pack.
             .left = 7200, .top = 7200, .right = 10800, .bottom = 10800,
             .density = 2.55f, .drop_multiplier = 0.02,
             .spawns = {
@@ -270,7 +270,7 @@ inline std::array const MAPS = std::to_array<MapZones>({
             .difficulty = 1, .color = 0xff40916c, .name = "Jungle Edge"
         },
         {
-            // hub â€?rich low-tier jungle; no wasps (aggro on sight)
+            // hub ï¿½?rich low-tier jungle; no wasps (aggro on sight)
             .left = 7200, .top = 7200, .right = 10800, .bottom = 10800,
             .density = 2.55f, .drop_multiplier = 0.02,
             .spawns = {
@@ -313,7 +313,7 @@ inline std::array const MAPS = std::to_array<MapZones>({
             .difficulty = 1, .color = 0xffa98467, .name = "Ant Hell"
         },
         {
-            // Spawn hub â€?rich low-tier ant pack.
+            // Spawn hub ï¿½?rich low-tier ant pack.
             .left = 7200, .top = 7200, .right = 10800, .bottom = 10800,
             .density = 2.55f, .drop_multiplier = 0.02,
             .spawns = {
@@ -357,7 +357,7 @@ inline std::array const MAPS = std::to_array<MapZones>({
             .difficulty = 1, .color = 0xff4a4e69, .name = "Volcano"
         },
         {
-            // Spawn hub â€?rich low-tier volcano pack.
+            // Spawn hub ï¿½?rich low-tier volcano pack.
             .left = 7200, .top = 7200, .right = 10800, .bottom = 10800,
             .density = 2.55f, .drop_multiplier = 0.02,
             .spawns = {
@@ -371,7 +371,7 @@ inline std::array const MAPS = std::to_array<MapZones>({
     // ---- Royal Capital (exactly 6 zones; geometry rewritten by build_zones_royal) ----
     MapZones({
         {
-            // 0 Outer Wall â€?rich low-tier capital pack
+            // 0 Outer Wall ï¿½?rich low-tier capital pack
             .left = 0, .top = 0, .right = (float)ARENA_WIDTH, .bottom = (float)ARENA_HEIGHT,
             .density = 2.55f, .drop_multiplier = 0.02,
             .spawns = {
@@ -383,7 +383,7 @@ inline std::array const MAPS = std::to_array<MapZones>({
             .difficulty = 0, .color = RARITY_COLORS[RarityID::kCommon], .name = "Outer Wall"
         },
         {
-            // 1 Common Quarter â€?Unusual band
+            // 1 Common Quarter ï¿½?Unusual band
             .left = 800, .top = 7500, .right = 12500, .bottom = 19200,
             .density = 3.50f, .drop_multiplier = 0.09,
             .spawns = {
@@ -394,7 +394,7 @@ inline std::array const MAPS = std::to_array<MapZones>({
             .difficulty = RarityID::kUnusual, .color = RARITY_COLORS[RarityID::kUnusual], .name = "Common Quarter"
         },
         {
-            // 2 Royal Garden â€?Rare
+            // 2 Royal Garden ï¿½?Rare
             .left = 15500, .top = 3500, .right = 27200, .bottom = 16500,
             .density = 2.4f, .drop_multiplier = 0.17,
             .spawns = {
@@ -404,7 +404,7 @@ inline std::array const MAPS = std::to_array<MapZones>({
             .difficulty = RarityID::kRare, .color = RARITY_COLORS[RarityID::kRare], .name = "Royal Garden"
         },
         {
-            // 3 Barracks â€?Epic
+            // 3 Barracks ï¿½?Epic
             .left = 5000, .top = 400, .right = 23000, .bottom = 7200,
             .density = 2.5f, .drop_multiplier = 0.19,
             .spawns = {
@@ -415,7 +415,7 @@ inline std::array const MAPS = std::to_array<MapZones>({
             .difficulty = RarityID::kEpic, .color = RARITY_COLORS[RarityID::kEpic], .name = "Barracks"
         },
         {
-            // 4 Ruined Quarter â€?Legendary
+            // 4 Ruined Quarter ï¿½?Legendary
             .left = 600, .top = 800, .right = 10500, .bottom = 9500,
             .density = 3.2f, .drop_multiplier = 0.55,
             .spawns = {
@@ -426,7 +426,7 @@ inline std::array const MAPS = std::to_array<MapZones>({
             .difficulty = RarityID::kLegendary, .color = RARITY_COLORS[RarityID::kLegendary], .name = "Ruined Quarter"
         },
         {
-            // 5 Royal Palace â€?Mythic
+            // 5 Royal Palace ï¿½?Mythic
             .left = 14500, .top = 4500, .right = 24500, .bottom = 11500,
             .density = 3.3f, .drop_multiplier = 0.58,
             .spawns = {
@@ -439,11 +439,11 @@ inline std::array const MAPS = std::to_array<MapZones>({
     })
 });
 
-// Implemented in MapGen.cc â€?deterministic per-map zones + impassable terrain.
+// Implemented in MapGen.cc ï¿½?deterministic per-map zones + impassable terrain.
 MapZones const &map_zones(uint8_t map_id);
 MapTerrain const &map_terrain(uint8_t map_id);
 
-// Field portals (Slice D) â€?config table, not client-hardcoded destinations.
+// Field portals (Slice D) ï¿½?config table, not client-hardcoded destinations.
 struct MapPortalDef {
     uint8_t from_map;
     uint8_t to_map;
@@ -455,23 +455,23 @@ struct MapPortalDef {
 };
 
 inline std::array const MAP_PORTALS = std::to_array<MapPortalDef>({
-    // Garden east â†?Royal Capital outer plaza (center, away from royal side gates)
+    // Garden east ï¿½?Royal Capital outer plaza (center, away from royal side gates)
     { MapID::kGarden, MapID::kRoyalCapital,
       ARENA_WIDTH * 0.88f, ARENA_HEIGHT * 0.50f, 220.f,
       MAP_SPAWN_X, MAP_SPAWN_Y },
-    // Desert west â†?Royal Capital plaza
+    // Desert west ï¿½?Royal Capital plaza
     { MapID::kDesert, MapID::kRoyalCapital,
       ARENA_WIDTH * 0.12f, ARENA_HEIGHT * 0.50f, 220.f,
       MAP_SPAWN_X, MAP_SPAWN_Y },
-    // Royal west gate â†?Garden hub (center, not near Garden east portal)
+    // Royal west gate ï¿½?Garden hub (center, not near Garden east portal)
     { MapID::kRoyalCapital, MapID::kGarden,
       ARENA_WIDTH * 0.10f, ARENA_HEIGHT * 0.50f, 240.f,
       MAP_SPAWN_X, MAP_SPAWN_Y },
-    // Royal east gate â†?Desert hub (center, not near Desert west portal)
+    // Royal east gate ï¿½?Desert hub (center, not near Desert west portal)
     { MapID::kRoyalCapital, MapID::kDesert,
       ARENA_WIDTH * 0.90f, ARENA_HEIGHT * 0.50f, 240.f,
       MAP_SPAWN_X, MAP_SPAWN_Y },
-    // Royal north â†?Volcano hub
+    // Royal north ï¿½?Volcano hub
     { MapID::kRoyalCapital, MapID::kVolcano,
       ARENA_WIDTH * 0.50f, ARENA_HEIGHT * 0.10f, 240.f,
       MAP_SPAWN_X, MAP_SPAWN_Y },
@@ -492,6 +492,13 @@ std::array const ANTHOLE_SPAWNS = std::to_array<StaticArray<MobID::T, 3>>({
 });
 
 extern std::array<StaticArray<float, MAX_DROPS_PER_MOB>, MobID::kNumMobs> const MOB_DROP_CHANCES;
+
+// Per-kill drop weights vs the mob's live rarity. Normals: same 20% / âˆ’1 60% /
+// âˆ’2 20% (renormalized among bands present). Chase specials (Moon / Ygg /
+// Golden Leaf): flat 10% each. Writes drops.size() entries; sums â‰ˆ 1.
+void compute_mob_drop_weights(MobID::T mob_id, uint8_t mob_rarity,
+                              float out[MAX_DROPS_PER_MOB]);
+uint8_t is_chase_loot_petal(PetalID::T id);
 
 extern uint32_t score_to_pass_level(uint32_t);
 extern uint32_t score_to_level(uint32_t);

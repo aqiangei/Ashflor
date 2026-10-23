@@ -1,5 +1,9 @@
 #!/usr/bin/env python3
-"""Append missing same-name rarity ladder rungs for craft (min→Unique)."""
+"""Fill every petal family (except Coin/None) to Common..Unique same-name ladders.
+
+Materials (kMat*): copy base stats, set rarity — no special combat curve.
+Combat petals: scale HP/dmg ×3 per step up to Mythic, ×2 above; inverse when filling down.
+"""
 from __future__ import annotations
 
 import re
@@ -19,12 +23,14 @@ RARITY_ENUM = [f"RarityID::k{n}" for n in RARITY_NAMES]
 
 
 def step_mult(from_r: int, to_r: int) -> float:
-    """Combat HP/dmg multiplier for one rarity step."""
+    if to_r == from_r:
+        return 1.0
+    ascending = to_r > from_r
+    a, b = (from_r, to_r) if ascending else (to_r, from_r)
     m = 1.0
-    for r in range(from_r, to_r):
-        # Common→Mythic ×3; Mythic→Unique ×2
+    for r in range(a, b):
         m *= 2.0 if r >= 5 else 3.0
-    return m
+    return m if ascending else (1.0 / m)
 
 
 def sanitize_enum(name: str) -> str:
@@ -34,7 +40,6 @@ def sanitize_enum(name: str) -> str:
 
 def parse_petal_blocks(text: str) -> list[dict]:
     start = text.index("PETAL_DATA = {{")
-    # Outer array uses `{{` … `}}`; petal entries sit at brace-depth 2.
     end = text.index("\n}};", start)
     body = text[start:end]
     entries: list[str] = []
@@ -44,7 +49,6 @@ def parse_petal_blocks(text: str) -> list[dict]:
         if ch == "{":
             depth += 1
             if depth == 3 and begin is None:
-                # depth: 1=`{` of `{{`, 2=second `{`, 3=petal open
                 begin = j
         elif ch == "}":
             if depth == 3 and begin is not None:
@@ -61,15 +65,26 @@ def parse_petal_blocks(text: str) -> list[dict]:
         rel = re.search(r"\.reload\s*=\s*([0-9.eE+-]+)", block)
         cnt = re.search(r"\.count\s*=\s*([0-9]+)", block)
         desc = re.search(r'\.description\s*=\s*"([^"]*)"', block)
-        am = re.search(r"\.attributes\s*=\s*(\{[\s\S]*\})\s*$", block.strip())
-        attrs_s = am.group(1).strip() if am else "{}"
+        # Capture attributes object only (brace-balanced from .attributes =)
+        attrs_s = "{}"
+        am = re.search(r"\.attributes\s*=\s*\{", block)
+        if am:
+            i0 = am.end() - 1
+            d = 0
+            for k in range(i0, len(block)):
+                if block[k] == "{":
+                    d += 1
+                elif block[k] == "}":
+                    d -= 1
+                    if d == 0:
+                        attrs_s = block[i0 : k + 1]
+                        break
         if not nm or not rar:
             continue
         try:
             ri = RARITY_NAMES.index(rar.group(1))
         except ValueError:
             continue
-        # Escape description quotes for re-emit
         desc_s = (desc.group(1) if desc else "").replace("\\", "\\\\").replace('"', '\\"')
         parsed.append(
             {
@@ -82,8 +97,7 @@ def parse_petal_blocks(text: str) -> list[dict]:
                 "reload": float(rel.group(1)) if rel else 2.5,
                 "count": int(cnt.group(1)) if cnt else 1,
                 "description": desc_s,
-                "attrs": attrs_s,
-                "block": block,
+                "attrs": attrs_s.strip(),
             }
         )
     return parsed
@@ -96,22 +110,15 @@ def parse_enum_ids(hh: str) -> list[str]:
     ids = []
     for line in m.group(1).splitlines():
         line = line.split("//")[0].strip().rstrip(",")
-        if not line or not line.startswith("k"):
-            continue
-        ids.append(line)
+        if line.startswith("k"):
+            ids.append(line)
     return ids
 
 
-def parse_zh_array(text: str, marker: str) -> list[str]:
-    m = re.search(
-        rf"static char const \*const {marker}\[PetalID::kNumPetals\] = \{{(.*?)\n\}};",
-        text,
-        re.S,
-    )
-    if not m:
-        raise SystemExit(f"{marker} not found")
-    body = m.group(1)
-    return re.findall(r'"((?:\\.|[^"\\])*)"', body)
+def parse_zh_section(text: str, marker: str, next_marker: str) -> list[str]:
+    a = text.index(marker)
+    b = text.index(next_marker)
+    return re.findall(r'"(?:\\.|[^"\\])*"', text[a:b])
 
 
 def fmt_num(x: float) -> str:
@@ -123,39 +130,31 @@ def fmt_num(x: float) -> str:
     return s
 
 
-def scale_attrs(attrs: str, mult: float) -> str:
-    """Scale common numeric combat fields inside attributes initializer."""
-    keys = (
-        "aura_heal",
-        "aura_radius",
-        "poison_damage",
-        "heal",
-        "constant_heal",
-        "damage",
-        "health",
-    )
+def scale_attrs(attrs: str, mult: float, is_mat: bool) -> str:
+    if is_mat or attrs.strip() in ("{}", ""):
+        return attrs if attrs.strip() else "{}"
+    if abs(mult - 1.0) < 1e-9:
+        return attrs
 
     def repl_poison(m: re.Match) -> str:
         inner = m.group(1)
+
         def sc(n: re.Match) -> str:
             return f"{n.group(1)}{fmt_num(float(n.group(2)) * mult)}"
-        inner2 = re.sub(r"(\.\w+\s*=\s*)([0-9.eE+-]+)", sc, inner)
-        return ".poison_damage = {" + inner2 + "}"
 
-    out = re.sub(
-        r"\.poison_damage\s*=\s*\{([^{}]*)\}",
-        repl_poison,
-        attrs,
-    )
+        return ".poison_damage = {" + re.sub(r"(\.\w+\s*=\s*)([0-9.eE+-]+)", sc, inner) + "}"
+
+    out = re.sub(r"\.poison_damage\s*=\s*\{([^{}]*)\}", repl_poison, attrs)
 
     def repl_field(key: str, s: str) -> str:
         def sc(m: re.Match) -> str:
             return f"{m.group(1)}{fmt_num(float(m.group(2)) * mult)}"
+
         return re.sub(rf"(\.{key}\s*=\s*)([0-9.eE+-]+)", sc, s)
 
-    for k in ("aura_heal", "aura_radius", "heal", "constant_heal"):
+    for k in ("aura_heal", "aura_radius", "heal", "constant_heal",
+              "radial_pulse_damage", "radial_pulse_radius", "extra_range"):
         out = repl_field(k, out)
-    # extra_reload_factor: leave as-is (Golden Leaf already complete)
     return out
 
 
@@ -166,36 +165,33 @@ def main() -> int:
 
     petals = parse_petal_blocks(cc)
     enum_ids = parse_enum_ids(hh)
-    zh_names = parse_zh_array(i18n, "PETAL_NAME_ZH")
-    zh_descs = parse_zh_array(i18n, "PETAL_DESC_ZH")
+    zh_names = parse_zh_section(i18n, "PETAL_NAME_ZH", "PETAL_DESC_ZH")
+    zh_descs = parse_zh_section(i18n, "PETAL_DESC_ZH", "MOB_NAME_ZH")
+    # strip quotes
+    zh_names = [s[1:-1] for s in zh_names]
+    zh_descs = [s[1:-1] for s in zh_descs]
 
-    if len(petals) != len(enum_ids):
-        print(
-            f"warn: petal blocks {len(petals)} vs enum {len(enum_ids)}",
-            file=sys.stderr,
-        )
     n = min(len(petals), len(enum_ids), len(zh_names), len(zh_descs))
+    print(f"parsed petals={len(petals)} enum={len(enum_ids)} zh={len(zh_names)}/{len(zh_descs)}")
 
-    # Material / skip ranges from enum names
     skip_names = {"None", "Coin"}
-    mat_ids = set()
-    for i, eid in enumerate(enum_ids[:n]):
-        if eid.startswith("kMat") or eid == "kCoin" or eid == "kNone":
-            mat_ids.add(i)
-            skip_names.add(petals[i]["name"])
+    mat_idx = {i for i, e in enumerate(enum_ids[:n]) if e.startswith("kMat")}
 
-    # Group by English name → best entry per rarity
     families: dict[str, dict[int, dict]] = {}
     for i in range(n):
-        if i in mat_ids:
-            continue
         p = petals[i]
         if p["name"] in skip_names:
             continue
         fam = families.setdefault(p["name"], {})
-        # Prefer higher id on collision
         if p["rarity"] not in fam or i > fam[p["rarity"]]["idx"]:
-            fam[p["rarity"]] = {**p, "idx": i, "enum": enum_ids[i], "zh": zh_names[i], "zh_desc": zh_descs[i]}
+            fam[p["rarity"]] = {
+                **p,
+                "idx": i,
+                "enum": enum_ids[i],
+                "zh": zh_names[i],
+                "zh_desc": zh_descs[i],
+                "mat": i in mat_idx or enum_ids[i].startswith("kMat"),
+            }
 
     existing_enums = set(enum_ids)
     new_enums: list[str] = []
@@ -207,29 +203,37 @@ def main() -> int:
         present = sorted(by_r.keys())
         if not present:
             continue
-        rmin = present[0]
-        # Fill every missing rarity from rmin..Unique inclusive
-        for r in range(rmin, 9):
+        is_mat = any(by_r[r].get("mat") for r in present)
+        # Fill every rarity Common..Unique
+        for r in range(9):
             if r in by_r:
                 continue
-            # Source = highest existing below r
-            src_r = max(rr for rr in present if rr < r)
+            # Nearest existing source (prefer lower, else higher)
+            below = [rr for rr in present if rr < r]
+            above = [rr for rr in present if rr > r]
+            if below:
+                src_r = max(below)
+            else:
+                src_r = min(above)
             src = by_r[src_r]
-            mult = step_mult(src_r, r)
-            hp = src["health"] * mult
-            dmg = src["damage"] * mult
-            attrs = scale_attrs(src["attrs"], mult)
+            if is_mat:
+                mult = 1.0
+                hp, dmg = src["health"], src["damage"]
+            else:
+                mult = step_mult(src_r, r)
+                hp = max(1.0, src["health"] * mult)
+                dmg = max(1.0, src["damage"] * mult)
+            attrs = scale_attrs(src["attrs"], 1.0 if is_mat else mult, is_mat)
+
             base_enum = sanitize_enum(name)
             suffix = RARITY_NAMES[r]
             eid = f"k{base_enum}{suffix}"
-            # Avoid collisions
             n_try = 0
             while eid in existing_enums or eid in new_enums:
                 n_try += 1
                 eid = f"k{base_enum}{suffix}X{n_try}"
             new_enums.append(eid)
             existing_enums.add(eid)
-            # remember for further steps in same family
             by_r[r] = {
                 **src,
                 "rarity": r,
@@ -237,21 +241,23 @@ def main() -> int:
                 "damage": dmg,
                 "attrs": attrs,
                 "idx": 10_000_000 + len(new_enums),
+                "mat": is_mat,
             }
             present = sorted(by_r.keys())
 
-            desc = src["description"]
-            block = f"""    {{
-        .name = "{name}",
-        .description = "{desc}",
-        .health = {fmt_num(hp)},
-        .damage = {fmt_num(dmg)},
-        .radius = {fmt_num(src['radius'])},
-        .reload = {fmt_num(src['reload'])},
-        .count = {src['count']},
-        .rarity = {RARITY_ENUM[r]},
-        .attributes = {attrs}
-    }}"""
+            block = (
+                f"    {{\n"
+                f"        .name = \"{name}\",\n"
+                f"        .description = \"{src['description']}\",\n"
+                f"        .health = {fmt_num(hp)},\n"
+                f"        .damage = {fmt_num(dmg)},\n"
+                f"        .radius = {fmt_num(src['radius'])},\n"
+                f"        .reload = {fmt_num(src['reload'])},\n"
+                f"        .count = {src['count']},\n"
+                f"        .rarity = {RARITY_ENUM[r]},\n"
+                f"        .attributes = {attrs}\n"
+                f"    }}"
+            )
             new_data.append(block)
             new_zh_name.append(src["zh"])
             new_zh_desc.append(src["zh_desc"])
@@ -261,54 +267,56 @@ def main() -> int:
         print("nothing to add")
         return 0
 
-    # --- Patch StaticDefinitions.hh ---
+    # Patch enum: insert before kNumPetals
+    if "        kNumPetals" not in hh:
+        raise SystemExit("kNumPetals anchor missing")
     hh2 = hh.replace(
-        "        kGoldenLeafUnique,\n        kNumPetals",
-        "        kGoldenLeafUnique,\n"
-        "        // Auto-filled rarity ladders (same English name; craft +1 only)\n"
+        "        kNumPetals",
+        "        // Full Common..Unique ladders (gen_petal_ladders.py; excl Coin)\n"
         + "".join(f"        {e},\n" for e in new_enums)
         + "        kNumPetals",
+        1,
     )
-    if hh2 == hh:
-        raise SystemExit("failed to patch StaticDefinitions.hh anchor")
     STATIC_HH.write_text(hh2, encoding="utf-8")
 
-    # --- Patch StaticData.cc ---
-    # Insert before closing `}};` of PETAL_DATA (before MOB_DATA)
-    anchor = """        .attributes = { .extra_reload_factor = 0.74f, .icon_angle = -1 } // -26%
-    }
-}};"""
+    # Patch PETAL_DATA: append before closing }};
+    # Find last petal entry end — after auto-filled section or Golden Leaf
+    mob = cc.index("\nstd::array<struct MobData")
+    petal_end = cc.rfind("\n}};", 0, mob)
+    if petal_end < 0:
+        raise SystemExit("PETAL_DATA end not found")
+    # Ensure comma after previous last entry
+    before = cc[:petal_end].rstrip()
+    if not before.endswith(","):
+        # last entry ends with `}` — add comma
+        if before.endswith("}"):
+            before = before + ","
     insert = (
-        "        .attributes = { .extra_reload_factor = 0.74f, .icon_angle = -1 } // -26%\n"
-        "    },\n"
-        "    // ---- Auto-filled rarity ladders (gen_petal_ladders.py) ----\n"
+        before
+        + "\n    // ---- Full rarity ladders (gen_petal_ladders.py) ----\n"
         + ",\n".join(new_data)
         + "\n}};"
+        + cc[petal_end + len("\n}};") :]
     )
-    if anchor not in cc:
-        raise SystemExit("failed to find PETAL_DATA end anchor")
-    cc2 = cc.replace(anchor, insert, 1)
-    STATIC_CC.write_text(cc2, encoding="utf-8")
+    STATIC_CC.write_text(insert, encoding="utf-8")
 
-    # --- Patch I18nData.inc NAME + DESC ---
-    def patch_zh(src: str, marker: str, adds: list[str]) -> str:
-        # Find closing of array: last golden leaf strings before `};`
-        m = re.search(
-            rf"(static char const \*const {marker}\[PetalID::kNumPetals\] = \{{)(.*?)(\n\}});",
-            src,
-            re.S,
-        )
-        if not m:
-            raise SystemExit(f"patch {marker} failed")
-        extra = "".join(f',\n    "{a}"' for a in adds)
-        # append before closing
-        body = m.group(2).rstrip()
-        if not body.endswith('"'):
+    # Patch I18n by section rewrite (NAME then DESC)
+    def append_zh(src: str, marker: str, next_m: str, adds: list[str]) -> str:
+        a = src.index(marker)
+        # find opening brace after marker
+        ob = src.index("{", a)
+        b = src.index(next_m)
+        close = src.rfind("}", ob, b)
+        body = src[ob + 1 : close].rstrip()
+        if body and not body.endswith(","):
+            # last line is "foo" without comma — OK for C, we'll add comma before new
             pass
-        return src[: m.start()] + m.group(1) + body + extra + m.group(3) + src[m.end() :]
+        extra = "".join(f',\n    "{a}"' for a in adds)
+        # if body ends with "foo" add comma via extra starting with ,
+        return src[: close] + extra + "\n}" + src[close + 1 :]
 
-    i18n2 = patch_zh(i18n, "PETAL_NAME_ZH", new_zh_name)
-    i18n2 = patch_zh(i18n2, "PETAL_DESC_ZH", new_zh_desc)
+    i18n2 = append_zh(i18n, "PETAL_NAME_ZH", "PETAL_DESC_ZH", new_zh_name)
+    i18n2 = append_zh(i18n2, "PETAL_DESC_ZH", "MOB_NAME_ZH", new_zh_desc)
     I18N.write_text(i18n2, encoding="utf-8")
 
     print(f"wrote {len(new_enums)} ladder rungs")

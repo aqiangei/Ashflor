@@ -78,10 +78,17 @@ static struct PlayerBuffs _get_petal_passive_buffs(
         if (slot_petal_id == PetalID::kYinYang)
             ++buffs.yinyang_count;
         if (!player.loadout[i].already_spawned) continue;
-        if (petal_name_is(slot_petal_id, "Leaf"))
-            buffs.heal += attrs.constant_heal * lv_mult / TPS;
-        else if (slot_petal_id == PetalID::kYucca && BitMath::at(player.input, InputFlags::kDefending) && !BitMath::at(player.input, InputFlags::kAttacking))
-            buffs.heal += attrs.constant_heal * lv_mult / TPS;
+        // constant_heal is data-driven (HP/s). Yucca keeps classic defend-only gating;
+        // all other petals with the attr heal while the slot is spawned.
+        if (attrs.constant_heal > 0.f) {
+            if (slot_petal_id == PetalID::kYucca) {
+                if (BitMath::at(player.input, InputFlags::kDefending)
+                    && !BitMath::at(player.input, InputFlags::kAttacking))
+                    buffs.heal += attrs.constant_heal * lv_mult / TPS;
+            } else {
+                buffs.heal += attrs.constant_heal * lv_mult / TPS;
+            }
+        }
         buffs.extra_rot += attrs.extra_rotation_speed;
         buffs.extra_health += attrs.extra_health * lv_mult;
         player.damage_reflection = std::fmax(player.damage_reflection, attrs.damage_reflection);
@@ -263,6 +270,8 @@ void tick_player_behavior(Simulation *sim, Entity &player) {
         if (slot_petal_id == PetalID::kNone || petal_data.count == 0)
             continue;
         float min_reload = 1;
+        float health_sum = 0.f;
+        uint32_t health_n = 0;
         for (uint32_t j = 0; j < slot.size(); ++j) {
             LoadoutPetal &petal_slot = slot.petals[j];
             if (!sim->ent_alive(petal_slot.ent_id)) {
@@ -299,6 +308,13 @@ void tick_player_behavior(Simulation *sim, Entity &player) {
             }
             if (sim->ent_alive(petal_slot.ent_id)) {
                 Entity &petal = sim->get_ent(petal_slot.ent_id);
+                if (petal.max_health > 0.f) {
+                    float hr = petal.health / petal.max_health;
+                    if (hr < 0.f) hr = 0.f;
+                    if (hr > 1.f) hr = 1.f;
+                    health_sum += hr;
+                    ++health_n;
+                }
                 //only do this if petal not despawning
                 if (petal.has_component(kPetal) && 
                     !BitMath::at(petal.flags, EntityFlags::kIsDespawning) &&
@@ -370,6 +386,11 @@ void tick_player_behavior(Simulation *sim, Entity &player) {
         //clump
         if (petal_data.attributes.clump_radius > 0) ++rot_pos;
         player.set_loadout_reloads(i, min_reload * 255);
+        // Alive petals only — while reloading (none out) keep full so CD pie owns the cue.
+        float slot_hp = health_n > 0 ? health_sum / (float) health_n : 1.f;
+        if (slot_hp < 0.f) slot_hp = 0.f;
+        if (slot_hp > 1.f) slot_hp = 1.f;
+        player.set_loadout_healths(i, (uint8_t) (slot_hp * 255.f + 0.5f));
     };
     if (BitMath::at(player.input, InputFlags::kAttacking)) 
         player.set_face_flags(player.get_face_flags() | (1 << FaceFlags::kAttacking));

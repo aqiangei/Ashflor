@@ -32,6 +32,11 @@ namespace Server {
     extern volatile sig_atomic_t is_draining;
     extern bool is_stopping;
     extern uint32_t player_count;
+    // Tick telemetry for /health and /api/live (updated every Server::tick)
+    extern double last_tick_ms;
+    extern double max_tick_ms_window;
+    extern uint32_t tick_overruns_window;
+    extern uint32_t tick_count_window;
     extern void init();
     extern void run();
     extern void tick();
@@ -40,6 +45,8 @@ namespace Server {
     extern Client *client_by_camera(Simulation *, EntityID const &);
     // JSON snapshot for /api/live (online roster + per-map counts)
     extern std::string live_status_json();
+    // Compact liveness JSON for load balancers / ops probes
+    extern std::string health_json();
     // Slim positions-only JSON for smooth minimap polling (~TPS)
     extern std::string live_positions_json();
     // Static per-map terrain/zones for live.html minimaps (cached)

@@ -190,16 +190,12 @@ void Particle::tick_game(Renderer &ctx, double dt) {
         RenderContext c(&ctx);
         part.x += part.x_velocity * dt / 1000;
         part.y += part.y_velocity * dt / 1000;
-        // Spirit motes: bright gold/white halo. Unique ash: soft graphite bloom.
+        // Spirit motes: bright gold/white halo. Unique FX: ash→gold bloom via unique_fx.
         uint8_t spirit = (part.fill == 0xfffff6d0 || part.fill == 0xffffd060
             || part.fill == 0xffffffff || part.fill == 0xffffc84a
             || part.fill == 0xffff8ad8);
-        uint8_t unique_ash = (part.fill == 0xd0121418 || part.fill == 0xc0282c32
-            || part.fill == 0xb03c424a || part.fill == 0xa05a6068
-            || part.fill == 0x909098a0
-            || part.fill == ((RARITY_COLORS[RarityID::kUnique] & 0x00ffffff) | 0xb0000000));
         float fade = spirit ? (float) (dt / 1600.0)
-            : unique_ash ? (float) (dt / 1400.0)
+            : part.unique_fx ? (float) (dt / 1400.0)
             : (float) (dt / 1000.0);
         part.opacity = fclamp(part.opacity - fade, 0, 1);
         ctx.set_global_alpha(part.opacity);
@@ -208,8 +204,10 @@ void Particle::tick_game(Renderer &ctx, double dt) {
             ctx.begin_path();
             ctx.arc(part.x, part.y, part.radius * 2.4f);
             ctx.fill();
-        } else if (unique_ash) {
-            ctx.set_fill(0x55202830);
+        } else if (part.unique_fx) {
+            // Halo follows particle fill (graphite at low Lv, warm gold at high Lv).
+            uint32_t halo = (part.fill & 0x00ffffff) | 0x55000000;
+            ctx.set_fill(halo);
             ctx.begin_path();
             ctx.arc(part.x, part.y, part.radius * 2.2f);
             ctx.fill();
@@ -468,27 +466,59 @@ void Particle::tick_guide_sprite(double dt) {
     spark_cd_ms = 900 + frand() * 500;
 }
 
-void Particle::add_unique_particle(float x, float y) {
-    // Unique（唯一）: textured gray-black grit — charcoal core + gunmetal flecks.
-    // Palette is also used by tick_game for a soft ash halo (not Super mint / old pink).
+static uint32_t lerp_argb_channel(uint32_t a, uint32_t b, float t) {
+    if (t <= 0.f) return a;
+    if (t >= 1.f) return b;
+    int aa = (int) ((a >> 24) & 0xff), ar = (int) ((a >> 16) & 0xff);
+    int ag = (int) ((a >> 8) & 0xff), ab = (int) (a & 0xff);
+    int ba = (int) ((b >> 24) & 0xff), br = (int) ((b >> 16) & 0xff);
+    int bg = (int) ((b >> 8) & 0xff), bb = (int) (b & 0xff);
+    int oa = aa + (int) ((ba - aa) * t + 0.5f);
+    int or_ = ar + (int) ((br - ar) * t + 0.5f);
+    int og = ag + (int) ((bg - ag) * t + 0.5f);
+    int ob = ab + (int) ((bb - ab) * t + 0.5f);
+    return ((uint32_t) oa << 24) | ((uint32_t) or_ << 16)
+        | ((uint32_t) og << 8) | (uint32_t) ob;
+}
+
+void Particle::add_unique_particle(float x, float y, uint32_t level) {
+    // Unique（唯一）: Lv.0 charcoal grit → increasingly gold (caps ~Lv.33).
     static uint32_t const kAsh[5] = {
         0xd0121418, // near-black
         0xc0282c32, // deep charcoal
-        0xb03c424a, // slate (matches RARITY_COLORS[kUnique] family)
+        0xb03c424a, // slate
         0xa05a6068, // gunmetal
-        0x909098a0  // cool steel highlight
+        0x909098a0  // cool steel
     };
-    int n = 2 + (frand() < 0.35f ? 1 : 0);
+    static uint32_t const kGold[5] = {
+        0xe0c87820, // deep bronze
+        0xe0e0a040, // amber
+        0xf0ffd060, // bright gold
+        0xf0fff0b0, // pale gold
+        0xffffffff  // white-hot highlight
+    };
+    float t = level >= 33u ? 1.f : (float) level / 33.f;
+    // Ease-in so early levels stay mostly ash, high levels go full gold.
+    t = t * t;
+    int n = 2 + (level >= 5u ? 1 : 0) + (level >= 15u ? 1 : 0)
+        + (frand() < 0.35f + t * 0.25f ? 1 : 0);
+    if (n > 5) n = 5;
+    float scatter = 10.f + t * 8.f;
+    float rad0 = 2.8f + t * 1.2f;
+    float rad1 = 3.2f + t * 2.0f;
+    float speed = 0.55f + t * 0.35f;
     for (int i = 0; i < n; ++i) {
         GameParticleEntity part;
         Vector rand = Vector::rand(42);
-        part.x = x + (frand() - 0.5f) * 10.f;
-        part.y = y + (frand() - 0.5f) * 10.f;
-        part.radius = 2.8f + frand() * 3.2f;
-        part.opacity = 0.92f + frand() * 0.08f;
-        part.fill = kAsh[(int) (frand() * 5.f) % 5];
-        part.x_velocity = rand.x * (0.55f + frand() * 0.5f);
-        part.y_velocity = rand.y * (0.55f + frand() * 0.5f);
+        int idx = (int) (frand() * 5.f) % 5;
+        part.x = x + (frand() - 0.5f) * scatter;
+        part.y = y + (frand() - 0.5f) * scatter;
+        part.radius = rad0 + frand() * rad1;
+        part.opacity = 0.90f + frand() * 0.10f;
+        part.fill = lerp_argb_channel(kAsh[idx], kGold[idx], t);
+        part.unique_fx = 1;
+        part.x_velocity = rand.x * (speed + frand() * 0.5f);
+        part.y_velocity = rand.y * (speed + frand() * 0.5f);
         game_particles.push_back(std::move(part));
     }
 }

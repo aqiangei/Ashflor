@@ -137,46 +137,78 @@ static void _alloc_drops(Simulation *sim, std::vector<PetalID::T> &success_drops
     }
 }
 
-// Weighted pick from mob drop table (chances sum to 1). Prefer non-Unique if Unique taken.
-// rarity_boost > 0 tilts the roll toward rarer petals (per-zone difficulty reward).
-// boss=1: crush mats / Common filler so map bosses feel rewarding.
-static PetalID::T _roll_mob_drop(Simulation *sim, MobID::T mob_id, float rarity_boost,
+// Sensory drop rarity. Rare+ mobs (and all bosses) use Ultra/Super/Unique
+// shares so kills feel like collecting the game's petal roster. Soft-zone
+// mobs still lean up so early maps aren't only Common scraps.
+static uint8_t _roll_drop_rarity(uint8_t mob_rarity, uint8_t boss) {
+    if (mob_rarity >= RarityID::kNumRarities) mob_rarity = RarityID::kCommon;
+    float r = frand();
+    // Bosses + Rare+: Ultra 55 · Super 35 · Unique 10
+    if (boss || mob_rarity >= RarityID::kRare) {
+        if (r < 0.55f) return RarityID::kUltra;
+        if (r < 0.90f) return RarityID::kSuper;
+        return RarityID::kUnique;
+    }
+    // Common / Unusual live: still exciting — Rare 25 · Epic 35 · Ultra 30 · Super 10
+    if (r < 0.25f) return RarityID::kRare;
+    if (r < 0.60f) return RarityID::kEpic;
+    if (r < 0.90f) return RarityID::kUltra;
+    return RarityID::kSuper;
+}
+
+// Table family (biome seed) OR full petal pool. High full-pool rate so every
+// petal family can appear from play — not only from a few drop-table rows.
+static PetalID::T _roll_mob_drop(Simulation *sim, MobID::T mob_id, uint8_t mob_rarity,
                                  uint8_t boss = 0) {
     struct MobData const &mob_data = MOB_DATA[mob_id];
-    StaticArray<float, MAX_DROPS_PER_MOB> const &chances = MOB_DROP_CHANCES[mob_id];
-    if (mob_data.drops.size() == 0) return PetalID::kNone;
+    uint8_t drop_r = _roll_drop_rarity(mob_rarity, boss);
+
+    // Full-pool majority: content must be feelable. Unique gated by tracker.
+    float pool_p = boss ? 0.70f : 0.60f;
+    if (mob_data.drops.size() == 0 || frand() < pool_p) {
+        for (uint32_t attempt = 0; attempt < 8; ++attempt) {
+            PetalID::T got = Craft::random_petal_of_rarity(drop_r);
+            if (got == PetalID::kNone || got >= PetalID::kNumPetals) continue;
+            if (PETAL_DATA[got].rarity != RarityID::kUnique
+                || PetalTracker::get_count(sim, got) == 0)
+                return got;
+            drop_r = RarityID::kSuper; // Unique taken → retry as Super
+        }
+        return Craft::random_petal_of_rarity(
+            drop_r >= RarityID::kUnique ? RarityID::kSuper : drop_r);
+    }
+
+    float base[MAX_DROPS_PER_MOB] = {};
+    compute_mob_drop_weights(mob_id, mob_rarity, base);
     float weights[MAX_DROPS_PER_MOB] = {};
     float total_weight = 0.f;
     for (uint32_t i = 0; i < mob_data.drops.size(); ++i) {
-        float w = chances[i];
+        float w = base[i];
         PetalID::T drop_id = mob_data.drops[i];
-        w *= Craft::drop_weight_mult(drop_id);
+        // Chase specials already carry a flat 10% — do not crush them again.
+        if (!is_chase_loot_petal(drop_id))
+            w *= Craft::drop_weight_mult(drop_id);
         uint8_t r = PETAL_DATA[drop_id].rarity;
-        if (boss) {
-            // Epic+ craft mats are intended boss cores; low mats stay crushed.
-            if (Craft::is_shop_material(drop_id)) {
-                if (r >= RarityID::kEpic)
-                    w *= 2.4f;
-                else
-                    w *= 0.05f;
-            }
-            // Common / Unusual combat fillers (Wing, Iris, AntEgg…) stay rare on bosses.
-            else if (r <= RarityID::kUnusual)
+        if (boss && !is_chase_loot_petal(drop_id)) {
+            if (r <= RarityID::kUnusual)
                 w *= 0.18f;
             else if (r == RarityID::kRare)
                 w *= 0.85f;
             else if (r >= RarityID::kEpic && r < RarityID::kUnique)
                 w *= 2.0f;
         }
-        if (rarity_boost > 0.f) {
-            // Zone / boss tilt must not inflate Unique+ (Moon/Ygg) toward a guarantee.
-            if (r < RarityID::kUnique)
-                w *= std::pow(1.f + rarity_boost, (float)r);
-        }
+        // Family seed still gets weight even if baked ID is below the band —
+        // rarity is resolved after pick via petal_at_rarity.
+        if (w <= 0.f && !is_chase_loot_petal(drop_id))
+            w = 0.15f;
         weights[i] = w;
         total_weight += w;
     }
-    if (total_weight <= 0.f) return mob_data.drops[0];
+    if (total_weight <= 0.f) {
+        PetalID::T fam = mob_data.drops[0];
+        PetalID::T resolved = Craft::petal_at_rarity(fam, drop_r);
+        return resolved != PetalID::kNone ? resolved : fam;
+    }
     for (uint32_t attempt = 0; attempt < 8; ++attempt) {
         float roll = frand() * total_weight;
         float acc = 0.f;
@@ -186,14 +218,22 @@ static PetalID::T _roll_mob_drop(Simulation *sim, MobID::T mob_id, float rarity_
             chosen = mob_data.drops[i];
             if (roll < acc) break;
         }
-        if (PETAL_DATA[chosen].rarity != RarityID::kUnique
-            || PetalTracker::get_count(sim, chosen) == 0)
-            return chosen;
+        // Chase specials keep baked ID; everything else ladders to drop_r.
+        PetalID::T out = chosen;
+        if (!is_chase_loot_petal(chosen)) {
+            PetalID::T resolved = Craft::petal_at_rarity(chosen, drop_r);
+            if (resolved != PetalID::kNone) out = resolved;
+        }
+        if (PETAL_DATA[out].rarity != RarityID::kUnique
+            || PetalTracker::get_count(sim, out) == 0)
+            return out;
     }
-    // Fallback: first non-unique (or first drop)
-    for (PetalID::T id : mob_data.drops)
-        if (PETAL_DATA[id].rarity != RarityID::kUnique)
-            return id;
+    for (PetalID::T id : mob_data.drops) {
+        PetalID::T resolved = Craft::petal_at_rarity(id, drop_r);
+        PetalID::T out = resolved != PetalID::kNone ? resolved : id;
+        if (PETAL_DATA[out].rarity != RarityID::kUnique)
+            return out;
+    }
     return mob_data.drops[0];
 }
 
@@ -282,14 +322,6 @@ void entity_on_death(Simulation *sim, Entity const &ent) {
             struct MobData const &mob_data = MOB_DATA[ent.get_mob_id()];
             uint8_t const live_rarity = ent.get_rarity() < RarityID::kNumRarities
                 ? ent.get_rarity() : mob_data.rarity;
-            float rarity_boost = 0.f;
-            {
-                MapZones const &zones = map_zones(sim->map_id);
-                if (ent.zone < zones.size())
-                    rarity_boost = zones[ent.zone].drop_multiplier;
-                else if (live_rarity >= RarityID::kEpic)
-                    rarity_boost = 0.4f;
-            }
 
             // Private loot: need ≥5% max HP damage (≥1% for bosses). Totals persist
             // across player respawns. Same-party claims coalesce. Party XP in _add_score.
@@ -392,63 +424,35 @@ void entity_on_death(Simulation *sim, Entity const &ent) {
                 spawn_class(ent.get_mob_id()) == SpawnClass::kBoss;
 
             auto roll_for_team = [&](EntityID drop_team, float angle_off) {
-                float boost = rarity_boost;
-                // Map bosses sit outside zone tables → often had ~0 tilt and
-                // rolled the same Common/mat junk as trash mobs.
-                if (is_boss_kill) {
-                    if (boost < 1.25f) boost = 1.25f;
-                    boost += 0.85f;
-                }
                 std::vector<PetalID::T> success_drops = {};
+                // Weights follow the killed mob's live rarity (same 20% / −1 60% /
+                // −2 20%; Moon/Ygg/Golden Leaf flat 10% each).
                 auto roll_one = [&]() {
-                    return _roll_mob_drop(sim, ent.get_mob_id(), boost, is_boss_kill);
+                    return _roll_mob_drop(sim, ent.get_mob_id(), live_rarity, is_boss_kill);
                 };
-                PetalID::T chosen = roll_one();
-                if (chosen != PetalID::kNone)
-                    success_drops.push_back(chosen);
-                // Bosses: always at least 3 petal piles; normals keep chance curve.
+                // Sensory density: normals guarantee 2 piles, bosses fill toward cap.
+                auto push_roll = [&]() {
+                    if (success_drops.size() >= MAX_DROPS_PER_MOB) return;
+                    PetalID::T extra = roll_one();
+                    if (extra != PetalID::kNone)
+                        success_drops.push_back(extra);
+                };
+                push_roll();
+                push_roll(); // always at least 2
                 if (is_boss_kill) {
-                    // Still guarantee ≥3 piles; 4th/5th less free than before.
-                    for (uint32_t n = 0; n < 2 && success_drops.size() < MAX_DROPS_PER_MOB; ++n) {
-                        PetalID::T extra = roll_one();
-                        if (extra != PetalID::kNone)
-                            success_drops.push_back(extra);
-                    }
-                    if (success_drops.size() < MAX_DROPS_PER_MOB && frand() < 0.55f) {
-                        PetalID::T extra = roll_one();
-                        if (extra != PetalID::kNone)
-                            success_drops.push_back(extra);
-                    }
-                    if (success_drops.size() < MAX_DROPS_PER_MOB && frand() < 0.28f) {
-                        PetalID::T extra = roll_one();
-                        if (extra != PetalID::kNone)
-                            success_drops.push_back(extra);
-                    }
+                    for (uint32_t n = 0; n < 4; ++n) push_roll(); // → often 6
+                    if (frand() < 0.70f) push_roll();
+                    if (frand() < 0.45f) push_roll(); // toward MAX 8
                 } else {
-                    float p2 = 0.18f + 0.035f * (float) live_rarity;
-                    if (success_drops.size() < MAX_DROPS_PER_MOB && frand() < p2) {
-                        PetalID::T extra = roll_one();
-                        if (extra != PetalID::kNone)
-                            success_drops.push_back(extra);
-                    }
-                    if (live_rarity >= RarityID::kEpic
-                        && success_drops.size() < MAX_DROPS_PER_MOB) {
-                        float p3 = 0.07f + 0.02f * (float) live_rarity;
-                        if (frand() < p3) {
-                            PetalID::T extra = roll_one();
-                            if (extra != PetalID::kNone)
-                                success_drops.push_back(extra);
-                        }
-                    }
-                    if (live_rarity >= RarityID::kLegendary
-                        && success_drops.size() < MAX_DROPS_PER_MOB) {
-                        float p4 = 0.035f + 0.015f * (float) (live_rarity - RarityID::kLegendary);
-                        if (frand() < p4) {
-                            PetalID::T extra = roll_one();
-                            if (extra != PetalID::kNone)
-                                success_drops.push_back(extra);
-                        }
-                    }
+                    if (frand() < 0.72f) push_roll();
+                    if (live_rarity >= RarityID::kUnusual && frand() < 0.55f)
+                        push_roll();
+                    if (live_rarity >= RarityID::kRare && frand() < 0.45f)
+                        push_roll();
+                    if (live_rarity >= RarityID::kEpic && frand() < 0.40f)
+                        push_roll();
+                    if (live_rarity >= RarityID::kLegendary && frand() < 0.35f)
+                        push_roll();
                 }
                 if (team_has_bonus(drop_team)) {
                     size_t bonus_rolls = std::min<size_t>(success_drops.size() * 2, 12);

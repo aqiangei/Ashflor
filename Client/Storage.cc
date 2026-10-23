@@ -216,8 +216,9 @@ void Storage::retrieve() {
                 I18n::use_chinese = BitMath::at(opts, 2);
             else
                 I18n::use_chinese = 1;
-            Input::invert_attack = BitMath::at(opts, 4);
-            Input::invert_defend = BitMath::at(opts, 5);
+            // Either saved bit enables the full attack↔defend swap.
+            Input::invert_attack = BitMath::at(opts, 4) || BitMath::at(opts, 5);
+            Input::invert_defend = Input::invert_attack;
             // bit7 = request_mobile explicitly saved; else default to device probe
             if (BitMath::at(opts, 7))
                 Input::request_mobile = BitMath::at(opts, 6);

@@ -65,7 +65,8 @@ static void calculate_leaderboard(Simulation *sim) {
         std::string name = resolve_player_name(sim, ent, player);
         players.push_back(&player);
         names.push_back(name);
-        if (!name.empty())
+        // Score high-water → LB dirty. Do it with fill_top (~5 Hz), not every tick.
+        if (!name.empty() && (sim->tick_index % 4 == 0))
             LeaderboardStore::record(name, player.get_score(), player.get_color());
     });
     uint32_t online = (uint32_t) players.size();
@@ -163,11 +164,25 @@ void Simulation::on_tick() {
 
     // Occupied: refill near players. Soft-cap batches — linear 2+flowers up to 8
     // overfilled hub when a crowd's AOIs overlapped the Common belt.
-    if (frand() < 1.0f / TPS) {
+    // Crowd scale: 32+ flowers on one map made spawn+collide the tick hog in
+    // combat load tests — keep pockets filling for solo/small groups, throttle
+    // when a hub is already packed.
+    float spawn_mul = 1.f;
+    if (flowers >= 16u) spawn_mul = 0.55f;
+    if (flowers >= 28u) spawn_mul = 0.35f;
+    if (frand() < (2.5f * spawn_mul) / (float) TPS) {
         uint32_t extra = flowers;
         if (extra > 3u) extra = 3u;
-        uint32_t batches = 2u + extra;
+        if (flowers >= 16u && extra > 1u) extra = 1u;
+        uint32_t batches = 4u + extra;
+        if (flowers >= 28u) batches = 2u;
         for (uint32_t i = 0; i < batches; ++i)
+            Map::spawn_zone_mob(this);
+    }
+    // Underfilled player zones get a second burst so sparse rings/corners
+    // do not stay empty after unseen-despawn cleared the pack.
+    if (flowers < 16u && frand() < 3.0f / (float) TPS) {
+        for (uint32_t i = 0; i < 3u; ++i)
             Map::spawn_zone_mob(this);
     }
     for_each_entity([](Simulation *sim, Entity &ent) {

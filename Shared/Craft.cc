@@ -216,6 +216,8 @@ namespace Craft {
     }
 
     PetalID::T petal_at_rarity(PetalID::T from, uint8_t rarity) {
+        // Coin is currency — one ID for every assemble filter rarity.
+        if (from == PetalID::kCoin) return PetalID::kCoin;
         return find_same_name_at_rarity(from, rarity);
     }
 

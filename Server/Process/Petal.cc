@@ -233,6 +233,7 @@ void tick_petal_behavior(Simulation *sim, Entity &petal) {
         case PetalID::kPollenSandstorm:
         case PetalID::kWorldTreeSeed:
         case PetalID::kChronoVortex:
+            // fallthrough shared plant path below
             if (BitMath::at(player.input, InputFlags::kAttacking)
                 || BitMath::at(player.input, InputFlags::kDefending)) {
                 Vector delta(petal.get_x() - player.get_x(), petal.get_y() - player.get_y());
@@ -247,6 +248,18 @@ void tick_petal_behavior(Simulation *sim, Entity &petal) {
             }
             break;
         default:
+            // Heartwood ladder (any rarity): same grounded heal-aura plant as Monstera.
+            if (petal_name_is(pid, "Heartwood")
+                && (BitMath::at(player.input, InputFlags::kAttacking)
+                    || BitMath::at(player.input, InputFlags::kDefending))) {
+                Vector delta(petal.get_x() - player.get_x(), petal.get_y() - player.get_y());
+                petal.friction = DEFAULT_FRICTION;
+                petal.acceleration.unit_normal(delta.angle()).set_magnitude(18 * PLAYER_ACCELERATION);
+                petal.set_split_projectile(1);
+                float dur = petal_data.attributes.aura_duration > 0
+                    ? petal_data.attributes.aura_duration : 16.f;
+                entity_set_despawn_tick(petal, (game_tick_t)(dur * TPS));
+            }
             break;
     }
 }

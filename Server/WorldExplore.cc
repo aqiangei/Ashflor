@@ -243,12 +243,12 @@ static void award_followers_near(GameInstance *game, MapExploreDef const &def,
         float dx = player.get_x() - x, dy = player.get_y() - y;
         if (dx * dx + dy * dy > r2) continue;
 
-        uint32_t coins = 200;
+        uint32_t coins = 320;
         client_award_coins(client, coins);
         client_send_loot_toast(client, PetalID::kCoin, (uint16_t) coins, def.spirit_zh);
         uint8_t mats = 0;
         std::string mat_line;
-        for (uint8_t i = 0; i < 2; ++i) {
+        for (uint8_t i = 0; i < 6; ++i) {
             PetalID::T mat = TreasureSites::pick_explore_mat(mid, TreasureSites::kTierNormal);
             if (mat == PetalID::kNone) continue;
             if (!client_award_petal(client, mat)) continue;
@@ -446,12 +446,12 @@ void WorldExplore::tick(GameInstance *game) {
                 ++client->explore_puzzle_step;
                 if (client->explore_puzzle_step >= 3) {
                     client->explore_puzzle_done[mid] = 1;
-                    uint32_t coins = 250;
+                    uint32_t coins = 400;
                     client_award_coins(client, coins);
                     client_send_loot_toast(client, PetalID::kCoin, (uint16_t) coins, "探索印记");
                     uint8_t mats = 0;
                     std::string mat_line;
-                    for (uint8_t i = 0; i < 3; ++i) {
+                    for (uint8_t i = 0; i < 7; ++i) {
                         PetalID::T mat = TreasureSites::pick_explore_mat(mid, TreasureSites::kTierHard);
                         if (mat == PetalID::kNone) continue;
                         if (!client_award_petal(client, mat)) continue;

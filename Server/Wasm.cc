@@ -34,6 +34,10 @@ extern "C" {
         return heap_strdup_std(Server::live_status_json());
     }
 
+    EMSCRIPTEN_KEEPALIVE char *health_json() {
+        return heap_strdup_std(Server::health_json());
+    }
+
     EMSCRIPTEN_KEEPALIVE char *live_catalog_json() {
         return heap_strdup_std(Server::live_catalog_json());
     }
@@ -190,6 +194,26 @@ WebSocketServer::WebSocketServer() {
                 _free(ptr);
                 return t;
             };
+            if (path === "/health" || path === "/api/health") {
+                const ptr = _health_json();
+                if (!ptr) {
+                    sendJson(500, "{\"ok\":false,\"status\":\"bad\",\"msg\":\"health unavailable\"}");
+                    return;
+                }
+                let body = UTF8ToString(ptr);
+                _free(ptr);
+                try {
+                    const data = JSON.parse(body);
+                    data["ts"] = Date.now();
+                    data["pid"] = process.pid;
+                    data["uptime_s"] = Math.floor(process.uptime());
+                    body = JSON.stringify(data);
+                    sendJson(data["ok"] ? 200 : 503, body);
+                } catch (e) {
+                    sendJson(200, body);
+                }
+                return;
+            }
             if (path === "/api/live") {
                 const ptr = _live_status_json();
                 if (!ptr) {
@@ -537,7 +561,9 @@ WebSocketServer::WebSocketServer() {
         Module.wss = wss;
         Module.ws_connections = {};
         let curr_id = 0;
-        // Protocol ping keeps nginx / mobile NATs from dropping "idle" sockets
+        // Protocol ping keeps nginx / mobile NATs from dropping "idle" sockets.
+        // 8s stays well under common 60s proxy idle timeouts; 15s was marginal
+        // on some mobile carriers and showed up as abrupt 1006 after a while.
         setInterval(function() {
             const map = Module.ws_connections || {};
             for (const id in map) {
@@ -545,7 +571,7 @@ WebSocketServer::WebSocketServer() {
                 if (!ws || ws.readyState !== 1) continue;
                 try { ws.ping(); } catch (e) {}
             }
-        }, 15000);
+        }, 8000);
         wss.on("connection", function(ws, req) {
             const ws_id = curr_id;
             Module.ws_connections[ws_id] = ws;
@@ -648,7 +674,7 @@ uint8_t Client::can_accept_update() {
         if (!Module.ws_connections || !Module.ws_connections[$0]) return 0;
         const ws = Module.ws_connections[$0];
         if (ws.readyState !== 1) return 0;
-        return ws.bufferedAmount <= 128 * 1024 ? 1 : 0;
+        return ws.bufferedAmount <= 256 * 1024 ? 1 : 0;
     }, ws->id());
 }
 
@@ -667,7 +693,9 @@ void WebSocket::send(uint8_t const *packet, size_t size) {
         if (!Module.ws_connections || !Module.ws_connections[$0]) return;
         const ws = Module.ws_connections[$0];
         if (ws.readyState !== 1) return;
-        if (ws.bufferedAmount > 128 * 1024) return;
+        // Cap matches can_accept_update — larger backlog used to stall forever and
+        // mobile NATs closed the socket as 1006 while we kept "sending" into a void.
+        if (ws.bufferedAmount > 256 * 1024) return;
         ws.send(HEAPU8.subarray($1,$1+$2));
     }, ws_id, packet, size);
 }

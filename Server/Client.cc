@@ -959,15 +959,43 @@ void Client::on_message(WebSocket *ws, std::string_view message, uint64_t code) 
             }
             if (mode == CraftMode::kCraftRecipe) {
                 uint16_t idx = (uint16_t) arg;
+                if (client->check_invalid(validator.validate_uint8())) return;
+                uint8_t rarity = reader.read<uint8_t>();
+                if (rarity >= RarityID::kNumRarities) rarity = RarityID::kCommon;
                 if (idx >= Recipe::recipe_count()) {
                     send_craft_update(client, CraftResultCode::kCraftNoMats, PetalID::kNone);
                     break;
                 }
                 Recipe::Def const &rec = Recipe::recipe_at(idx);
-                flush_craft_bank_to_bag(client);
+                uint8_t coin_shop = 0;
+                for (uint8_t i = 0; i < rec.ingredient_count; ++i)
+                    if (rec.ingredients[i].id == PetalID::kCoin) { coin_shop = 1; break; }
+                // Coin-shop rows: baked IDs only (no rarity ladder exploit).
+                PetalID::T result = coin_shop
+                    ? rec.result
+                    : Craft::petal_at_rarity(rec.result, rarity);
+                if (result == PetalID::kNone || result >= PetalID::kNumPetals) {
+                    send_craft_update(client, CraftResultCode::kCraftNoMats, PetalID::kNone);
+                    break;
+                }
+                PetalID::T mats[Recipe::kMaxIngredients] = {};
                 uint8_t ok = 1;
                 for (uint8_t i = 0; i < rec.ingredient_count; ++i) {
-                    if (craft_owned(client, rec.ingredients[i].id) < rec.ingredients[i].count) {
+                    mats[i] = coin_shop
+                        ? rec.ingredients[i].id
+                        : Craft::petal_at_rarity(rec.ingredients[i].id, rarity);
+                    if (mats[i] == PetalID::kNone || mats[i] >= PetalID::kNumPetals) {
+                        ok = 0;
+                        break;
+                    }
+                }
+                if (!ok) {
+                    send_craft_update(client, CraftResultCode::kCraftNoMats, PetalID::kNone);
+                    break;
+                }
+                flush_craft_bank_to_bag(client);
+                for (uint8_t i = 0; i < rec.ingredient_count; ++i) {
+                    if (craft_owned(client, mats[i]) < rec.ingredients[i].count) {
                         ok = 0;
                         break;
                     }
@@ -977,7 +1005,7 @@ void Client::on_message(WebSocket *ws, std::string_view message, uint64_t code) 
                     break;
                 }
                 for (uint8_t i = 0; i < rec.ingredient_count; ++i) {
-                    if (!consume_craft_mats(client, rec.ingredients[i].id, rec.ingredients[i].count)) {
+                    if (!consume_craft_mats(client, mats[i], rec.ingredients[i].count)) {
                         ok = 0;
                         break;
                     }
@@ -986,13 +1014,13 @@ void Client::on_message(WebSocket *ws, std::string_view message, uint64_t code) 
                     send_craft_update(client, CraftResultCode::kCraftNoMats, PetalID::kNone);
                     break;
                 }
-                if (!try_give_petal(client, rec.result)) {
+                if (!try_give_petal(client, result)) {
                     persist_account(client);
-                    send_craft_update(client, CraftResultCode::kCraftInvFull, rec.result);
+                    send_craft_update(client, CraftResultCode::kCraftInvFull, result);
                 } else {
-                    credit_high_craft(client, rec.result);
+                    credit_high_craft(client, result);
                     persist_account(client);
-                    send_craft_update(client, CraftResultCode::kCraftBought, rec.result, 1);
+                    send_craft_update(client, CraftResultCode::kCraftBought, result, 1);
                 }
                 break;
             }
@@ -1229,7 +1257,8 @@ void Client::on_message(WebSocket *ws, std::string_view message, uint64_t code) 
                         break;
                     }
                     if (!placed) {
-                        if (client->craft_bank[id] < 1000000) ++client->craft_bank[id];
+                        uint32_t cap = Recipe::bank_stack_cap(id);
+                        if (client->craft_bank[id] < cap) ++client->craft_bank[id];
                         PetalTracker::remove_petal(simulation, id);
                     }
                 }
@@ -1357,9 +1386,10 @@ void Client::on_message(WebSocket *ws, std::string_view message, uint64_t code) 
             if (old == PetalID::kBasic) {
                 PetalTracker::remove_petal(simulation, old);
             } else if (old != PetalID::kNone && old < PetalID::kNumPetals) {
-                if (client->craft_bank[old] >= 1000000) break;
+                // At stack cap: still clear the displaced petal off the bar.
                 PetalTracker::remove_petal(simulation, old);
-                ++client->craft_bank[old];
+                uint32_t cap = Recipe::bank_stack_cap(old);
+                if (client->craft_bank[old] < cap) ++client->craft_bank[old];
             }
             --client->craft_bank[id];
             PetalTracker::add_petal(simulation, id);
@@ -1382,8 +1412,10 @@ void Client::on_message(WebSocket *ws, std::string_view message, uint64_t code) 
             PetalID::T id = player != nullptr ? player->get_loadout_ids(pos)
                 : camera.get_inventory(pos);
             if (id == PetalID::kNone || id >= PetalID::kNumPetals) break;
-            if (client->craft_bank[id] >= 1000000) break;
-            ++client->craft_bank[id];
+            // Always unequip. At stack cap, clear the slot without bumping bank
+            // (coins/petals maxed must not freeze the loadout bar).
+            uint32_t cap = Recipe::bank_stack_cap(id);
+            if (client->craft_bank[id] < cap) ++client->craft_bank[id];
             PetalTracker::remove_petal(simulation, id);
             if (player != nullptr) player->set_loadout_ids(pos, PetalID::kNone);
             else camera.set_inventory(pos, PetalID::kNone);

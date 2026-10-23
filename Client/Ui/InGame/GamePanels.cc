@@ -269,6 +269,19 @@ public:
                 });
             }
         }
+        // Same as craft Unique column: gold Lv on the petal once leveled.
+        if (Craft::can_level_petal(pid) && Game::petal_levels[pid] > 0) {
+            RenderContext c(&ctx);
+            std::string lv = std::format("Lv.{}", Game::petal_levels[pid]);
+            ctx.set_fill(Chrome::kGold);
+            ctx.set_stroke(0xff111111);
+            ctx.set_text_size(12);
+            ctx.set_line_width(1.2f);
+            float tw = (float) ctx.get_text_size(lv.c_str());
+            ctx.translate(width / 2 - 3 - tw, height / 2 - 28);
+            ctx.stroke_text(lv.c_str());
+            ctx.fill_text(lv.c_str());
+        }
         ctx.translate(0, height / 2 - 15);
         ctx.draw_text(I18n::petal_name(pid), {
             .fill = Chrome::kTitle, .size = 16, .stroke_scale = 0.1f
@@ -1348,6 +1361,8 @@ static PetalID::T resolve_craft_family_slot(char const *name, uint8_t rarity) {
 class CraftMatCell final : public Element {
     char const *family_name;
     uint8_t rarity;
+    // Last column: display Unique with account level (absorb mats stay in Unique col).
+    uint8_t level_slot = 0;
     float hold_timer = 0;
     float hold_interval = 0.28f;
     uint8_t holding = 0;
@@ -1357,6 +1372,14 @@ class CraftMatCell final : public Element {
 
     PetalID::T current_id() const {
         if (family_name == nullptr) return PetalID::kNone;
+        if (level_slot) {
+            PetalID::T slot = resolve_craft_family_slot(family_name, RarityID::kUnique);
+            if (slot == PetalID::kNone) return PetalID::kNone;
+            // Show current Unique version if owned or already leveled.
+            if (Game::craft_owned(slot) > 0 || Game::petal_levels[slot] > 0)
+                return slot;
+            return PetalID::kNone;
+        }
         PetalID::T id = resolve_craft_family_petal(family_name, rarity);
         if (id == PetalID::kNone || Game::craft_owned(id) == 0) return PetalID::kNone;
         return id;
@@ -1368,30 +1391,36 @@ class CraftMatCell final : public Element {
         hold_interval = 0.28f;
     }
 public:
-    CraftMatCell(char const *name, uint8_t r)
+    CraftMatCell(char const *name, uint8_t r, uint8_t is_level_slot = 0)
         : Element(64, 66, {
             // Death screen keeps craft UI open (same as bag / specials).
             .should_render = [](){
                 return Game::alive() || Game::on_game_screen;
             },
             .no_animation = 1
-        }), family_name(name), rarity(r) {
+        }), family_name(name), rarity(r), level_slot(is_level_slot) {
         style.animate = [this](Element *, Renderer &){
             PetalID::T petal_id = current_id();
-            // Fly target for the next-rarity column even when still empty.
-            PetalID::T slot_id = resolve_craft_family_slot(family_name, rarity);
+            // Fly target: level column overrides Unique mat cell (same id, rightmost wins).
+            PetalID::T slot_id = level_slot
+                ? resolve_craft_family_slot(family_name, RarityID::kUnique)
+                : resolve_craft_family_slot(family_name, rarity);
             if (slot_id != PetalID::kNone && screen_x > 1.f)
                 CraftFx::remember_mat(slot_id, screen_x, screen_y);
             uint32_t avail = (petal_id == PetalID::kNone) ? 0 : Game::craft_available(petal_id);
-            // Hide icon when unowned or all copies are on the tray.
-            float target = (petal_id != PetalID::kNone && avail > 0) ? 1.f : 0.f;
-            if (petal_id != PetalID::kNone && avail > 0) last_shown_id = petal_id;
+            // Level slot stays visible while owned/leveled even if mats are on the tray.
+            float target = 0.f;
+            if (level_slot)
+                target = (petal_id != PetalID::kNone) ? 1.f : 0.f;
+            else
+                target = (petal_id != PetalID::kNone && avail > 0) ? 1.f : 0.f;
+            if (target > 0.f) last_shown_id = petal_id;
             float step = (float)(Ui::dt / 180.0);
             if (empty_anim < target) empty_anim = std::min(target, empty_anim + step);
             else if (empty_anim > target) empty_anim = std::max(target, empty_anim - step);
             if (empty_anim <= 0.f) last_shown_id = PetalID::kNone;
 
-            if (!holding) return;
+            if (level_slot || !holding) return;
             // Mobile repeats kMouseDown while held; track the finger, not focus_state.
             uint8_t still_down = 0;
             if (Input::is_mobile) {
@@ -1423,7 +1452,11 @@ public:
         PetalID::T petal_id = current_id();
         if (petal_id != PetalID::kNone)
             CraftFx::remember_mat(petal_id, screen_x, screen_y);
-        uint32_t shown = (petal_id == PetalID::kNone) ? 0 : Game::craft_available(petal_id);
+        uint32_t shown = 0;
+        if (petal_id != PetalID::kNone) {
+            if (level_slot) shown = Game::craft_owned(petal_id);
+            else shown = Game::craft_available(petal_id);
+        }
         // Unowned rarity columns: blank plate only — never catalog art.
         if (petal_id == PetalID::kNone && last_shown_id == PetalID::kNone) {
             ctx.set_fill(Chrome::kPanelInset);
@@ -1433,15 +1466,18 @@ public:
             return;
         }
         // Empty / all-in-tray: plain plate (never "x0"); fade icon out via empty_anim.
-        if (petal_id == PetalID::kNone || shown == 0 || empty_anim < 0.98f) {
+        uint8_t show_icon = level_slot
+            ? (petal_id != PetalID::kNone)
+            : (petal_id != PetalID::kNone && shown > 0);
+        if (!show_icon || empty_anim < 0.98f) {
             ctx.set_fill(Chrome::kPanelInset);
             ctx.begin_path();
             ctx.round_rect(-width / 2, -height / 2, width, height, 6);
             ctx.fill();
         }
-        PetalID::T draw_id = (shown > 0 && petal_id != PetalID::kNone) ? petal_id : last_shown_id;
+        PetalID::T draw_id = show_icon ? petal_id : last_shown_id;
         if (draw_id == PetalID::kNone || empty_anim <= 0.02f) return;
-        uint8_t selected = (Game::craft_tray_id == petal_id && shown > 0);
+        uint8_t selected = (!level_slot && Game::craft_tray_id == petal_id && shown > 0);
         {
             RenderContext guard(&ctx);
             ctx.set_global_alpha(empty_anim);
@@ -1456,7 +1492,8 @@ public:
             ctx.round_rect(-width / 2, -height / 2, width, height, 10);
             ctx.stroke();
         }
-        if (shown > 0 && empty_anim > 0.5f) {
+        // Material columns show stack; level column is the current Unique version (no qty).
+        if (!level_slot && shown > 0 && empty_anim > 0.5f) {
             RenderContext t(&ctx);
             std::string qty = format_stack(shown);
             ctx.set_global_alpha(empty_anim);
@@ -1468,9 +1505,8 @@ public:
             ctx.stroke_text(qty.c_str());
             ctx.fill_text(qty.c_str());
         }
-        // Unique column (last rarity): show Lv only after at least one successful level-up.
-        if (empty_anim > 0.5f && Craft::can_level_petal(draw_id)
-            && Game::petal_levels[draw_id] > 0) {
+        // Level lives on the last column only (≥Lv.1).
+        if (level_slot && empty_anim > 0.5f && Game::petal_levels[draw_id] > 0) {
             RenderContext t(&ctx);
             std::string lv = std::format("Lv.{}", Game::petal_levels[draw_id]);
             ctx.set_global_alpha(empty_anim);
@@ -1501,6 +1537,21 @@ public:
     void on_event(uint8_t event) override {
         PetalID::T petal_id = current_id();
         if (petal_id == PetalID::kNone) return;
+        if (level_slot) {
+            // Display-only: Unique absorb mats are the previous column.
+            if (event == kMouseDown) {
+                Game::craft_status = I18n::use_chinese
+                    ? "这是当前唯一等级；请从左侧唯一栏放入材料升级"
+                    : "Current Unique level — put mats from the Unique column";
+            }
+            if (event != kFocusLost && petal_id < PetalID::kNumPetals) {
+                rendering_tooltip = 1;
+                tooltip = Ui::UiLoadout::petal_tooltips[petal_id];
+            } else {
+                rendering_tooltip = 0;
+            }
+            return;
+        }
         if (event == kMouseDown) {
             if (Game::craft_available(petal_id) == 0) {
                 Game::craft_status = I18n::use_chinese
@@ -1547,6 +1598,56 @@ public:
     }
 };
 
+static int craft_family_best_owned_rarity(char const *name) {
+    int best = -1;
+    if (name == nullptr) return best;
+    for (uint32_t raw = 1; raw < (uint32_t) PetalID::kNumPetals; ++raw) {
+        PetalID::T id = (PetalID::T) raw;
+        if (id == PetalID::kCoin || Recipe::is_bag_only(id)) continue;
+        if (PETAL_DATA[id].name == nullptr) continue;
+        if (std::strcmp(PETAL_DATA[id].name, name) != 0) continue;
+        if (Game::craft_owned(id) == 0) continue;
+        int r = (int) PETAL_DATA[id].rarity;
+        if (r > best) best = r;
+    }
+    return best;
+}
+
+class CraftFamilyRow final : public Ui::HContainer {
+public:
+    char const *family_name;
+    CraftFamilyRow(char const *name, std::vector<Element *> cells)
+        : Ui::HContainer(cells, 0, 4, { .h_justify = Style::Left, .no_animation = 1 }),
+          family_name(name) {}
+};
+
+// Re-sort rows while the craft panel is open so newly owned high-rarity
+// petals float to the top without rebuilding the whole tree.
+class CraftFamilyList final : public Ui::VContainer {
+public:
+    CraftFamilyList(std::vector<Element *> rows)
+        : Ui::VContainer(rows, 0, 4, { .h_justify = Style::Left, .no_animation = 1 }) {}
+    void refactor() override {
+        if (Game::game_panel == Game::kPanelCraft && children.size() > 1) {
+            std::stable_sort(children.begin(), children.end(),
+                [](Element *ea, Element *eb){
+                    auto *a = static_cast<CraftFamilyRow *>(ea);
+                    auto *b = static_cast<CraftFamilyRow *>(eb);
+                    int ra = craft_family_best_owned_rarity(a->family_name);
+                    int rb = craft_family_best_owned_rarity(b->family_name);
+                    uint8_t oa = ra >= 0 ? 1 : 0;
+                    uint8_t ob = rb >= 0 ? 1 : 0;
+                    if (oa != ob) return oa > ob;
+                    if (oa && ra != rb) return ra > rb;
+                    char const *na = a->family_name ? a->family_name : "";
+                    char const *nb = b->family_name ? b->family_name : "";
+                    return std::strcmp(na, nb) < 0;
+                });
+        }
+        Ui::VContainer::refactor();
+    }
+};
+
 class CraftMaterialGrid final : public Ui::ScrollContainer {
 public:
     explicit CraftMaterialGrid(Element *content) : Ui::ScrollContainer(content, 316) {}
@@ -1559,8 +1660,9 @@ public:
 };
 
 static Element *make_craft_material_grid() {
-    // One row per petal name. Columns are rarities left → right (Common…Unique).
+    // One row per petal name. Columns: Common…Unique (absorb mats) → Unique Lv (current).
     // Cells resolve the owned id at draw time (name collisions like Dahlia/RoseRare).
+    // Row order: owned high-rarity first (see CraftFamilyList::refactor).
     std::vector<char const *> family_names;
     for (uint32_t raw = 1; raw < (uint32_t) PetalID::kNumPetals; ++raw) {
         PetalID::T id = (PetalID::T) raw;
@@ -1581,18 +1683,12 @@ static Element *make_craft_material_grid() {
     for (char const *name : family_names) {
         std::vector<Element *> cells;
         for (uint8_t r = 0; r < RarityID::kNumRarities; ++r)
-            cells.push_back(new CraftMatCell(name, r));
-        // Spacer keeps column alignment with older layout.
-        cells.push_back(new CraftMatCell(nullptr, 0));
-        // Always list every family × rarity column — empty plates for unowned
-        // slots so the catalog is never blank.
-        vrows.push_back(new Ui::HContainer(cells, 0, 4, {
-            .h_justify = Style::Left,
-            .no_animation = 1
-        }));
+            cells.push_back(new CraftMatCell(name, r, 0));
+        // Last column: current Unique version with account level (display-only).
+        cells.push_back(new CraftMatCell(name, RarityID::kUnique, 1));
+        vrows.push_back(new CraftFamilyRow(name, cells));
     }
-    Element *grid = new Ui::VContainer(vrows, 0, 4, { .h_justify = Style::Left, .no_animation = 1 });
-    return new CraftMaterialGrid(grid);
+    return new CraftMaterialGrid(new CraftFamilyList(vrows));
 }
 
 Element *Ui::make_game_side_buttons() {
@@ -2628,8 +2724,8 @@ Element *Ui::make_craft_panel() {
                 }, { .fill = Chrome::kTitle, .h_justify = Style::Left }),
                 new Ui::DynamicText(15, [](){
                     return I18n::use_chinese
-                        ? "升阶，唯一可无限升级（失败损失1–4）"
-                        : "to rank up; Unique levels forever (miss loses 1–4)";
+                        ? "升阶；唯一栏放材料，末格为当前等级（失败损失1–4）"
+                        : "rank up; Unique col=mats, last=current Lv (miss loses 1–4)";
                 }, { .fill = Chrome::kTitle, .h_justify = Style::Left }),
                 new Ui::DynamicText(13, [](){
                     if (Game::craft_tray_id == PetalID::kNone) return std::string{};
@@ -2795,7 +2891,7 @@ Element *Ui::make_boost_panel() {
             new Ui::DynamicText(clock_sz, [](){ return bonus_clock(visible_bonus_seconds(false)); },
                 { .fill = Chrome::kTitle, .h_justify = Style::Left }),
             new Ui::DynamicText(hint_sz, [](){
-                return I18n::use_chinese ? "离线 10 分钟积 1 分钟 · 最多存 3 小时" : "10 minutes away earns 1 minute · cap 3 hours";
+                return I18n::use_chinese ? "离线 10 分钟积 1 分钟 · 最多存 6 小时" : "10 minutes away earns 1 minute · cap 6 hours";
             }, { .fill = Chrome::kBody, .h_justify = Style::Left })
         }, card_pad, 10, { .fill = 0xff73c77a, .round_radius = 10, .h_justify = Style::Left }),
         new Ui::DynamicText(hint_sz + 1.f, [](){
@@ -2849,18 +2945,35 @@ static char const *recipe_rarity_label() {
     return I18n::rarity_name(recipe_filter_rarity);
 }
 
-static uint8_t recipe_result_rarity(uint16_t idx) {
-    if (idx >= Recipe::recipe_count()) return 0;
-    PetalID::T id = Recipe::recipe_at(idx).result;
-    if (id == PetalID::kNone || id >= PetalID::kNumPetals) return 0;
-    return PETAL_DATA[id].rarity;
+static uint8_t recipe_uses_coin(Recipe::Def const &rec) {
+    for (uint8_t i = 0; i < rec.ingredient_count; ++i)
+        if (rec.ingredients[i].id == PetalID::kCoin) return 1;
+    return 0;
+}
+
+// Recipe table stores base-family IDs; assemble UI/server resolve to the
+// real petal at the selected rarity via petal_at_rarity.
+// Coin-shop rows (Magnet/…) stay at their baked result rarity — no free
+// Unique-for-coins exploit via the rarity filter.
+static uint8_t recipe_resolves_at(uint16_t idx, uint8_t rarity) {
+    if (idx >= Recipe::recipe_count() || rarity >= RarityID::kNumRarities) return 0;
+    Recipe::Def const &rec = Recipe::recipe_at(idx);
+    if (recipe_uses_coin(rec)) {
+        if (rec.result == PetalID::kNone || rec.result >= PetalID::kNumPetals) return 0;
+        return PETAL_DATA[rec.result].rarity == rarity ? 1 : 0;
+    }
+    if (Craft::petal_at_rarity(rec.result, rarity) == PetalID::kNone) return 0;
+    for (uint8_t i = 0; i < rec.ingredient_count; ++i)
+        if (Craft::petal_at_rarity(rec.ingredients[i].id, rarity) == PetalID::kNone)
+            return 0;
+    return 1;
 }
 
 static uint8_t recipe_tier_has_rarity(uint8_t tier, uint8_t rarity) {
     uint16_t n = Recipe::recipe_count();
     for (uint16_t i = 0; i < n; ++i) {
         if (Recipe::recipe_at(i).tier != tier) continue;
-        if (recipe_result_rarity(i) == rarity) return 1;
+        if (recipe_resolves_at(i, rarity)) return 1;
     }
     return 0;
 }
@@ -2900,11 +3013,16 @@ static void on_recipe_rarity_next(Element *, uint8_t e) {
 }
 
 static uint8_t recipe_can_craft(uint16_t idx) {
-    if (idx >= Recipe::recipe_count()) return 0;
+    if (!recipe_resolves_at(idx, recipe_filter_rarity)) return 0;
     Recipe::Def const &rec = Recipe::recipe_at(idx);
-    for (uint8_t i = 0; i < rec.ingredient_count; ++i)
-        if (Game::craft_owned(rec.ingredients[i].id) < rec.ingredients[i].count)
+    uint8_t coin_shop = recipe_uses_coin(rec);
+    for (uint8_t i = 0; i < rec.ingredient_count; ++i) {
+        PetalID::T id = coin_shop
+            ? rec.ingredients[i].id
+            : Craft::petal_at_rarity(rec.ingredients[i].id, recipe_filter_rarity);
+        if (Game::craft_owned(id) < rec.ingredients[i].count)
             return 0;
+    }
     return 1;
 }
 
@@ -2976,7 +3094,7 @@ public:
             if (idx >= Recipe::recipe_count()) return false;
             if (Recipe::recipe_at(idx).tier != recipe_filter_tier)
                 return false;
-            if (recipe_result_rarity(idx) != recipe_filter_rarity)
+            if (!recipe_resolves_at(idx, recipe_filter_rarity))
                 return false;
             return recipe_visible(idx) != 0;
         };
@@ -3047,12 +3165,18 @@ public:
             chip.on_render(ctx);
             x += step;
         };
+        uint8_t coin_shop = recipe_uses_coin(rec);
         for (uint8_t i = 0; i < n_in; ++i) {
             if (i > 0) draw_op("+");
-            draw_chip(rec.ingredients[i].id, rec.ingredients[i].count, 1);
+            PetalID::T mid = coin_shop
+                ? rec.ingredients[i].id
+                : Craft::petal_at_rarity(rec.ingredients[i].id, recipe_filter_rarity);
+            draw_chip(mid, rec.ingredients[i].count, 1);
         }
         draw_op("=");
-        draw_chip(rec.result, 1, 0);
+        draw_chip(coin_shop
+            ? rec.result
+            : Craft::petal_at_rarity(rec.result, recipe_filter_rarity), 1, 0);
         // Combine / craft button (right) — claw-hammer glyph on a warm plate
         {
             RenderContext c(&ctx);
@@ -3134,7 +3258,7 @@ public:
         // Only the hammer zone crafts (right ~70px), like the mockup.
         float local_x = (Input::mouse_x - screen_x) / (float) Ui::scale;
         if (local_x > width / 2 - 70.f && recipe_can_craft(recipe_index))
-            Game::craft_recipe(recipe_index);
+            Game::craft_recipe(recipe_index, recipe_filter_rarity);
     }
 };
 

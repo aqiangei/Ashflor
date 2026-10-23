@@ -816,11 +816,12 @@ uint8_t Game::withdraw_bank_petal(PetalID::T id, uint8_t dest) {
     if (dest < n && Recipe::is_bag_only(id)) return 0;
     PetalID::T old = cached_loadout[dest];
     // Same as empty: equip. Real petal already there → bank it first.
+    // At stack cap: still replace the slot (do not block equip); bank count stays.
     if (old == PetalID::kBasic) {
         // Basic is filler — drop without banking.
     } else if (old != PetalID::kNone && old < PetalID::kNumPetals) {
-        if (craft_bank[old] >= 1000000) return 0;
-        ++craft_bank[old];
+        uint32_t cap = Recipe::bank_stack_cap(old);
+        if (craft_bank[old] < cap) ++craft_bank[old];
     }
     --craft_bank[id];
     cached_loadout[dest] = id;
@@ -847,9 +848,11 @@ void Game::deposit_bank_petal(uint8_t static_pos) {
     if (static_pos >= 2 * MAX_SLOT_COUNT) return;
     PetalID::T id = cached_loadout[static_pos];
     if (id == PetalID::kNone || id >= PetalID::kNumPetals) return;
-    // Optimistic — backpack panel reads stacks + slot copies together.
+    // Optimistic — always clear the slot. At stack cap, skip the ++ so the
+    // bar cannot stick when coins/petals are already maxed.
     cached_loadout[static_pos] = PetalID::kNone;
-    if (craft_bank[id] < 1000000) ++craft_bank[id];
+    uint32_t cap = Recipe::bank_stack_cap(id);
+    if (craft_bank[id] < cap) ++craft_bank[id];
     Writer writer(static_cast<uint8_t *>(OUTGOING_PACKET));
     writer.write<uint8_t>(Serverbound::kBankDeposit);
     writer.write<uint8_t>(static_pos);
@@ -1046,11 +1049,13 @@ void Game::craft_buy_announce(std::string const &text) {
     craft_status = I18n::use_chinese ? "正在发送全服广播…" : "Sending server announce…";
 }
 
-void Game::craft_recipe(uint16_t recipe_index) {
+void Game::craft_recipe(uint16_t recipe_index, uint8_t rarity) {
     if (!socket.ready || !(alive() || on_game_screen)) return;
+    if (rarity >= RarityID::kNumRarities) rarity = RarityID::kCommon;
     Writer writer(static_cast<uint8_t *>(OUTGOING_PACKET));
     writer.write<uint8_t>(Serverbound::kPetalCraft);
     writer.write<uint8_t>(CraftMode::kCraftRecipe);
     writer.write<uint16_t>(recipe_index);
+    writer.write<uint8_t>(rarity);
     socket.send(writer.packet, writer.at - writer.packet);
 }

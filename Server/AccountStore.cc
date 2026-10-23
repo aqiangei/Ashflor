@@ -101,7 +101,7 @@ static uint8_t bind_session(Client *client, std::string const &username, Account
     }
     if (!continuing_session && acc->last_seen_epoch > 0 && now > acc->last_seen_epoch) {
         uint64_t earned = (now - acc->last_seen_epoch) / 10;
-        acc->offline_bonus_seconds = (uint32_t) std::min<uint64_t>(10800,
+        acc->offline_bonus_seconds = (uint32_t) std::min<uint64_t>(21600,
             (uint64_t)acc->offline_bonus_seconds + earned);
     }
     // Fold legacy overflow into actual backpack slots before sending the
@@ -442,7 +442,7 @@ void AccountStore::load() {
                     if (rest.size() >= at + 4) {
                         acc.bonus_day = (uint32_t)rest[at++];
                         acc.daily_bonus_seconds = (uint32_t)std::min<uint64_t>(rest[at++], 3600);
-                        acc.offline_bonus_seconds = (uint32_t)std::min<uint64_t>(rest[at++], 10800);
+                        acc.offline_bonus_seconds = (uint32_t)std::min<uint64_t>(rest[at++], 21600);
                         acc.last_seen_epoch = rest[at++];
                     }
                     // Optional active K/L preset index (absent on older saves).

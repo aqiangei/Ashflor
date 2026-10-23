@@ -54,10 +54,10 @@ void tick_entity_motion(Simulation *sim, Entity &ent) {
         float const f = 1 - ent.friction;
         Vector const term_vel = ent.acceleration * (ent.speed_ratio / ent.friction);
         Vector const v = ent.velocity - term_vel;
-        Vector const add = term_vel * dt + v * ((std::powf(f, dt) - 1) / std::logf(f));
+        Vector const add = term_vel * dt + v * ((::powf(f, dt) - 1) / ::logf(f));
         ent.set_x(ent.get_x() + add.x + ent.collision_velocity.x);
         ent.set_y(ent.get_y() + add.y + ent.collision_velocity.y);
-        ent.velocity = term_vel + v * (std::powf(f, dt));
+        ent.velocity = term_vel + v * (::powf(f, dt));
     }
     ent.velocity += ent.collision_velocity * 0.5;
     // Soft cap flower velocity so bubble / knockback stacks can't yeet across the map.

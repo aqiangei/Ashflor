@@ -88,7 +88,7 @@ enum CraftMode : uint8_t {
     kCraftBuyRarity = 2,  // arg = rarity → random petal of that rarity
     kCraftBuySpecial = 3, // arg = PetalID special (legacy coin shop)
     kCraftGambleAll = 4,  // arg = PetalID → craft every possible batch
-    kCraftRecipe = 5,     // arg = recipe index → consume ingredients, give result
+    kCraftRecipe = 5,     // arg = recipe index; followed by uint8 rarity → resolve real IDs
     kCraftBuyAnnounce = 6 // arg unused; followed by string → paid screen banner
     // Gamble / GambleAll / Exchange on a Unique petal roll its infinite level.
 };

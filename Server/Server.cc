@@ -1,6 +1,7 @@
 #include <Server/Server.hh>
 
 #include <Server/AccountStore.hh>
+#include <Server/AdminGiveLog.hh>
 #include <Server/Chat.hh>
 #include <Server/Client.hh>
 #include <Server/DevCheats.hh>
@@ -44,6 +45,10 @@ namespace Server {
     volatile sig_atomic_t is_draining = 0;
     bool is_stopping = false;
     uint32_t player_count = 0;
+    double last_tick_ms = 0;
+    double max_tick_ms_window = 0;
+    uint32_t tick_overruns_window = 0;
+    uint32_t tick_count_window = 0;
 }
 
 using namespace Server;
@@ -177,8 +182,25 @@ void Server::tick() {
     }
     auto end = std::chrono::steady_clock::now();
     std::chrono::duration<double, std::milli> tick_time = end - start;
+    double ms = tick_time.count();
+    Server::last_tick_ms = ms;
+    // Rolling ~60s window at 20 TPS for /health probes.
+    static uint32_t win_ticks = 0;
+    if (win_ticks == 0) {
+        Server::max_tick_ms_window = ms;
+        Server::tick_overruns_window = 0;
+    }
+    ++win_ticks;
+    Server::tick_count_window = win_ticks;
+    if (ms > Server::max_tick_ms_window) Server::max_tick_ms_window = ms;
     // 20 TPS budget ≈ 50ms; log only when we actually miss the frame
-    if (tick_time > 40ms) std::cout << "tick took " << tick_time << '\n';
+    if (tick_time > 40ms) {
+        ++Server::tick_overruns_window;
+        std::cout << "tick took " << tick_time << '\n';
+    }
+    if (win_ticks >= 1200) { // reset window each ~60s
+        win_ticks = 0;
+    }
 
     if (Server::is_draining && !was_draining) {
         was_draining = true;
@@ -281,6 +303,15 @@ std::string Server::live_status_json() {
     out += std::to_string(VERSION_HASH);
     out += ",\"ts\":";
     out += std::to_string(now_ms);
+    // Tick telemetry (same fields as /health) for ops dashboards.
+    {
+        char buf[128];
+        std::snprintf(buf, sizeof(buf),
+            ",\"tick\":{\"last_ms\":%.2f,\"max_ms_60s\":%.2f,\"overruns_60s\":%u,\"samples_60s\":%u}",
+            Server::last_tick_ms, Server::max_tick_ms_window,
+            Server::tick_overruns_window, Server::tick_count_window);
+        out += buf;
+    }
 
     // --- Bosses ---
     out += ",\"bosses\":[";
@@ -546,6 +577,26 @@ std::string Server::live_status_json() {
     out += players_json;
     out += '}';
     return out;
+}
+
+std::string Server::health_json() {
+    // Compact probe: ok unless draining-and-empty or last tick blew past 100ms.
+    uint8_t ok = 1;
+    if (Server::is_draining) ok = 0;
+    if (Server::last_tick_ms >= 100.0) ok = 0;
+    char buf[384];
+    std::snprintf(buf, sizeof(buf),
+        "{\"ok\":%s,\"status\":\"%s\",\"online\":%u,\"draining\":%s,"
+        "\"tick\":{\"last_ms\":%.2f,\"max_ms_60s\":%.2f,\"overruns_60s\":%u,\"samples_60s\":%u}}",
+        ok ? "true" : "false",
+        ok ? "ok" : "bad",
+        Server::player_count,
+        Server::is_draining ? "true" : "false",
+        Server::last_tick_ms,
+        Server::max_tick_ms_window,
+        Server::tick_overruns_window,
+        Server::tick_count_window);
+    return std::string(buf);
 }
 
 static std::string live_admin_ok(std::string const &msg) {
@@ -872,6 +923,12 @@ std::string Server::live_admin_give(std::string const &who, uint32_t petal_id, u
     }
     if (given == 0) return live_admin_err("发放失败（背包已满）");
     AccountStore::capture(c); // disk flush so restart cannot drop the gift
+    AdminGiveLog::record(
+        c->account_name.empty() ? who : c->account_name,
+        who,
+        (uint32_t) give_id,
+        PETAL_DATA[give_id].rarity,
+        given);
     client_send_loot_toast(c, give_id, (uint16_t) given, "管理员发放");
     std::string msg = "已向 ";
     msg += who;

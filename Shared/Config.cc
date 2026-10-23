@@ -1,7 +1,7 @@
 #include <Shared/Config.hh>
 
 #ifndef VERSION_HASH
-extern const uint64_t VERSION_HASH = 19235684321476ull;
+extern const uint64_t VERSION_HASH = 19235684321477ull;
 #endif
 
 #ifndef SERVER_PORT

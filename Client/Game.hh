@@ -337,7 +337,7 @@ namespace Game {
     void craft_buy_rarity(uint8_t rarity);
     void craft_buy_special(PetalID::T id);
     void craft_buy_announce(std::string const &text);
-    void craft_recipe(uint16_t recipe_index);
+    void craft_recipe(uint16_t recipe_index, uint8_t rarity);
     // Secondary + pure bag slot copies (not primary)
     uint32_t craft_bag_count(PetalID::T id);
     // Backpack total: slot copies + stacks

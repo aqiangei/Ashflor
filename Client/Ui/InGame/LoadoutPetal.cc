@@ -388,8 +388,27 @@ uint8_t Ui::bag_gesture_busy() {
 static uint8_t bag_press_scrollable(float mx, float my) {
     if (!Input::is_mobile) return 0;
     if (Game::game_panel != Game::kPanelInventory) return 0;
+    if (Ui::bag_gesture_wants_equip(mx, my)) return 0;
     if (Ui::find_loadout_drop_target(mx, my) != (uint8_t) -1) return 0;
     return Ui::loadout_drag_over_bag(mx, my);
+}
+
+uint8_t Ui::bag_gesture_wants_equip(float x, float y) {
+    if (!bag_gesture_active) return 0;
+    if (Ui::find_loadout_drop_target(x, y) != (uint8_t) -1) return 1;
+    if (Ui::loadout_bar_hit(x, y)) return 1;
+    // Left the inventory drawer — equip drag, not list scroll.
+    if (!Ui::loadout_drag_over_bag(x, y)) return 1;
+    // Still inside the bag: near the bottom edge moving downward toward the
+    // loadout bar (drawer sits above it). Do not let ScrollContainer cancel.
+    Element *panel = Ui::game_panel_roots[Game::kPanelInventory];
+    if (panel == nullptr || !panel->visible) return 0;
+    float bag_bottom = panel->screen_y + panel->height * Ui::scale * 0.5f;
+    float edge = 96.f * Ui::scale;
+    float dy = y - bag_gesture_y;
+    if (dy >= Input::pointer_slop() * 0.55f && y >= bag_bottom - edge)
+        return 1;
+    return 0;
 }
 
 uint8_t Ui::petal_drag_committed() {
@@ -409,6 +428,9 @@ uint8_t Ui::petal_drag_committed() {
                 my = ended->second.y;
             }
         }
+        if (Ui::bag_gesture_wants_equip(mx, my)
+            && std::hypot(mx - bag_gesture_x, my - bag_gesture_y) >= slop * 0.75f)
+            return 1;
         // Match finish_bag_gesture drag threshold so scroll can win soft presses.
         if (std::hypot(mx - bag_gesture_x, my - bag_gesture_y) >= slop * 1.6f) {
             if (bag_press_scrollable(mx, my)) return 0;
@@ -503,13 +525,14 @@ void Ui::finish_bag_gesture() {
     uint8_t over_slot = find_loadout_drop_target(mx, my) != (uint8_t) -1;
     float drag_slop = Input::is_mobile ? Input::pointer_slop() * 1.6f : Input::pointer_slop();
     uint8_t from_bank = bag_gesture_pos == (uint8_t) -1;
-    // Inside open bag: vertical swipe scrolls the list. Only promote to a
-    // loadout drag once the finger leaves the panel or lands on a slot.
+    // Inside open bag: vertical swipe scrolls the list. Promote to a loadout
+    // drag once the finger leaves the panel, aims at the bar, or lands on a slot.
     uint8_t keep_soft = bag_press_scrollable(mx, my);
+    uint8_t aim_equip = Ui::bag_gesture_wants_equip(mx, my);
     if (!bag_gesture_dragging
-        && !keep_soft
+        && (!keep_soft || aim_equip)
         && dist >= Input::pointer_slop()
-        && (over_slot || dist >= drag_slop)) {
+        && (over_slot || aim_equip || dist >= drag_slop)) {
         bag_gesture_dragging = 1;
         // Collapse backpack while aiming at loadout slots so the bar is clear.
         if (Game::game_panel == Game::kPanelInventory)
@@ -611,6 +634,7 @@ UiLoadoutPetal::UiLoadoutPetal(uint8_t pos) : Element(60, 60),
     petal_id(PetalID::kNone), last_id(PetalID::kNone) 
 {
     reload = 1;
+    health = 1;
     style.should_render = [&](){
         if (!Game::alive()) return false;
         //coincidentally also works for trashing
@@ -633,15 +657,23 @@ UiLoadoutPetal::UiLoadoutPetal(uint8_t pos) : Element(60, 60),
                 if (old > reload) reload.set(old);
                 else reload = old;
             }
+            if (player.get_state_loadout_healths(static_pos)) {
+                float hp = player.get_loadout_healths(static_pos) / 255.0f;
+                if (hp < health) health.set(hp);
+                else health = hp;
+            }
         }
-        else
+        else {
             reload = 0;
+            health = 1;
+        }
         if ((no_change_ticks == 0 && petal_id == PetalID::kNone) || last_id == PetalID::kNone) return false;
         return true;
     };
     style.animate = [&](Element *elt, Renderer &ctx) {
         float lerp_amt = Ui::lerp_amount * 0.75;
         reload.step(lerp_amt);
+        health.step(lerp_amt);
         if (curr_pos != 2 * MAX_SLOT_COUNT) 
             curr_pos = static_to_dynamic(static_pos);
         
@@ -803,7 +835,7 @@ void UiLoadoutPetal::on_render(Renderer &ctx) {
     if (last_id == PetalID::kNone) return;
     ctx.scale(width / 60);
     if (static_pos < Game::loadout_count && PETAL_DATA[last_id].count != 0)
-        draw_loadout_background(ctx, last_id, (float) reload);
+        draw_loadout_background(ctx, last_id, (float) reload, 1, (float) health);
     else
         draw_loadout_background(ctx, last_id);
 }

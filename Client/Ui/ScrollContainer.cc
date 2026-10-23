@@ -56,7 +56,8 @@ void ScrollContainer::on_render(Renderer &ctx) {
 
         // Thumb drag: desktop uses mouse delta; mobile follows the finger
         // that grabbed the bar (same touch_id as this container).
-        if (scroll->style.layer) {
+        uint8_t thumb_dragging = scroll->style.layer ? 1 : 0;
+        if (thumb_dragging) {
             if (Input::is_mobile) {
                 auto it = Input::touches.find(touch_id);
                 if (it != Input::touches.end())
@@ -64,25 +65,30 @@ void ScrollContainer::on_render(Renderer &ctx) {
             } else {
                 lerp_scroll += (Input::mouse_y - Input::prev_mouse_y);
             }
+            // Thumb owns the gesture — never also apply content swipe.
+            scroll_dragging = 0;
         }
 
         // Content-area swipe. Soft petal presses must not block scrolling —
         // only a committed petal/bag drag (past slop, finger left the bag)
         // does. Once we scroll, cancel the soft press so release does not
-        // equip/swap.
-        if (Input::is_mobile && !Ui::petal_drag_committed()) {
+        // equip/swap. Skip entirely while the right-side thumb is dragged.
+        if (Input::is_mobile && !thumb_dragging && !Ui::petal_drag_committed()) {
             auto iter = Input::touches.find(touch_id);
             if (iter != Input::touches.end()) {
+                float mx = iter->second.x, my = iter->second.y;
                 if (!scroll_dragging) {
-                    float dist = std::hypot(iter->second.x - touch_press_x,
-                                            iter->second.y - touch_press_y);
+                    float dist = std::hypot(mx - touch_press_x, my - touch_press_y);
                     // Prefer vertical list scroll over accidental petal-drag
                     // when the swipe is mostly up/down inside this viewport.
-                    float adx = std::fabs(iter->second.x - touch_press_x);
-                    float ady = std::fabs(iter->second.y - touch_press_y);
+                    float adx = std::fabs(mx - touch_press_x);
+                    float ady = std::fabs(my - touch_press_y);
                     uint8_t vertical_bias = ady >= adx * 0.85f
                         && ady >= Input::pointer_slop() * 0.55f;
-                    if (dist >= Input::pointer_slop() || vertical_bias) {
+                    // Bag→loadout (down toward the bar) must not become scroll.
+                    uint8_t aiming_equip = Ui::bag_gesture_busy()
+                        && Ui::bag_gesture_wants_equip(mx, my);
+                    if (!aiming_equip && (dist >= Input::pointer_slop() || vertical_bias)) {
                         scroll_dragging = 1;
                         if (Ui::bag_gesture_busy() || Ui::UiLoadout::num_petals_selected != 0)
                             Ui::cancel_petal_drags();
@@ -94,8 +100,8 @@ void ScrollContainer::on_render(Renderer &ctx) {
                 touch_id = (uint32_t)-1;
                 scroll_dragging = 0;
             }
-        } else if (Input::is_mobile && Ui::petal_drag_committed()) {
-            // Petal owns the gesture — do not also scroll.
+        } else if (Input::is_mobile && (thumb_dragging || Ui::petal_drag_committed())) {
+            // Thumb or petal owns the gesture — do not also content-scroll.
             scroll_dragging = 0;
         }
 
