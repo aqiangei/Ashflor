@@ -526,7 +526,7 @@ void draw_static_petal_single(PetalID::T id, Renderer &ctx) {
         }
 
         case PetalID::kLentil: {
-            ctx.save();
+            RenderContext save(&ctx);
             ctx.rotate(0.785398f);
             ctx.set_fill(0xffebb134);
             ctx.set_stroke(0xffc4942d);
@@ -539,7 +539,6 @@ void draw_static_petal_single(PetalID::T id, Renderer &ctx) {
             ctx.begin_path();
             ctx.ellipse(-r * 0.2f, -r * 0.25f, r * 0.28f, r * 0.4f);
             ctx.fill();
-            ctx.restore();
             break;
         }
         case PetalID::kSawblade: {
