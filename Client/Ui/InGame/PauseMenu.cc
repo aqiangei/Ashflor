@@ -15,9 +15,7 @@
 #include <Helpers/Math.hh>
 
 #include <cmath>
-#include <cstddef>
 #include <string>
-#include <vector>
 
 using namespace Ui;
 
@@ -47,31 +45,31 @@ Element *Ui::make_pause_menu() {
     float const pad = m ? 14.f : 28.f;
     float const gap = m ? 8.f : 14.f;
 
-    std::vector<Element *> toggles = {
+    Element *controls_col = new Ui::VContainer({
+        new Ui::DynamicText(section, [](){ return I18n::tr(I18n::kSettingsControls); }, {
+            .fill = Chrome::kGold, .h_justify = Style::Left
+        }),
         pause_toggle_row(&Input::keyboard_movement, I18n::kKeyboardMovement),
         pause_toggle_row(&Input::movement_helper, I18n::kMovementHelper),
         pause_toggle_row(&Input::invert_attack, I18n::kInvertAttack),
         pause_toggle_row(&Input::invert_defend, I18n::kInvertDefend),
-        pause_toggle_row(&Input::disable_auto_party, I18n::kDisableAutoParty),
         pause_toggle_row(&Input::request_mobile, I18n::kRequestMobile),
-        pause_toggle_row(&Game::show_debug, I18n::kDebugStats),
+        pause_toggle_row(&Input::disable_auto_party, I18n::kDisableAutoParty),
+    }, 0, m ? 8.f : 10.f, { .h_justify = Style::Left, .no_animation = 1 });
+
+    Element *display_col = new Ui::VContainer({
+        new Ui::DynamicText(section, [](){ return I18n::tr(I18n::kSettingsDisplay); }, {
+            .fill = Chrome::kGold, .h_justify = Style::Left
+        }),
+        pause_toggle_row(&I18n::use_chinese, I18n::kLanguage),
+        pause_toggle_row(&Game::show_low_rarity_drops, I18n::kShowLowRarityDrops),
         pause_toggle_row(&Game::show_hitboxes, I18n::kShowHitboxes),
-    };
-    Element *toggles_block = nullptr;
-    if (m) {
-        // Same two-column sheet as title settings so it fits the phone viewport.
-        size_t mid = (toggles.size() + 1) / 2;
-        std::vector<Element *> left(toggles.begin(), toggles.begin() + (std::ptrdiff_t) mid);
-        std::vector<Element *> right(toggles.begin() + (std::ptrdiff_t) mid, toggles.end());
-        toggles_block = new Ui::HContainer({
-            new Ui::VContainer(left, 0, 8, { .h_justify = Style::Left, .no_animation = 1 }),
-            new Ui::VContainer(right, 0, 8, { .h_justify = Style::Left, .no_animation = 1 })
-        }, 0, 12, { .h_justify = Style::Left, .no_animation = 1 });
-    } else {
-        toggles_block = new Ui::VContainer(toggles, 0, gap, {
-            .h_justify = Style::Left, .no_animation = 1
-        });
-    }
+        pause_toggle_row(&Game::show_debug, I18n::kDebugStats),
+    }, 0, m ? 8.f : 10.f, { .h_justify = Style::Left, .no_animation = 1 });
+
+    Element *toggles_block = new Ui::HContainer({
+        controls_col, display_col
+    }, 0, m ? 16.f : 28.f, { .h_justify = Style::Left, .no_animation = 1 });
 
     Element *elt = new Ui::VContainer({
         new Ui::DynamicText(title, [](){ return I18n::tr(I18n::kPauseMenu); }, {
@@ -102,9 +100,6 @@ Element *Ui::make_pause_menu() {
             [](){ return Game::party_member_count == 0; },
             { .fill = Chrome::kBtnIron, .line_width = 0, .round_radius = Chrome::kRadius }
         ),
-        new Ui::DynamicText(section, [](){
-            return I18n::use_chinese ? std::string{"—— 操作 ——"} : std::string{"— Controls —"};
-        }, { .fill = Chrome::kMuted, .h_justify = Style::Left }),
         toggles_block,
         new Ui::Button(btn_w, m ? 34.f : 48.f,
             new Ui::DynamicText(section, [](){ return I18n::tr(I18n::kFullscreen); }),
@@ -211,24 +206,22 @@ Element *Ui::make_game_topbar() {
         { .fill = 0xffd5ad24, .line_width = 0, .round_radius = Chrome::kRadius }
     );
 
-    // Boost sits at the right end of the top-left cluster (just before leave).
-    Element *elt = new Ui::HContainer({
-        gear,
-        guild_btn,
-        mob_btn,
-        petal_btn,
-        trophy_btn,
-        boost_btn,
-        exit_btn
-    }, 10, 8, {
+    // Two rows so seven icons do not crush into one dense strip.
+    Element *row1 = new Ui::HContainer({
+        gear, guild_btn, mob_btn, petal_btn
+    }, 0, 12, { .h_justify = Style::Left, .no_animation = 1 });
+    Element *row2 = new Ui::HContainer({
+        trophy_btn, boost_btn, exit_btn
+    }, 0, 12, { .h_justify = Style::Left, .no_animation = 1 });
+    Element *elt = new Ui::VContainer({ row1, row2 }, 8, 10, {
         .should_render = [](){
             return Game::alive() && Game::should_render_game_ui();
         },
         .h_justify = Style::Left,
         .v_justify = Style::Top
     });
-    elt->x = 6;
-    elt->y = 6;
+    elt->x = 8;
+    elt->y = 8;
     Ui::game_topbar_root = elt;
     return elt;
 }

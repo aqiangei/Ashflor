@@ -45,6 +45,8 @@ static Element *make_changelog_contents() {
     Element *elt = new Ui::VContainer({
         make_date("2026年10月24日", "October 24th 2026"),
         make_entries({
+            {"设置面板双列+滚动；局内左上角图标两行排布，不再挤成一条",
+             "Settings: two-column + scroll; in-game top-left icons wrap to two rows"},
             {"设置：操作/显示/社交分区；默认隐藏普通·罕见掉落（可开「显示普通/罕见掉落」）",
              "Settings: Controls/Display/Social sections; hide Common/Unusual drops by default"},
             {"磁铁吸掉落可穿墙，不再被地形挡住",

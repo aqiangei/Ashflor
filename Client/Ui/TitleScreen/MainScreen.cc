@@ -523,7 +523,7 @@ Element *Ui::make_panel_buttons() {
             [](){ return Ui::panel_open == Panel::kChangelog; },
             soft_btn(Chrome::kBtnSlate)
         ),
-    }, 14, 10, {
+    }, 14, 14, {
         .should_render = [](){ return Game::should_render_title_ui() && Game::auth_panel == 0; },
         .h_justify = Style::Left,
         .v_justify = Style::Top
