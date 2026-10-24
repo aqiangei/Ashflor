@@ -1,8 +1,14 @@
 build/
+build-native/
+build-native-check/
 wasm_build/
 node_modules/
 .vs/
 .vscode/
+__pycache__/
+*.bak
+*.bak-*
+Client/build-art/
 gardn-client.js
 gardn-client.wasm
 gardn-client.js.br
@@ -17,4 +23,10 @@ gardn-client.wasm.gz
 .env.*
 accounts.dat
 leaderboard.dat
+feedback.dat
+feedback.dat.tmp
+feedback.dat.bak
+feedback.dat.bak.tmp
+feedback-salt.dat
+feedback-salt.dat.tmp
 backups/

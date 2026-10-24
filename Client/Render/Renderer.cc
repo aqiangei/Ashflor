@@ -395,6 +395,25 @@ void Renderer::draw_image(Renderer &ctx) {
     }, id, ctx.id, -ctx.width / 2, -ctx.height / 2);
 }
 
+void Renderer::draw_image_data(char const *data, float width, float height) {
+    flush_transform(this);
+    EM_ASM({
+        const key = UTF8ToString($1);
+        if (!Module.embeddedImages) Module.embeddedImages = new Map();
+        let img = Module.embeddedImages.get(key);
+        if (!img) {
+            img = new Image();
+            img.src = key;
+            Module.embeddedImages.set(key, img);
+        }
+        if (!img.complete || !img.naturalWidth) return;
+        const scale = Math.min($2 / img.naturalWidth, $3 / img.naturalHeight);
+        const w = img.naturalWidth * scale;
+        const h = img.naturalHeight * scale;
+        Module.ctxs[$0].drawImage(img, -w / 2, -h / 2, w, h);
+    }, id, data, width, height);
+}
+
 void Renderer::draw_image_at(Renderer &ctx, float x, float y) {
     flush_transform(this);
     EM_ASM({

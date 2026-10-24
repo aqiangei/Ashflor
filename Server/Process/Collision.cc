@@ -2,6 +2,8 @@
 #include <Server/AccountStore.hh>
 #include <Server/Client.hh>
 #include <Server/Game.hh>
+#include <Server/Loot.hh>
+#include <Server/PetalTracker.hh>
 #include <Server/Server.hh>
 
 #include <Shared/Simulation.hh>
@@ -12,6 +14,7 @@
 
 #include <Helpers/Math.hh>
 
+#include <algorithm>
 #include <cmath>
 #include <iostream>
 
@@ -19,10 +22,13 @@ static bool _should_interact(Entity const &ent1, Entity const &ent2) {
     //if (ent1.has_component(kFlower) || ent2.has_component(kFlower)) return false;
     //if (ent1.has_component(kPetal) || ent2.has_component(kPetal)) return false;
     if (ent1.pending_delete || ent2.pending_delete) return false;
-    // Drops must collide with flowers so pickup can run (team/immunity checked in pickup_drop)
+    // Drops must collide with living flowers so pickup can run (not revive corpses).
     if ((ent1.has_component(kDrop) && ent2.has_component(kFlower))
-        || (ent2.has_component(kDrop) && ent1.has_component(kFlower)))
+        || (ent2.has_component(kDrop) && ent1.has_component(kFlower))) {
+        Entity const &flower = ent1.has_component(kFlower) ? ent1 : ent2;
+        if (!flower.has_component(kHealth)) return false;
         return true;
+    }
     // Loot has no push/damage/web interaction. Discard these pairs before
     // distance normalization when a battle leaves many private piles behind.
     if (ent1.has_component(kDrop) || ent2.has_component(kDrop)) return false;
@@ -42,77 +48,42 @@ static bool _should_interact(Entity const &ent1, Entity const &ent2) {
     if (BitMath::at((ent1.flags | ent2.flags), EntityFlags::kNoFriendlyCollision)) return false;
     //if (ent1.has_component(kPetal) || ent2.has_component(kPetal)) return false;
     if (ent1.has_component(kMob) && ent2.has_component(kMob)) return true;
+    // Same-team flowers still soft-collide (party / auto-party shared team).
+    if (ent1.has_component(kFlower) && ent2.has_component(kFlower)) return true;
     return false;
 }
 
-// Overflow into backpack stacks when inventory slots are full.
-static void _add_to_backpack_stack(Client *client, PetalID::T id) {
-    if (client == nullptr || id == PetalID::kNone || id >= PetalID::kNumPetals) return;
-    uint32_t const cap = Recipe::bank_stack_cap(id);
-    if (client->craft_bank[id] < cap)
-        ++client->craft_bank[id];
-    AccountStore::capture_nosave(client);
-    client_sync_craft(client);
-}
-
 void pickup_drop(Simulation *sim, Entity &player, Entity &drop) {
+    if (player.pending_delete || drop.pending_delete) return;
     if (!sim->ent_alive(player.get_parent())) return;
     // Private loot: tagged piles belong to one camera only (not party-shared).
     // Unowned piles: brief immunity then anyone. Party still shares mob XP.
     Client *client = Server::client_by_camera(sim, player.get_parent());
-    if (drop.get_team() != NULL_ENTITY) {
-        if (!(drop.get_team() == player.get_parent()))
-            return;
-    } else if (drop.immunity_ticks > 0) {
-        return;
-    }
+    if (client == nullptr || !Loot::can_access_drop(drop, player.get_parent())
+        || drop.immunity_ticks > 0) return;
 
     PetalID::T drop_id = drop.get_drop_id();
+    if (drop_id == PetalID::kNone || drop_id >= PetalID::kNumPetals) return;
     uint16_t qty = drop.get_drop_count();
     if (qty < 1) qty = 1;
-    auto place_one = [&](uint32_t begin, uint32_t end) -> bool {
-        for (uint32_t i = begin; i < end; ++i) {
-            if (player.get_loadout_ids(i) != PetalID::kNone) continue;
-            player.set_loadout_ids(i, drop_id);
-            return true;
-        }
-        return false;
-    };
-    uint32_t const n = player.get_loadout_count();
-    // Slot fills sync via loadout_ids entity delta. Overflow into craft_bank
-    // must push kCraftUpdate or the bag UI stays stale until a full refresh.
-    uint8_t craft_dirty = 0;
-    for (uint16_t q = 0; q < qty; ++q) {
-        uint8_t placed = 0;
-        if (Recipe::is_bag_only(drop_id)) {
-            placed = place_one(n, n + MAX_SLOT_COUNT);
-        } else {
-            placed = place_one(n, n + MAX_SLOT_COUNT) || place_one(0, n);
-        }
-        if (!placed) {
-            if (client != nullptr) {
-                uint32_t const cap = Recipe::bank_stack_cap(drop_id);
-                uint32_t add = (uint32_t) (qty - q);
-                uint64_t sum = (uint64_t) client->craft_bank[drop_id] + add;
-                if (sum > cap) sum = cap;
-                client->craft_bank[drop_id] = (uint32_t) sum;
-                craft_dirty = 1;
-                for (uint16_t c = q; c < qty; ++c)
-                    client_credit_petal_pick(client, drop_id);
-            }
-            break;
-        }
-        if (client != nullptr) client_credit_petal_pick(client, drop_id);
-    }
-    if (client != nullptr) {
-        AccountStore::capture_nosave(client);
-        if (craft_dirty || Recipe::is_bag_only(drop_id))
-            client_sync_craft(client);
+    // Picking up loot never changes either equipment row, even when empty.
+    uint32_t const cap = Recipe::bank_stack_cap(drop_id);
+    uint32_t const held = client->craft_bank[drop_id];
+    uint16_t const collected = (uint16_t) std::min<uint32_t>(qty, held < cap ? cap - held : 0);
+    if (collected == 0) return;
+    client->craft_bank[drop_id] += collected;
+    for (uint16_t i = 0; i < collected; ++i) client_credit_petal_pick(client, drop_id);
+    AccountStore::capture_nosave(client);
+    client_sync_craft(client);
+    if (collected < qty) {
+        drop.set_drop_count(qty - collected);
+        return;
     }
     // Do not teleport the pile onto the flower before delete — the client
     // lerps that position update, so a moving player looks like drops slowly
     // chase them. Instant absorb = delete in place.
     BitMath::unset(drop.flags, EntityFlags::kIsDespawning);
+    PetalTracker::remove_petal(sim, drop_id);
     sim->request_delete(drop.id);
 }
 
@@ -166,11 +137,16 @@ void on_collide(Simulation *sim, Entity &ent1, Entity &ent2) {
         else if (distance > 0.f)
             separation *= 1.f / distance;
         float ratio = ent2.mass / (ent1.mass + ent2.mass);
-        // Players still block each other (soft push / overlap resolve), but no
-        // knockback shove — that was the only PvP feel to remove.
+        // Players soft-block each other (overlap resolve + cancel into each
+        // other) but never get attack knockback.
         uint8_t const both_players =
             is_player_faction(sim, ent1) && is_player_faction(sim, ent2);
-        if (!both_players && !(ent1.get_team() == ent2.get_team())) {
+        if (both_players) {
+            if (ent1.has_component(kFlower) && ent2.has_component(kFlower)) {
+                _cancel_movement(ent1, separation, ent2.velocity - ent1.velocity);
+                _cancel_movement(ent2, separation*-1, ent1.velocity - ent2.velocity);
+            }
+        } else if (!(ent1.get_team() == ent2.get_team())) {
             if (ent1.has_component(kFlower) && !ent2.has_component(kPetal))
                 _cancel_movement(ent1, separation, ent2.velocity - ent1.velocity);
             else
@@ -180,8 +156,13 @@ void on_collide(Simulation *sim, Entity &ent1, Entity &ent2) {
             else
                 _deal_knockback(ent2, separation*-1, 1 - ratio);
         }
-        _deal_push(ent1, separation, ratio, dist);
-        _deal_push(ent2, separation*-1, 1 - ratio, dist);
+        // Player soft-block: shallow overlaps still need a separation floor or
+        // bodies slowly sink through each other (looks like pass-through).
+        float push_dist = dist;
+        if (both_players)
+            push_dist = fmaxf(dist, min_dist * 0.08f);
+        _deal_push(ent1, separation, ratio, push_dist);
+        _deal_push(ent2, separation*-1, 1 - ratio, push_dist);
     }
 
     if (BOTH(kHealth) && !(ent1.get_team() == ent2.get_team())) {
@@ -195,9 +176,10 @@ void on_collide(Simulation *sim, Entity &ent1, Entity &ent2) {
             if (!(BitMath::at(proj.flags, EntityFlags::kIsDetached)
                   || BitMath::at(proj.flags, EntityFlags::kIsDespawning)))
                 return false;
-            if (proj.get_petal_id() != PetalID::kMissile
-                && proj.get_petal_id() != PetalID::kPeas
-                && proj.get_petal_id() != PetalID::kPoisonPeas)
+            PetalID::T pp = proj.get_petal_id();
+            if (pp != PetalID::kMissile
+                && !petal_name_is(pp, "Peas")
+                && !petal_name_is(pp, "Glass Storm"))
                 return false;
             inflict_damage(sim, proj.id, guard.id, proj.damage * 0.35f, DamageType::kContact);
             sim->request_delete(proj.id);

@@ -5,6 +5,7 @@
 #include <Client/I18n.hh>
 #include <Client/StaticData.hh>
 
+#include <Helpers/Bits.hh>
 #include <Helpers/UTF8.hh>
 #include <Shared/Entity.hh>
 #include <Shared/StaticData.hh>
@@ -82,7 +83,9 @@ static void wrap_speech(Renderer &ctx, std::string const &text, float max_w,
 void render_name(Renderer &ctx, Entity const &ent) {
     float rad = ent.get_radius();
     ctx.set_global_alpha(1 - ent.deletion_animation);
-    ctx.scale(1 + 0.5 * ent.deletion_animation);
+    if (!(ent.has_component(kMob) && !ent.has_component(kFlower)
+          && ent.deletion_animation > 0.f))
+        ctx.scale(1 + 0.5 * ent.deletion_animation);
 
     // 1) Chat bubble above head (brief)
     if (ent.has_component(kName) && !ent.get_name().empty()) {
@@ -143,10 +146,15 @@ void render_name(Renderer &ctx, Entity const &ent) {
             && (ent.id == Game::player_id);
         if (!is_self) {
             std::string const &name = ent.get_name();
+            // Downed party corpses: amber nametag so the body reads as revive target.
+            uint32_t fill = 0xffffffff;
+            if (!ent.has_component(kHealth)
+                && BitMath::at(ent.get_face_flags(), FaceFlags::kDeadEyes))
+                fill = 0xffffb060;
             RenderContext label(&ctx);
             ctx.set_text_size(15);
             ctx.translate(0, -rad - 20.f);
-            draw_label(ctx, name.c_str(), 15, 0xffffffff);
+            draw_label(ctx, name.c_str(), 15, fill);
         }
     }
 

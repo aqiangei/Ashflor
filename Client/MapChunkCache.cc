@@ -206,6 +206,16 @@ void paint_static(Renderer &renderer, uint8_t mid, uint32_t difficulty,
     TerrainArt::ThemeMaterial const &tm = TerrainArt::theme(mid);
 
     // --- Pass 1: ground fills (zone rings tinted toward theme ground) ---
+    // Base theme fill first so the dark void never peeks through unbaked tiles
+    // (title preview paints tm.ground full-screen; in-game used to show charcoal).
+    float const gl = std::max(leftX, 0.f);
+    float const gt = std::max(topY, 0.f);
+    float const gr = std::min(rightX, (float)ARENA_WIDTH);
+    float const gb = std::min(bottomY, (float)ARENA_HEIGHT);
+    if (gr > gl && gb > gt) {
+        renderer.set_fill(Renderer::MIX(tm.ground, tm.ground_light, 0.2f));
+        renderer.fill_rect(gl, gt, gr - gl, gb - gt);
+    }
     // Specialty eco-pockets drive spawns but must not paint flat rectangles.
     MapZones const &zones = map_zones(mid);
     // First MAX_DIFFICULTY+1 entries are concentric rarity rings (outer→hub).
@@ -224,14 +234,12 @@ void paint_static(Renderer &renderer, uint8_t mid, uint32_t difficulty,
             col = Renderer::MIX(tm.ground, tm.wall_dark, 0.12f + tint);
         else if (def.difficulty >= RarityID::kRare)
             col = Renderer::MIX(tm.ground, tm.wall_mid, 0.08f + tint * 0.5f);
+        // Soft "above your band" cue — was 0x40000000 black overlays that read as
+        // ash/charcoal once several nested AABBs or Unique gunmetal mixed in.
+        if (difficulty > def.difficulty && def.difficulty > 0)
+            col = Renderer::MIX(col, tm.ground_shade | 0xff000000u, 0.14f);
         renderer.set_fill(col);
         renderer.fill_rect(def.left, def.top, def.right - def.left, def.bottom - def.top);
-        // Fog must be painted with the zone fill (later rings overwrite earlier).
-        // A separate live fog pass stacked alpha on overlapping AABBs → near-black.
-        if (difficulty > def.difficulty) {
-            renderer.set_fill(0x40000000);
-            renderer.fill_rect(def.left, def.top, def.right - def.left, def.bottom - def.top);
-        }
     }
 
     TerrainPattern::draw(renderer, mid, leftX, topY, rightX, bottomY);

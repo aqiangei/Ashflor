@@ -42,7 +42,22 @@ namespace Craft {
     // per account per PetalID; only the first primary loadout copy of that ID
     // gets the stat bonus (other copies stay at base stats).
     constexpr uint32_t kMaxPetalLevel = 65535;
-    constexpr float kLevelStatPerLevel = 0.03f; // +3% damage & health per level
+    constexpr float kLevelStatPerLevel = 0.12f; // +12% combat / additive attrs per level
+    // Global petal CD after Golden Leaf × talent: never faster than this fraction
+    // of base reload (50% CDR cap). Prevents stack/Lv from deleting petal art.
+    constexpr float kReloadFactorFloor = 0.50f;
+    constexpr float kReloadFactorCeil = 4.f;
+    // Multiplicative attrs (speed, CDR, vision…): scale the deviation from 1.
+    // CDR (factor<1) soft-capped per leaf so Unique Lv cannot erase the floor alone.
+    inline float level_scale_factor(float factor, float lv_mult) {
+        if (lv_mult <= 1.0001f) return factor;
+        if (factor >= 1.f)
+            return 1.f + (factor - 1.f) * lv_mult;
+        float depth = (1.f - factor) * lv_mult;
+        if (depth > 0.40f) depth = 0.40f; // deepest single-leaf cut ≈ −40%
+        float out = 1.f - depth;
+        return out < kReloadFactorFloor ? kReloadFactorFloor : out;
+    }
     uint8_t can_level_petal(PetalID::T id);
     // Tray accepts it (rarity upgrade or level-up).
     uint8_t can_craft_petal(PetalID::T id);

@@ -94,6 +94,8 @@ public:
     void clip_rect(float, float, float, float);
 
     void draw_image(Renderer &);
+    // Cached, embedded original image (no external request at render time).
+    void draw_image_data(char const *, float width, float height);
     void draw_image_at(Renderer &, float x, float y);
 
     void fill_text(char const *);

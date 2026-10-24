@@ -508,6 +508,22 @@ void draw_static_petal_single(PetalID::T id, Renderer &ctx) {
             ctx.fill();
             ctx.stroke();
             break;
+        case PetalID::kTriangle: {
+            // White spike — same silhouette as Stinger, single tip (florr Triangle).
+            ctx.set_fill(0xfff4f4f4);
+            ctx.set_stroke(0xffc8c8c8);
+            ctx.set_line_width(3);
+            ctx.round_line_cap();
+            ctx.round_line_join();
+            ctx.begin_path();
+            ctx.move_to(r, 0);
+            ctx.line_to(-r * 0.5f, r * 0.866f);
+            ctx.line_to(-r * 0.5f, -r * 0.866f);
+            ctx.line_to(r, 0);
+            ctx.fill();
+            ctx.stroke();
+            break;
+        }
         case PetalID::kMoon: {
             ctx.set_fill(0xff878787);
             ctx.set_stroke(0xff6d6d6d);

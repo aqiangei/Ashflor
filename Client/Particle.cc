@@ -362,6 +362,7 @@ void Particle::tick_ambient_env(double dt) {
         drift_x = (frand() - 0.5f) * 20.f; drift_y = (frand() - 0.5f) * 20.f;
         rad = 2.0f; n = 4; spread = 260.f;
         break;
+    case MapID::kAntNest:
     case MapID::kAntHell: // A04 地道灰尘
         col = 0xa0D9C09B;
         drift_x = -12.f; drift_y = 8.f;

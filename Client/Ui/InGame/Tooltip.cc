@@ -96,6 +96,9 @@ static float get_reload_factor() {
         }
     }
     factor *= Talent::reload_mult(Game::talent_ranks[TalentID::kCooldown]);
+    // Match server Golden Leaf CDR cap (50%).
+    if (factor < Craft::kReloadFactorFloor) factor = Craft::kReloadFactorFloor;
+    if (factor > Craft::kReloadFactorCeil) factor = Craft::kReloadFactorCeil;
     return factor;
 }
 
@@ -246,7 +249,11 @@ static Ui::Element *make_petal_stat_container(PetalID::T id, uint8_t apply_level
     if (attrs.extra_rotation_speed > 0) {
         stats.push_back(new Ui::HContainer({
             new Ui::DynamicText(12, [](){ return I18n::tr(I18n::kRotationSpeed); }, { .fill = 0xffcde23b }),
-            new Ui::StaticText(12, "+" + format_number(attrs.extra_rotation_speed) + " rad/s")
+            new Ui::DynamicText(12, [id, apply_level](){
+                float v = PETAL_DATA[id].attributes.extra_rotation_speed
+                    * tooltip_level_mult(id, apply_level);
+                return "+" + format_number(v) + " rad/s";
+            })
         }, 0, 5, { .h_justify = Style::Left }));
     }
     if (attrs.spawns != MobID::kNumMobs && attrs.spawn_count == 0) {
@@ -268,13 +275,23 @@ static Ui::Element *make_petal_stat_container(PetalID::T id, uint8_t apply_level
     if (attrs.vision_factor < 1) {
         stats.push_back(new Ui::HContainer({
             new Ui::DynamicText(12, [](){ return I18n::tr(I18n::kExtraVision); }, { .fill = 0xffcde23b }),
-            new Ui::StaticText(12, format_pct(100 / attrs.vision_factor))
+            new Ui::DynamicText(12, [id, apply_level](){
+                float f = Craft::level_scale_factor(
+                    PETAL_DATA[id].attributes.vision_factor,
+                    tooltip_level_mult(id, apply_level));
+                return format_pct(100 / f);
+            })
         }, 0, 5, { .h_justify = Style::Left }));
     }
     if (attrs.move_speed_factor != 1) {
         stats.push_back(new Ui::HContainer({
             new Ui::DynamicText(12, [](){ return I18n::tr(I18n::kMoveSpeed); }, { .fill = 0xff3ecf8e }),
-            new Ui::StaticText(12, format_pct(attrs.move_speed_factor * 100))
+            new Ui::DynamicText(12, [id, apply_level](){
+                float f = Craft::level_scale_factor(
+                    PETAL_DATA[id].attributes.move_speed_factor,
+                    tooltip_level_mult(id, apply_level));
+                return format_pct(f * 100);
+            })
         }, 0, 5, { .h_justify = Style::Left }));
     }
     if (attrs.magnet_radius > 0) {
@@ -282,13 +299,19 @@ static Ui::Element *make_petal_stat_container(PetalID::T id, uint8_t apply_level
             new Ui::DynamicText(12, [](){
                 return I18n::use_chinese ? "磁力范围：" : "Magnet Range:";
             }, { .fill = 0xff4a7fd9 }),
-            new Ui::StaticText(12, format_number(attrs.magnet_radius))
+            new Ui::DynamicText(12, [id, apply_level](){
+                return format_number(PETAL_DATA[id].attributes.magnet_radius
+                    * tooltip_level_mult(id, apply_level));
+            })
         }, 0, 5, { .h_justify = Style::Left }));
     }
     if (attrs.extra_range > 0) {
         stats.push_back(new Ui::HContainer({
             new Ui::DynamicText(12, [](){ return I18n::tr(I18n::kAttackRange); }, { .fill = 0xffcde23b }),
-            new Ui::StaticText(12, "+" + format_number(attrs.extra_range))
+            new Ui::DynamicText(12, [id, apply_level](){
+                return "+" + format_number(PETAL_DATA[id].attributes.extra_range
+                    * tooltip_level_mult(id, apply_level));
+            })
         }, 0, 5, { .h_justify = Style::Left }));
     }
     if (attrs.slow_inflict_seconds > 0) {
@@ -450,22 +473,36 @@ static Ui::Element *make_petal_stat_container(PetalID::T id, uint8_t apply_level
     if (attrs.extra_damage_factor > 1) {
         stats.push_back(new Ui::HContainer({
             new Ui::DynamicText(12, [](){ return I18n::tr(I18n::kExtraDamage); }, { .fill = 0xffff7777 }),
-            new Ui::StaticText(12, "+"+format_pct(100 * (attrs.extra_damage_factor - 1)))
+            new Ui::DynamicText(12, [id, apply_level](){
+                float f = Craft::level_scale_factor(
+                    PETAL_DATA[id].attributes.extra_damage_factor,
+                    tooltip_level_mult(id, apply_level));
+                return "+"+format_pct(100 * (f - 1));
+            })
         }, 0, 5, { .h_justify = Style::Left }));
     }
     if (attrs.extra_reload_factor > 1.0001f) {
         stats.push_back(new Ui::HContainer({
             new Ui::DynamicText(12, [](){ return I18n::tr(I18n::kExtraReload); }, { .fill = 0xff7777ff }),
-            new Ui::StaticText(12, "+"+format_pct(100 * (attrs.extra_reload_factor - 1)))
+            new Ui::DynamicText(12, [id, apply_level](){
+                float f = Craft::level_scale_factor(
+                    PETAL_DATA[id].attributes.extra_reload_factor,
+                    tooltip_level_mult(id, apply_level));
+                return "+"+format_pct(100 * (f - 1));
+            })
         }, 0, 5, { .h_justify = Style::Left }));
     } else if (attrs.extra_reload_factor < 0.999f) {
         // Cooldown cut (e.g. Golden Leaf); stacks by multiplying factors.
-        float cut_pct = 100.f * (1.f - attrs.extra_reload_factor);
         stats.push_back(new Ui::HContainer({
             new Ui::DynamicText(12, [](){
                 return I18n::use_chinese ? "花瓣冷却：" : "Cooldown:";
             }, { .fill = 0xff77ddff }),
-            new Ui::StaticText(12, "-"+format_pct(cut_pct))
+            new Ui::DynamicText(12, [id, apply_level](){
+                float f = Craft::level_scale_factor(
+                    PETAL_DATA[id].attributes.extra_reload_factor,
+                    tooltip_level_mult(id, apply_level));
+                return "-"+format_pct(100.f * (1.f - f));
+            })
         }, 0, 5, { .h_justify = Style::Left }));
     }
     return new Ui::VContainer(stats, 0, 2, { .h_justify = Style::Left });

@@ -147,24 +147,34 @@ uint32_t LeaderboardStore::recorded_count() {
 
 void LeaderboardStore::record(std::string const &name, uint32_t score, uint8_t color) {
     if (name.empty()) return;
+    uint32_t cap = score_soft_cap();
+    if (score > cap) score = cap;
+    uint32_t derived = score_to_level(score);
     auto it = ENTRIES.find(name);
     if (it == ENTRIES.end()) {
         LeaderboardEntry e;
         e.name = name;
         e.score = score;
+        e.level = derived;
         e.color = color;
         ENTRIES[name] = e;
         DIRTY = 1;
         return;
     }
+    uint8_t dirty = 0;
     if (score > it->second.score) {
         it->second.score = score;
-        it->second.color = color;
-        DIRTY = 1;
-    } else if (it->second.color != color) {
-        it->second.color = color;
-        DIRTY = 1;
+        dirty = 1;
     }
+    if (derived > it->second.level) {
+        it->second.level = derived;
+        dirty = 1;
+    }
+    if (it->second.color != color) {
+        it->second.color = color;
+        dirty = 1;
+    }
+    if (dirty) DIRTY = 1;
 }
 
 void LeaderboardStore::force_set_level_score(std::string const &name, uint32_t level, uint32_t score) {

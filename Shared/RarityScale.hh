@@ -29,9 +29,9 @@ inline std::array<uint32_t, RarityID::kNumRarities> const RARITY_COLORS = {{
     0xfff70fb6, // Ultra (究极)
     // Mint / aqua-green — green-family like florr Super (#2bffa4), not Common lime.
     0xff2bffa4, // Super (超凡)
-    // Charcoal / gunmetal — Unique（唯一）top tier; petals, mobs, map rings share this.
-    // Mid-steel so nameplates stay readable with the black stroke bake.
-    0xff5a616c  // Unique (唯一)
+    // Bright platinum — Unique（唯一）top tier. Was mid-gunmetal (#5a616c) which
+    // vanished on dark chat / UI; keep a light cool metal so stroke + fill read.
+    0xffc8d0dc  // Unique (唯一)
 }};
 
 // Zone difficulty 0..MAX_DIFFICULTY == RarityID. Combat follows petal ×3 curve;
@@ -108,11 +108,21 @@ inline float mob_rarity_damage_mult(uint8_t rarity) {
     return k[rarity];
 }
 
+// Extra HP pad so Legendary+ packs survive Unique petal DPS (petal curve is
+// already baked into Unique petals; bare relative ×3 was still too soft).
+inline float mob_high_tier_hp_pad(uint8_t spawn_rarity) {
+    static float const k[RarityID::kNumRarities] = {
+        1.00f, 1.00f, 1.00f, 1.15f, 1.45f, 1.90f, 2.60f, 3.40f, 4.50f
+    };
+    if (spawn_rarity >= RarityID::kNumRarities) return 1.f;
+    return k[spawn_rarity];
+}
+
 // HP scale from baked MobData rarity → live spawn rarity (petal ×3 curve).
 inline float mob_spawn_threat_mult(uint8_t base_rarity, uint8_t spawn_rarity) {
     float base = rarity_combat_mult(base_rarity);
     if (base < 1e-3f) base = 1.f;
-    return rarity_combat_mult(spawn_rarity) / base;
+    return (rarity_combat_mult(spawn_rarity) / base) * mob_high_tier_hp_pad(spawn_rarity);
 }
 
 // Applied at kill grant (Death::_add_mob_xp). 2026-10 economy Seg3: 15→12 after

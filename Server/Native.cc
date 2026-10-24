@@ -3,6 +3,8 @@
 
 #include <Server/AccountStore.hh>
 #include <Server/Chat.hh>
+#include <Server/FeedbackStore.hh>
+#include <Shared/ClientAddress.hh>
 #include <Server/Client.hh>
 #include <Server/LeaderboardStore.hh>
 #include <Server/RateLimit.hh>
@@ -178,7 +180,7 @@ static void send_file(uWS::HttpResponse<false> *res, std::string const &file) {
     res->writeHeader("Content-Type", mime_for(file));
     if (file.find("gardn-client.") != std::string::npos)
         res->writeHeader("Cache-Control", "public, max-age=31536000, immutable");
-    else if (file == "index.html" || file == "sw.js")
+    else if (file == "index.html" || file == "sw.js" || file == "feedback.html")
         res->writeHeader("Cache-Control", "no-cache");
     res->end(data);
 }
@@ -233,6 +235,35 @@ uWS::App Server::server = uWS::App()
 })
 .get("/api/catalog", [](auto *res, auto * /*req*/) {
     send_json(res, 200, Server::live_catalog_json());
+})
+.get("/api/feedback", [](auto *res, auto *req) {
+    std::string before(req->getQuery("before"));
+    send_json(res, 200, FeedbackStore::page_json((uint32_t) std::strtoul(before.c_str(), nullptr, 10)));
+})
+.get("/api/broadcasts", [](auto *res, auto *req) {
+    uint32_t before = (uint32_t) std::strtoul(std::string(req->getQuery("before")).c_str(), nullptr, 10);
+    uint32_t limit = (uint32_t) std::strtoul(std::string(req->getQuery("limit")).c_str(), nullptr, 10);
+    if (limit == 0) limit = 60;
+    std::string day(req->getQuery("day"));
+    std::string player(req->getQuery("player"));
+    std::string kind_s(req->getQuery("kind"));
+    std::string map_s(req->getQuery("map"));
+    std::string source(req->getQuery("source"));
+    int kind = kind_s.empty() ? -1 : (int) std::strtol(kind_s.c_str(), nullptr, 10);
+    int map = map_s.empty() ? -1 : (int) std::strtol(map_s.c_str(), nullptr, 10);
+    send_json(res, 200, Chat::query_broadcasts_json(before, limit, day, player, kind, map, source));
+})
+.get("/api/chatlog", [](auto *res, auto *req) {
+    uint32_t before = (uint32_t) std::strtoul(std::string(req->getQuery("before")).c_str(), nullptr, 10);
+    uint32_t limit = (uint32_t) std::strtoul(std::string(req->getQuery("limit")).c_str(), nullptr, 10);
+    if (limit == 0) limit = 60;
+    std::string day(req->getQuery("day"));
+    std::string player(req->getQuery("player"));
+    std::string ch_s(req->getQuery("channel"));
+    std::string map_s(req->getQuery("map"));
+    int channel = ch_s.empty() ? -1 : (int) std::strtol(ch_s.c_str(), nullptr, 10);
+    int map = map_s.empty() ? -1 : (int) std::strtol(map_s.c_str(), nullptr, 10);
+    send_json(res, 200, Chat::query_chatlog_json(before, limit, day, player, channel, map));
 })
 .get("/api/codex", [](auto *res, auto * /*req*/) {
     send_json(res, 200, Server::live_codex_json());
@@ -314,7 +345,8 @@ uWS::App Server::server = uWS::App()
                 (uint32_t) json_int(j, "mob_id", 0),
                 json_float(j, "x", 0.f),
                 json_float(j, "y", 0.f),
-                json_raw_field(j, "near")));
+                json_raw_field(j, "near"),
+                (uint32_t) json_int(j, "count", 1)));
             return;
         }
         send_json(res, 400, "{\"ok\":false,\"msg\":\"unknown action\"}");
@@ -342,19 +374,10 @@ uWS::App Server::server = uWS::App()
     // Off: ~104 s of silence sends a ping, 16 s later the socket is dropped.
     .resetIdleTimeoutOnSend = false,
     .sendPingsAutomatically = true,
-    // Honor X-Forwarded-For so localhost load bots (unique XFF) are not capped
-    // by kMaxConnPerIp=24 on a single 127.0.0.1 peer.
+    // Only known reverse proxies may supply forwarded client identities.
     .upgrade = [](auto *res, auto *req, auto *context) {
         Client c{};
-        auto xf = req->getHeader("x-forwarded-for");
-        if (!xf.empty()) {
-            auto comma = xf.find(',');
-            c.remote_ip.assign(xf.data(), comma == std::string_view::npos ? xf.size() : comma);
-            while (!c.remote_ip.empty() && c.remote_ip.front() == ' ')
-                c.remote_ip.erase(0, 1);
-            while (!c.remote_ip.empty() && c.remote_ip.back() == ' ')
-                c.remote_ip.pop_back();
-        }
+        c.remote_ip = ClientAddress::resolve(res->getRemoteAddressAsText(), req->getHeader("x-forwarded-for"));
         res->template upgrade<Client>(std::move(c),
             req->getHeader("sec-websocket-key"),
             req->getHeader("sec-websocket-protocol"),

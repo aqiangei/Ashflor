@@ -256,10 +256,18 @@ namespace Game {
     extern std::array<LoadoutPreset, LOADOUT_PRESET_COUNT> loadout_presets;
     extern uint8_t active_loadout_preset; // 0..19, 20 = no preset applied
     extern std::string loadout_preset_status;
+    struct TrainingReadout {
+        std::string last = "0.0", dps = "0.0", total = "0.0";
+    };
+    extern std::array<TrainingReadout, RarityID::kNumRarities> training_readouts;
+    bool near_training_dummies();
+    void reset_training();
     // Mobile: sticky after long-press R — tap primary slot i → apply L(i+1)
     extern uint8_t mobile_l_preset_pick;
     // Desktop: hold K=1 / L=2 → ghost first petal of that bank's presets on primary slots
     extern uint8_t preset_ghost_bank;
+    // Shared desktop K/L and sticky mobile R preview (0=off, 1=K, 2=L).
+    uint8_t loadout_preview_bank();
     // First petal of the preset shown as ghost on primary slot i (kNone = none)
     PetalID::T preset_ghost_petal(uint8_t primary_index);
     extern uint8_t rot_speed_setting; // quantized 0..10 (network)
@@ -272,6 +280,7 @@ namespace Game {
     void set_rot_speed_from_frac(float frac01);
     void save_loadout_preset(uint8_t index);
     void apply_loadout_preset(uint8_t index);
+    void post_feedback(std::string const &text);
     // Equip one copy from backpack stacks. dest 0xFF = auto (empty/Basic/…).
     // Returns 1 if equipped into an empty/Basic slot; 0 if barred (full bar).
     uint8_t withdraw_bank_petal(PetalID::T id, uint8_t dest = (uint8_t) -1);

@@ -69,7 +69,15 @@ class RotationWheel final : public Element {
 
 public:
     RotationWheel() : Element(Input::is_mobile ? 96 : 72, Input::is_mobile ? 96 : 72, { .no_animation = 1 }) {
-        style.should_render = [](){ return Game::alive(); };
+        style.should_render = [](){ return Game::alive() || Game::on_game_screen; };
+    }
+
+    uint8_t is_dragging() const { return dragging; }
+    uint32_t held_touch() const { return hold_touch; }
+    uint8_t hit_screen(float px, float py) const {
+        if (!visible) return 0;
+        float dist = std::hypot(px - screen_x, py - screen_y);
+        return dist < width * 0.55f * Ui::scale ? 1 : 0;
     }
 
     void on_event(uint8_t e) override {
@@ -145,8 +153,21 @@ public:
     }
 };
 
+static RotationWheel *g_rotation_wheel = nullptr;
+
 Element *Ui::make_rotation_wheel() {
-    return new RotationWheel();
+    g_rotation_wheel = new RotationWheel();
+    return g_rotation_wheel;
+}
+
+uint8_t Ui::rotation_wheel_touch_busy(uint32_t touch_id) {
+    if (g_rotation_wheel == nullptr || !g_rotation_wheel->is_dragging()) return 0;
+    if (touch_id == (uint32_t) -1) return 1;
+    return g_rotation_wheel->held_touch() == touch_id ? 1 : 0;
+}
+
+uint8_t Ui::rotation_wheel_hit(float x, float y) {
+    return g_rotation_wheel != nullptr && g_rotation_wheel->hit_screen(x, y) ? 1 : 0;
 }
 
 UiLoadoutSlot *Ui::UiLoadout::petal_backgrounds[2 * MAX_SLOT_COUNT + 1] = {nullptr};
@@ -159,7 +180,7 @@ UiLoadoutSlot::UiLoadoutSlot(uint8_t pos) : Element(70, 70, { .fill = 0xffeeeeee
     style.round_radius = width * 0.22f;
     style.should_render = [=](){
         if (pos < MAX_SLOT_COUNT)
-            return pos < Game::loadout_count;
+            return pos < Game::loadout_count || Game::loadout_preview_bank() != 0;
         if (pos < 2 * MAX_SLOT_COUNT)
             return (pos - MAX_SLOT_COUNT) < Game::loadout_count;
         return true; // delete slot
@@ -173,6 +194,18 @@ void UiLoadoutSlot::poll_events(ScreenEvent const &event) {
     float const px = Input::is_mobile ? event.x : Input::mouse_x;
     float const py = Input::is_mobile ? event.y : Input::mouse_y;
     if (Ui::game_panel_blocks_loadout(px, py)) return;
+    // Capture the pick directly, including empty / newly shown preview slots.
+    // Saturation prevents this same finger from starting a drag or a row swap.
+    if (Input::is_mobile && Game::mobile_l_preset_pick && position < MAX_SLOT_COUNT) {
+        auto touch = Input::touches.find(event.id);
+        if (touch != Input::touches.end() && !touch->second.saturated
+            && std::abs(px - screen_x) < width * Ui::scale / 2
+            && std::abs(py - screen_y) < height * Ui::scale / 2) {
+            touch->second.saturated = 1;
+            Game::try_mobile_l_preset_slot(position);
+        }
+        return;
+    }
     Element::poll_events(event);
 }
 
@@ -180,11 +213,13 @@ void UiLoadoutSlot::on_event(uint8_t event) {
     // Empty primaries have no petal widget — pick mode lands here.
     if (event != kClick && event != kMouseDown) return;
     if (!Game::mobile_l_preset_pick) return;
-    if (position >= Game::loadout_count) return;
+    if (position >= MAX_SLOT_COUNT) return;
     Game::try_mobile_l_preset_slot(position);
 }
 
 void UiLoadoutSlot::on_render(Renderer &ctx) {
+    uint8_t const preview_bank = Game::loadout_preview_bank();
+    bool const preview = preview_bank != 0 && position < MAX_SLOT_COUNT;
     // Rarity-tinted slot (zorr / florr_clone loadout bar)
     uint32_t saved_fill = style.fill;
     if (position < 2 * MAX_SLOT_COUNT) {
@@ -201,28 +236,33 @@ void UiLoadoutSlot::on_render(Renderer &ctx) {
     }
     Element::on_render(ctx);
     style.fill = saved_fill;
-    // Hold K/L: translucent first petal of that bank's preset on each primary slot
-    // (identifier only — does not change equipped petals).
-    if (Game::preset_ghost_bank != 0 && position < Game::loadout_count) {
+    // The primary row becomes a clearly labelled preset selector. Equipped
+    // widgets yield their drawing below so they cannot cover these previews.
+    if (preview) {
         PetalID::T ghost = Game::preset_ghost_petal(position);
         if (ghost != PetalID::kNone && ghost < PetalID::kNumPetals) {
-            ctx.set_global_alpha(0.38f);
-            {
-                RenderContext rc(&ctx);
-                float s = width / 60.f;
-                if (s < 0.35f) s = 0.35f;
-                ctx.scale(s);
-                draw_static_petal(ghost, ctx);
-            }
-            ctx.set_global_alpha(1.f);
-            // Soft ring so empty slots still read as "preview"
-            ctx.set_stroke(Game::preset_ghost_bank == 1 ? 0xa0a8d8ff : 0xa0ffe08a);
-            ctx.set_line_width(2.f);
+            RenderContext rc(&ctx);
+            ctx.scale(width / 60.f);
+            draw_loadout_background(ctx, ghost);
+        } else {
+            ctx.set_fill(0xcc404850);
             ctx.begin_path();
-            ctx.round_rect(-width / 2 - 1, -height / 2 - 1, width + 2, height + 2,
-                style.round_radius + 1);
-            ctx.stroke();
+            ctx.round_rect(-width / 2, -height / 2, width, height, style.round_radius);
+            ctx.fill();
+            ctx.draw_text(I18n::use_chinese ? "空" : "Empty", { .fill = 0xffdddddd, .size = 16 });
         }
+        uint32_t const color = preview_bank == 1 ? 0xffa8c8ff : 0xffffe08a;
+        ctx.set_stroke(color);
+        ctx.set_line_width(3.f);
+        ctx.begin_path();
+        ctx.round_rect(-width / 2 - 2, -height / 2 - 2, width + 4, height + 4,
+            style.round_radius + 2);
+        ctx.stroke();
+        std::string const label = std::format("{}{}", preview_bank == 1 ? "K" : "L",
+            position == 9 ? "0" : std::to_string(position + 1));
+        ctx.translate(0, -height / 2 - 16);
+        ctx.draw_text(label.c_str(), { .fill = color, .size = 15 });
+        return;
     }
     // Hover highlight while dragging a petal over this slot
     if (Ui::UiLoadout::num_petals_selected != 0) {
@@ -235,27 +275,6 @@ void UiLoadoutSlot::on_render(Renderer &ctx) {
             ctx.fill();
             ctx.set_global_alpha(1.f);
         }
-    }
-    // L-pick: gold ring on primary slots
-    if (Game::mobile_l_preset_pick && position < Game::loadout_count) {
-        ctx.set_stroke(0xffffe08a);
-        ctx.set_line_width(3.5f);
-        ctx.begin_path();
-        ctx.round_rect(-width / 2 - 2, -height / 2 - 2, width + 4, height + 4, style.round_radius + 2);
-        ctx.stroke();
-    }
-    if (Game::mobile_l_preset_pick && position < Game::loadout_count) {
-        ctx.set_global_alpha(1.f);
-        ctx.translate(0, -height / 2 - 16);
-        // L1..L9, L0 (matches digit keybinds)
-        char const *lab = position == 9 ? "L0" : nullptr;
-        std::string lab_buf;
-        if (lab == nullptr) {
-            lab_buf = std::format("L{}", position + 1);
-            lab = lab_buf.c_str();
-        }
-        ctx.draw_text(lab, { .fill = 0xffffe08a, .size = 15 });
-        return;
     }
     if (Game::slot_indicator_opacity < 0.01) return;
     if (position < Game::loadout_count) {

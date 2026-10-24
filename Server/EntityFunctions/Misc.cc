@@ -25,6 +25,13 @@ public:
 };
 
 void entity_clear_references(Simulation *sim, Entity &ent) {
+    // Clearing an expired owner reference to NULL would turn private loot into
+    // public loot after disconnect/map transfer. Delete it with ownership intact.
+    if (ent.has_component(kDrop) && !ent.get_team().null()
+        && !sim->ent_exists(ent.get_team())) {
+        sim->request_delete(ent.id);
+        return;
+    }
 #define SINGLE(component, name, type) \
 if constexpr (std::is_same_v<type, EntityID>) { \
     if (ent.has_component(k##component) && !sim->ent_exists(FilterCast<EntityID, type>::get(ent.get_##name()))) \

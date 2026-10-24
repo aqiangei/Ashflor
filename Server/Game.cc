@@ -2,6 +2,7 @@
 
 #include <Server/AccountStore.hh>
 #include <Server/LeaderboardStore.hh>
+#include <Server/Loot.hh>
 #include <Server/Client.hh>
 #include <Server/EntityFunctions.hh>
 #include <Server/Guild.hh>
@@ -67,36 +68,17 @@ static void _update_client(Simulation *sim, Client *client) {
     sim->spatial_hash.query(camera.get_camera_x(), camera.get_camera_y(),
         half_w, half_h,
         [&](Simulation *, Entity &ent){
-            // Hide other players' private drops unless same party.
-            if (ent.has_component(kDrop) && ent.get_team() != NULL_ENTITY) {
-                EntityID my_team = camera.get_team();
-                if (!(ent.get_team() == my_team)
-                    && !Party::can_take_drop(client, sim, ent.get_team()))
-                    return;
-            }
+            // Private drops are tagged to a personal camera id. Party join
+            // rewrites camera.get_team() to the leader camera — never use that
+            // for loot visibility (mates would see the leader's piles but fail
+            // pickup). Only the owning camera may see / take tagged drops.
+            if (ent.has_component(kDrop) && !Loot::can_access_drop(ent, client->camera)) return;
             in_view.push_back(ent.id);
         });
     std::sort(in_view.begin(), in_view.end());
     in_view.erase(std::unique(in_view.begin(), in_view.end()), in_view.end());
-    // Hard cap entities per snapshot so one Antenna crowd cannot explode packet CPU.
-    constexpr size_t kMaxViewEntities = 280;
-    if (in_view.size() > kMaxViewEntities) {
-        // Keep camera + player (first two pushes), drop the farthest IDs by
-        // truncating the sorted tail — stable and cheap vs distance sort.
-        EntityID cam_id = client->camera;
-        EntityID pl_id = sim->ent_exists(camera.get_player())
-            ? camera.get_player() : NULL_ENTITY;
-        in_view.resize(kMaxViewEntities);
-        // Ensure camera/player survived truncation.
-        auto ensure = [&](EntityID id) {
-            if (id == NULL_ENTITY) return;
-            if (std::binary_search(in_view.begin(), in_view.end(), id)) return;
-            in_view.back() = id;
-            std::sort(in_view.begin(), in_view.end());
-        };
-        ensure(cam_id);
-        ensure(pl_id);
-    }
+    // No per-client entity count cap — matches gardn / rrolf / florr_clone-web.
+    // Cost is controlled by FOV AABB interest, density caps, and AI cull.
 
     for (EntityID const &i: client->in_view) {
         if (!std::binary_search(in_view.begin(), in_view.end(), i)) {
@@ -242,8 +224,10 @@ void GameInstance::tick() {
     Treasure::tick(this);
     WorldExplore::tick(this);
     WorldEvent::tick(this);
-    for (Client *client : clients)
+    for (Client *client : clients) {
+        TrainingDummy::tick_client(&simulation, client);
         _update_client(&simulation, client);
+    }
     simulation.post_tick();
 }
 

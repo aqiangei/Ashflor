@@ -31,14 +31,14 @@ namespace Party {
     // empty name = nearest alive player — sends pending invite (accept/reject)
     uint8_t invite(Client *from, std::string const &target_name);
     uint8_t respond(Client *target, std::string const &from_name, uint8_t accept);
-    void on_death(Client *, float x, float y);
+    void on_death(Client *, float x, float y, uint8_t color = 0, uint8_t equip_flags = 0);
     void clear_corpse(Client *);
     void tick(GameInstance *);
     void apply_team(Client *);
     void send_update(Client *);
     void notify(Client *, std::string const &);
     uint8_t same_party(Client *, Client *);
-    // Drop claim window: same team, or same party (team desync fallback).
+    // Personal camera ownership only; party membership never grants access.
     uint8_t can_take_drop(Client *picker, Simulation *, EntityID drop_team);
     // Alive mates on the same map instance (includes self). Solo → just self.
     // Returns count written to out[0..cap).

@@ -414,6 +414,8 @@ void WorldExplore::tick(GameInstance *game) {
                         rt.spirit_y = my;
                         npc.set_x(mx);
                         npc.set_y(my);
+                        // Face travel direction (escort arts are authored toward +X).
+                        npc.set_angle(std::atan2(dy, dx));
                     }
                 }
             }

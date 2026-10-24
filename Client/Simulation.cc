@@ -64,8 +64,12 @@ void Entity::tick_lerp(float amt) {
         }
         radius.step(amt);
         angle.step_angle(phys_amt);
-        if (pending_delete)
-            deletion_animation = fclamp(deletion_animation + Ui::dt / 150, 0, 1);
+        if (pending_delete) {
+            // Mobs linger ~750ms as a tipped corpse; other ents keep the snap fade.
+            float const fade_ms =
+                (has_component(kMob) && !has_component(kFlower)) ? 750.f : 150.f;
+            deletion_animation = fclamp(deletion_animation + Ui::dt / fade_ms, 0, 1);
+        }
     }
     if (has_component(kCamera)) {
         camera_x.step(cam_amt);
@@ -83,6 +87,9 @@ void Entity::tick_lerp(float amt) {
             // Mob damage pops (petal / contact / poison — any HP drop with damaged flag).
             if (damaged && delta < -0.0004f
                 && has_component(kMob) && !has_component(kPetal)
+                // Practice targets show exact server readouts, including lethal
+                // hits; an HP-ratio estimate would undercount their resets.
+                && get_mob_id() != MobID::kTrainingDummy
                 && !pending_delete) {
                 float amt = -delta * estimate_max_hp(*this);
                 // Cap Y offset so huge Unique+ radii do not bury floats inside the sprite
@@ -131,6 +138,7 @@ void Entity::tick_lerp(float amt) {
         if (BitMath::at(face_flags, FaceFlags::kAttacking)
             || BitMath::at(face_flags, FaceFlags::kPoisoned) 
             || BitMath::at(face_flags, FaceFlags::kDandelioned)
+            || BitMath::at(face_flags, FaceFlags::kDeadEyes)
             || pending_delete) mouth = lerp(mouth, 5, amt);
         else if (BitMath::at(face_flags, FaceFlags::kDefending)) mouth = lerp(mouth, 8, amt);
         else mouth = lerp(mouth, 15, amt);

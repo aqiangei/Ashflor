@@ -54,9 +54,9 @@ void ScrollContainer::on_render(Renderer &ctx) {
             Input::wheel_delta = 0; // consume so camera zoom does not also fire
         }
 
-        // Thumb drag: desktop uses mouse delta; mobile follows the finger
-        // that grabbed the bar (same touch_id as this container).
-        uint8_t thumb_dragging = scroll->style.layer ? 1 : 0;
+        // Thumb / gutter drag: desktop uses mouse delta; mobile follows the
+        // finger that grabbed the bar (same touch_id as this container).
+        uint8_t thumb_dragging = (scroll->style.layer || track_dragging) ? 1 : 0;
         if (thumb_dragging) {
             if (Input::is_mobile) {
                 auto it = Input::touches.find(touch_id);
@@ -160,9 +160,22 @@ void ScrollContainer::poll_events(ScreenEvent const &event) {
         touch_press_x = event.x;
         touch_press_y = event.y;
         scroll_dragging = 0;
+        track_dragging = 0;
+        // Press on the right scrollbar gutter: exclusive thumb scroll so the
+        // list content (and outer page) do not also swipe.
+        if (Input::is_mobile && children.size() == 2 && children[1]->visible) {
+            Element *bar = children[1];
+            float bar_left = screen_x + (width * 0.5f - bar->width) * Ui::scale;
+            if (event.x >= bar_left - 8.f * Ui::scale) {
+                track_dragging = 1;
+                bar->style.layer = 1;
+            }
+        }
     }
-    if (touch_id == (uint32_t) -1)
+    if (touch_id == (uint32_t) -1) {
         scroll_dragging = 0;
+        track_dragging = 0;
+    }
     if (Ui::focused != this) return;
     // children[0]=content, children[1]=scrollbar. Container::poll_events only
     // walks descendants when Ui::focused == content; if the touch sits in the

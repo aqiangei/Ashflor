@@ -47,6 +47,8 @@ namespace AccountStore {
     void load();
     // Atomic replace of accounts.dat (+ accounts.dat.bak + periodic backups/)
     void save();
+    // Mark accounts dirty so the next save() writes (migrations mutate in place).
+    void mark_dirty();
     // Copy live client progress into the Account row (no disk write)
     void capture_nosave(Client *);
     // capture_nosave + save()

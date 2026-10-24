@@ -702,6 +702,8 @@ void royal_wayside(Renderer &ctx, float anim, uint32_t seed) {
 
 // ---- Escorts ----
 void escort_bee(Renderer &ctx, float anim, uint32_t seed) {
+    // Authored facing -X; rotate so +X matches movement angle.
+    ctx.rotate((float) M_PI);
     float b = breath(anim, seed) * 2.f;
     float w = sinf(anim * 9.f + seed) * 0.25f;
     ctx.translate(0, b);
@@ -736,6 +738,8 @@ void escort_bee(Renderer &ctx, float anim, uint32_t seed) {
 }
 
 void escort_traveler(Renderer &ctx, float anim, uint32_t seed) {
+    // Authored upright (-Y); face +X for movement angle.
+    ctx.rotate(-(float) M_PI * 0.5f);
     float b = breath(anim, seed);
     ctx.set_fill(0xffD8A45D);
     ctx.begin_path();
@@ -763,6 +767,7 @@ void escort_traveler(Renderer &ctx, float anim, uint32_t seed) {
 }
 
 void escort_jelly(Renderer &ctx, float anim, uint32_t seed) {
+    ctx.rotate(-(float) M_PI * 0.5f);
     float s = 1.f + 0.04f * breath(anim, seed);
     ctx.scale(s, 1.f / s);
     ctx.set_global_alpha(0.75f);
@@ -797,6 +802,7 @@ void escort_jelly(Renderer &ctx, float anim, uint32_t seed) {
 }
 
 void escort_penguin(Renderer &ctx, float anim, uint32_t seed) {
+    ctx.rotate(-(float) M_PI * 0.5f);
     float tilt = breath(anim, seed) * 0.05f;
     ctx.rotate(tilt);
     ctx.set_fill(0xff2A3A4A);
@@ -837,6 +843,7 @@ void escort_penguin(Renderer &ctx, float anim, uint32_t seed) {
 }
 
 void escort_critter(Renderer &ctx, float anim, uint32_t seed) {
+    ctx.rotate(-(float) M_PI * 0.5f);
     float b = breath(anim, seed);
     ctx.set_fill(0xff5A9A4A);
     ctx.begin_path();
@@ -871,6 +878,7 @@ void escort_critter(Renderer &ctx, float anim, uint32_t seed) {
 }
 
 void escort_worker(Renderer &ctx, float anim, uint32_t seed) {
+    ctx.rotate(-(float) M_PI * 0.5f);
     float b = breath(anim, seed);
     ctx.set_fill(0xffAD7852);
     ctx.begin_path();
@@ -905,6 +913,7 @@ void escort_worker(Renderer &ctx, float anim, uint32_t seed) {
 }
 
 void escort_ember(Renderer &ctx, float anim, uint32_t seed) {
+    ctx.rotate(-(float) M_PI * 0.5f);
     float b = breath(anim, seed) * 2.f;
     float p = pulse(anim, seed);
     ctx.translate(0, b);
@@ -940,6 +949,8 @@ void escort_ember(Renderer &ctx, float anim, uint32_t seed) {
 
 void escort_knight(Renderer &ctx, float anim, uint32_t seed) {
     (void) anim; (void) seed;
+    // Authored upright (-Y); face +X so set_angle matches travel.
+    ctx.rotate(-(float) M_PI * 0.5f);
     ctx.set_fill(0xff8A6A50);
     ctx.begin_path();
     ctx.ellipse(0, -22, 21, 19);
@@ -978,6 +989,7 @@ void draw_escort(Renderer &ctx, uint8_t map_id, float anim, uint32_t seed) {
     case MapID::kOcean: escort_jelly(ctx, anim, seed); break;
     case MapID::kPolar: escort_penguin(ctx, anim, seed); break;
     case MapID::kJungle: escort_critter(ctx, anim, seed); break;
+    case MapID::kAntNest:
     case MapID::kAntHell: escort_worker(ctx, anim, seed); break;
     case MapID::kVolcano: escort_ember(ctx, anim, seed); break;
     case MapID::kRoyalCapital: escort_knight(ctx, anim, seed); break;
@@ -992,6 +1004,7 @@ void draw_main(Renderer &ctx, uint8_t map_id, float anim, uint32_t seed) {
     case MapID::kOcean: ocean_main(ctx, anim, seed); break;
     case MapID::kPolar: polar_main(ctx, anim, seed); break;
     case MapID::kJungle: jungle_main(ctx, anim, seed); break;
+    case MapID::kAntNest:
     case MapID::kAntHell: ant_main(ctx, anim, seed); break;
     case MapID::kVolcano: volcano_main(ctx, anim, seed); break;
     case MapID::kRoyalCapital: royal_main(ctx, anim, seed); break;
@@ -1006,6 +1019,7 @@ void draw_wayside(Renderer &ctx, uint8_t map_id, float anim, uint32_t seed) {
     case MapID::kOcean: ocean_wayside(ctx, anim, seed); break;
     case MapID::kPolar: polar_wayside(ctx, anim, seed); break;
     case MapID::kJungle: jungle_wayside(ctx, anim, seed); break;
+    case MapID::kAntNest:
     case MapID::kAntHell: ant_wayside(ctx, anim, seed); break;
     case MapID::kVolcano: volcano_wayside(ctx, anim, seed); break;
     case MapID::kRoyalCapital: royal_wayside(ctx, anim, seed); break;
@@ -1209,6 +1223,7 @@ void draw_pad(Renderer &ctx, uint8_t map_id, float anim, uint32_t seed) {
     case MapID::kOcean: pad_ocean(ctx, anim, seed); break;
     case MapID::kPolar: pad_polar(ctx, anim, seed); break;
     case MapID::kJungle: pad_jungle(ctx, anim, seed); break;
+    case MapID::kAntNest:
     case MapID::kAntHell: pad_ant(ctx, anim, seed); break;
     case MapID::kVolcano: pad_volcano(ctx, anim, seed); break;
     case MapID::kRoyalCapital: pad_royal(ctx, anim, seed); break;
@@ -1302,6 +1317,7 @@ void draw_crate(Renderer &ctx, uint8_t map_id, float anim, uint32_t seed) {
         ctx.arc(0, 0, 7);
         ctx.fill();
         break;
+    case MapID::kAntNest:
     case MapID::kAntHell:
         crate_base(ctx, 0xff8E6244, 0xff5A3D22);
         ctx.set_fill(0xffAD7852);
@@ -1355,6 +1371,7 @@ void chest_draw(Renderer &ctx, uint8_t map_id, float alpha, float anim, uint32_t
     case MapID::kOcean: body = 0xff3E7185; lid = 0xff7CCDDC; trim = 0xff2A4A5A; lock = 0xffF5D58B; break;
     case MapID::kPolar: body = 0xff91CFE8; lid = 0xffE6F6FA; trim = 0xff557D99; lock = 0xffBDE8F4; break;
     case MapID::kJungle: body = 0xff6B8F4E; lid = 0xffA6D78A; trim = 0xff3A5A2A; lock = 0xffC9A227; break;
+    case MapID::kAntNest:
     case MapID::kAntHell: body = 0xff8E6244; lid = 0xffAD7852; trim = 0xff5A3D22; lock = 0xffC45A3A; break;
     case MapID::kVolcano: body = 0xff45424A; lid = 0xffE66C40; trim = 0xff2A282E; lock = 0xffF6BA59; break;
     case MapID::kRoyalCapital: body = 0xff5A5A5E; lid = 0xffC9A227; trim = 0xff3A3A3E; lock = 0xffE8D5A3; break;
@@ -1567,6 +1584,7 @@ void draw_flee(Renderer &ctx, uint8_t map_id, float anim, uint32_t seed) {
     case MapID::kOcean: flee_ocean(ctx, anim, seed); break;
     case MapID::kPolar: flee_polar(ctx, anim, seed); break;
     case MapID::kJungle: flee_jungle(ctx, anim, seed); break;
+    case MapID::kAntNest:
     case MapID::kAntHell: flee_ant(ctx, anim, seed); break;
     case MapID::kVolcano: flee_volcano(ctx, anim, seed); break;
     case MapID::kRoyalCapital: flee_royal(ctx, anim, seed); break;
@@ -1750,6 +1768,7 @@ void draw_height(Renderer &ctx, uint8_t map_id, float anim, uint32_t seed,
     case MapID::kOcean: height_shell(ctx, s); break;
     case MapID::kPolar: height_ice(ctx, s); break;
     case MapID::kJungle: height_resin(ctx, s); break;
+    case MapID::kAntNest:
     case MapID::kAntHell: height_fungus(ctx, s); break;
     case MapID::kVolcano: height_sulfur(ctx, s); break;
     case MapID::kRoyalCapital: height_crest(ctx, s); break;
@@ -1945,11 +1964,11 @@ void draw_lore(Renderer &ctx, uint8_t map_id, float anim, uint32_t seed,
         ctx.begin_path();
         ctx.move_to(-30, 8); ctx.qcurve_to(0, -4, 30, 8);
         ctx.stroke();
-        ctx.set_fill(map_id == MapID::kAntHell ? 0xff8E6244 : 0xffC9A227);
+        ctx.set_fill((map_id == MapID::kAntHell || map_id == MapID::kAntNest) ? 0xff8E6244 : 0xffC9A227);
         for (int i = 0; i < 5; ++i) {
             float x = -24.f + i * 12.f;
             ctx.begin_path();
-            if (map_id == MapID::kAntHell) {
+            if ((map_id == MapID::kAntHell || map_id == MapID::kAntNest)) {
                 ctx.ellipse(x, 0, 4, 3);
                 ctx.ellipse(x + 5, 0, 3, 2.5f);
                 ctx.ellipse(x + 9, 0, 3.5f, 3);
@@ -2018,7 +2037,8 @@ void draw_lore(Renderer &ctx, uint8_t map_id, float anim, uint32_t seed,
         case MapID::kOcean: c = 0xff7CCDDC; break;
         case MapID::kPolar: c = 0xffBDE8F4; break;
         case MapID::kJungle: c = 0xff6FAF4A; break;
-        case MapID::kAntHell: c = 0xffAD7852; break;
+        case MapID::kAntNest:
+    case MapID::kAntHell: c = 0xffAD7852; break;
         case MapID::kVolcano: c = 0xffE66C40; break;
         case MapID::kRoyalCapital: c = 0xffC9A227; break;
         default: break;

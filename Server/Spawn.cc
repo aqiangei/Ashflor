@@ -36,7 +36,7 @@ Entity &alloc_drop(Simulation *sim, PetalID::T drop_id, EntityID const team, uin
     drop.set_drop_id(drop_id);
     drop.set_drop_count(count);
     entity_set_despawn_tick(drop, 10 * (2 + PETAL_DATA[drop_id].rarity) * TPS);
-    // Team-tagged drops stay private for their whole lifetime (owner + party only).
+    // Tagged drops stay private to their personal camera for their whole life.
     // Unowned (manual discard) gets a brief lock so the dropper doesn't re-grab, then FFA.
     if (team == NULL_ENTITY)
         drop.immunity_ticks = TPS / 3;
@@ -45,17 +45,28 @@ Entity &alloc_drop(Simulation *sim, PetalID::T drop_id, EntityID const team, uin
     return drop;
 }
 
-Entity &alloc_corpse(Simulation *sim, EntityID const team, float x, float y, std::string const &name) {
+Entity &alloc_corpse(
+    Simulation *sim, EntityID const team, float x, float y, std::string const &name,
+    uint8_t color, uint8_t equip_flags
+) {
     Entity &corpse = sim->alloc_ent();
     corpse.add_component(kPhysics);
-    corpse.set_radius(BASE_FLOWER_RADIUS);
+    // Slightly smaller + tipped — reads as fallen, not standing AFK.
+    corpse.set_radius(BASE_FLOWER_RADIUS * 0.92f);
+    corpse.set_angle(-0.55f);
     corpse.set_x(x);
     corpse.set_y(y);
     corpse.mass = 10000;
     corpse.friction = 1;
     corpse.add_component(kRelations);
     corpse.set_team(team);
+    corpse.set_color(color);
     BitMath::set(corpse.flags, EntityFlags::kNoFriendlyCollision);
+    // Visible dead flower (no kHealth → skipped by tick_player_behavior / AI).
+    corpse.add_component(kFlower);
+    corpse.set_face_flags(1 << FaceFlags::kDeadEyes);
+    corpse.set_equip_flags(equip_flags);
+    corpse.set_loadout_count(0);
     corpse.add_component(kName);
     corpse.set_name(name + " [DOWN]");
     corpse.set_nametag_visible(1);

@@ -637,6 +637,7 @@ static char const *height_pad_name(uint8_t mid, uint8_t p) {
     case MapID::kOcean: return kShell[p];
     case MapID::kPolar: return kIce[p];
     case MapID::kJungle: return kResin[p];
+    case MapID::kAntNest:
     case MapID::kAntHell: return kFung[p];
     case MapID::kVolcano: return kSulf[p];
     case MapID::kRoyalCapital: return kCrest[p];

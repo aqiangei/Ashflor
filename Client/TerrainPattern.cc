@@ -181,6 +181,7 @@ void flowing_bands(Renderer &r, uint8_t mid,
     case MapID::kDesert: color = 0xffE6BE79; opacity = .34f; break;
     case MapID::kPolar: color = 0xffD4E5ED; opacity = .52f; break;
     case MapID::kJungle: color = 0xff659A5D; opacity = .31f; break;
+    case MapID::kAntNest:
     case MapID::kAntHell: color = 0xffA77E58; opacity = .24f; break;
     case MapID::kVolcano: color = 0xff373645; opacity = .28f; break;
     default: return;
@@ -262,7 +263,7 @@ void organic(Renderer &r, uint8_t mid, float left, float top, float right, float
             leaf(r,x-30.f,y+13.f,29.f,11.f,0xff659A5D,0xffB2CE85);
             leaf(r,x-8.f,y+5.f,22.f,9.f,0xff5D9D64,0xffB2CE85);
             if(v>.6f) leaf(r,x+47.f,y-18.f,20.f,8.f,0xffA88759,0xffD5C37C);
-        } else if (mid == MapID::kAntHell) {
+        } else if ((mid == MapID::kAntHell || mid == MapID::kAntNest)) {
             sweep(r,x,y,142.f,13.f,0xffE0BF92,3.3f);
             sweep(r,x+9.f,y+25.f,105.f,9.f,0xff8A5E43,3.f);
             r.set_stroke(0xffD9C09B); r.set_line_width(2.f);
@@ -348,7 +349,8 @@ void sparse_landmarks(Renderer &r, uint8_t mid,
             leaf(r, x, y, 36.f * s, 14.f * s, 0xff40916C, 0xff95D5B2);
             leaf(r, x + 14 * s, y - 8 * s, 28.f * s, 11.f * s, 0xff2D6A4F, 0xff95D5B2);
             break;
-        case MapID::kAntHell:
+        case MapID::kAntNest:
+    case MapID::kAntHell:
             r.set_fill(0xff704A35);
             r.begin_path(); r.ellipse(x, y, 22 * s, 14 * s); r.fill();
             r.set_fill(0xffC9A477);
@@ -432,7 +434,8 @@ void map_fine_litter(Renderer &r, uint8_t mid,
                 r.begin_path(); r.arc(x, y, 2.f); r.fill();
             }
             break;
-        case MapID::kAntHell:
+        case MapID::kAntNest:
+    case MapID::kAntHell:
             r.set_fill(kind ? 0xff8A5E43 : 0xffD9C09B);
             r.begin_path(); r.ellipse(x, y, 3.2f, 2.f); r.fill();
             break;
@@ -511,7 +514,8 @@ void TerrainPattern::draw_wall(Renderer &r, TerrainFeature const &f, uint8_t map
             r.qcurve_to(x-31*s,y+22*s,x+2*s,y+35*s); r.fill();
             sweep(r,x,y-19*s,42*s,3.f,0xffA5DDEA,3.f);
             break;
-        case MapID::kAntHell:
+        case MapID::kAntNest:
+    case MapID::kAntHell:
             ribbon(r,x,y,110.f*s,44.f*s,0xff704A35);
             sweep(r,x,y-10.f,91.f*s,7.f,0xffB4865E,3.f);
             sweep(r,x+7.f,y+11.f,83.f*s,6.f,0xff8A5E43,5.f);

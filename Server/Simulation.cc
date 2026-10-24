@@ -6,6 +6,7 @@
 #include <Server/Server.hh>
 #include <Server/Spawn.hh>
 #include <Server/SpatialHash.hh>
+#include <Server/TrainingDummy.hh>
 
 #include <Server/LeaderboardStore.hh>
 #include <Shared/Map.hh>
@@ -104,9 +105,14 @@ static void ensure_boss(Simulation *sim) {
     uint8_t mob_id = 0;
     if (!Map::boss_anchor(sim->map_id, bx, by, mob_id)) return;
     // Cached id: avoid full mob scan every tick while boss is alive / on respawn CD.
+    // Only the map-anchor boss (zone==0xFF) counts — nest trash queens must not
+    // suppress Unique boss respawn.
+    auto is_map_boss = [mob_id](Entity &m) -> bool {
+        return m.get_mob_id() == mob_id && !m.pending_delete && m.zone == 0xFF;
+    };
     if (sim->ent_alive(sim->boss_ent)) {
         Entity &b = sim->get_ent(sim->boss_ent);
-        if (b.get_mob_id() == mob_id && !b.pending_delete) return;
+        if (is_map_boss(b)) return;
     }
     if (sim->boss_ever_spawned) {
         if (sim->boss_respawn_ticks <= 0)
@@ -117,7 +123,7 @@ static void ensure_boss(Simulation *sim) {
     {
         bool alive = false;
         sim->for_each<kMob>([&](Simulation *, Entity &m) {
-            if (m.get_mob_id() == mob_id && !m.pending_delete) {
+            if (is_map_boss(m)) {
                 alive = true;
                 sim->boss_ent = m.id;
             }
@@ -128,10 +134,33 @@ static void ensure_boss(Simulation *sim) {
     std::cout << "[boss] map " << (int)sim->map_id << " spawning " << MOB_DATA[mob_id].name
               << " at (" << (int)bx << "," << (int)by << ")" << std::endl;
     Entity &boss = alloc_mob(sim, (MobID::T)mob_id, bx, by, NULL_ENTITY, [](Entity &mob) {
-        mob.score_reward = MOB_DATA[mob.get_mob_id()].xp;
+        MobID::T mid = mob.get_mob_id();
+        uint8_t base_r = MOB_DATA[mid].rarity;
+        // Map bosses are top-tier fights — never sit at the baked Common/Rare rung.
+        uint8_t spawn_r = RarityID::kUnique;
+        if (spawn_r < base_r) spawn_r = base_r;
+        mob.set_rarity(spawn_r);
+        float th = mob_spawn_threat_mult(base_r, spawn_r);
+        float dmg = mob_spawn_damage_mult(base_r, spawn_r);
+        float rs = mob_rarity_radius_mult(spawn_r);
         BitMath::set(mob.flags, EntityFlags::kHasCulling);
         mob.detection_radius = 1400.f;
         mob.zone = 0xFF;   // 不计入任何 Zone 的刷怪计数
+        // Unique petals are baked on the ×2000 curve; rarity threat alone is not
+        // enough — keep an extra boss pad so Unique loadouts still feel a fight.
+        constexpr float kBossHpMult = 8.f;
+        constexpr float kBossDmgMult = 1.35f;
+        mob.max_health *= th * kBossHpMult;
+        mob.health = mob.max_health;
+        mob.damage *= dmg * kBossDmgMult;
+        mob.score_reward = (uint32_t) (
+            MOB_DATA[mid].xp * mob_spawn_xp_mult(base_r, spawn_r) * 8.f + 500.f);
+        if (rs != 1.f) {
+            float nr = mob.get_radius() * rs;
+            mob.set_radius(nr);
+            mob.mass = (1 + nr / BASE_FLOWER_RADIUS)
+                * (MOB_DATA[mid].attributes.stationary ? 10000.f : 1.f);
+        }
     });
     sim->boss_ent = boss.id;
     sim->boss_ever_spawned = 1;
@@ -143,7 +172,8 @@ void Simulation::on_tick() {
     // florr_clone / rrolf: no humans → no spawn pressure; skip heavy collide/AI.
     uint32_t flowers = 0;
     for_each<kFlower>([&](Simulation *, Entity &ent) {
-        if (!ent.has_component(kMob)) ++flowers;
+        // Corpses have Flower but no Health — don't keep an empty map "occupied".
+        if (!ent.has_component(kMob) && ent.has_component(kHealth)) ++flowers;
     });
     uint8_t const occupied = flowers > 0;
 
@@ -153,6 +183,7 @@ void Simulation::on_tick() {
     // Always — empty-map early-out used to skip this and bosses never spawned
     // at boot / never counted respawn CD (live "Boss 存活" all dead).
     ensure_boss(this);
+    TrainingDummy::ensure(this);
 
     // Idle map (Server already ~1 Hz): thin wild mobs slowly, skip collide/AI.
     // Only zone wildlife (kSpawnedFromZone). WorldEvent / Treasure / explore
@@ -313,7 +344,7 @@ void Simulation::post_tick() {
         if (ent.immunity_ticks > 0) {
             --ent.immunity_ticks;
         }
-        // Team-tagged drops stay private for their whole lifetime (owner + party).
+        // Tagged drops stay private to their personal camera for their whole life.
         // Only unowned (manual discard) piles use immunity then go FFA — never clear team here.
     });
     for_each_entity([](Simulation *sim, Entity &ent) {

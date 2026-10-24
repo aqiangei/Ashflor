@@ -30,11 +30,12 @@ void render_health(Renderer &ctx, Entity const &ent) {
         && (ent.id == Game::player_id);
     // Level / guild stay visible at full HP; only the bar fades with opacity.
     uint8_t show_identity = is_player && !is_self;
-    // Reward loot chests: always draw an HP bar (walk-up open, but still a
-    // combat-looking prop). Other mobs: name+rarity always; bar after damage.
+    // Reward loot chests: always draw an HP bar (kill-to-open).
+    // Other mobs: name+rarity always; bar after damage.
     uint8_t is_loot_chest = is_mob && ent.get_mob_id() == MobID::kLootChest;
+    bool const is_training = is_mob && ent.get_mob_id() == MobID::kTrainingDummy;
     uint8_t show_mob_label = is_mob && !is_segment;
-    uint8_t show_bar = is_loot_chest || ent.healthbar_opacity >= 0.01f;
+    uint8_t show_bar = is_loot_chest || is_training || ent.healthbar_opacity >= 0.01f;
     if (!show_bar && !show_identity && !show_mob_label) return;
 
     // Skip non-combat props (pads / crates / guide + explore escort NPCs).
@@ -53,7 +54,10 @@ void render_health(Renderer &ctx, Entity const &ent) {
     float const rad = ent.get_radius();
     float w = rad * 1.33f;
     float bar_w = 2 * w;
-    ctx.scale(1 + 0.5 * ent.deletion_animation);
+    // Match body filter: mob corpses do not balloon the chrome.
+    if (!(ent.has_component(kMob) && !ent.has_component(kFlower)
+          && ent.deletion_animation > 0.f))
+        ctx.scale(1 + 0.5 * ent.deletion_animation);
     // Origin = left end of the HP bar (below the entity). Extra clearance so
     // oversized mob art (beyond physics radius) does not swallow the chrome.
     float y_below = rad + 18.f + std::min(rad * 0.22f, 48.f);
@@ -62,7 +66,7 @@ void render_health(Renderer &ctx, Entity const &ent) {
 
     float const label_alpha = 1.f - ent.deletion_animation;
     // Loot chests keep a solid bar even at full HP (opacity otherwise fades to 0).
-    float const bar_alpha = label_alpha * (is_loot_chest ? 1.f
+    float const bar_alpha = label_alpha * (is_loot_chest || is_training ? 1.f
         : (show_bar ? ent.healthbar_opacity : 1.f));
 
     char const *mob_name = nullptr;
@@ -110,24 +114,47 @@ void render_health(Renderer &ctx, Entity const &ent) {
     }
 
     // Mob chrome under the bar line: name LEFT, rarity RIGHT (same as
-    // player Lv / guild). At full HP the bar is hidden but labels stay.
-    // Segments: bar only (head keeps name/rarity).
+    // player Lv / guild). Small ants have a short bar_w so Chinese name +
+    // rarity overlap — expand the label span like player Lv/guild.
     float const under_y = 13.f;
     if (show_mob_label && !is_loot_chest) {
-        if (mob_name != nullptr) {
+        Renderer *name_baked = nullptr;
+        Renderer *rare_baked = nullptr;
+        if (mob_name != nullptr)
+            name_baked = MobLabelCache::get(1, (uint8_t)mid, 0, mob_name, nullptr, 0xffffffff);
+        if (rarity_label != nullptr)
+            rare_baked = MobLabelCache::get(2, (uint8_t)mid, rarity, nullptr, rarity_label,
+                RARITY_COLORS[rarity]);
+        float name_w = name_baked != nullptr ? name_baked->width : 0.f;
+        float rare_w = rare_baked != nullptr ? rare_baked->width : 0.f;
+        float span = bar_w;
+        if (name_w > 0.f && rare_w > 0.f)
+            span = std::max(bar_w, name_w + 10.f + rare_w);
+        float const x0 = (bar_w - span) * 0.5f;
+        if (name_baked != nullptr) {
             RenderContext nm(&ctx);
             ctx.set_global_alpha(label_alpha);
-            Renderer *baked = MobLabelCache::get(1, (uint8_t)mid, 0, mob_name, nullptr, 0xffffffff);
-            if (baked != nullptr)
-                ctx.draw_image_at(*baked, 0.f, under_y - baked->height * 0.5f);
+            ctx.draw_image_at(*name_baked, x0, under_y - name_baked->height * 0.5f);
         }
-        if (rarity_label != nullptr) {
+        if (rare_baked != nullptr) {
             RenderContext rare(&ctx);
             ctx.set_global_alpha(label_alpha);
-            uint32_t col = RARITY_COLORS[rarity];
-            Renderer *baked = MobLabelCache::get(2, (uint8_t)mid, rarity, nullptr, rarity_label, col);
-            if (baked != nullptr)
-                ctx.draw_image_at(*baked, bar_w - baked->width, under_y - baked->height * 0.5f);
+            ctx.draw_image_at(*rare_baked, x0 + span - rare_w, under_y - rare_baked->height * 0.5f);
+        }
+    }
+
+    if (is_training) {
+        uint8_t rarity = ent.get_rarity();
+        if (rarity < RarityID::kNumRarities) {
+            auto const &data = Game::training_readouts[rarity];
+            std::string text = std::format("{} {}  ·  DPS {}",
+                I18n::use_chinese ? "单次" : "Hit", data.last, data.dps);
+            RenderContext stats(&ctx);
+            ctx.translate(bar_w * 0.5f, under_y + 22.f);
+            ctx.draw_text(text.c_str(), {.fill = 0xffffe6a5, .stroke = 0xff1b211d, .size = 13});
+            ctx.translate(0, 19.f);
+            std::string total = std::format("{} {}", I18n::use_chinese ? "我的累计伤害" : "My Total Damage", data.total);
+            ctx.draw_text(total.c_str(), {.fill = 0xffe7efff, .stroke = 0xff1b211d, .size = 13});
         }
     }
 

@@ -436,11 +436,33 @@ static uint8_t match_player(std::string const &needle, std::string const &a, std
     return has(a) || has(b);
 }
 
+// Ops/console announce: Live board + legacy sender "公告".
+// Shop announce: paid broadcast; text is usually "Name：body".
+static uint8_t is_ops_announce(Chat::LiveBroadcast const &e) {
+    if (e.kind != Chat::kAnnounce) return 0;
+    if (e.sender == "公告") return 1;
+    if (e.sender == "aqa") {
+        static char const *kPrefix = "aqa：";
+        if (e.text.compare(0, 6, kPrefix) != 0) return 1;
+    }
+    return 0;
+}
+
 std::string Chat::query_broadcasts_json(uint32_t before_id, uint32_t limit,
                                         std::string const &day, std::string const &player,
-                                        int kind_filter, int map_filter) {
+                                        int kind_filter, int map_filter,
+                                        std::string const &source) {
     if (limit < 1) limit = 50;
     if (limit > 200) limit = 200;
+    uint8_t want_ops = (source == "ops");
+    uint8_t want_shop = (source == "shop");
+    // Searching "aqa" should also surface legacy console rows (sender "公告").
+    uint8_t needle_aqa = 0;
+    if (!player.empty()) {
+        std::string n = player;
+        for (char &c : n) if (c >= 'A' && c <= 'Z') c = (char) (c - 'A' + 'a');
+        needle_aqa = (n == "aqa");
+    }
     std::vector<Chat::LiveBroadcast const *> hits;
     hits.reserve(limit);
     // Walk newest→oldest, collect, then reverse to oldest→newest for UI.
@@ -449,7 +471,16 @@ std::string Chat::query_broadcasts_json(uint32_t before_id, uint32_t limit,
         if (kind_filter >= 0 && (int) it->kind != kind_filter) continue;
         if (map_filter >= 0 && (int) it->map_id != map_filter) continue;
         if (!day.empty() && day_of(it->ts_ms) != day) continue;
-        if (!match_player(player, it->player, it->sender)) continue;
+        if (want_ops || want_shop) {
+            uint8_t ops = is_ops_announce(*it);
+            if (want_ops && !ops) continue;
+            if (want_shop && ops) continue;
+        }
+        if (!player.empty()) {
+            uint8_t hit = match_player(player, it->player, it->sender);
+            if (!hit && needle_aqa && it->sender == "公告") hit = 1;
+            if (!hit) continue;
+        }
         hits.push_back(&(*it));
         if (hits.size() >= limit) break;
     }
@@ -472,6 +503,10 @@ std::string Chat::query_broadcasts_json(uint32_t before_id, uint32_t limit,
         json_escape_append(out, e.player);
         out += "\",\"text\":\"";
         json_escape_append(out, e.text);
+        out += "\",\"src\":\"";
+        out += (e.kind == Chat::kAnnounce)
+            ? (is_ops_announce(e) ? "ops" : "shop")
+            : "";
         out += "\"}";
     }
     out += "],\"total\":";

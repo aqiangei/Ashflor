@@ -5,6 +5,7 @@
 
 #ifdef SERVERSIDE
 #include <Server/SpatialHash.hh>
+#include <Server/TrainingDummy.hh>
 #endif
 
 #include <functional>
@@ -26,6 +27,7 @@ public:
     SERVER_ONLY(int32_t boss_respawn_ticks;)
     SERVER_ONLY(uint8_t boss_ever_spawned;)
     SERVER_ONLY(EntityID boss_ent;)
+    SERVER_ONLY(std::array<EntityID, RarityID::kNumRarities> training_dummies;)
     SERVER_ONLY(SpatialHash spatial_hash;)
     // Tick counter for throttling non-critical work (leaderboard fill_top, etc.)
     SERVER_ONLY(uint32_t tick_index;)

@@ -69,6 +69,7 @@ namespace Server {
     // rarity: 0..kNumRarities-1 resolve same-name ladder; 255 = use petal_id as-is
     extern std::string live_admin_give(std::string const &who, uint32_t petal_id, uint32_t count,
                                       uint32_t rarity);
+    // count: 1–10 (clamped server-side)
     extern std::string live_admin_spawn(uint8_t map_id, uint32_t mob_id, float x, float y,
-                                       std::string const &near_who);
+                                       std::string const &near_who, uint32_t count = 1);
 };

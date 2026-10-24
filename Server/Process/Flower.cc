@@ -8,6 +8,8 @@
 #include <Shared/Craft.hh>
 #include <Shared/Entity.hh>
 #include <Shared/Map.hh>
+#include <Shared/RarityScale.hh>
+#include <Server/Loot.hh>
 #include <Shared/Simulation.hh>
 #include <Shared/StaticData.hh>
 #include <Shared/Talent.hh>
@@ -46,9 +48,10 @@ static float _owner_level_mult(std::array<uint32_t, PetalID::kNumPetals> const *
     return Craft::level_stat_mult((*levels)[id]);
 }
 
-// Only the earliest primary slot holding this PetalID receives Unique level stats.
+// Only the earliest primary slot holding this Unique PetalID receives level stats.
 static uint8_t _slot_is_leveled_copy(Entity const &player, uint32_t slot_i, PetalID::T id) {
     if (id == PetalID::kNone || id >= PetalID::kNumPetals) return 0;
+    if (!Craft::can_level_petal(id)) return 0;
     if (slot_i >= player.get_loadout_count()) return 0;
     for (uint32_t i = 0; i < slot_i; ++i) {
         if (player.loadout[i].get_petal_id() == id) return 0;
@@ -73,18 +76,21 @@ static struct PlayerBuffs _get_petal_passive_buffs(
             ? _owner_level_mult(petal_levels, slot_petal_id) : 1.f;
         if (attrs.equipment != EquipmentFlags::kNone)
             player.set_equip_flags(player.get_equip_flags() | (1 << attrs.equipment));
-        buffs.vision_factor = std::min(buffs.vision_factor, attrs.vision_factor);
+        float vision = Craft::level_scale_factor(attrs.vision_factor, lv_mult);
+        buffs.vision_factor = std::min(buffs.vision_factor, vision);
         // Speed boosts: strongest single factor wins. Multiplying several
         // Accelerators (1.3^n) turned map travel into an accidental rocket.
-        if (attrs.move_speed_factor > 1.f)
-            buffs.move_speed_factor = std::fmax(buffs.move_speed_factor, attrs.move_speed_factor);
-        else if (attrs.move_speed_factor > 0.f && attrs.move_speed_factor < 1.f)
-            buffs.move_speed_factor *= attrs.move_speed_factor;
-        buffs.magnet_radius = std::fmax(buffs.magnet_radius, attrs.magnet_radius);
-        buffs.extra_range = std::fmax(attrs.extra_range, buffs.extra_range);
+        // Unique Lv scales the excess above 1 (Accelerator etc. were ignoring Lv).
+        float move = Craft::level_scale_factor(attrs.move_speed_factor, lv_mult);
+        if (move > 1.f)
+            buffs.move_speed_factor = std::fmax(buffs.move_speed_factor, move);
+        else if (move > 0.f && move < 1.f)
+            buffs.move_speed_factor *= move;
+        buffs.magnet_radius = std::fmax(buffs.magnet_radius, attrs.magnet_radius * lv_mult);
+        buffs.extra_range = std::fmax(attrs.extra_range * lv_mult, buffs.extra_range);
         buffs.extra_damage = std::fmax(buffs.extra_damage, attrs.extra_body_damage * lv_mult);
-        buffs.damage_factor *= attrs.extra_damage_factor;
-        buffs.reload_factor *= attrs.extra_reload_factor;
+        buffs.damage_factor *= Craft::level_scale_factor(attrs.extra_damage_factor, lv_mult);
+        buffs.reload_factor *= Craft::level_scale_factor(attrs.extra_reload_factor, lv_mult);
         if (slot_petal_id == PetalID::kYinYang)
             ++buffs.yinyang_count;
         if (!player.loadout[i].already_spawned) continue;
@@ -99,14 +105,14 @@ static struct PlayerBuffs _get_petal_passive_buffs(
                 buffs.heal += attrs.constant_heal * lv_mult / TPS;
             }
         }
-        buffs.extra_rot += attrs.extra_rotation_speed;
+        buffs.extra_rot += attrs.extra_rotation_speed * lv_mult;
         buffs.extra_health += attrs.extra_health * lv_mult;
         player.damage_reflection = std::fmax(player.damage_reflection, attrs.damage_reflection);
         player.poison_armor = std::fmax(player.poison_armor, attrs.poison_armor * lv_mult / TPS);
         if (slot_petal_id == PetalID::kPoisonCactus)
             buffs.is_poisonous = 1;
         // King's Oath: low-HP damage surge (on top of petal extra_damage_factor)
-        if (slot_petal_id == PetalID::kKingsOath
+        if (petal_name_is(slot_petal_id, "King's Oath")
             && player.max_health > 0.f
             && player.health / player.max_health < 0.35f)
             buffs.damage_factor *= 1.35f;
@@ -162,6 +168,8 @@ static RotationCenter const _get_petal_rotation_center(Simulation *sim, Entity c
 
 void tick_player_behavior(Simulation *sim, Entity &player) {
     if (player.pending_delete) return;
+    // Party revive corpses are kFlower without kHealth — visual only.
+    if (!player.has_component(kHealth)) return;
     DEBUG_ONLY(assert(player.max_health > 0);)
     float talent_hp = 0;
     float talent_rot = 0;
@@ -189,6 +197,12 @@ void tick_player_behavior(Simulation *sim, Entity &player) {
         }
     }
     buffs.reload_factor *= talent_reload;
+    // Golden Leaf CDR cap (50%): stacked leaves + Unique Lv + talent cannot
+    // push below kReloadFactorFloor (was ≤0 → invisible petals / particles only).
+    if (buffs.reload_factor < Craft::kReloadFactorFloor)
+        buffs.reload_factor = Craft::kReloadFactorFloor;
+    if (buffs.reload_factor > Craft::kReloadFactorCeil)
+        buffs.reload_factor = Craft::kReloadFactorCeil;
     float health_ratio = player.health / player.max_health;
     if (!player.has_component(kMob)) {
         uint32_t const sc = player.get_score();
@@ -232,12 +246,7 @@ void tick_player_behavior(Simulation *sim, Entity &player) {
             player.get_x(), player.get_y(), query_r, query_r,
             [&](Simulation *, Entity &drop) {
             if (!drop.has_component(kDrop) || drop.pending_delete) return;
-            if (drop.get_team() != NULL_ENTITY) {
-                if (!(drop.get_team() == player.get_parent()))
-                    return;
-            } else if (drop.immunity_ticks > 0) {
-                return;
-            }
+            if (!Loot::can_access_drop(drop, player.get_parent()) || drop.immunity_ticks > 0) return;
             float dx = player.get_x() - drop.get_x();
             float dy = player.get_y() - drop.get_y();
             float d2 = dx * dx + dy * dy;
@@ -277,6 +286,21 @@ void tick_player_behavior(Simulation *sim, Entity &player) {
 
         if (slot_petal_id == PetalID::kNone || petal_data.count == 0)
             continue;
+        // Body-mounted equipment (Cutter / Accelerator / Magnet / …): passive +
+        // flower art only — never spawn an orbiting clone.
+        if (petal_data.attributes.equipment != EquipmentFlags::kNone) {
+            for (uint32_t j = 0; j < slot.size(); ++j) {
+                LoadoutPetal &petal_slot = slot.petals[j];
+                if (sim->ent_alive(petal_slot.ent_id))
+                    sim->request_delete(petal_slot.ent_id);
+                petal_slot.ent_id = NULL_ENTITY;
+                petal_slot.reload = 0;
+            }
+            slot.already_spawned = 1;
+            player.set_loadout_reloads(i, 255);
+            player.set_loadout_healths(i, 255);
+            continue;
+        }
         float min_reload = 1;
         float health_sum = 0.f;
         uint32_t health_n = 0;
@@ -284,13 +308,26 @@ void tick_player_behavior(Simulation *sim, Entity &player) {
             LoadoutPetal &petal_slot = slot.petals[j];
             if (!sim->ent_alive(petal_slot.ent_id)) {
                 petal_slot.ent_id = NULL_ENTITY;
-                game_tick_t reload_time = (petal_data.reload * TPS) * buffs.reload_factor;
+                float reload_f = petal_data.reload * (float) TPS * buffs.reload_factor;
+                if (reload_f < 2.f) reload_f = 2.f; // ≥2 ticks so art can render
+                game_tick_t reload_time = (game_tick_t) reload_f;
                 if (!slot.already_spawned) reload_time += TPS;
-                float this_reload = reload_time == 0 ? 1 : (float) petal_slot.reload / reload_time;
+                float this_reload = (float) petal_slot.reload / (float) reload_time;
                 min_reload = std::min(min_reload, this_reload);
                 if (petal_slot.reload >= reload_time) {
                     petal_slot.ent_id = alloc_petal(sim, slot_petal_id, player).id;
                     Entity &spawned = sim->get_ent(petal_slot.ent_id);
+                    // Triangle: each same-ID copy adds stack_damage (florr wiki).
+                    if (petal_data.attributes.stack_damage > 0.f) {
+                        uint32_t copies = 0;
+                        for (uint32_t si = 0; si < player.get_loadout_count(); ++si) {
+                            if (player.get_loadout_ids(si) == slot_petal_id)
+                                ++copies;
+                        }
+                        if (copies < 1) copies = 1;
+                        spawned.damage = petal_data.damage
+                            + petal_data.attributes.stack_damage * (float)(copies - 1);
+                    }
                     spawned.damage *= buffs.damage_factor;
                     float hp_mult = talent_petal_hp;
                     // Unique level: only the first primary copy of this ID.
@@ -360,13 +397,39 @@ void tick_player_behavior(Simulation *sim, Entity &player) {
                     if (petal_data.attributes.spawns != MobID::kNumMobs &&
                         petal.secondary_reload > sec_reload_ticks) {
                         uint8_t spawn_id = petal_data.attributes.spawns;
+                        uint8_t const petal_r = petal_data.rarity;
                         Entity &mob = alloc_mob(sim, spawn_id, petal.get_x(), petal.get_y(), petal.get_team(), [&](Entity &mob){
+                            // Always leash to the flower — egg petals die / orbit and
+                            // must not be the AI parent (that parked summons in place).
                             mob.set_parent(player.id);
                             mob.set_color(player.get_color());
                             mob.base_entity = player.id;
                             BitMath::set(mob.flags, EntityFlags::kDieOnParentDeath);
                             BitMath::set(mob.flags, EntityFlags::kNoDrops);
                             BitMath::set(mob.flags, EntityFlags::kIsDetached);
+                            // Keep score_reward so escort-freeze (0 dmg + 0 xp + NoDrops)
+                            // cannot match hatch pets.
+                            if (mob.score_reward == 0)
+                                mob.score_reward = 1;
+                            // Match egg petal rarity (zone spawns already do this).
+                            uint8_t base_r = MOB_DATA[spawn_id].rarity;
+                            uint8_t spawn_r = petal_r;
+                            if (spawn_r >= RarityID::kNumRarities) spawn_r = base_r;
+                            if (spawn_r < base_r) spawn_r = base_r;
+                            mob.set_rarity(spawn_r);
+                            float th = mob_spawn_threat_mult(base_r, spawn_r);
+                            mob.max_health *= th;
+                            mob.health = mob.max_health;
+                            mob.damage *= mob_spawn_damage_mult(base_r, spawn_r);
+                            if (mob.damage <= 0.f)
+                                mob.damage = 1.f;
+                            float rs = mob_rarity_radius_mult(spawn_r);
+                            if (rs != 1.f) {
+                                float nr = mob.get_radius() * rs;
+                                mob.set_radius(nr);
+                                mob.mass = (1 + nr / BASE_FLOWER_RADIUS)
+                                    * (MOB_DATA[spawn_id].attributes.stationary ? 10000.f : 1.f);
+                            }
                         });
                     
                         if (petal_data.attributes.spawn_count == 0) {
@@ -376,9 +439,7 @@ void tick_player_behavior(Simulation *sim, Entity &player) {
                         } else {
                             entity_set_despawn_tick(mob, sec_reload_ticks * petal_data.attributes.spawn_count);
                             petal.secondary_reload = 0;
-                            //needed
-                            mob.set_parent(petal.id);
-                            mob.base_entity = player.id;
+                            // Parent stays the flower (set above); do not rebind to petal.
                         }
                     }
                 } else {

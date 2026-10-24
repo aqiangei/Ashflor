@@ -1087,7 +1087,10 @@ static float soft_zone_density_mul(Simulation *sim, uint32_t difficulty) {
     return mul;
 }
 
-static constexpr uint32_t kPlazaMobCap = 16;
+// Hub pad must stay open for respawn / dummies. Was 16 — kite + admin spawn
+// still packed the ellipse because thinning only trusted plaza_mob_count
+// (spawned-in-plaza) and ignored mobs walked / admin-dropped into the pad.
+static constexpr uint32_t kPlazaMobCap = 4;
 // dens×area alone is not safe: Common hub ≈ 29e6 units² → hundreds of heads.
 // Rare+ used to return ~unlimited and never ran thin_soft → ring inflation.
 static constexpr uint32_t kSoftAbsCapCommon = 64;
@@ -1140,29 +1143,46 @@ void Map::thin_soft_zone_excess(Simulation *sim) {
             --budget;
         });
     }
-    if (sim->plaza_mob_count > kPlazaMobCap) {
-        uint32_t budget = sim->plaza_mob_count - kPlazaMobCap;
-        if (budget > 4) budget = 4;
-        sim->for_each<kMob>([&](Simulation *s, Entity &ent) {
-            if (budget == 0) return;
+    // Live plaza census — kite packs + admin drops never bumped plaza_mob_count.
+    {
+        uint32_t live = 0;
+        sim->for_each<kMob>([&](Simulation *, Entity &ent) {
             if (ent.pending_delete) return;
-            if (!BitMath::at(ent.flags, EntityFlags::kSpawnedFromZone)) return;
             if (!in_spawn_plaza(ent.get_x(), ent.get_y())) return;
-            BitMath::set(ent.flags, EntityFlags::kNoDrops);
-            s->request_delete(ent.id);
-            --budget;
+            // Keep dummies / map boss / explore props.
+            if (ent.get_mob_id() == MobID::kTrainingDummy) return;
+            if (ent.zone == 0xFF) return;
+            if (ent.damage <= 0.f && ent.score_reward == 0
+                && BitMath::at(ent.flags, EntityFlags::kNoDrops))
+                return;
+            ++live;
         });
+        sim->plaza_mob_count = live;
+        if (live > kPlazaMobCap) {
+            uint32_t budget = live - kPlazaMobCap;
+            if (budget > 8) budget = 8;
+            sim->for_each<kMob>([&](Simulation *s, Entity &ent) {
+                if (budget == 0) return;
+                if (ent.pending_delete) return;
+                if (!in_spawn_plaza(ent.get_x(), ent.get_y())) return;
+                if (ent.get_mob_id() == MobID::kTrainingDummy) return;
+                if (ent.zone == 0xFF) return;
+                if (ent.damage <= 0.f && ent.score_reward == 0
+                    && BitMath::at(ent.flags, EntityFlags::kNoDrops))
+                    return;
+                BitMath::set(ent.flags, EntityFlags::kNoDrops);
+                s->request_delete(ent.id);
+                --budget;
+            });
+        }
     }
 }
 
 void Map::spawn_random_mob(Simulation *sim, float x, float y) {
     uint32_t zone_id = Map::get_zone_from_pos(sim->map_id, x, y);
     struct ZoneDefinition const &zone = map_zones(sim->map_id)[zone_id];
-    // Respawn plaza: only difficulty-0 table; hard cap stops pad pile-up.
-    if (in_spawn_plaza(x, y)) {
-        if (zone.difficulty != 0) return;
-        if (sim->plaza_mob_count >= kPlazaMobCap) return;
-    }
+    // Respawn plaza: never auto-spawn — hub stays clear for players / dummies.
+    if (in_spawn_plaza(x, y)) return;
     if ((float)sim->zone_mob_counts[zone_id] >= soft_zone_spawn_target(sim, zone_id, zone))
         return;
     float sum = 0;
@@ -1507,10 +1527,8 @@ uint8_t Map::_spawn_zone_mob_once(Simulation *sim) {
         });
         if (near) return 0;
     }
-    if (in_spawn_plaza(x, y)) {
-        if (zone.difficulty != 0) return 0;
-        if (sim->plaza_mob_count >= kPlazaMobCap) return 0;
-    }
+    // Never auto-spawn inside the respawn ellipse (kite/admin piles belong elsewhere).
+    if (in_spawn_plaza(x, y)) return 0;
     _spawn_mob_at(sim, zone_id, mob_id, x, y, spawn_r);
     return 1;
 }

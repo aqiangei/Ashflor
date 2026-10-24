@@ -11,6 +11,7 @@
 #include <Client/Ui/TextInput.hh>
 
 #include <Client/Debug.hh>
+#include <Client/Assets/QqLogo.hh>
 #include <Client/DOM.hh>
 #include <Client/Game.hh>
 #include <Client/I18n.hh>
@@ -38,15 +39,39 @@ static TextInput *auth_password_input = nullptr;
 static void select_map_garden(Element *, uint8_t e) {
     if (e == Ui::kClick) Game::selected_map = MapID::kGarden;
 }
+static void select_map_desert(Element *, uint8_t e) {
+    if (e == Ui::kClick) Game::selected_map = MapID::kDesert;
+}
 static void select_map_ocean(Element *, uint8_t e) {
     if (e == Ui::kClick) Game::selected_map = MapID::kOcean;
+}
+static void select_map_polar(Element *, uint8_t e) {
+    if (e == Ui::kClick) Game::selected_map = MapID::kPolar;
+}
+static void select_map_jungle(Element *, uint8_t e) {
+    if (e == Ui::kClick) Game::selected_map = MapID::kJungle;
+}
+static void select_map_ant_hell(Element *, uint8_t e) {
+    if (e == Ui::kClick) Game::selected_map = MapID::kAntHell;
+}
+static void select_map_volcano(Element *, uint8_t e) {
+    if (e == Ui::kClick) Game::selected_map = MapID::kVolcano;
 }
 static void select_map_royal(Element *, uint8_t e) {
     if (e == Ui::kClick) Game::selected_map = MapID::kRoyalCapital;
 }
+static void select_map_ant_nest(Element *, uint8_t e) {
+    if (e == Ui::kClick) Game::selected_map = MapID::kAntNest;
+}
 static bool darken_map_garden() { return Game::selected_map != MapID::kGarden; }
+static bool darken_map_desert() { return Game::selected_map != MapID::kDesert; }
 static bool darken_map_ocean() { return Game::selected_map != MapID::kOcean; }
+static bool darken_map_polar() { return Game::selected_map != MapID::kPolar; }
+static bool darken_map_jungle() { return Game::selected_map != MapID::kJungle; }
+static bool darken_map_ant_hell() { return Game::selected_map != MapID::kAntHell; }
+static bool darken_map_volcano() { return Game::selected_map != MapID::kVolcano; }
 static bool darken_map_royal() { return Game::selected_map != MapID::kRoyalCapital; }
+static bool darken_map_ant_nest() { return Game::selected_map != MapID::kAntNest; }
 
 // Soft title controls — rounded fill, no outer rim stroke
 static Style soft_btn(uint32_t fill) {
@@ -261,11 +286,22 @@ Element *Ui::make_title_input_box() {
                     return I18n::use_chinese ? std::string{"选择地图"} : std::string{"Choose map"};
                 }, { .fill = Chrome::kHint }),
                 new Ui::Element(0, 6),
-                // Launch set only — Desert/Polar/Jungle/AntHell/Volcano closed for now
-                new Ui::HContainer({
-                    make_map_select_button(MapID::kGarden, 0xff3dd68c, select_map_garden, darken_map_garden),
-                    make_map_select_button(MapID::kOcean, 0xff3eb6e8, select_map_ocean, darken_map_ocean),
-                    make_map_select_button(MapID::kRoyalCapital, 0xffe8c45a, select_map_royal, darken_map_royal)
+                new Ui::VContainer({
+                    new Ui::HContainer({
+                        make_map_select_button(MapID::kGarden, 0xff3dd68c, select_map_garden, darken_map_garden),
+                        make_map_select_button(MapID::kDesert, 0xffefd36a, select_map_desert, darken_map_desert),
+                        make_map_select_button(MapID::kOcean, 0xff3eb6e8, select_map_ocean, darken_map_ocean),
+                        make_map_select_button(MapID::kPolar, 0xff8ec8ef, select_map_polar, darken_map_polar)
+                    }, 0, 10, {}),
+                    new Ui::HContainer({
+                        make_map_select_button(MapID::kJungle, 0xff45b06a, select_map_jungle, darken_map_jungle),
+                        make_map_select_button(MapID::kAntHell, 0xffd4a574, select_map_ant_hell, darken_map_ant_hell),
+                        make_map_select_button(MapID::kVolcano, 0xffff6f4f, select_map_volcano, darken_map_volcano),
+                        make_map_select_button(MapID::kRoyalCapital, 0xffe8c45a, select_map_royal, darken_map_royal)
+                    }, 0, 10, {}),
+                    new Ui::HContainer({
+                        make_map_select_button(MapID::kAntNest, 0xffc48a55, select_map_ant_nest, darken_map_ant_nest)
+                    }, 0, 10, {})
                 }, 0, 10, { .no_animation = 1 }),
                 new Ui::Element(0, 16),
                 new Ui::VContainer({
@@ -626,27 +662,12 @@ static void open_ashflor_repo(Element *, uint8_t e) {
 
 static void open_qq_group(Element *, uint8_t e) {
     if (e != Ui::kClick) return;
-    // group_code=227990150 — same as Settings; opens join page / QQ client
-    DOM::open_page("https://qm.qq.com/cgi-bin/qm/qr?jump_from=webapi&group_code=227990150");
+    DOM::open_qq_group();
 }
 
 static Element *make_qq_group_icon(float size) {
     return new Ui::StaticIcon([](Element *elt, Renderer &ctx){
-        ctx.scale(elt->width / 36);
-        // Simple QQ-like mark: round face + ears
-        ctx.set_fill(0xffffffff);
-        ctx.begin_path();
-        ctx.arc(0, 1.5f, 11.f);
-        ctx.fill();
-        ctx.begin_path();
-        ctx.arc(-8.5f, -6.f, 4.2f);
-        ctx.arc(8.5f, -6.f, 4.2f);
-        ctx.fill();
-        ctx.set_fill(0xff12b7f5);
-        ctx.begin_path();
-        ctx.arc(-3.5f, 0.f, 2.f);
-        ctx.arc(3.5f, 0.f, 2.f);
-        ctx.fill();
+        ctx.draw_image_data(QQ_LOGO_DATA, elt->width, elt->height);
     }, size, size);
 }
 
@@ -684,6 +705,19 @@ static Element *make_labeled_qq_button() {
 Element *Ui::make_github_link_button() {
     // Right: this fork. Left of it: upstream gardn. Far left: QQ group.
     Element *elt = new Ui::HContainer({
+        new Ui::VContainer({
+            new Ui::Button(46, 46,
+                new Ui::StaticIcon([](Element *, Renderer &ctx){
+                    ctx.set_stroke(0xffffffff); ctx.set_line_width(2.5f);
+                    ctx.begin_path(); ctx.round_rect(-13, -11, 26, 19, 4);
+                    ctx.move_to(-7, 8); ctx.line_to(-7, 14); ctx.line_to(0, 8);
+                    ctx.stroke();
+                    for (float y : {-4.f, 2.f}) { ctx.begin_path(); ctx.move_to(-7, y); ctx.line_to(7, y); ctx.stroke(); }
+                }, 32, 32),
+                [](Element *, uint8_t e){ if (e == Ui::kClick) DOM::open_feedback_board(); },
+                nullptr, soft_btn(Chrome::kBtnMoss)),
+            new Ui::DynamicText(11, [](){ return I18n::use_chinese ? std::string{"给作者留言"} : std::string{"Feedback"}; })
+        }, 0, 4, {}),
         make_labeled_qq_button(),
         make_labeled_github_button(
             "上游 gardn", "gardn", open_upstream_gardn, Chrome::kBtnMoss
@@ -692,7 +726,13 @@ Element *Ui::make_github_link_button() {
             "本仓库", "ashflor", open_ashflor_repo, Chrome::kBtnIron
         )
     }, 10, 10, {
-        .should_render = [](){ return Game::should_render_title_ui() && Game::auth_panel == 0; },
+        .animate = [](Element *elt, Renderer &ctx){
+            ctx.scale((float) elt->animation);
+            // Portrait phones give community links a second row below menus.
+            if (Ui::window_width < Ui::window_height) ctx.translate(0, 76.f);
+        },
+        .should_render = [](){ return Game::should_render_title_ui() && Game::auth_panel == 0
+            && Ui::panel_open == Ui::Panel::kNone; },
         .h_justify = Style::Right,
         .v_justify = Style::Top
     });

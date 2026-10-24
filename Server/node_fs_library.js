@@ -41,6 +41,24 @@ addToLibrary({
     }
   },
 
+  node_fs_write_durable_atomic__deps: ['$UTF8ToString', '$HEAPU8'],
+  node_fs_write_durable_atomic: function (pathPtr, dataPtr, len) {
+    var fs = require('fs'), path = require('path'), fd;
+    var p = UTF8ToString(pathPtr), tmp = p + '.tmp';
+    try {
+      fd = fs.openSync(tmp, 'w', 384);
+      fs.writeFileSync(fd, Buffer.from(HEAPU8.subarray(dataPtr, dataPtr + len)));
+      fs.fsyncSync(fd); fs.closeSync(fd); fd = undefined;
+      fs.renameSync(tmp, p);
+      var dir = fs.openSync(path.dirname(p), 'r');
+      try { fs.fsyncSync(dir); } finally { fs.closeSync(dir); }
+      return 1;
+    } catch (e) {
+      if (fd !== undefined) try { fs.closeSync(fd); } catch (_) {}
+      console.error('[feedback durable write]', p, e.message); return 0;
+    }
+  },
+
   node_fs_snapshot__deps: ['$UTF8ToString'],
   node_fs_snapshot: function (pathPtr) {
     var fs = require('fs');

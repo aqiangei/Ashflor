@@ -114,6 +114,10 @@ Element *Ui::make_pause_menu() {
             nullptr,
             { .fill = Chrome::kBtnSlate, .line_width = 0, .round_radius = Chrome::kRadius }
         ),
+        new Ui::Button(btn_w, m ? 34.f : 48.f,
+            new Ui::DynamicText(section, [](){ return I18n::use_chinese ? std::string{"给作者留言"} : std::string{"Feedback board"}; }),
+            [](Element *, uint8_t e){ if (e == Ui::kClick) DOM::open_feedback_board(); }, nullptr,
+            { .fill = Chrome::kBtnMoss, .line_width = 0, .round_radius = Chrome::kRadius }),
         new Ui::DynamicText(hint, [](){ return I18n::tr(I18n::kEscHint); }, {
             .fill = Chrome::kBody,
             .h_justify = Style::Left

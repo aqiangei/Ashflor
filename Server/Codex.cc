@@ -1,19 +1,23 @@
 #include <Server/Codex.hh>
 
 #include <Shared/Craft.hh>
+#include <Shared/MapGen.hh>
 #include <Shared/RarityScale.hh>
 #include <Shared/StaticData.hh>
 #include <Shared/StaticDefinitions.hh>
+#include <Shared/Talent.hh>
 #include <Shared/MobDescZh.inc>
 #include <Shared/MobNameZh.inc>
 #include <Shared/PetalDescZh.inc>
 #include <Shared/PetalNameZh.inc>
 
 #include <algorithm>
+#include <cmath>
 #include <cstdio>
 #include <cstring>
 #include <string>
 #include <unordered_map>
+#include <unordered_set>
 #include <vector>
 
 namespace {
@@ -232,7 +236,7 @@ static ArtKind const ARTS[] = {
     { "escort", "护送精灵", "Escort spirit", "迷路/掉队单位，护送过图", "Lost units you escort across the map" },
     { "pad", "Yahaha 垫板", "Yahaha pad", "踩踏触发的地图机关", "Step-triggered map gadgets" },
     { "crate", "推箱", "Push crate", "可推动的主题木箱", "Pushable themed crates" },
-    { "chest", "宝箱", "Loot chest", "走近开启的 Yahaha 宝箱", "Walk-up Yahaha chests" },
+    { "chest", "宝箱", "Loot chest", "打碎开启的 Yahaha 宝箱", "Kill-to-open Yahaha chests" },
     { "mirage", "幻影箱", "Mirage chest", "半透明诱饵箱", "Translucent decoy chests" },
     { "flee", "逃离事件", "Flee event", "受惊逃窜的灌木/沙丘/海藻等", "Spooked fleeing bush / dune / kelp…" },
     { "height", "列高事件", "Height event", "蘑菇/仙人掌/贝壳等高度序列", "Ordered mushrooms / cactus / shells…" },
@@ -240,6 +244,177 @@ static ArtKind const ARTS[] = {
 };
 
 #include "CodexWorld.inc"
+
+// Structured numbers + code flow for each mechanics chapter (from live constants).
+static void emit_mech_payload(std::string &out, char const *id) {
+    std::string stats;
+    std::string steps;
+    auto srow = [&](char const *k, char const *v) {
+        if (!stats.empty()) stats += ',';
+        stats += "{\"k\":\"";
+        esc(stats, k);
+        stats += "\",\"v\":\"";
+        esc(stats, v);
+        stats += "\"}";
+    };
+    auto srowf = [&](char const *k, float v) {
+        char buf[64];
+        if (std::fabs(v - (float) (int) v) < 1e-6f)
+            std::snprintf(buf, sizeof(buf), "%d", (int) v);
+        else
+            std::snprintf(buf, sizeof(buf), "%.4g", (double) v);
+        srow(k, buf);
+    };
+    auto step = [&](char const *zh, char const *en) {
+        if (!steps.empty()) steps += ',';
+        steps += "{\"zh\":\"";
+        esc(steps, zh);
+        steps += "\",\"en\":\"";
+        esc(steps, en);
+        steps += "\"}";
+    };
+
+    if (std::strcmp(id, "rarity") == 0) {
+        for (uint8_t r = 0; r < RarityID::kNumRarities; ++r) {
+            char k[64];
+            std::snprintf(k, sizeof(k), "#%u %s / %s", r, rarity_zh(r), rarity_en(r));
+            char col[16];
+            std::snprintf(col, sizeof(col), "#%06x", RARITY_COLORS[r] & 0xffffffu);
+            srow(k, col);
+        }
+        step("同名英文字段 PETAL_DATA.name 为梯子键", "Same English PETAL_DATA.name keys the ladder");
+        step("合成：Craft::petal_at_rarity / craft_result 优先最近同名 ID", "Craft::petal_at_rarity / craft_result prefer nearest same-name ID");
+        step("怪掉稀有度带：自身 20% / −1 60% / −2 20%（Death::_roll_drop_rarity）", "Mob drop rarity: self 20% / −1 60% / −2 20%");
+        step("事件/宝箱：Ultra/Super/Unique 池（TreasureSites::roll_mat_rarity）", "Events/chests: Ultra/Super/Unique pool");
+    } else if (std::strcmp(id, "craft") == 0) {
+        srowf("合成批量 kCraftBatch", (float) Craft::kCraftBatch);
+        srowf("失败最少损耗", (float) Craft::kCraftFailLossMin);
+        srowf("失败最多损耗", (float) Craft::kCraftFailLossMax);
+        srowf("唯一等级每级属性", Craft::kLevelStatPerLevel);
+        srow("唯一成功率公式", "max(0.02, 0.60 × 0.9^level)");
+        srowf("唯一 Lv0 成功率", Craft::level_success_chance(0));
+        srowf("唯一 Lv10 成功率", Craft::level_success_chance(10));
+        srowf("唯一成功率下限", 0.02f);
+        for (uint8_t r = 0; r < RarityID::kNumRarities - 1; ++r) {
+            char k[80];
+            std::snprintf(k, sizeof(k), "成功率 %s→%s", rarity_zh(r), rarity_zh((uint8_t) (r + 1)));
+            char v[48];
+            float p = Craft::success_chance(r);
+            std::snprintf(v, sizeof(v), "%.4g%% (兑换≈%u)", (double) (p * 100.f),
+                          (unsigned) Craft::exchange_cost(r));
+            srow(k, v);
+        }
+        step("副槽 / craft_bank 互通材料", "Secondary slots share craft_bank");
+        step("托盘放入 5 同瓣 → success_chance(from_rarity) 判定", "Tray 5 same → success_chance(from_rarity)");
+        step("成功：写入 rarity+1 同名（petal_at_rarity）；失败：损耗 1–4，其余退回", "Win: next rarity same-name; miss: lose 1–4, refund rest");
+        step("唯一：无限等级赌；+5%/级；仅主手第一枚吃加成", "Unique: infinite level gamble; +5%/lv; first primary copy only");
+        step("超凡+ 成功进全服播报与排行榜", "Super+ success → broadcast + leaderboard");
+    } else if (std::strcmp(id, "loadout") == 0) {
+        srowf("基础主槽 kBaseSlots", (float) Talent::kBaseSlots);
+        srowf("主槽硬顶 MAX_SLOT_COUNT", (float) MAX_SLOT_COUNT);
+        srowf("天赋槽位最多 kMaxSlotRanks", (float) Talent::kMaxSlotRanks);
+        srowf("等级每 N 级+1槽（无主生成）", (float) LEVELS_PER_EXTRA_SLOT);
+        srow("登录玩家槽位", "Talent::slot_count = min(10, 5 + slots_rank)");
+        srow("无主/初始槽位", "loadout_slots_at_level = 5 + level/15");
+        srow("配装热键", "K / L 云端预设");
+        step("主槽作战 / 副槽背包", "Primary combat / secondary bag");
+        step("Spawn/Camera：有 owner 用天赋槽位，否则用等级公式", "Spawn/Camera: talent slots if owned, else level formula");
+        step("死亡后仍可拖槽、R 切换、K·L 配装", "After death: drag slots, R swap, K·L presets");
+        step("空预设内容进 craft_bank，避免吞瓣", "Empty preset → craft_bank (no petal eat)");
+        step("组装界面悬停显示 tip（全数值）", "Assemble UI hover tips with full stats");
+    } else if (std::strcmp(id, "combat") == 0) {
+        srow("攻击", "左键 / 空格 — InputFlags::kAttacking");
+        srow("防御", "右键 / Shift — InputFlags::kDefending");
+        srow("反转攻击", "交换攻防方向（全交换）");
+        srow("冷却乘算", "Σ petal.extra_reload_factor × Talent::reload_mult");
+        srow("月亮", "独立轨道；每 tick 推进角度；攻击可甩出");
+        srow("磁铁", "Talent 磁铁半径 + 花瓣 magnet_radius → pickup_drop");
+        step("花瓣环绕花心；攻/防改变姿态半径与面向", "Petals orbit flower; attack/defend change pose");
+        step("黄金之叶等 extra_reload_factor 与冷却天赋相乘", "Golden Leaf × cooldown talent");
+        step("月亮系强制分离 + 独立绕飞", "Moon petals force-separate + own orbit");
+        step("磁铁吸入走 pickup_drop（非仅碰撞）", "Magnet uses pickup_drop, not collide-only");
+    } else if (std::strcmp(id, "xp") == 0) {
+        srowf("1 级基础生命 BASE_HEALTH", BASE_HEALTH);
+        srow("生命公式", "100 + 8*(L-1) + 0.08*(L-1)^2");
+        srow("体伤公式", "BASE + 0.4*g + 0.0025*g^2（g=L-1）");
+        srowf("L1 HP", hp_at_level(1));
+        srowf("L50 HP", hp_at_level(50));
+        srowf("L100 HP", hp_at_level(100));
+        srowf("L1 槽位(无天赋)", (float) loadout_slots_at_level(1));
+        srowf("L60 槽位(无天赋)", (float) loadout_slots_at_level(60));
+        step("击杀加分：怪 xp × 区域 × 生成稀有度 × 击杀倍率", "Kill score: mob xp × zone × spawn-rarity × kill mult");
+        step("score_to_level 累减 score_to_pass_level；高水位存档", "score_to_level walks pass thresholds; high-water saved");
+        step("溢出钳 uint32；排行榜同步分数/等级", "Clamp uint32; leaderboard syncs score/level");
+    } else if (std::strcmp(id, "talent") == 0) {
+        srow("点数", "points_earned = level（每级 1 点）");
+        srow("升一档花费", "rank_cost(r) = 2*r − 1");
+        srowf("体魄 / 级", 50.f);
+        srowf("转速 / 级", 0.4f);
+        srowf("射程 / 级", 8.f);
+        srowf("磁铁半径 / 级", 200.f);
+        srowf("瓣甲倍率 / 级", 0.08f);
+        srow("冷却", "每级 ×0.97（连乘）");
+        srowf("普通天赋满级档", (float) Talent::kMaxGradeRank);
+        srowf("槽位天赋满级档", (float) Talent::kMaxSlotRanks);
+        srow("等级对档位上限", "max_rank ≈ 1 + level/10（槽位除外）");
+        step("TalentID：体魄/转速/射程/冷却/磁铁/瓣甲/槽位", "TalentID: Health/Rot/Range/CD/Magnet/Armor/Slots");
+        step("can_set_rank 检查等级上限与剩余点数", "can_set_rank checks level cap + free points");
+        step("槽位 = min(10, 5 + slots_rank)；另有等级赠槽", "Slots = min(10, 5+rank); level also grants slots");
+    } else if (std::strcmp(id, "drop") == 0) {
+        srow("怪掉稀有度带", "自身 20% / −1 60% / −2 20%");
+        srow("普怪基础堆数", "2 + 概率追加");
+        srow("追加概率", "0.72；Unusual+0.55；Rare+0.45；Epic+0.40；Legendary+0.35");
+        srow("Boss 堆数", "+4 保底，再 70% / 45%");
+        srow("种子权重", "compute_mob_drop_weights + Craft::mob_loot_weights");
+        srow("Chase 特殊", "月/世界树/金叶等扁平份额后再倾斜");
+        srow("事件普通档", "Ultra 55% / Super 35% / Unique 10%");
+        srow("事件传说档 Unique", "8%");
+        srow("事件高难档 Unique", "12%");
+        srow("仪式档 Unique", "14%");
+        srow("探索全池占比", "88%（其余地图主题材料）");
+        srow("仪式全池占比", "75%");
+        step("Death：roll 种子权重 → petal_at_rarity(seed, drop_r)", "Death: weight seed → petal_at_rarity");
+        step("事件/宝箱：roll_mat_rarity(tier) → 全池或地图材料", "Events: roll_mat_rarity → pool or map mat");
+        step("三倍加成开启时额外翻倍堆（Unique 除外）", "Triple bonus doubles piles (excludes Unique)");
+    } else if (std::strcmp(id, "world") == 0) {
+        srow("世界事件槽位", "每图 12 × 8 图 = 96");
+        srow("传说触摸奖励", "120 币 + 5 传说档残片");
+        srow("逃离奖励", "280 币 + 6");
+        srow("睡觉怪奖励", "220 币 + 5");
+        srow("伏击奖励", "240 币 + 5");
+        srow("幻影箱奖励", "100 币 + 4");
+        srow("列高奖励", "360 币 + 7");
+        srow("限时三印奖励", "340 币 + 7");
+        srow("护送终点", "320 币 + 6");
+        srow("三印探索", "400 币 + 7（每图一次）");
+        srow("道具 zone", "0xFF（不被野怪缓清误删）");
+        step("WorldEvent / WorldExplore / Treasure 三套系统", "WorldEvent / WorldExplore / Treasure");
+        step("ThemeArt::resolve(mob,name,map) 决定程序美术", "ThemeArt::resolve picks procedural art");
+        step("点「代码流程」或「世界介绍」看全部变体图文", "See Processes / Maps for full illustrated roster");
+    } else if (std::strcmp(id, "social") == 0) {
+        srow("聊天频道", "附近 / 队伍 / 公会 / 私聊 / 全服");
+        srow("chatlog", "持久化聊天记录 /api/chatlog");
+        srow("broadcasts", "击杀 / 高级合成 / 公告 /api/broadcasts");
+        srow("组队", "共享击杀经验");
+        srow("排行榜维度", "在线时长、等级、发言、Boss、高级合成");
+        step("Chat.cc 写入；Live 看板拉取历史", "Chat.cc persists; Live console queries history");
+        step("公会/组队实体 TeamManager / Party / Guild", "Guild/Party via TeamManager");
+    } else if (std::strcmp(id, "bonus") == 0) {
+        srow("每日加成发放", "3600 秒（1 小时）");
+        srow("离线累计上限", "21600 秒（6 小时）");
+        srow("效果", "开启后击杀掉落额外翻倍堆（Unique 除外）");
+        srow("需登录账号", "未登录不累计");
+        step("AccountStore 登录发 daily=3600，离线累加封顶 21600", "Login daily=3600; offline accrue cap 21600");
+        step("Client 手动开启；Death 检测 daily/offline 秒数", "Client toggles; Death checks remaining seconds");
+        step("消耗优先扣 daily，再扣 offline", "Spend daily first, then offline");
+    }
+
+    out += ",\"stats\":[";
+    out += stats;
+    out += "],\"steps\":[";
+    out += steps;
+    out += "]";
+}
 
 static void emit_petal_attrs(std::string &out, PetalAttributes const &a) {
     out += ",\"attrs\":{";
@@ -295,8 +470,18 @@ static void emit_petal_attrs(std::string &out, PetalAttributes const &a) {
     out += '}';
 }
 
+static void emit_u8_array(std::string &out, std::vector<uint8_t> const &v) {
+    out += '[';
+    for (size_t i = 0; i < v.size(); ++i) {
+        if (i) out += ',';
+        out += std::to_string((unsigned) v[i]);
+    }
+    out += ']';
+}
+
 static void emit_petal(std::string &out, uint32_t id,
-                       std::unordered_map<std::string, std::vector<uint32_t>> const &ladders) {
+                       std::unordered_map<std::string, std::vector<uint32_t>> const &ladders,
+                       std::vector<uint8_t> const &maps) {
     PetalData const &p = PETAL_DATA[id];
     char const *en = p.name ? p.name : "";
     out += '{';
@@ -324,6 +509,8 @@ static void emit_petal(std::string &out, uint32_t id,
         jkv_u(out, "craft_next", (unsigned) next, f);
     }
     emit_petal_attrs(out, p.attributes);
+    out += ",\"maps\":";
+    emit_u8_array(out, maps);
     out += ",\"ladder\":[";
     auto it = ladders.find(en);
     if (it != ladders.end()) {
@@ -371,7 +558,35 @@ static void emit_mob_drops(std::string &out, uint32_t mob_id, uint8_t view_rarit
     out += ']';
 }
 
-static void emit_mob(std::string &out, uint32_t id) {
+// Mob IDs that actually spawn on each map (MapGen zones + boss anchor).
+static void collect_map_mobs(std::vector<std::vector<uint32_t>> &by_map,
+                             std::vector<std::vector<uint8_t>> &mob_to_maps) {
+    by_map.assign(MapID::kNumMaps, {});
+    mob_to_maps.assign(MobID::kNumMobs, {});
+    for (uint8_t mid = 0; mid < MapID::kNumMaps; ++mid) {
+        MapGen::ensure(mid);
+        std::unordered_set<uint32_t> seen;
+        MapZones const &zones = MapGen::zones(mid);
+        for (uint32_t zi = 0; zi < zones.size(); ++zi) {
+            auto const &spawns = zones[zi].spawns;
+            for (uint32_t si = 0; si < spawns.size(); ++si) {
+                uint32_t id = (uint32_t) spawns[si].id;
+                if (id == 0 || id >= MobID::kNumMobs) continue;
+                if (seen.insert(id).second) by_map[mid].push_back(id);
+            }
+        }
+        MapGen::BossAnchor const &boss = MapGen::boss_anchor(mid);
+        if (boss.mob_id && boss.mob_id < MobID::kNumMobs
+            && seen.insert(boss.mob_id).second)
+            by_map[mid].push_back(boss.mob_id);
+        std::sort(by_map[mid].begin(), by_map[mid].end());
+        for (uint32_t id : by_map[mid])
+            mob_to_maps[id].push_back(mid);
+    }
+}
+
+static void emit_mob(std::string &out, uint32_t id,
+                     std::vector<std::vector<uint8_t>> const &mob_to_maps) {
     MobData const &m = MOB_DATA[id];
     char const *en = m.name ? m.name : "";
     out += '{';
@@ -396,6 +611,9 @@ static void emit_mob(std::string &out, uint32_t id) {
     jkv_f(out, "poison_dps", m.attributes.poison_damage.damage, f);
     jkv_f(out, "poison_time", m.attributes.poison_damage.time, f);
     jkv_u(out, "boss", is_boss_mob((MobID::T) id) ? 1u : 0u, f);
+    out += ",\"maps\":";
+    if (id < mob_to_maps.size()) emit_u8_array(out, mob_to_maps[id]);
+    else out += "[]";
     out += ",\"drops\":";
     emit_mob_drops(out, id, m.rarity);
     // Full rarity ladder of drop tables for balance editing
@@ -502,7 +720,9 @@ std::string Server::live_codex_json() {
         esc(out, c.detail_zh);
         out += "\",\"detail_en\":\"";
         esc(out, c.detail_en);
-        out += "\"}";
+        out += "\"";
+        emit_mech_payload(out, c.id);
+        out += "}";
     }
 
     out += "],\"art_kinds\":[";
@@ -587,6 +807,46 @@ std::string Server::live_codex_json() {
         });
     }
 
+    std::vector<std::vector<uint32_t>> map_mobs;
+    std::vector<std::vector<uint8_t>> mob_to_maps;
+    collect_map_mobs(map_mobs, mob_to_maps);
+
+    // Petal maps = maps of mobs that list this seed (or any same-name ladder mate).
+    std::vector<std::unordered_set<uint8_t>> petal_map_set(PetalID::kNumPetals);
+    for (uint32_t mid = 0; mid < MobID::kNumMobs; ++mid) {
+        if (mob_to_maps[mid].empty()) continue;
+        auto const &drops = MOB_DATA[mid].drops;
+        for (uint32_t di = 0; di < drops.size(); ++di) {
+            uint32_t seed = (uint32_t) drops[di];
+            if (seed == 0 || seed >= PetalID::kNumPetals) continue;
+            char const *en = PETAL_DATA[seed].name;
+            if (en == nullptr || !*en) {
+                for (uint8_t m : mob_to_maps[mid]) petal_map_set[seed].insert(m);
+                continue;
+            }
+            auto lit = ladders.find(en);
+            if (lit == ladders.end()) {
+                for (uint8_t m : mob_to_maps[mid]) petal_map_set[seed].insert(m);
+                continue;
+            }
+            for (uint32_t pid : lit->second)
+                for (uint8_t m : mob_to_maps[mid]) petal_map_set[pid].insert(m);
+        }
+    }
+
+    out += "],\"map_spawns\":[";
+    for (uint8_t mid = 0; mid < MapID::kNumMaps; ++mid) {
+        if (mid) out += ',';
+        out += "{\"map_id\":";
+        out += std::to_string(mid);
+        out += ",\"mobs\":[";
+        for (size_t i = 0; i < map_mobs[mid].size(); ++i) {
+            if (i) out += ',';
+            out += std::to_string(map_mobs[mid][i]);
+        }
+        out += "]}";
+    }
+
     out += "],\"petals\":[";
     {
         uint8_t first_p = 1;
@@ -595,7 +855,9 @@ std::string Server::live_codex_json() {
             if (en == nullptr || !*en) continue;
             if (!first_p) out += ',';
             first_p = 0;
-            emit_petal(out, id, ladders);
+            std::vector<uint8_t> maps(petal_map_set[id].begin(), petal_map_set[id].end());
+            std::sort(maps.begin(), maps.end());
+            emit_petal(out, id, ladders, maps);
         }
     }
 
@@ -607,7 +869,7 @@ std::string Server::live_codex_json() {
             if (en == nullptr || !*en) continue;
             if (!first_m) out += ',';
             first_m = 0;
-            emit_mob(out, id);
+            emit_mob(out, id, mob_to_maps);
         }
     }
 

@@ -1791,6 +1791,11 @@ Element *Ui::make_game_side_buttons() {
     // Size bumped further on mobile by Button::apply_mobile_touch_size (44→64).
     float const gap = Input::is_mobile ? 10.f : 6.f;
     Element *elt = new Ui::VContainer({
+        new Ui::Button(90, 44,
+            new Ui::DynamicText(13, [](){ return I18n::use_chinese ? "重置测试" : "Reset Test"; }),
+            [](Element *, uint8_t event){ if (event == Ui::kClick) Game::reset_training(); }, nullptr,
+            { .fill = Chrome::kBtnMoss, .line_width = 0, .round_radius = Chrome::kRadius,
+              .should_render = [](){ return Game::near_training_dummies(); } }),
         new Ui::Button(48, 48,
             make_hud_icon(hud_icon_inventory, 28.f),
             on_inventory_btn, inventory_active,
@@ -1987,8 +1992,8 @@ Element *Ui::make_presets_panel() {
         }, { .fill = Chrome::kMuted }),
         new Ui::DynamicText(13, [](){
             return I18n::use_chinese
-                ? std::string{"手机 R：长按后点槽切 L 背包（当前→L1，其它首次空）"}
-                : std::string{"Mobile R: hold then tap L bag (current→L1, others start empty)"};
+                ? std::string{"手机 R：长按后点槽切 L 配装；离开前自动保存修改"}
+                : std::string{"Mobile R: hold then tap L preset; edits auto-save before leaving"};
         }, { .fill = Chrome::kMuted }),
         new Ui::VContainer(rows, 0, 6, { .no_animation = 1 }),
         new Ui::Button(180, 44,

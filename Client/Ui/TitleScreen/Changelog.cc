@@ -43,6 +43,26 @@ static Element *make_entries(std::initializer_list<std::pair<char const *, char 
 
 static Element *make_changelog_contents() {
     Element *elt = new Ui::VContainer({
+        make_date("2026年10月24日", "October 24th 2026"),
+        make_entries({
+            {"视野同步：取消每客户端 280 实体硬截断（对齐二创）；缩放不再因截尾导致屏内怪闪现消失，仍靠视口 AOI+密度+AI 休眠控成本",
+             "View sync: drop 280/client hard cap (like other clones); zoom no longer flickers on-screen mobs; AOI+density+AI cull remain"},
+            {"碰撞质感：玩家互推保留 soft-block，浅重叠加最小分离，减轻缓慢穿模；不跳过远距物理碰撞",
+             "Collision feel: player soft-block keeps min separation on shallow overlap; no skipping far physics"},
+            {"怪物倒下：客户端倾倒/压扁/阴影尸体姿态，淡出约 0.75s（不再胀死消失）",
+             "Mob death: tipped/squash/shadow corpse pose ~0.75s fade (no balloon pop)"},
+            {"训练假人：Hit/DPS/累计伤害读数统一 k/m/b 缩写",
+             "Training dummy: Hit/DPS/total use k/m/b suffixes"},
+            {"掉落私有化：组队每人独立掉落，仅本人可见可拾；拾取进背包不自动装槽",
+             "Private loot: per-player piles; owner-only see/pickup; bank stacks not auto-equip"},
+            {"花园假人区：九档测试假人独立美术与 DPS 隔离；换装重置个人统计",
+             "Garden dummies: nine tiers, personal DPS; loadout change resets stats"},
+            {"配装/蜂蜜/反转/泡泡/金叶等一批战斗与 UI 修复；王城稀有度区与 Boss 稀有度刷怪修正",
+             "Loadout/honey/invert/bubble/Golden Leaf combat+UI fixes; capital rarity zones & boss spawn rarity"},
+            {"性能：视口 AOI、碰撞格子、刷怪拒绝、区块缓存与快照代数戳等引擎侧优化",
+             "Perf: viewport AOI, spatial collide, spawn reject, chunk cache, snapshot generation stamps"},
+        }),
+        make_divider(),
         make_date("2026年10月23日（晚）", "October 23rd 2026 (evening)"),
         make_entries({
             {"唯一带等级：背包拆成 Lv 单格+普通堆叠；加成只作用主手第一枚；装备槽右上角显示 Lv；提示区分加强/基础数值",

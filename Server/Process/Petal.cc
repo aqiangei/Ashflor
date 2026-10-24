@@ -43,25 +43,26 @@ void tick_petal_behavior(Simulation *sim, Entity &petal) {
     }
     Entity &player = sim->get_ent(petal.get_parent());
     struct PetalData const &petal_data = PETAL_DATA[petal.get_petal_id()];
-    if (petal_data.attributes.rotation_style == PetalAttributes::kPassiveRot) {
+    uint8_t const detached = BitMath::at(petal.flags, EntityFlags::kIsDetached)
+        || BitMath::at(petal.flags, EntityFlags::kIsDespawning);
+    // PassiveRot must not run while detached — Honey was curving from spin (looked like orbit).
+    if (petal_data.attributes.rotation_style == PetalAttributes::kPassiveRot && !detached) {
         //simulate on clientside
         float rot_amt = petal_name_is(petal.get_petal_id(), "Wing") ? 10.0 : 1.0;
         if (petal.id.id % 2) petal.set_angle(petal.get_angle() + rot_amt / TPS);
         else petal.set_angle(petal.get_angle() - rot_amt / TPS);
-    } else if (petal_data.attributes.rotation_style == PetalAttributes::kFollowRot && !(BitMath::at(petal.flags, EntityFlags::kIsDespawning))) {
+    } else if (petal_data.attributes.rotation_style == PetalAttributes::kFollowRot && !detached) {
         Vector delta(petal.get_x() - player.get_x(), petal.get_y() - player.get_y());
         petal.set_angle(delta.angle());
     }
-    if (BitMath::at(petal.flags, EntityFlags::kIsDespawning) ||
-        BitMath::at(petal.flags, EntityFlags::kIsDetached)) {
+    if (detached) {
         PetalID::T pid = petal.get_petal_id();
         if (petal_name_is(pid, "Missile") || pid == PetalID::kSandLeafDart) {
             petal.acceleration.unit_normal(petal.get_angle()).set_magnitude(2.0 * PLAYER_ACCELERATION);
         } else if (petal_is_honey(pid)) {
-            // Very slow crawl — keep honey near the flower / magnet AFK bubble.
-            petal.acceleration.unit_normal(petal.get_angle()).set_magnitude(0.30f * PLAYER_ACCELERATION);
-        } else if (pid == PetalID::kPoisonPeas || pid == PetalID::kPeas
-                   || pid == PetalID::kGlassStorm) {
+            // Straight bait toss — slower than Missile so mobs can catch it.
+            petal.acceleration.unit_normal(petal.get_angle()).set_magnitude(0.7f * PLAYER_ACCELERATION);
+        } else if (petal_name_is(pid, "Peas") || petal_name_is(pid, "Glass Storm")) {
             petal.acceleration.unit_normal(petal.heading_angle).set_magnitude(2.0 * PLAYER_ACCELERATION);
         } else if (petal_is_moon(pid)) {
             // Orbit the flower: advance angle every tick (all Moon ladder IDs).
@@ -149,10 +150,14 @@ void tick_petal_behavior(Simulation *sim, Entity &petal) {
             }
     } else if (petal_is_honey(pid)) {
             if (BitMath::at(player.input, InputFlags::kAttacking)) {
-                // Short soft toss; 4s life, stays close for AFK magnet farming.
-                petal.velocity.unit_normal(petal.get_angle()).set_magnitude(2.0f * PLAYER_ACCELERATION);
+                // Straight outward bait — lock angle away from flower (no PassiveRot curve).
+                BitMath::set(petal.flags, EntityFlags::kIsDetached);
+                Vector out(petal.get_x() - player.get_x(), petal.get_y() - player.get_y());
+                float ang = out.magnitude() > 1.f ? out.angle() : player.get_angle();
+                petal.set_angle(ang);
+                petal.velocity.unit_normal(ang).set_magnitude(4.5f * PLAYER_ACCELERATION);
                 petal.friction = DEFAULT_FRICTION;
-                entity_set_despawn_tick(petal, 4.0 * TPS);
+                entity_set_despawn_tick(petal, 8.0 * TPS);
             }
     } else if (petal_is_meteor(pid)) {
             if (BitMath::at(player.input, InputFlags::kAttacking)
@@ -198,35 +203,33 @@ void tick_petal_behavior(Simulation *sim, Entity &petal) {
                 }
                 sim->request_delete(petal.id);
             }
+    } else if (petal_name_is(pid, "Peas") || petal_name_is(pid, "Glass Storm")) {
+        // Full rarity ladders — exact PetalID cases missed every rung but the seed.
+        if (BitMath::at(player.input, InputFlags::kAttacking)) {
+            float spray_angle = frand() * 2 * M_PI;
+            petal.friction = DEFAULT_FRICTION;
+            petal.velocity.unit_normal(spray_angle).set_magnitude(20 * PLAYER_ACCELERATION);
+            petal.set_split_projectile(0);
+            petal.heading_angle = spray_angle;
+            entity_set_despawn_tick(petal, 1.0 * TPS);
+            for (uint32_t i = 1; i < petal_data.count; ++i) {
+                Entity &new_petal = alloc_petal(sim, petal.get_petal_id(), player);
+                new_petal.friction = DEFAULT_FRICTION;
+                new_petal.set_x(petal.get_x());
+                new_petal.set_y(petal.get_y());
+                new_petal.set_split_projectile(0);
+                new_petal.heading_angle = spray_angle + (2 * M_PI * i) / petal_data.count;
+                new_petal.velocity
+                    .unit_normal(new_petal.heading_angle)
+                    .set_magnitude(20 * PLAYER_ACCELERATION);
+                entity_set_despawn_tick(new_petal, 1.0 * TPS);
+            }
+        }
     } else switch (pid) {
         case PetalID::kPollen:
             if (BitMath::at(player.input, InputFlags::kAttacking) || BitMath::at(player.input, InputFlags::kDefending)) {
                 petal.friction = DEFAULT_FRICTION;
                 entity_set_despawn_tick(petal, 4.0 * TPS);
-            }
-            break;
-        case PetalID::kPeas:
-        case PetalID::kPoisonPeas:
-        case PetalID::kGlassStorm:
-            if (BitMath::at(player.input, InputFlags::kAttacking)) {
-                float spray_angle = frand() * 2 * M_PI;
-                petal.friction = DEFAULT_FRICTION;
-                petal.velocity.unit_normal(spray_angle).set_magnitude(20 * PLAYER_ACCELERATION);
-                petal.set_split_projectile(0);
-                petal.heading_angle = spray_angle;
-                entity_set_despawn_tick(petal, 1.0 * TPS);
-                for (uint32_t i = 1; i < petal_data.count; ++i) {
-                    Entity &new_petal = alloc_petal(sim, petal.get_petal_id(), player);
-                    new_petal.friction = DEFAULT_FRICTION;
-                    new_petal.set_x(petal.get_x());
-                    new_petal.set_y(petal.get_y());
-                    new_petal.set_split_projectile(0);
-                    new_petal.heading_angle = spray_angle + (2 * M_PI * i) / petal_data.count;
-                    new_petal.velocity
-                        .unit_normal(new_petal.heading_angle)
-                        .set_magnitude(20 * PLAYER_ACCELERATION);
-                    entity_set_despawn_tick(new_petal, 1.0 * TPS);
-                }
             }
             break;
         case PetalID::kMoon: {
@@ -250,7 +253,6 @@ void tick_petal_behavior(Simulation *sim, Entity &petal) {
         case PetalID::kPollenSandstorm:
         case PetalID::kWorldTreeSeed:
         case PetalID::kChronoVortex:
-            // fallthrough shared plant path below
             if (BitMath::at(player.input, InputFlags::kAttacking)
                 || BitMath::at(player.input, InputFlags::kDefending)) {
                 Vector delta(petal.get_x() - player.get_x(), petal.get_y() - player.get_y());

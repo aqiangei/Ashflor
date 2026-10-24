@@ -7,4 +7,8 @@
 namespace XpMigration {
     // Returns number of accounts whose level was rewritten. Idempotent via sentinel file.
     uint32_t run_once();
+    // Every boot: compress UINT32_MAX / absurd overflow rows (score or level).
+    // Idempotent on clean data; needed because v2 sentinel skips re-runs and new
+    // guests can still pin UINT32_MAX via the old overflow clamp.
+    uint32_t scrub_overflow();
 }

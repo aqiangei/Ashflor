@@ -104,31 +104,31 @@ static uint8_t bind_session(Client *client, std::string const &username, Account
         acc->offline_bonus_seconds = (uint32_t) std::min<uint64_t>(21600,
             (uint64_t)acc->offline_bonus_seconds + earned);
     }
-    // Fold legacy overflow into actual backpack slots before sending the
-    // account snapshot. Keep any remainder in the old save fields until a
-    // slot is freed, so migration never destroys owned petals.
-    bool migrated = false;
-    uint32_t bag_start = Talent::slot_count_from_ranks(acc->talent_ranks);
-    for (uint32_t id = 1; id < PetalID::kNumPetals; ++id) {
-        while (acc->craft_bank[id] > 0) {
-            uint32_t slot = bag_start;
-            while (slot < bag_start + MAX_SLOT_COUNT
-                && acc->petals[slot] != PetalID::kNone) ++slot;
-            if (slot >= bag_start + MAX_SLOT_COUNT) break;
-            acc->petals[slot] = (PetalID::T)id;
-            --acc->craft_bank[id];
-            migrated = true;
-        }
-    }
+    // Backpack stacks stay stacked; login must not equip them into empty slots.
     acc->last_seen_epoch = now;
     client->account_name = username;
     // Empty primary after a bad drain → rebuild from last K/L scheme using bag.
     client->active_loadout_preset = acc->active_loadout_preset;
     client->loadout_presets = acc->loadout_presets;
     restore_primary_from_active_preset(*acc);
+    client->last_applied_loadout = current_loadout_preset(acc->petals,
+        Talent::slot_count_from_ranks(acc->talent_ranks));
     client->craft_bank = acc->craft_bank;
     client->coins = acc->coins;
     client->craft_attempts = acc->craft_attempts;
+    // Remap Unique levels that sat on shifted non-Unique IDs (same as load path).
+    {
+        for (uint32_t id = 1; id < (uint32_t) PetalID::kNumPetals; ++id) {
+            uint32_t lv = acc->petal_levels[id];
+            if (lv == 0) continue;
+            if (PETAL_DATA[id].rarity == RarityID::kUnique) continue;
+            PetalID::T uniq = Craft::petal_at_rarity((PetalID::T) id, RarityID::kUnique);
+            if (uniq == PetalID::kNone || uniq >= PetalID::kNumPetals) continue;
+            if (acc->petal_levels[uniq] < lv)
+                acc->petal_levels[uniq] = lv;
+            acc->petal_levels[id] = 0;
+        }
+    }
     client->petal_levels = acc->petal_levels;
     for (uint8_t i = 0; i < TalentID::kNum; ++i)
         client->talent_ranks[i] = acc->talent_ranks[i];
@@ -150,10 +150,6 @@ static uint8_t bind_session(Client *client, std::string const &username, Account
     ACTIVE_SESSIONS.insert(username);
     if (client->game != nullptr && client->game->simulation.ent_exists(client->camera) && !client->alive())
         AccountStore::apply_to_camera(&client->game->simulation, client->game->simulation.get_ent(client->camera), *acc);
-    if (migrated) {
-        ACCOUNTS_DIRTY = 1;
-        AccountStore::save();
-    }
     Guild::on_login(client);
     return AccountResultCode::kAccountOk;
 }
@@ -477,8 +473,8 @@ void AccountStore::load() {
             if (acc.craft_bank[i] > 1000000u)
                 acc.craft_bank[i] = 0;
         }
-        // Trailing tokens after numeric fields (optional on old saves):
-        //   g:<name> <leader>   s:<score>
+        // Tagged extensions keep the numeric layout readable by older saves.
+        bool has_secondary_presets = false;
         {
             ls.clear();
             std::string tok;
@@ -495,6 +491,28 @@ void AccountStore::load() {
                         acc.score = (uint32_t) v;
                     } catch (...) {
                         acc.score = 0;
+                    }
+                } else if (tok.starts_with("p2:")) {
+                    std::string data = tok.substr(3);
+                    std::replace(data.begin(), data.end(), ',', ' ');
+                    std::istringstream ps(data);
+                    auto presets = acc.loadout_presets;
+                    bool valid = true;
+                    for (auto &preset : presets) {
+                        for (auto &id : preset.secondary) {
+                            uint32_t value;
+                            if (!(ps >> value) || value >= PetalID::kNumPetals) {
+                                valid = false;
+                                break;
+                            }
+                            id = (PetalID::T) value;
+                        }
+                        if (!valid) break;
+                    }
+                    std::string extra;
+                    if (valid && !(ps >> extra)) {
+                        acc.loadout_presets = presets;
+                        has_secondary_presets = true;
                     }
                 } else if (tok.size() >= 2 && tok[0] == 'l' && tok[1] == ':') {
                     // l:id=lv,id=lv  (or l:- when empty)
@@ -514,6 +532,20 @@ void AccountStore::load() {
                 }
             }
         }
+        // Enum/ID shifts: if a saved level sits on a non-Unique id, move it onto
+        // the same-name Unique rung so display + craft leveling stay wired.
+        {
+            for (uint32_t id = 1; id < (uint32_t) PetalID::kNumPetals; ++id) {
+                uint32_t lv = acc.petal_levels[id];
+                if (lv == 0) continue;
+                if (PETAL_DATA[id].rarity == RarityID::kUnique) continue;
+                PetalID::T uniq = Craft::petal_at_rarity((PetalID::T) id, RarityID::kUnique);
+                if (uniq == PetalID::kNone || uniq >= PetalID::kNumPetals) continue;
+                if (acc.petal_levels[uniq] < lv)
+                    acc.petal_levels[uniq] = lv;
+                acc.petal_levels[id] = 0;
+            }
+        }
         // Score is cumulative & authoritative. Recompute level from score under
         // the current curve (curve changes never wipe XP — only remap level).
         {
@@ -524,6 +556,14 @@ void AccountStore::load() {
             if (acc.level < 1) acc.level = 1;
             Talent::clamp_ranks(acc.talent_ranks, acc.level);
         }
+        // Old saves only know the currently equipped secondary row. Recover
+        // that row for the active preset without guessing other saved schemes.
+        if (!has_secondary_presets && acc.active_loadout_preset < LOADOUT_PRESET_COUNT) {
+            auto &preset = acc.loadout_presets[acc.active_loadout_preset];
+            uint8_t slots = Talent::slot_count_from_ranks(acc.talent_ranks);
+            for (uint8_t i = 0; i < std::min(slots, preset.slot_count); ++i)
+                preset.secondary[i] = acc.petals[slots + i];
+        }
         ACCOUNTS[acc.username] = acc;
     }
     std::cout << "[accounts] loaded " << ACCOUNTS.size() << " accounts" << std::endl;
@@ -531,10 +571,14 @@ void AccountStore::load() {
     save();
 }
 
+void AccountStore::mark_dirty() {
+    ACCOUNTS_DIRTY = 1;
+}
+
 void AccountStore::save() {
     if (!ACCOUNTS_DIRTY) return;
     std::ostringstream out;
-    out << "# ashflor accounts  fields: user hash level petals[20] craft_bank[N] coins craft_attempts talent_ranks[7] session_hash presets[20][slots+10 petals] bonus_day daily_bonus offline_bonus last_seen active_preset g:guild leader s:score\n";
+    out << "# ashflor accounts  fields: user hash level petals[20] craft_bank[N] coins craft_attempts talent_ranks[7] session_hash presets[20][slots+10 petals] bonus_day daily_bonus offline_bonus last_seen active_preset g:guild leader s:score p2:secondary[20][10]\n";
     for (auto const &kv : ACCOUNTS) {
         Account const &acc = kv.second;
         out << acc.username << ' ' << acc.pass_hash << ' ' << (uint32_t) acc.level;
@@ -560,6 +604,14 @@ void AccountStore::save() {
         uint32_t floor = level_to_score(acc.level < 1 ? 1 : acc.level);
         if (sc < floor) sc = floor;
         out << " s:" << sc;
+        out << " p2:";
+        bool first_secondary = true;
+        for (auto const &preset : acc.loadout_presets)
+            for (PetalID::T id : preset.secondary) {
+                if (!first_secondary) out << ',';
+                out << (uint32_t) id;
+                first_secondary = false;
+            }
         {
             std::string lv;
             for (uint32_t i = 1; i < PetalID::kNumPetals; ++i) {
@@ -603,13 +655,6 @@ static uint8_t petal_is_filler(PetalID::T id) {
     return id == PetalID::kNone || id == PetalID::kBasic || id == PetalID::kUniqueBasic;
 }
 
-static uint32_t count_valuable_petals(std::array<PetalID::T, 2 * MAX_SLOT_COUNT> const &p) {
-    uint32_t n = 0;
-    for (uint32_t i = 0; i < 2 * MAX_SLOT_COUNT; ++i)
-        if (!petal_is_filler(p[i])) ++n;
-    return n;
-}
-
 // Primary bar only — bag/secondary is a separate authority.
 static uint8_t primary_is_trivial(
     std::array<PetalID::T, 2 * MAX_SLOT_COUNT> const &p, uint32_t primary_n
@@ -638,16 +683,8 @@ static void restore_primary_from_active_preset(Account &acc) {
     if (preset.slot_count == 0) return;
     uint32_t primary_n = account_primary_slots(acc, nullptr);
     if (!primary_is_trivial(acc.petals, primary_n)) return;
-    std::array<uint32_t, PetalID::kNumPetals> overflow = {};
     uint8_t fallback = 0;
-    if (!arrange_loadout_preset(acc.petals, (uint8_t) primary_n, preset, overflow, fallback))
-        return;
-    for (uint32_t id = 0; id < PetalID::kNumPetals; ++id) {
-        if (overflow[id] == 0) continue;
-        uint64_t sum = (uint64_t) acc.craft_bank[id] + overflow[id];
-        if (sum > 1000000ull) sum = 1000000ull;
-        acc.craft_bank[id] = (uint32_t) sum;
-    }
+    arrange_loadout_preset(acc.petals, (uint8_t) primary_n, preset, acc.craft_bank, fallback);
 }
 
 // Returns 1 when the in-memory Account row changed (caller should mark dirty).
@@ -696,33 +733,15 @@ static uint8_t copy_progress(Account &acc, Client *client) {
         client->pending_score = acc.score;
 
     uint32_t const primary_n = account_primary_slots(acc, client);
-    uint32_t const next_v = count_valuable_petals(next);
-    uint32_t const acc_v = count_valuable_petals(acc.petals);
-    // Primary and bag are separate authorities. A mid-drain snap with an empty
-    // primary bar but intact bag used to overwrite and DELETE equipped petals.
-    // Refuse that: keep previous primary when valuables were lost.
-    if (primary_is_trivial(next, primary_n)
-        && !primary_is_trivial(acc.petals, primary_n)
-        && next_v < acc_v) {
-        for (uint32_t i = primary_n; i < primary_n + MAX_SLOT_COUNT
-            && i < 2 * MAX_SLOT_COUNT; ++i)
-            acc.petals[i] = next[i];
-    } else {
-        acc.petals = next;
-    }
+    // The flower/camera chosen above is authoritative. An empty primary can
+    // be intentional: a preset has moved those copies into craft_bank. Keeping
+    // the old primary here would duplicate them and restore the wrong scheme.
+    acc.petals = next;
     normalize_petals(acc);
 
-    // Refresh the active K/L preset from the live primary so redeploy restores it.
-    // Never used a scheme yet → park current bar on K1.
-    if (!primary_is_trivial(acc.petals, primary_n)) {
-        if (client->active_loadout_preset >= LOADOUT_PRESET_COUNT)
-            client->active_loadout_preset = 0;
-        LoadoutPreset &p = client->loadout_presets[client->active_loadout_preset];
-        p.slot_count = (uint8_t) primary_n;
-        p.petals.fill(PetalID::kNone);
-        for (uint32_t i = 0; i < primary_n; ++i)
-            p.petals[i] = acc.petals[i];
-    }
+    refresh_active_loadout_preset(client->loadout_presets,
+        client->active_loadout_preset, client->last_applied_loadout,
+        current_loadout_preset(acc.petals, (uint8_t) primary_n));
 
     acc.craft_bank = client->craft_bank;
     acc.coins = client->coins;
@@ -874,6 +893,8 @@ void AccountStore::capture(Client *client) {
 
 void AccountStore::note_score(Client *client, uint32_t score) {
     if (client == nullptr || score == 0) return;
+    uint32_t cap = score_soft_cap();
+    if (score > cap) score = cap;
     if (score > client->pending_score)
         client->pending_score = score;
     if (client->account_name.empty()) return;
@@ -881,6 +902,11 @@ void AccountStore::note_score(Client *client, uint32_t score) {
     if (acc == nullptr) return;
     if (score > acc->score) {
         acc->score = score;
+        ACCOUNTS_DIRTY = 1;
+    }
+    // Cap legacy overflow rows that already sat at UINT32_MAX.
+    if (acc->score > cap) {
+        acc->score = cap;
         ACCOUNTS_DIRTY = 1;
     }
     acc->level = score_to_level(acc->score);

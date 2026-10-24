@@ -13,6 +13,15 @@ constexpr float BASE_TPS = 20;
 
 void tick_entity_motion(Simulation *sim, Entity &ent) {
     if (ent.pending_delete) return;
+    if (TrainingDummy::is_dummy(ent)) {
+        ent.set_x(ent.home_x);
+        ent.set_y(ent.home_y);
+        ent.velocity.set(0, 0);
+        ent.acceleration.set(0, 0);
+        ent.collision_velocity.set(0, 0);
+        ent.speed_ratio = 1;
+        return;
+    }
     // Self-heal NaN/Inf physics (from florr_incremental): one poisoned entity
     // otherwise freezes the arena / breaks spatial hash after respawns.
     if (!is_finite(ent.get_x()) || !is_finite(ent.get_y())) {

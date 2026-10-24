@@ -40,17 +40,23 @@ namespace MapID {
         kAntHell,
         kVolcano,
         kRoyalCapital, // 王城 — append only
+        kAntNest,    // 三族蚁穴 — player layout; Fire|Black|Termite — append only
         kNumMaps
     };
 }
 
-// Launch set: only these maps boot / tick / appear in title select.
-// Re-enable others by adding IDs here (and a title button). Call each map
-// separately (MapGen::ensure / GameInstance::init) — do not batch all kNumMaps.
+// Maps that boot / tick / appear in title select.
+// Each map: separate MapGen::ensure + GameInstance::init (not one mega-batch).
 inline constexpr uint8_t OPEN_MAPS[] = {
     MapID::kGarden,
+    MapID::kDesert,
     MapID::kOcean,
+    MapID::kPolar,
+    MapID::kJungle,
+    MapID::kAntHell,
+    MapID::kVolcano,
     MapID::kRoyalCapital,
+    MapID::kAntNest,
 };
 inline constexpr uint8_t OPEN_MAP_COUNT =
     (uint8_t)(sizeof(OPEN_MAPS) / sizeof(OPEN_MAPS[0]));
@@ -1881,6 +1887,16 @@ namespace PetalID {
         kYinYangUnusual,
         kYinYangRare,
         kYuccaCommon,
+        // Triangle (Ant Nest / Termite drop) — append only
+        kTriangle,
+        kTriangleUnusual,
+        kTriangleRare,
+        kTriangleEpic,
+        kTriangleLegendary,
+        kTriangleMythic,
+        kTriangleUltra,
+        kTriangleSuper,
+        kTriangleUnique,
         kNumPetals
     };
 };
@@ -2010,6 +2026,14 @@ namespace MobID {
         kYahahaPad,
         kTreasureNpc,
         kLootChest, // walk-up Yahaha chest (not Mimic)
+        kTrainingDummy, // Garden spawn practice targets; never drops rewards
+        // Ant Nest factions — Fire (left) / Termite (right); append only
+        kBabyFireAnt,
+        kWorkerFireAnt,
+        kSoldierFireAnt,
+        kBabyTermite,
+        kWorkerTermite,
+        kSoldierTermite,
         kNumMobs
     };
 };
@@ -2131,6 +2155,7 @@ struct PetalAttributes {
     struct PoisonDamage burn_damage; // contact DoT; ignores poison_armor
     float armor_penetration = 0;     // 0-1 fraction of armor ignored
     float bonus_vs_poisoned = 0;     // additive, e.g. 0.35 = +35%
+    float stack_damage = 0;          // Triangle: +stack per same-ID copy equipped
     float bonus_vs_slowed = 0;
     uint8_t hit_cycle = 0;           // every N contact hits
     float hit_cycle_factor = 2.0f;
@@ -2169,6 +2194,7 @@ struct MobAttributes {
     float aggro_radius = 500;
     uint8_t segments = 1;
     uint8_t stationary;
+    uint8_t share_damage = 0; // Termite psionic: share hits with nearby kin
     struct PoisonDamage poison_damage;
 };
 

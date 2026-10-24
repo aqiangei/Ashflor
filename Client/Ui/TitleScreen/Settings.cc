@@ -84,6 +84,16 @@ Element *Ui::make_settings_panel() {
                 ? std::string{"交流 QQ 群：227990150"}
                 : std::string{"QQ group: 227990150"};
         }, { .fill = Chrome::kGold, .h_justify = Style::Left }),
+        new Ui::HContainer({
+            new Ui::Button(mobile ? 130.f : 150.f, 34,
+                new Ui::DynamicText(14, [](){ return I18n::use_chinese ? std::string{"给作者留言"} : std::string{"Feedback"}; }),
+                [](Element *, uint8_t e){ if (e == Ui::kClick) DOM::open_feedback_board(); }, nullptr,
+                { .fill = Chrome::kBtnMoss, .line_width = 0, .round_radius = Chrome::kRadius }),
+            new Ui::Button(mobile ? 110.f : 130.f, 34,
+                new Ui::DynamicText(14, [](){ return I18n::use_chinese ? std::string{"加入 QQ 群"} : std::string{"QQ group"}; }),
+                [](Element *, uint8_t e){ if (e == Ui::kClick) DOM::open_qq_group(); }, nullptr,
+                { .fill = Chrome::kBtnSlate, .line_width = 0, .round_radius = Chrome::kRadius })
+        }, 0, 8, {}),
         new Ui::DynamicText(mobile ? 15.f : 14.f, [](){ return I18n::tr(I18n::kMadeBy); }, {
             .fill = Chrome::kMuted, .h_justify = Style::Left
         }),

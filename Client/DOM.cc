@@ -1,7 +1,11 @@
 #include <Client/DOM.hh>
+#include <Client/Game.hh>
+#include <Client/Assets/QqLogo.hh>
 
 #include <Helpers/UTF8.hh>
 #include <Shared/Config.hh>
+
+#include <cstdlib>
 
 #include <emscripten.h>
 
@@ -173,6 +177,112 @@ void DOM::open_page(char const *url) {
             window.open(UTF8ToString($0));
         } catch(e) {}
     }, url);
+}
+
+void DOM::open_feedback_board() {
+    EM_ASM({
+        const user = UTF8ToString($0);
+        Module.feedbackSession = Object.create(null);
+        Module.feedbackSession["kind"] = "ashflor-feedback-session";
+        Module.feedbackSession["user"] = user;
+        if (!Module.feedbackListener) {
+            Module.feedbackListener = function(event) {
+                if (event.origin !== location.origin || event.source !== Module.feedbackWindow
+                    || !event.data) return;
+                if (event.data["kind"] === "ashflor-feedback-ready")
+                    event.source.postMessage(Module.feedbackSession, location.origin);
+                else if (event.data["kind"] === "ashflor-feedback-post"
+                    && typeof event.data["text"] === "string")
+                    _ashflor_feedback_post(stringToNewUTF8(event.data["text"]));
+            };
+            window.addEventListener("message", Module.feedbackListener);
+        }
+        Module.feedbackWindow = window.open("/feedback.html", "ashflor-feedback");
+        if (Module.feedbackWindow) {
+            Module.feedbackWindow.postMessage(Module.feedbackSession, location.origin);
+            Module.feedbackWindow.focus();
+        }
+    }, Game::account_logged_in ? Game::username.c_str() : "");
+}
+
+extern "C" EMSCRIPTEN_KEEPALIVE void ashflor_feedback_post(char *text) {
+    Game::post_feedback(text ? text : "");
+    std::free(text);
+}
+
+void DOM::feedback_result(uint8_t result, uint32_t id) {
+    EM_ASM({
+        if (!Module.feedbackWindow || Module.feedbackWindow.closed) return;
+        const reply = Object.create(null);
+        reply["kind"] = "ashflor-feedback-result";
+        reply["result"] = $0;
+        reply["id"] = $1;
+        Module.feedbackWindow.postMessage(reply, location.origin);
+    }, result, id);
+}
+
+void DOM::open_qq_group() {
+    EM_ASM({
+        const old = document.getElementById("ashflor-qq-dialog");
+        if (old) { old.focus(); return; }
+        if (!document.getElementById("ashflor-qq-dialog-style")) {
+            const style = document.createElement("style");
+            style.id = "ashflor-qq-dialog-style";
+            style.textContent =
+                "#ashflor-qq-dialog{border:2px solid #d7bd79;border-radius:20px;padding:28px 28px 22px;"
+                + "background:#fff9e9;color:#384638;font-family:system-ui,sans-serif;"
+                + "width:min(340px,calc(100vw - 48px));max-width:calc(100vw - 48px);text-align:center;"
+                + "box-shadow:0 18px 80px #0007}"
+                + "#ashflor-qq-dialog::backdrop{background:rgba(20,28,22,.45)}"
+                + "#ashflor-qq-dialog h2{margin:12px 0 8px;font-size:1.35rem}"
+                + "#ashflor-qq-dialog p{margin:0 0 10px}"
+                + "#ashflor-qq-dialog .qq-hint{font-size:14px;opacity:.85;line-height:1.4}"
+                + "#ashflor-qq-dialog .qq-actions{display:flex;flex-direction:column;gap:10px;margin-top:18px}"
+                + "#ashflor-qq-dialog .qq-row{display:flex;gap:10px}"
+                + "#ashflor-qq-dialog .qq-btn{"
+                + "display:inline-flex;align-items:center;justify-content:center;box-sizing:border-box;"
+                + "width:100%;min-height:44px;padding:11px 16px;border-radius:12px;font-size:15px;"
+                + "font-weight:600;cursor:pointer;text-decoration:none;border:2px solid transparent;"
+                + "-webkit-tap-highlight-color:transparent;user-select:none}"
+                + "#ashflor-qq-dialog .qq-btn-primary{background:#48a575;color:#fff;border-color:#3a8a60}"
+                + "#ashflor-qq-dialog .qq-btn-primary:hover{background:#3f9668}"
+                + "#ashflor-qq-dialog .qq-btn-secondary{background:#f3ead3;color:#384638;border-color:#d7bd79}"
+                + "#ashflor-qq-dialog .qq-btn-secondary:hover{background:#ebe0c4}"
+                + "#ashflor-qq-dialog [data-status]{min-height:20px;margin:10px 0 0;font-size:14px}";
+            document.head.appendChild(style);
+        }
+        const dialog = document.createElement("dialog");
+        dialog.id = "ashflor-qq-dialog";
+        dialog.innerHTML =
+            '<img alt="QQ" width="52" height="52">'
+            + '<h2>Ashflor 交流群</h2>'
+            + '<p>QQ群：<strong>227990150</strong></p>'
+            + '<p class="qq-hint">打不开 QQ 时，可以复制群号搜索加入。</p>'
+            + '<div class="qq-actions">'
+            +   '<a class="qq-btn qq-btn-primary" href="https://qm.qq.com/q/E0OG9CLIg" target="_blank" rel="noopener noreferrer">加入 QQ 群</a>'
+            +   '<div class="qq-row">'
+            +     '<button type="button" class="qq-btn qq-btn-secondary" data-copy>复制群号</button>'
+            +     '<button type="button" class="qq-btn qq-btn-secondary" data-close>关闭</button>'
+            +   '</div>'
+            + '</div>'
+            + '<p data-status role="status"></p>';
+        dialog.querySelector("img").src = UTF8ToString($0);
+        dialog.querySelector("[data-copy]").onclick = async function() {
+            const status = dialog.querySelector("[data-status]");
+            try { await navigator.clipboard.writeText("227990150"); status.textContent = "群号已复制"; }
+            catch (e) { status.textContent = "请手动复制群号：227990150"; }
+        };
+        dialog.querySelector("[data-close]").onclick = function() { dialog.close(); };
+        // Backdrop / outside the panel → dismiss (native <dialog> click target is the dialog itself).
+        dialog.addEventListener("click", function(event) {
+            if (event.target === dialog) dialog.close();
+        });
+        dialog.onclose = function() { dialog.remove(); };
+        for (const name of new Array("keydown", "keyup", "mousedown", "mouseup", "touchstart", "touchend", "touchmove"))
+            dialog.addEventListener(name, function(event) { event.stopPropagation(); });
+        document.body.appendChild(dialog);
+        dialog.showModal();
+    }, QQ_LOGO_DATA);
 }
 
 void DOM::focus_element(char const *name) {

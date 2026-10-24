@@ -128,20 +128,23 @@ int setup_inputs() {
             !e.repeat && _key_event(stringToNewUTF8(e.code), 1);
         });
         window.addEventListener("contextmenu", (e) => { e.preventDefault(); });
+        // Map to Input::LeftMouse=0 / RightMouse=1. Ignore middle (button===1).
+        const mouseBtn = (e) => (e.button === 2 ? 1 : (e.button === 0 ? 0 : -1));
         window.addEventListener("mousedown", (e) => {
-            //e.preventDefault();
             const r = dpr();
-            _mouse_event(e.clientX * r, e.clientY * r, 0, +!!e.button);
+            const b = mouseBtn(e);
+            if (b < 0) return;
+            _mouse_event(e.clientX * r, e.clientY * r, 0, b);
         });
         window.addEventListener("mousemove", (e) => {
-            //e.preventDefault();
             const r = dpr();
-            _mouse_event(e.clientX * r, e.clientY * r, 1, +!!e.button);
+            _mouse_event(e.clientX * r, e.clientY * r, 1, 0);
         });
         window.addEventListener("mouseup", (e) => {
-            //e.preventDefault();
             const r = dpr();
-            _mouse_event(e.clientX * r, e.clientY * r, 2, +!!e.button);
+            const b = mouseBtn(e);
+            if (b < 0) return;
+            _mouse_event(e.clientX * r, e.clientY * r, 2, b);
         });
         const touchOnField = (e) => {
             const t = e.target;
@@ -181,19 +184,19 @@ int setup_inputs() {
             e.preventDefault();
             _wheel_event(e.deltaY);
         }, { passive: false });
-        // Blur / tab-hide: abort petal drag so the next click cannot drop stale state
-        window.addEventListener("blur", () => {
+        // Blur / tab-hide: abort petal drag + clear LMB/RMB (lost mouseup sticks invert).
+        const onFocusLost = () => {
+            _mouse_event(0, 0, 2, 0);
+            _mouse_event(0, 0, 2, 1);
             if (typeof _ashflor_cancel_petal_drags === "function")
                 _ashflor_cancel_petal_drags();
             else if (typeof Module !== "undefined" && Module["_ashflor_cancel_petal_drags"])
                 Module["_ashflor_cancel_petal_drags"]();
-        });
+        };
+        window.addEventListener("blur", onFocusLost);
         document.addEventListener("visibilitychange", () => {
             if (document.visibilityState !== "hidden") return;
-            if (typeof _ashflor_cancel_petal_drags === "function")
-                _ashflor_cancel_petal_drags();
-            else if (typeof Module !== "undefined" && Module["_ashflor_cancel_petal_drags"])
-                Module["_ashflor_cancel_petal_drags"]();
+            onFocusLost();
         });
     });
     return 0;

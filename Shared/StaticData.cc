@@ -175,7 +175,7 @@ std::array<struct PetalData, PetalID::kNumPetals> const PETAL_DATA = {{
         .health = 15.0,
         .damage = 0.0,
         .radius = 12.0,
-        .reload = 1.75,
+        .reload = 0.55,
         .count = 1,
         .rarity = RarityID::kRare,
         .attributes = { .secondary_reload = 0.4575, .defend_only = 1 }
@@ -655,11 +655,11 @@ std::array<struct PetalData, PetalID::kNumPetals> const PETAL_DATA = {{
         }
     },
     // Golden Leaf (黄金之叶): global petal CD cut; factors multiply across slots.
-    // Rare−5% · Epic−8% · Leg−11% · Mythic−14% · Ultra−18% · Super−22% · Unique−26%.
+    // Hard cap: Craft::kReloadFactorFloor (50% CDR) after leaves × talent × Unique Lv.
     // World drop: Ultra only from Unique sovereigns (Molten Overlord / Ancient Treant).
     {
         .name = "Golden Leaf",
-        .description = "Shortens all petal cooldowns. Multiple copies multiply together.",
+        .description = "Shortens all petal cooldowns (stacks; hard cap 50% CDR).",
         .health = 15.0,
         .damage = 10.0,
         .radius = 10.0,
@@ -843,14 +843,14 @@ std::array<struct PetalData, PetalID::kNumPetals> const PETAL_DATA = {{
     {
         .name = "King's Oath",
         .description = "Amplifies petal damage; surges harder when your flower is low on health",
-        .health = 810.0,
-        .damage = 540.0,
+        .health = 900.0,
+        .damage = 600.0,
         .radius = 16.0,
         .reload = 4.0,
         .count = 1,
         .rarity = RarityID::kLegendary,
         .attributes = {
-            .extra_damage_factor = 1.265f
+            .extra_damage_factor = 1.4500f
         }
     },
     // ---- Rarity ladders (same name as base; ×3 combat feel) ----
@@ -1217,7 +1217,7 @@ std::array<struct PetalData, PetalID::kNumPetals> const PETAL_DATA = {{
         .health = 5.0,
         .damage = 0.0,
         .radius = 12.0,
-        .reload = 1.75,
+        .reload = 0.55,
         .count = 1,
         .rarity = RarityID::kUnusual,
         .attributes = { .secondary_reload = 0.5038, .defend_only = 1 }
@@ -1228,7 +1228,7 @@ std::array<struct PetalData, PetalID::kNumPetals> const PETAL_DATA = {{
         .health = 45.0,
         .damage = 0.0,
         .radius = 12.0,
-        .reload = 1.75,
+        .reload = 0.55,
         .count = 1,
         .rarity = RarityID::kEpic,
         .attributes = { .secondary_reload = 0.4113, .defend_only = 1 }
@@ -1239,7 +1239,7 @@ std::array<struct PetalData, PetalID::kNumPetals> const PETAL_DATA = {{
         .health = 135.0,
         .damage = 0.0,
         .radius = 12.0,
-        .reload = 1.75,
+        .reload = 0.55,
         .count = 1,
         .rarity = RarityID::kLegendary,
         .attributes = { .secondary_reload = 0.365, .defend_only = 1 }
@@ -1250,7 +1250,7 @@ std::array<struct PetalData, PetalID::kNumPetals> const PETAL_DATA = {{
         .health = 405.0,
         .damage = 0.0,
         .radius = 12.0,
-        .reload = 1.75,
+        .reload = 0.55,
         .count = 1,
         .rarity = RarityID::kMythic,
         .attributes = { .secondary_reload = 0.3187, .defend_only = 1 }
@@ -2864,60 +2864,60 @@ std::array<struct PetalData, PetalID::kNumPetals> const PETAL_DATA = {{
     {
         .name = "Heart of Nature",
         .description = "Durable + heal. Sovereign relic of Ancient Heart and Heartwood.",
-        .health = 220.0,
-        .damage = 5.0,
+        .health = 420.0,
+        .damage = 12.0,
         .radius = 23.0,
         .reload = 9.0,
         .count = 1,
         .rarity = RarityID::kLegendary,
-        .attributes = { .constant_heal = 5.0, .extra_health = 35.0, .defend_only = 1 }
+        .attributes = { .constant_heal = 22.0, .extra_health = 520.0, .defend_only = 1 }
     },
     {
         .name = "Abyssal Tide",
         .description = "Abyssal ring + slow. Sovereign relic of Tide Core and Blizzard Eye.",
-        .health = 80.0,
-        .damage = 55.0,
+        .health = 160.0,
+        .damage = 90.0,
         .radius = 24.0,
         .reload = 7.0,
         .count = 1,
         .rarity = RarityID::kLegendary,
         .attributes = {
-            .secondary_reload = 2.5375,
-            .slow_inflict_seconds = 1.1475,
-            .extra_range = 41.9985,
-            .radial_pulse_damage = 28.0017,
-            .radial_pulse_radius = 140.0004
+            .secondary_reload = 2.2,
+            .slow_inflict_seconds = 1.6,
+            .extra_range = 50.0,
+            .radial_pulse_damage = 55.0,
+            .radial_pulse_radius = 180.0
         }
     },
     {
         .name = "Infernal Core",
         .description = "Burns on contact. Sovereign relic of Leyline Core.",
-        .health = 180.0,
-        .damage = 65.0,
+        .health = 280.0,
+        .damage = 95.0,
         .radius = 24.0,
         .reload = 9.5,
         .count = 1,
         .rarity = RarityID::kLegendary,
         .attributes = {
-            .extra_health = 2025.0,
-            .burn_damage = { .damage = 8.0, .time = 4.0 }
+            .extra_health = 2400.0,
+            .burn_damage = { .damage = 18.0, .time = 5.0 }
         }
     },
     {
         .name = "Chrono Vortex",
         .description = "Defend-throw slow aura. Relic binding Sandstorm Eye, Sovereign Core, Tide Core.",
-        .health = 90.0,
-        .damage = 20.0,
+        .health = 160.0,
+        .damage = 40.0,
         .radius = 23.0,
         .reload = 8.0,
         .count = 1,
         .rarity = RarityID::kLegendary,
         .attributes = {
-            .secondary_reload = 0.3625,
-            .slow_inflict_seconds = 2.7,
-            .aura_radius = 120.0015,
-            .aura_duration = 10.05,
-            .aura_slow_seconds = 1.62,
+            .secondary_reload = 0.35,
+            .slow_inflict_seconds = 3.2,
+            .aura_radius = 160.0,
+            .aura_duration = 12.0,
+            .aura_slow_seconds = 2.2,
             .defend_only = 1
         }
     },
@@ -2940,42 +2940,42 @@ std::array<struct PetalData, PetalID::kNumPetals> const PETAL_DATA = {{
     {
         .name = "World Tree Seed",
         .description = "Large heal aura. World-tree relic grown from Heart of Nature.",
-        .health = 120.0,
+        .health = 200.0,
         .damage = 0.0,
         .radius = 22.0,
         .reload = 13.0,
         .count = 1,
         .rarity = RarityID::kLegendary,
         .attributes = { 
-            .secondary_reload = 0.3625,
-            .aura_heal = 6.9984,
-            .aura_radius = 155.0016,
-            .aura_duration = 13.4,
-            .defend_only = 1, .constant_heal = 3.0 }
+            .secondary_reload = 0.35,
+            .aura_heal = 18.0,
+            .aura_radius = 200.0,
+            .aura_duration = 16.0,
+            .defend_only = 1, .constant_heal = 10.0 }
     },
     {
         .name = "Skyblade",
         .description = "Amplifies petal damage. Relic sealed with twin Royal Seals.",
-        .health = 60.0,
-        .damage = 90.0,
+        .health = 120.0,
+        .damage = 140.0,
         .radius = 18.0,
         .reload = 8.5,
         .count = 1,
         .rarity = RarityID::kLegendary,
-        .attributes = { .extra_damage_factor = 1.28f }
+        .attributes = { .extra_damage_factor = 1.5500f }
     },
     {
         .name = "Chaos Prism",
         .description = "Poison + slow. Prism of three sovereign relics.",
-        .health = 2.9167,
-        .damage = 2.0833,
+        .health = 90.0,
+        .damage = 70.0,
         .radius = 22.0,
         .reload = 8.0,
         .count = 1,
         .rarity = RarityID::kLegendary,
         .attributes = {
-            .poison_damage = { .damage = 6.9984, .time = 2.5 },
-            .slow_inflict_seconds = 1.0125
+            .poison_damage = { .damage = 28.0, .time = 3.5 },
+            .slow_inflict_seconds = 1.8
         }
     },
     // ---- Ultra / Super / Unique ladders (×2 from Mythic each step) ----
@@ -3253,7 +3253,7 @@ std::array<struct PetalData, PetalID::kNumPetals> const PETAL_DATA = {{
         .health = 3240.0,
         .damage = 0.0,
         .radius = 12.0,
-        .reload = 1.75,
+        .reload = 0.55,
         .count = 1,
         .rarity = RarityID::kUnique,
         .attributes = { .secondary_reload = 0.18, .defend_only = 1 }
@@ -3264,7 +3264,7 @@ std::array<struct PetalData, PetalID::kNumPetals> const PETAL_DATA = {{
         .health = 1620.0,
         .damage = 0.0,
         .radius = 12.0,
-        .reload = 1.75,
+        .reload = 0.55,
         .count = 1,
         .rarity = RarityID::kSuper,
         .attributes = { .secondary_reload = 0.2263, .defend_only = 1 }
@@ -3275,7 +3275,7 @@ std::array<struct PetalData, PetalID::kNumPetals> const PETAL_DATA = {{
         .health = 810.0,
         .damage = 0.0,
         .radius = 12.0,
-        .reload = 1.75,
+        .reload = 0.55,
         .count = 1,
         .rarity = RarityID::kUltra,
         .attributes = { .secondary_reload = 0.2725, .defend_only = 1 }
@@ -3683,8 +3683,8 @@ std::array<struct PetalData, PetalID::kNumPetals> const PETAL_DATA = {{
     // ---- Honey / Meteor (art stubs; AFK/control gameplay wiring later) ----
     {
         .name = "Honey",
-        .description = "A thick amber honeycomb chunk. Sticky, durable, and slow when thrown.",
-        .health = 15.0,
+        .description = "A thick amber honeycomb chunk. Throw it straight — durable bait mobs prefer.",
+        .health = 4500.0,
         .damage = 10.0,
         .radius = 12.0,
         .reload = 2.5,
@@ -3706,8 +3706,8 @@ std::array<struct PetalData, PetalID::kNumPetals> const PETAL_DATA = {{
     // ---- Honey / Meteor rarity ladders ----
     {
         .name = "Honey",
-        .description = "A thick amber honeycomb chunk. Sticky, durable, and slow when thrown.",
-        .health = 1.6667,
+        .description = "A thick amber honeycomb chunk. Throw it straight — durable bait mobs prefer.",
+        .health = 500.0,
         .damage = 1.1111,
         .radius = 12.0,
         .reload = 2.5,
@@ -3717,8 +3717,8 @@ std::array<struct PetalData, PetalID::kNumPetals> const PETAL_DATA = {{
     },
     {
         .name = "Honey",
-        .description = "A thick amber honeycomb chunk. Sticky, durable, and slow when thrown.",
-        .health = 5.0,
+        .description = "A thick amber honeycomb chunk. Throw it straight — durable bait mobs prefer.",
+        .health = 1500.0,
         .damage = 3.3333,
         .radius = 12.0,
         .reload = 2.5,
@@ -3728,8 +3728,8 @@ std::array<struct PetalData, PetalID::kNumPetals> const PETAL_DATA = {{
     },
     {
         .name = "Honey",
-        .description = "A thick amber honeycomb chunk. Sticky, durable, and slow when thrown.",
-        .health = 45.0,
+        .description = "A thick amber honeycomb chunk. Throw it straight — durable bait mobs prefer.",
+        .health = 13500.0,
         .damage = 30.0,
         .radius = 12.0,
         .reload = 2.5,
@@ -3739,8 +3739,8 @@ std::array<struct PetalData, PetalID::kNumPetals> const PETAL_DATA = {{
     },
     {
         .name = "Honey",
-        .description = "A thick amber honeycomb chunk. Sticky, durable, and slow when thrown.",
-        .health = 135.0,
+        .description = "A thick amber honeycomb chunk. Throw it straight — durable bait mobs prefer.",
+        .health = 40000.0,
         .damage = 90.0,
         .radius = 12.0,
         .reload = 2.5,
@@ -3750,8 +3750,8 @@ std::array<struct PetalData, PetalID::kNumPetals> const PETAL_DATA = {{
     },
     {
         .name = "Honey",
-        .description = "A thick amber honeycomb chunk. Sticky, durable, and slow when thrown.",
-        .health = 405.0,
+        .description = "A thick amber honeycomb chunk. Throw it straight — durable bait mobs prefer.",
+        .health = 120000.0,
         .damage = 270.0,
         .radius = 12.0,
         .reload = 2.5,
@@ -3761,8 +3761,8 @@ std::array<struct PetalData, PetalID::kNumPetals> const PETAL_DATA = {{
     },
     {
         .name = "Honey",
-        .description = "A thick amber honeycomb chunk. Sticky, durable, and slow when thrown.",
-        .health = 3240.0,
+        .description = "A thick amber honeycomb chunk. Throw it straight — durable bait mobs prefer.",
+        .health = 1000000.0,
         .damage = 2160.0,
         .radius = 12.0,
         .reload = 2.5,
@@ -3772,8 +3772,8 @@ std::array<struct PetalData, PetalID::kNumPetals> const PETAL_DATA = {{
     },
     {
         .name = "Honey",
-        .description = "A thick amber honeycomb chunk. Sticky, durable, and slow when thrown.",
-        .health = 1620.0,
+        .description = "A thick amber honeycomb chunk. Throw it straight — durable bait mobs prefer.",
+        .health = 500000.0,
         .damage = 1080.0,
         .radius = 12.0,
         .reload = 2.5,
@@ -3783,8 +3783,8 @@ std::array<struct PetalData, PetalID::kNumPetals> const PETAL_DATA = {{
     },
     {
         .name = "Honey",
-        .description = "A thick amber honeycomb chunk. Sticky, durable, and slow when thrown.",
-        .health = 810.0,
+        .description = "A thick amber honeycomb chunk. Throw it straight — durable bait mobs prefer.",
+        .health = 250000.0,
         .damage = 540.0,
         .radius = 12.0,
         .reload = 2.5,
@@ -3883,7 +3883,7 @@ std::array<struct PetalData, PetalID::kNumPetals> const PETAL_DATA = {{
     // ---- Golden Leaf ladder (CD reduction; stacks multiplicatively) ----
     {
         .name = "Golden Leaf",
-        .description = "Shortens all petal cooldowns. Multiple copies multiply together.",
+        .description = "Shortens all petal cooldowns (stacks; hard cap 50% CDR).",
         .health = 45.0,
         .damage = 30.0,
         .radius = 10.0,
@@ -3894,7 +3894,7 @@ std::array<struct PetalData, PetalID::kNumPetals> const PETAL_DATA = {{
     },
     {
         .name = "Golden Leaf",
-        .description = "Shortens all petal cooldowns. Multiple copies multiply together.",
+        .description = "Shortens all petal cooldowns (stacks; hard cap 50% CDR).",
         .health = 135.0,
         .damage = 90.0,
         .radius = 10.0,
@@ -3905,7 +3905,7 @@ std::array<struct PetalData, PetalID::kNumPetals> const PETAL_DATA = {{
     },
     {
         .name = "Golden Leaf",
-        .description = "Shortens all petal cooldowns. Multiple copies multiply together.",
+        .description = "Shortens all petal cooldowns (stacks; hard cap 50% CDR).",
         .health = 405.0,
         .damage = 270.0,
         .radius = 10.0,
@@ -3916,7 +3916,7 @@ std::array<struct PetalData, PetalID::kNumPetals> const PETAL_DATA = {{
     },
     {
         .name = "Golden Leaf",
-        .description = "Shortens all petal cooldowns. Multiple copies multiply together.",
+        .description = "Shortens all petal cooldowns (stacks; hard cap 50% CDR).",
         .health = 810.0,
         .damage = 540.0,
         .radius = 10.0,
@@ -3927,7 +3927,7 @@ std::array<struct PetalData, PetalID::kNumPetals> const PETAL_DATA = {{
     },
     {
         .name = "Golden Leaf",
-        .description = "Shortens all petal cooldowns. Multiple copies multiply together.",
+        .description = "Shortens all petal cooldowns (stacks; hard cap 50% CDR).",
         .health = 1620.0,
         .damage = 1080.0,
         .radius = 10.0,
@@ -3938,7 +3938,7 @@ std::array<struct PetalData, PetalID::kNumPetals> const PETAL_DATA = {{
     },
     {
         .name = "Golden Leaf",
-        .description = "Shortens all petal cooldowns. Multiple copies multiply together.",
+        .description = "Shortens all petal cooldowns (stacks; hard cap 50% CDR).",
         .health = 3240.0,
         .damage = 2160.0,
         .radius = 10.0,
@@ -3951,69 +3951,69 @@ std::array<struct PetalData, PetalID::kNumPetals> const PETAL_DATA = {{
     {
         .name = "Abyssal Tide",
         .description = "Abyssal ring + slow. Sovereign relic of Tide Core and Blizzard Eye.",
-        .health = 240.0,
-        .damage = 165.0,
+        .health = 480.0,
+        .damage = 270.0,
         .radius = 24.0,
         .reload = 7.0,
         .count = 1,
         .rarity = RarityID::kMythic,
         .attributes = {
-            .secondary_reload = 2.2969,
-            .slow_inflict_seconds = 1.2856,
-            .extra_range = 125.9955,
-            .radial_pulse_damage = 84.0051,
-            .radial_pulse_radius = 420.0012
-        }
-    },
-    {
-        .name = "Abyssal Tide",
-        .description = "Abyssal ring + slow. Sovereign relic of Tide Core and Blizzard Eye.",
-        .health = 480.0,
-        .damage = 330.0,
-        .radius = 24.0,
-        .reload = 7.0,
-        .count = 1,
-        .rarity = RarityID::kUltra,
-        .attributes = {
-            .secondary_reload = 2.0562,
-            .slow_inflict_seconds = 1.4238,
-            .extra_range = 251.991,
-            .radial_pulse_damage = 168.0102,
-            .radial_pulse_radius = 840.0024
+            .secondary_reload = 2.42,
+            .slow_inflict_seconds = 1.76,
+            .extra_range = 55.0,
+            .radial_pulse_damage = 165.0,
+            .radial_pulse_radius = 198.0
         }
     },
     {
         .name = "Abyssal Tide",
         .description = "Abyssal ring + slow. Sovereign relic of Tide Core and Blizzard Eye.",
         .health = 960.0,
-        .damage = 660.0,
+        .damage = 540.0,
         .radius = 24.0,
         .reload = 7.0,
         .count = 1,
-        .rarity = RarityID::kSuper,
+        .rarity = RarityID::kUltra,
         .attributes = {
-            .secondary_reload = 1.8156,
-            .slow_inflict_seconds = 1.5619,
-            .extra_range = 503.982,
-            .radial_pulse_damage = 336.0204,
-            .radial_pulse_radius = 1680.0048
+            .secondary_reload = 2.64,
+            .slow_inflict_seconds = 1.92,
+            .extra_range = 60.0,
+            .radial_pulse_damage = 330.0,
+            .radial_pulse_radius = 216.0
         }
     },
     {
         .name = "Abyssal Tide",
         .description = "Abyssal ring + slow. Sovereign relic of Tide Core and Blizzard Eye.",
         .health = 1920.0,
-        .damage = 1320.0,
+        .damage = 1080.0,
+        .radius = 24.0,
+        .reload = 7.0,
+        .count = 1,
+        .rarity = RarityID::kSuper,
+        .attributes = {
+            .secondary_reload = 2.86,
+            .slow_inflict_seconds = 2.08,
+            .extra_range = 65.0,
+            .radial_pulse_damage = 660.0,
+            .radial_pulse_radius = 234.0
+        }
+    },
+    {
+        .name = "Abyssal Tide",
+        .description = "Abyssal ring + slow. Sovereign relic of Tide Core and Blizzard Eye.",
+        .health = 3840.0,
+        .damage = 2160.0,
         .radius = 24.0,
         .reload = 7.0,
         .count = 1,
         .rarity = RarityID::kUnique,
         .attributes = {
-            .secondary_reload = 1.575,
-            .slow_inflict_seconds = 1.7,
-            .extra_range = 1007.964,
-            .radial_pulse_damage = 672.0408,
-            .radial_pulse_radius = 3360.0096
+            .secondary_reload = 3.19,
+            .slow_inflict_seconds = 2.32,
+            .extra_range = 72.5,
+            .radial_pulse_damage = 1320.0,
+            .radial_pulse_radius = 261.0
         }
     },
     {
@@ -4896,57 +4896,57 @@ std::array<struct PetalData, PetalID::kNumPetals> const PETAL_DATA = {{
     {
         .name = "Chaos Prism",
         .description = "Poison + slow. Prism of three sovereign relics.",
-        .health = 8.75,
-        .damage = 6.25,
+        .health = 270.0,
+        .damage = 210.0,
         .radius = 22.0,
         .reload = 8.0,
         .count = 1,
         .rarity = RarityID::kMythic,
         .attributes = {
-            .poison_damage = { .damage = 20.9952, .time = 2.5 },
-            .slow_inflict_seconds = 1.1344
+            .poison_damage = { .damage = 84.0, .time = 3.675 },
+            .slow_inflict_seconds = 1.98
         }
     },
     {
         .name = "Chaos Prism",
         .description = "Poison + slow. Prism of three sovereign relics.",
-        .health = 17.5,
-        .damage = 12.5,
+        .health = 540.0,
+        .damage = 420.0,
         .radius = 22.0,
         .reload = 8.0,
         .count = 1,
         .rarity = RarityID::kUltra,
         .attributes = {
-            .poison_damage = { .damage = 41.9904, .time = 2.5 },
-            .slow_inflict_seconds = 1.2563
+            .poison_damage = { .damage = 168.0, .time = 3.85 },
+            .slow_inflict_seconds = 2.16
         }
     },
     {
         .name = "Chaos Prism",
         .description = "Poison + slow. Prism of three sovereign relics.",
-        .health = 35.0,
-        .damage = 25.0,
+        .health = 1080.0,
+        .damage = 840.0,
         .radius = 22.0,
         .reload = 8.0,
         .count = 1,
         .rarity = RarityID::kSuper,
         .attributes = {
-            .poison_damage = { .damage = 83.9808, .time = 2.5 },
-            .slow_inflict_seconds = 1.3781
+            .poison_damage = { .damage = 336.0, .time = 4.025 },
+            .slow_inflict_seconds = 2.34
         }
     },
     {
         .name = "Chaos Prism",
         .description = "Poison + slow. Prism of three sovereign relics.",
-        .health = 70.0,
-        .damage = 50.0,
+        .health = 2160.0,
+        .damage = 1680.0,
         .radius = 22.0,
         .reload = 8.0,
         .count = 1,
         .rarity = RarityID::kUnique,
         .attributes = {
-            .poison_damage = { .damage = 167.9616, .time = 2.5 },
-            .slow_inflict_seconds = 1.5
+            .poison_damage = { .damage = 672.0, .time = 4.375 },
+            .slow_inflict_seconds = 2.61
         }
     },
     {
@@ -5029,72 +5029,72 @@ std::array<struct PetalData, PetalID::kNumPetals> const PETAL_DATA = {{
     {
         .name = "Chrono Vortex",
         .description = "Defend-throw slow aura. Relic binding Sandstorm Eye, Sovereign Core, Tide Core.",
-        .health = 270.0,
-        .damage = 60.0,
+        .health = 480.0,
+        .damage = 120.0,
         .radius = 23.0,
         .reload = 8.0,
         .count = 1,
         .rarity = RarityID::kMythic,
         .attributes = {
-            .secondary_reload = 0.3281,
-            .slow_inflict_seconds = 3.025,
-            .aura_radius = 360.0045,
-            .aura_duration = 11.7375,
-            .aura_slow_seconds = 1.815,
+            .secondary_reload = 0.385,
+            .slow_inflict_seconds = 3.52,
+            .aura_radius = 176.0,
+            .aura_duration = 13.2,
+            .aura_slow_seconds = 2.42,
             .defend_only = 1
         }
     },
     {
         .name = "Chrono Vortex",
         .description = "Defend-throw slow aura. Relic binding Sandstorm Eye, Sovereign Core, Tide Core.",
-        .health = 540.0,
-        .damage = 120.0,
+        .health = 960.0,
+        .damage = 240.0,
         .radius = 23.0,
         .reload = 8.0,
         .count = 1,
         .rarity = RarityID::kUltra,
         .attributes = {
-            .secondary_reload = 0.2937,
-            .slow_inflict_seconds = 3.35,
-            .aura_radius = 720.009,
-            .aura_duration = 13.425,
-            .aura_slow_seconds = 2.01,
+            .secondary_reload = 0.42,
+            .slow_inflict_seconds = 3.84,
+            .aura_radius = 192.0,
+            .aura_duration = 14.4,
+            .aura_slow_seconds = 2.64,
             .defend_only = 1
         }
     },
     {
         .name = "Chrono Vortex",
         .description = "Defend-throw slow aura. Relic binding Sandstorm Eye, Sovereign Core, Tide Core.",
-        .health = 1080.0,
-        .damage = 240.0,
+        .health = 1920.0,
+        .damage = 480.0,
         .radius = 23.0,
         .reload = 8.0,
         .count = 1,
         .rarity = RarityID::kSuper,
         .attributes = {
-            .secondary_reload = 0.2594,
-            .slow_inflict_seconds = 3.675,
-            .aura_radius = 1440.018,
-            .aura_duration = 15.1125,
-            .aura_slow_seconds = 2.205,
+            .secondary_reload = 0.455,
+            .slow_inflict_seconds = 4.16,
+            .aura_radius = 208.0,
+            .aura_duration = 15.6,
+            .aura_slow_seconds = 2.86,
             .defend_only = 1
         }
     },
     {
         .name = "Chrono Vortex",
         .description = "Defend-throw slow aura. Relic binding Sandstorm Eye, Sovereign Core, Tide Core.",
-        .health = 2160.0,
-        .damage = 480.0,
+        .health = 3840.0,
+        .damage = 960.0,
         .radius = 23.0,
         .reload = 8.0,
         .count = 1,
         .rarity = RarityID::kUnique,
         .attributes = {
-            .secondary_reload = 0.225,
-            .slow_inflict_seconds = 4.0,
-            .aura_radius = 2880.036,
-            .aura_duration = 16.8,
-            .aura_slow_seconds = 2.4,
+            .secondary_reload = 0.5075,
+            .slow_inflict_seconds = 4.64,
+            .aura_radius = 232.0,
+            .aura_duration = 17.4,
+            .aura_slow_seconds = 3.19,
             .defend_only = 1
         }
     },
@@ -6528,46 +6528,46 @@ std::array<struct PetalData, PetalID::kNumPetals> const PETAL_DATA = {{
     {
         .name = "Heart of Nature",
         .description = "Durable + heal. Sovereign relic of Ancient Heart and Heartwood.",
-        .health = 660.0,
-        .damage = 15.0,
+        .health = 1260.0,
+        .damage = 36.0,
         .radius = 23.0,
         .reload = 9.0,
         .count = 1,
         .rarity = RarityID::kMythic,
-        .attributes = { .constant_heal = 15.0, .extra_health = 105.0, .defend_only = 1 }
+        .attributes = { .constant_heal = 66.0, .extra_health = 1560.0, .defend_only = 1 }
     },
     {
         .name = "Heart of Nature",
         .description = "Durable + heal. Sovereign relic of Ancient Heart and Heartwood.",
-        .health = 1320.0,
-        .damage = 30.0,
+        .health = 2520.0,
+        .damage = 72.0,
         .radius = 23.0,
         .reload = 9.0,
         .count = 1,
         .rarity = RarityID::kUltra,
-        .attributes = { .constant_heal = 30.0, .extra_health = 210.0, .defend_only = 1 }
+        .attributes = { .constant_heal = 132.0, .extra_health = 3120.0, .defend_only = 1 }
     },
     {
         .name = "Heart of Nature",
         .description = "Durable + heal. Sovereign relic of Ancient Heart and Heartwood.",
-        .health = 2640.0,
-        .damage = 60.0,
+        .health = 5040.0,
+        .damage = 144.0,
         .radius = 23.0,
         .reload = 9.0,
         .count = 1,
         .rarity = RarityID::kSuper,
-        .attributes = { .constant_heal = 60.0, .extra_health = 420.0, .defend_only = 1 }
+        .attributes = { .constant_heal = 264.0, .extra_health = 6240.0, .defend_only = 1 }
     },
     {
         .name = "Heart of Nature",
         .description = "Durable + heal. Sovereign relic of Ancient Heart and Heartwood.",
-        .health = 5280.0,
-        .damage = 120.0,
+        .health = 10080.0,
+        .damage = 288.0,
         .radius = 23.0,
         .reload = 9.0,
         .count = 1,
         .rarity = RarityID::kUnique,
-        .attributes = { .constant_heal = 120.0, .extra_health = 840.0, .defend_only = 1 }
+        .attributes = { .constant_heal = 528.0, .extra_health = 12480.0, .defend_only = 1 }
     },
     {
         .name = "Heaviest",
@@ -7156,57 +7156,57 @@ std::array<struct PetalData, PetalID::kNumPetals> const PETAL_DATA = {{
     {
         .name = "Infernal Core",
         .description = "Burns on contact. Sovereign relic of Leyline Core.",
-        .health = 540.0,
-        .damage = 195.0,
+        .health = 840.0,
+        .damage = 285.0,
         .radius = 24.0,
         .reload = 9.5,
         .count = 1,
         .rarity = RarityID::kMythic,
         .attributes = {
-            .extra_health = 6075.0,
-            .burn_damage = { .damage = 24.0, .time = 4.0 }
+            .extra_health = 7200.0,
+            .burn_damage = { .damage = 54.0, .time = 5.25 }
         }
     },
     {
         .name = "Infernal Core",
         .description = "Burns on contact. Sovereign relic of Leyline Core.",
-        .health = 1080.0,
-        .damage = 390.0,
+        .health = 1680.0,
+        .damage = 570.0,
         .radius = 24.0,
         .reload = 9.5,
         .count = 1,
         .rarity = RarityID::kUltra,
         .attributes = {
-            .extra_health = 12150.0,
-            .burn_damage = { .damage = 48.0, .time = 4.0 }
+            .extra_health = 14400.0,
+            .burn_damage = { .damage = 108.0, .time = 5.5 }
         }
     },
     {
         .name = "Infernal Core",
         .description = "Burns on contact. Sovereign relic of Leyline Core.",
-        .health = 2160.0,
-        .damage = 780.0,
+        .health = 3360.0,
+        .damage = 1140.0,
         .radius = 24.0,
         .reload = 9.5,
         .count = 1,
         .rarity = RarityID::kSuper,
         .attributes = {
-            .extra_health = 24300.0,
-            .burn_damage = { .damage = 96.0, .time = 4.0 }
+            .extra_health = 28800.0,
+            .burn_damage = { .damage = 216.0, .time = 5.75 }
         }
     },
     {
         .name = "Infernal Core",
         .description = "Burns on contact. Sovereign relic of Leyline Core.",
-        .health = 4320.0,
-        .damage = 1560.0,
+        .health = 6720.0,
+        .damage = 2280.0,
         .radius = 24.0,
         .reload = 9.5,
         .count = 1,
         .rarity = RarityID::kUnique,
         .attributes = {
-            .extra_health = 48600.0,
-            .burn_damage = { .damage = 192.0, .time = 4.0 }
+            .extra_health = 57600.0,
+            .burn_damage = { .damage = 432.0, .time = 6.25 }
         }
     },
     {
@@ -7454,53 +7454,53 @@ std::array<struct PetalData, PetalID::kNumPetals> const PETAL_DATA = {{
     {
         .name = "King's Oath",
         .description = "Amplifies petal damage; surges harder when your flower is low on health",
-        .health = 2430.0,
-        .damage = 1620.0,
+        .health = 2700.0,
+        .damage = 1800.0,
         .radius = 16.0,
         .reload = 4.0,
         .count = 1,
         .rarity = RarityID::kMythic,
         .attributes = {
-            .extra_damage_factor = 1.2937f
+            .extra_damage_factor = 1.6000f
         }
     },
     {
         .name = "King's Oath",
         .description = "Amplifies petal damage; surges harder when your flower is low on health",
-        .health = 4860.0,
-        .damage = 3240.0,
+        .health = 5400.0,
+        .damage = 3600.0,
         .radius = 16.0,
         .reload = 4.0,
         .count = 1,
         .rarity = RarityID::kUltra,
         .attributes = {
-            .extra_damage_factor = 1.3225f
+            .extra_damage_factor = 1.7700f
         }
     },
     {
         .name = "King's Oath",
         .description = "Amplifies petal damage; surges harder when your flower is low on health",
-        .health = 9720.0,
-        .damage = 6480.0,
+        .health = 10800.0,
+        .damage = 7200.0,
         .radius = 16.0,
         .reload = 4.0,
         .count = 1,
         .rarity = RarityID::kSuper,
         .attributes = {
-            .extra_damage_factor = 1.3512f
+            .extra_damage_factor = 2.0000f
         }
     },
     {
         .name = "King's Oath",
         .description = "Amplifies petal damage; surges harder when your flower is low on health",
-        .health = 19440.0,
-        .damage = 12960.0,
+        .health = 21600.0,
+        .damage = 14400.0,
         .radius = 16.0,
         .reload = 4.0,
         .count = 1,
         .rarity = RarityID::kUnique,
         .attributes = {
-            .extra_damage_factor = 1.38f
+            .extra_damage_factor = 2.3000f
         }
     },
     {
@@ -10153,46 +10153,46 @@ std::array<struct PetalData, PetalID::kNumPetals> const PETAL_DATA = {{
     {
         .name = "Skyblade",
         .description = "Amplifies petal damage. Relic sealed with twin Royal Seals.",
-        .health = 180.0,
-        .damage = 270.0,
+        .health = 360.0,
+        .damage = 420.0,
         .radius = 18.0,
         .reload = 8.5,
         .count = 1,
         .rarity = RarityID::kMythic,
-        .attributes = { .extra_damage_factor = 1.3f }
-    },
-    {
-        .name = "Skyblade",
-        .description = "Amplifies petal damage. Relic sealed with twin Royal Seals.",
-        .health = 360.0,
-        .damage = 540.0,
-        .radius = 18.0,
-        .reload = 8.5,
-        .count = 1,
-        .rarity = RarityID::kUltra,
-        .attributes = { .extra_damage_factor = 1.32f }
+        .attributes = { .extra_damage_factor = 1.7000f }
     },
     {
         .name = "Skyblade",
         .description = "Amplifies petal damage. Relic sealed with twin Royal Seals.",
         .health = 720.0,
-        .damage = 1080.0,
+        .damage = 840.0,
         .radius = 18.0,
         .reload = 8.5,
         .count = 1,
-        .rarity = RarityID::kSuper,
-        .attributes = { .extra_damage_factor = 1.34f }
+        .rarity = RarityID::kUltra,
+        .attributes = { .extra_damage_factor = 1.8700f }
     },
     {
         .name = "Skyblade",
         .description = "Amplifies petal damage. Relic sealed with twin Royal Seals.",
         .health = 1440.0,
-        .damage = 2160.0,
+        .damage = 1680.0,
+        .radius = 18.0,
+        .reload = 8.5,
+        .count = 1,
+        .rarity = RarityID::kSuper,
+        .attributes = { .extra_damage_factor = 2.1000f }
+    },
+    {
+        .name = "Skyblade",
+        .description = "Amplifies petal damage. Relic sealed with twin Royal Seals.",
+        .health = 2880.0,
+        .damage = 3360.0,
         .radius = 18.0,
         .reload = 8.5,
         .count = 1,
         .rarity = RarityID::kUnique,
-        .attributes = { .extra_damage_factor = 1.36f }
+        .attributes = { .extra_damage_factor = 2.4000f }
     },
     {
         .name = "Snowball",
@@ -11802,66 +11802,66 @@ std::array<struct PetalData, PetalID::kNumPetals> const PETAL_DATA = {{
     {
         .name = "World Tree Seed",
         .description = "Large heal aura. World-tree relic grown from Heart of Nature.",
-        .health = 360.0,
+        .health = 600.0,
         .damage = 0.0,
         .radius = 22.0,
         .reload = 13.0,
         .count = 1,
         .rarity = RarityID::kMythic,
         .attributes = { 
-            .secondary_reload = 0.3281,
-            .aura_heal = 20.9952,
-            .aura_radius = 465.0048,
-            .aura_duration = 15.65,
-            .defend_only = 1, .constant_heal = 9.0 }
+            .secondary_reload = 0.385,
+            .aura_heal = 54.0,
+            .aura_radius = 220.0,
+            .aura_duration = 17.6,
+            .defend_only = 1, .constant_heal = 30.0 }
     },
     {
         .name = "World Tree Seed",
         .description = "Large heal aura. World-tree relic grown from Heart of Nature.",
-        .health = 720.0,
+        .health = 1200.0,
         .damage = 0.0,
         .radius = 22.0,
         .reload = 13.0,
         .count = 1,
         .rarity = RarityID::kUltra,
         .attributes = { 
-            .secondary_reload = 0.2937,
-            .aura_heal = 41.9904,
-            .aura_radius = 930.0096,
-            .aura_duration = 17.9,
-            .defend_only = 1, .constant_heal = 18.0 }
+            .secondary_reload = 0.42,
+            .aura_heal = 108.0,
+            .aura_radius = 240.0,
+            .aura_duration = 19.2,
+            .defend_only = 1, .constant_heal = 60.0 }
     },
     {
         .name = "World Tree Seed",
         .description = "Large heal aura. World-tree relic grown from Heart of Nature.",
-        .health = 1440.0,
+        .health = 2400.0,
         .damage = 0.0,
         .radius = 22.0,
         .reload = 13.0,
         .count = 1,
         .rarity = RarityID::kSuper,
         .attributes = { 
-            .secondary_reload = 0.2594,
-            .aura_heal = 83.9808,
-            .aura_radius = 1860.0192,
-            .aura_duration = 20.15,
-            .defend_only = 1, .constant_heal = 36.0 }
+            .secondary_reload = 0.455,
+            .aura_heal = 216.0,
+            .aura_radius = 260.0,
+            .aura_duration = 20.8,
+            .defend_only = 1, .constant_heal = 120.0 }
     },
     {
         .name = "World Tree Seed",
         .description = "Large heal aura. World-tree relic grown from Heart of Nature.",
-        .health = 2880.0,
+        .health = 4800.0,
         .damage = 0.0,
         .radius = 22.0,
         .reload = 13.0,
         .count = 1,
         .rarity = RarityID::kUnique,
         .attributes = { 
-            .secondary_reload = 0.225,
-            .aura_heal = 167.9616,
-            .aura_radius = 3720.0384,
-            .aura_duration = 22.4,
-            .defend_only = 1, .constant_heal = 72.0 }
+            .secondary_reload = 0.5075,
+            .aura_heal = 432.0,
+            .aura_radius = 290.0,
+            .aura_duration = 23.2,
+            .defend_only = 1, .constant_heal = 240.0 }
     },
     {
         .name = "Yin Yang",
@@ -12108,69 +12108,69 @@ std::array<struct PetalData, PetalID::kNumPetals> const PETAL_DATA = {{
     {
         .name = "Abyssal Tide",
         .description = "Abyssal ring + slow. Sovereign relic of Tide Core and Blizzard Eye.",
-        .health = 0.9877,
-        .damage = 0.679,
+        .health = 17.7778,
+        .damage = 10.0,
         .radius = 24.0,
         .reload = 7.0,
         .count = 1,
         .rarity = RarityID::kCommon,
         .attributes = {
-            .secondary_reload = 3.5,
-            .slow_inflict_seconds = 0.595,
-            .extra_range = 0.5185,
-            .radial_pulse_damage = 0.3457,
-            .radial_pulse_radius = 1.7284
+            .secondary_reload = 1.54,
+            .slow_inflict_seconds = 1.12,
+            .extra_range = 35.0,
+            .radial_pulse_damage = 6.1111,
+            .radial_pulse_radius = 126.0
         }
     },
     {
         .name = "Abyssal Tide",
         .description = "Abyssal ring + slow. Sovereign relic of Tide Core and Blizzard Eye.",
-        .health = 2.963,
-        .damage = 2.037,
+        .health = 53.3333,
+        .damage = 30.0,
         .radius = 24.0,
         .reload = 7.0,
         .count = 1,
         .rarity = RarityID::kUnusual,
         .attributes = {
-            .secondary_reload = 3.2594,
-            .slow_inflict_seconds = 0.7331,
-            .extra_range = 1.5555,
-            .radial_pulse_damage = 1.0371,
-            .radial_pulse_radius = 5.1852
+            .secondary_reload = 1.76,
+            .slow_inflict_seconds = 1.28,
+            .extra_range = 40.0,
+            .radial_pulse_damage = 18.3333,
+            .radial_pulse_radius = 144.0
         }
     },
     {
         .name = "Abyssal Tide",
         .description = "Abyssal ring + slow. Sovereign relic of Tide Core and Blizzard Eye.",
-        .health = 8.8889,
-        .damage = 6.1111,
+        .health = 106.6667,
+        .damage = 60.0,
         .radius = 24.0,
         .reload = 7.0,
         .count = 1,
         .rarity = RarityID::kRare,
         .attributes = {
-            .secondary_reload = 3.0187,
-            .slow_inflict_seconds = 0.8712,
-            .extra_range = 4.6665,
-            .radial_pulse_damage = 3.1113,
-            .radial_pulse_radius = 15.5556
+            .secondary_reload = 1.98,
+            .slow_inflict_seconds = 1.44,
+            .extra_range = 45.0,
+            .radial_pulse_damage = 36.6667,
+            .radial_pulse_radius = 162.0
         }
     },
     {
         .name = "Abyssal Tide",
         .description = "Abyssal ring + slow. Sovereign relic of Tide Core and Blizzard Eye.",
-        .health = 26.6667,
-        .damage = 18.3333,
+        .health = 160.0,
+        .damage = 90.0,
         .radius = 24.0,
         .reload = 7.0,
         .count = 1,
         .rarity = RarityID::kEpic,
         .attributes = {
-            .secondary_reload = 2.7781,
-            .slow_inflict_seconds = 1.0094,
-            .extra_range = 13.9995,
-            .radial_pulse_damage = 9.3339,
-            .radial_pulse_radius = 46.6668
+            .secondary_reload = 2.09,
+            .slow_inflict_seconds = 1.52,
+            .extra_range = 47.5,
+            .radial_pulse_damage = 55.0,
+            .radial_pulse_radius = 171.0
         }
     },
     {
@@ -13030,7 +13030,7 @@ std::array<struct PetalData, PetalID::kNumPetals> const PETAL_DATA = {{
         .health = 1.6667,
         .damage = 0.0,
         .radius = 12.0,
-        .reload = 1.75,
+        .reload = 0.55,
         .count = 1,
         .rarity = RarityID::kCommon,
         .attributes = { .secondary_reload = 0.55, .defend_only = 1 }
@@ -13326,57 +13326,57 @@ std::array<struct PetalData, PetalID::kNumPetals> const PETAL_DATA = {{
     {
         .name = "Chaos Prism",
         .description = "Poison + slow. Prism of three sovereign relics.",
-        .health = 0.036,
-        .damage = 0.0257,
+        .health = 10.0,
+        .damage = 7.7778,
         .radius = 22.0,
         .reload = 8.0,
         .count = 1,
         .rarity = RarityID::kCommon,
         .attributes = {
-            .poison_damage = { .damage = 0.0864, .time = 2.5 },
-            .slow_inflict_seconds = 0.525
+            .poison_damage = { .damage = 3.1111, .time = 2.8 },
+            .slow_inflict_seconds = 1.26
         }
     },
     {
         .name = "Chaos Prism",
         .description = "Poison + slow. Prism of three sovereign relics.",
-        .health = 0.108,
-        .damage = 0.0772,
+        .health = 30.0,
+        .damage = 23.3333,
         .radius = 22.0,
         .reload = 8.0,
         .count = 1,
         .rarity = RarityID::kUnusual,
         .attributes = {
-            .poison_damage = { .damage = 0.2592, .time = 2.5 },
-            .slow_inflict_seconds = 0.6469
+            .poison_damage = { .damage = 9.3333, .time = 2.975 },
+            .slow_inflict_seconds = 1.44
         }
     },
     {
         .name = "Chaos Prism",
         .description = "Poison + slow. Prism of three sovereign relics.",
-        .health = 0.3241,
-        .damage = 0.2315,
+        .health = 60.0,
+        .damage = 46.6667,
         .radius = 22.0,
         .reload = 8.0,
         .count = 1,
         .rarity = RarityID::kRare,
         .attributes = {
-            .poison_damage = { .damage = 0.7776, .time = 2.5 },
-            .slow_inflict_seconds = 0.7687
+            .poison_damage = { .damage = 18.6667, .time = 3.15 },
+            .slow_inflict_seconds = 1.62
         }
     },
     {
         .name = "Chaos Prism",
         .description = "Poison + slow. Prism of three sovereign relics.",
-        .health = 0.9722,
-        .damage = 0.6944,
+        .health = 90.0,
+        .damage = 70.0,
         .radius = 22.0,
         .reload = 8.0,
         .count = 1,
         .rarity = RarityID::kEpic,
         .attributes = {
-            .poison_damage = { .damage = 2.3328, .time = 2.5 },
-            .slow_inflict_seconds = 0.8906
+            .poison_damage = { .damage = 28.0, .time = 3.325 },
+            .slow_inflict_seconds = 1.71
         }
     },
     {
@@ -13393,72 +13393,72 @@ std::array<struct PetalData, PetalID::kNumPetals> const PETAL_DATA = {{
     {
         .name = "Chrono Vortex",
         .description = "Defend-throw slow aura. Relic binding Sandstorm Eye, Sovereign Core, Tide Core.",
-        .health = 1.1111,
-        .damage = 0.2469,
+        .health = 17.7778,
+        .damage = 4.4444,
         .radius = 23.0,
         .reload = 8.0,
         .count = 1,
         .rarity = RarityID::kCommon,
         .attributes = {
-            .secondary_reload = 0.5,
-            .slow_inflict_seconds = 1.4,
-            .aura_radius = 1.4815,
-            .aura_duration = 3.3,
-            .aura_slow_seconds = 0.84,
+            .secondary_reload = 0.245,
+            .slow_inflict_seconds = 2.24,
+            .aura_radius = 112.0,
+            .aura_duration = 8.4,
+            .aura_slow_seconds = 1.54,
             .defend_only = 1
         }
     },
     {
         .name = "Chrono Vortex",
         .description = "Defend-throw slow aura. Relic binding Sandstorm Eye, Sovereign Core, Tide Core.",
-        .health = 3.3333,
-        .damage = 0.7407,
+        .health = 53.3333,
+        .damage = 13.3333,
         .radius = 23.0,
         .reload = 8.0,
         .count = 1,
         .rarity = RarityID::kUnusual,
         .attributes = {
-            .secondary_reload = 0.4656,
-            .slow_inflict_seconds = 1.725,
-            .aura_radius = 4.4445,
-            .aura_duration = 4.9875,
-            .aura_slow_seconds = 1.035,
+            .secondary_reload = 0.28,
+            .slow_inflict_seconds = 2.56,
+            .aura_radius = 128.0,
+            .aura_duration = 9.6,
+            .aura_slow_seconds = 1.76,
             .defend_only = 1
         }
     },
     {
         .name = "Chrono Vortex",
         .description = "Defend-throw slow aura. Relic binding Sandstorm Eye, Sovereign Core, Tide Core.",
-        .health = 10.0,
-        .damage = 2.2222,
+        .health = 106.6667,
+        .damage = 26.6667,
         .radius = 23.0,
         .reload = 8.0,
         .count = 1,
         .rarity = RarityID::kRare,
         .attributes = {
-            .secondary_reload = 0.4313,
-            .slow_inflict_seconds = 2.05,
-            .aura_radius = 13.3335,
-            .aura_duration = 6.675,
-            .aura_slow_seconds = 1.23,
+            .secondary_reload = 0.315,
+            .slow_inflict_seconds = 2.88,
+            .aura_radius = 144.0,
+            .aura_duration = 10.8,
+            .aura_slow_seconds = 1.98,
             .defend_only = 1
         }
     },
     {
         .name = "Chrono Vortex",
         .description = "Defend-throw slow aura. Relic binding Sandstorm Eye, Sovereign Core, Tide Core.",
-        .health = 30.0,
-        .damage = 6.6667,
+        .health = 160.0,
+        .damage = 40.0,
         .radius = 23.0,
         .reload = 8.0,
         .count = 1,
         .rarity = RarityID::kEpic,
         .attributes = {
-            .secondary_reload = 0.3969,
-            .slow_inflict_seconds = 2.375,
-            .aura_radius = 40.0005,
-            .aura_duration = 8.3625,
-            .aura_slow_seconds = 1.425,
+            .secondary_reload = 0.3325,
+            .slow_inflict_seconds = 3.04,
+            .aura_radius = 152.0,
+            .aura_duration = 11.4,
+            .aura_slow_seconds = 2.09,
             .defend_only = 1
         }
     },
@@ -14765,7 +14765,7 @@ std::array<struct PetalData, PetalID::kNumPetals> const PETAL_DATA = {{
     },
     {
         .name = "Golden Leaf",
-        .description = "Shortens all petal cooldowns. Multiple copies multiply together.",
+        .description = "Shortens all petal cooldowns (stacks; hard cap 50% CDR).",
         .health = 1.6667,
         .damage = 1.1111,
         .radius = 10.0,
@@ -14776,7 +14776,7 @@ std::array<struct PetalData, PetalID::kNumPetals> const PETAL_DATA = {{
     },
     {
         .name = "Golden Leaf",
-        .description = "Shortens all petal cooldowns. Multiple copies multiply together.",
+        .description = "Shortens all petal cooldowns (stacks; hard cap 50% CDR).",
         .health = 5.0,
         .damage = 3.3333,
         .radius = 10.0,
@@ -14847,46 +14847,46 @@ std::array<struct PetalData, PetalID::kNumPetals> const PETAL_DATA = {{
     {
         .name = "Heart of Nature",
         .description = "Durable + heal. Sovereign relic of Ancient Heart and Heartwood.",
-        .health = 2.716,
-        .damage = 0.0617,
+        .health = 46.6667,
+        .damage = 1.3333,
         .radius = 23.0,
         .reload = 9.0,
         .count = 1,
         .rarity = RarityID::kCommon,
-        .attributes = { .constant_heal = 0.0617, .extra_health = 0.4321, .defend_only = 1 }
+        .attributes = { .constant_heal = 2.4444, .extra_health = 57.7778, .defend_only = 1 }
     },
     {
         .name = "Heart of Nature",
         .description = "Durable + heal. Sovereign relic of Ancient Heart and Heartwood.",
-        .health = 8.1481,
-        .damage = 0.1852,
+        .health = 140.0,
+        .damage = 4.0,
         .radius = 23.0,
         .reload = 9.0,
         .count = 1,
         .rarity = RarityID::kUnusual,
-        .attributes = { .constant_heal = 0.1852, .extra_health = 1.2963, .defend_only = 1 }
+        .attributes = { .constant_heal = 7.3333, .extra_health = 173.3333, .defend_only = 1 }
     },
     {
         .name = "Heart of Nature",
         .description = "Durable + heal. Sovereign relic of Ancient Heart and Heartwood.",
-        .health = 24.4444,
-        .damage = 0.5556,
+        .health = 280.0,
+        .damage = 8.0,
         .radius = 23.0,
         .reload = 9.0,
         .count = 1,
         .rarity = RarityID::kRare,
-        .attributes = { .constant_heal = 0.5556, .extra_health = 3.8889, .defend_only = 1 }
+        .attributes = { .constant_heal = 14.6667, .extra_health = 346.6667, .defend_only = 1 }
     },
     {
         .name = "Heart of Nature",
         .description = "Durable + heal. Sovereign relic of Ancient Heart and Heartwood.",
-        .health = 73.3333,
-        .damage = 1.6667,
+        .health = 420.0,
+        .damage = 12.0,
         .radius = 23.0,
         .reload = 9.0,
         .count = 1,
         .rarity = RarityID::kEpic,
-        .attributes = { .constant_heal = 1.6667, .extra_health = 11.6667, .defend_only = 1 }
+        .attributes = { .constant_heal = 22.0, .extra_health = 520.0, .defend_only = 1 }
     },
     {
         .name = "Heartwood",
@@ -15699,57 +15699,57 @@ std::array<struct PetalData, PetalID::kNumPetals> const PETAL_DATA = {{
     {
         .name = "Infernal Core",
         .description = "Burns on contact. Sovereign relic of Leyline Core.",
-        .health = 2.2222,
-        .damage = 0.8025,
+        .health = 31.1111,
+        .damage = 10.5556,
         .radius = 24.0,
         .reload = 9.5,
         .count = 1,
         .rarity = RarityID::kCommon,
         .attributes = {
-            .extra_health = 25.0,
-            .burn_damage = { .damage = 0.0988, .time = 4.0 }
+            .extra_health = 266.6667,
+            .burn_damage = { .damage = 2.0, .time = 4.0 }
         }
     },
     {
         .name = "Infernal Core",
         .description = "Burns on contact. Sovereign relic of Leyline Core.",
-        .health = 6.6667,
-        .damage = 2.4074,
+        .health = 93.3333,
+        .damage = 31.6667,
         .radius = 24.0,
         .reload = 9.5,
         .count = 1,
         .rarity = RarityID::kUnusual,
         .attributes = {
-            .extra_health = 75.0,
-            .burn_damage = { .damage = 0.2963, .time = 4.0 }
+            .extra_health = 800.0,
+            .burn_damage = { .damage = 6.0, .time = 4.25 }
         }
     },
     {
         .name = "Infernal Core",
         .description = "Burns on contact. Sovereign relic of Leyline Core.",
-        .health = 20.0,
-        .damage = 7.2222,
+        .health = 186.6667,
+        .damage = 63.3333,
         .radius = 24.0,
         .reload = 9.5,
         .count = 1,
         .rarity = RarityID::kRare,
         .attributes = {
-            .extra_health = 225.0,
-            .burn_damage = { .damage = 0.8889, .time = 4.0 }
+            .extra_health = 1600.0,
+            .burn_damage = { .damage = 12.0, .time = 4.5 }
         }
     },
     {
         .name = "Infernal Core",
         .description = "Burns on contact. Sovereign relic of Leyline Core.",
-        .health = 60.0,
-        .damage = 21.6667,
+        .health = 280.0,
+        .damage = 95.0,
         .radius = 24.0,
         .reload = 9.5,
         .count = 1,
         .rarity = RarityID::kEpic,
         .attributes = {
-            .extra_health = 675.0,
-            .burn_damage = { .damage = 2.6667, .time = 4.0 }
+            .extra_health = 2400.0,
+            .burn_damage = { .damage = 18.0, .time = 4.75 }
         }
     },
     {
@@ -15793,53 +15793,53 @@ std::array<struct PetalData, PetalID::kNumPetals> const PETAL_DATA = {{
     {
         .name = "King's Oath",
         .description = "Amplifies petal damage; surges harder when your flower is low on health",
-        .health = 10.0,
-        .damage = 6.6667,
+        .health = 100.0,
+        .damage = 66.6667,
         .radius = 16.0,
         .reload = 4.0,
         .count = 1,
         .rarity = RarityID::kCommon,
         .attributes = {
-            .extra_damage_factor = 1.15f
+            .extra_damage_factor = 1.3300f
         }
     },
     {
         .name = "King's Oath",
         .description = "Amplifies petal damage; surges harder when your flower is low on health",
-        .health = 30.0,
-        .damage = 20.0,
+        .health = 300.0,
+        .damage = 200.0,
         .radius = 16.0,
         .reload = 4.0,
         .count = 1,
         .rarity = RarityID::kUnusual,
         .attributes = {
-            .extra_damage_factor = 1.1787f
+            .extra_damage_factor = 1.3700f
         }
     },
     {
         .name = "King's Oath",
         .description = "Amplifies petal damage; surges harder when your flower is low on health",
-        .health = 90.0,
-        .damage = 60.0,
+        .health = 600.0,
+        .damage = 400.0,
         .radius = 16.0,
         .reload = 4.0,
         .count = 1,
         .rarity = RarityID::kRare,
         .attributes = {
-            .extra_damage_factor = 1.2075f
+            .extra_damage_factor = 1.4100f
         }
     },
     {
         .name = "King's Oath",
         .description = "Amplifies petal damage; surges harder when your flower is low on health",
-        .health = 270.0,
-        .damage = 180.0,
+        .health = 900.0,
+        .damage = 600.0,
         .radius = 16.0,
         .reload = 4.0,
         .count = 1,
         .rarity = RarityID::kEpic,
         .attributes = {
-            .extra_damage_factor = 1.2362f
+            .extra_damage_factor = 1.4500f
         }
     },
     {
@@ -18600,46 +18600,46 @@ std::array<struct PetalData, PetalID::kNumPetals> const PETAL_DATA = {{
     {
         .name = "Skyblade",
         .description = "Amplifies petal damage. Relic sealed with twin Royal Seals.",
-        .health = 0.7407,
-        .damage = 1.1111,
+        .health = 13.3333,
+        .damage = 15.5556,
         .radius = 18.0,
         .reload = 8.5,
         .count = 1,
         .rarity = RarityID::kCommon,
-        .attributes = { .extra_damage_factor = 1.28f }
+        .attributes = { .extra_damage_factor = 1.4300f }
     },
     {
         .name = "Skyblade",
         .description = "Amplifies petal damage. Relic sealed with twin Royal Seals.",
-        .health = 2.2222,
-        .damage = 3.3333,
+        .health = 40.0,
+        .damage = 46.6667,
         .radius = 18.0,
         .reload = 8.5,
         .count = 1,
         .rarity = RarityID::kUnusual,
-        .attributes = { .extra_damage_factor = 1.28f }
+        .attributes = { .extra_damage_factor = 1.4700f }
     },
     {
         .name = "Skyblade",
         .description = "Amplifies petal damage. Relic sealed with twin Royal Seals.",
-        .health = 6.6667,
-        .damage = 10.0,
+        .health = 80.0,
+        .damage = 93.3333,
         .radius = 18.0,
         .reload = 8.5,
         .count = 1,
         .rarity = RarityID::kRare,
-        .attributes = { .extra_damage_factor = 1.28f }
+        .attributes = { .extra_damage_factor = 1.5100f }
     },
     {
         .name = "Skyblade",
         .description = "Amplifies petal damage. Relic sealed with twin Royal Seals.",
-        .health = 20.0,
-        .damage = 30.0,
+        .health = 120.0,
+        .damage = 140.0,
         .radius = 18.0,
         .reload = 8.5,
         .count = 1,
         .rarity = RarityID::kEpic,
-        .attributes = { .extra_damage_factor = 1.28f }
+        .attributes = { .extra_damage_factor = 1.5500f }
     },
     {
         .name = "Snow Fluff",
@@ -20395,66 +20395,66 @@ std::array<struct PetalData, PetalID::kNumPetals> const PETAL_DATA = {{
     {
         .name = "World Tree Seed",
         .description = "Large heal aura. World-tree relic grown from Heart of Nature.",
-        .health = 1.4815,
+        .health = 22.2222,
         .damage = 0.0,
         .radius = 22.0,
         .reload = 13.0,
         .count = 1,
         .rarity = RarityID::kCommon,
         .attributes = { 
-            .secondary_reload = 0.5,
-            .aura_heal = 0.0864,
-            .aura_radius = 1.9136,
-            .aura_duration = 4.4,
-            .defend_only = 1, .constant_heal = 0.037 }
+            .secondary_reload = 0.245,
+            .aura_heal = 2.0,
+            .aura_radius = 140.0,
+            .aura_duration = 11.2,
+            .defend_only = 1, .constant_heal = 1.1111 }
     },
     {
         .name = "World Tree Seed",
         .description = "Large heal aura. World-tree relic grown from Heart of Nature.",
-        .health = 4.4444,
+        .health = 66.6667,
         .damage = 0.0,
         .radius = 22.0,
         .reload = 13.0,
         .count = 1,
         .rarity = RarityID::kUnusual,
         .attributes = { 
-            .secondary_reload = 0.4656,
-            .aura_heal = 0.2592,
-            .aura_radius = 5.7408,
-            .aura_duration = 6.65,
-            .defend_only = 1, .constant_heal = 0.1111 }
+            .secondary_reload = 0.28,
+            .aura_heal = 6.0,
+            .aura_radius = 160.0,
+            .aura_duration = 12.8,
+            .defend_only = 1, .constant_heal = 3.3333 }
     },
     {
         .name = "World Tree Seed",
         .description = "Large heal aura. World-tree relic grown from Heart of Nature.",
-        .health = 13.3333,
+        .health = 133.3333,
         .damage = 0.0,
         .radius = 22.0,
         .reload = 13.0,
         .count = 1,
         .rarity = RarityID::kRare,
         .attributes = { 
-            .secondary_reload = 0.4313,
-            .aura_heal = 0.7776,
-            .aura_radius = 17.2224,
-            .aura_duration = 8.9,
-            .defend_only = 1, .constant_heal = 0.3333 }
+            .secondary_reload = 0.315,
+            .aura_heal = 12.0,
+            .aura_radius = 180.0,
+            .aura_duration = 14.4,
+            .defend_only = 1, .constant_heal = 6.6667 }
     },
     {
         .name = "World Tree Seed",
         .description = "Large heal aura. World-tree relic grown from Heart of Nature.",
-        .health = 40.0,
+        .health = 200.0,
         .damage = 0.0,
         .radius = 22.0,
         .reload = 13.0,
         .count = 1,
         .rarity = RarityID::kEpic,
         .attributes = { 
-            .secondary_reload = 0.3969,
-            .aura_heal = 2.3328,
-            .aura_radius = 51.6672,
-            .aura_duration = 11.15,
-            .defend_only = 1, .constant_heal = 1.0 }
+            .secondary_reload = 0.3325,
+            .aura_heal = 18.0,
+            .aura_radius = 190.0,
+            .aura_duration = 15.2,
+            .defend_only = 1, .constant_heal = 10.0 }
     },
     {
         .name = "Yggdrasil",
@@ -20590,6 +20590,106 @@ std::array<struct PetalData, PetalID::kNumPetals> const PETAL_DATA = {{
             .constant_heal = 0.5,
             .icon_angle = -1
         }
+    },
+    // ---- Triangle (Ant Nest / Termite) ----
+    {
+        .name = "Triangle",
+        .description = "Each copy of this petal equipped grants additional damage to it.",
+        .health = 10.0,
+        .damage = 5.0,
+        .radius = 10.0,
+        .reload = 2.0,
+        .count = 1,
+        .rarity = RarityID::kCommon,
+        .attributes = { .stack_damage = 4.0 }
+    },
+    {
+        .name = "Triangle",
+        .description = "Each copy of this petal equipped grants additional damage to it.",
+        .health = 30.0,
+        .damage = 15.0,
+        .radius = 10.0,
+        .reload = 2.0,
+        .count = 1,
+        .rarity = RarityID::kUnusual,
+        .attributes = { .stack_damage = 12.0 }
+    },
+    {
+        .name = "Triangle",
+        .description = "Each copy of this petal equipped grants additional damage to it.",
+        .health = 90.0,
+        .damage = 45.0,
+        .radius = 10.0,
+        .reload = 2.0,
+        .count = 1,
+        .rarity = RarityID::kRare,
+        .attributes = { .stack_damage = 36.0 }
+    },
+    {
+        .name = "Triangle",
+        .description = "Each copy of this petal equipped grants additional damage to it.",
+        .health = 270.0,
+        .damage = 135.0,
+        .radius = 10.0,
+        .reload = 2.0,
+        .count = 1,
+        .rarity = RarityID::kEpic,
+        .attributes = { .stack_damage = 108.0 }
+    },
+    {
+        .name = "Triangle",
+        .description = "Each copy of this petal equipped grants additional damage to it.",
+        .health = 810.0,
+        .damage = 405.0,
+        .radius = 10.0,
+        .reload = 2.0,
+        .count = 1,
+        .rarity = RarityID::kLegendary,
+        .attributes = { .stack_damage = 324.0 }
+    },
+    {
+        .name = "Triangle",
+        .description = "Each copy of this petal equipped grants additional damage to it.",
+        .health = 2430.0,
+        .damage = 1215.0,
+        .radius = 10.0,
+        .reload = 2.0,
+        .count = 1,
+        .rarity = RarityID::kMythic,
+        .attributes = { .stack_damage = 972.0 }
+    },
+    {
+        .name = "Triangle",
+        .description = "Each copy of this petal equipped grants additional damage to it.",
+        .health = 7290.0,
+        .damage = 3645.0,
+        .radius = 10.0,
+        .reload = 2.0,
+        .count = 1,
+        .rarity = RarityID::kUltra,
+        .attributes = { .stack_damage = 2916.0 }
+    },
+    {
+        .name = "Triangle",
+        .description = "Each copy of this petal equipped grants additional damage to it.",
+        .health = 21870.0,
+        .damage = 10935.0,
+        .radius = 10.0,
+        .reload = 2.0,
+        .count = 1,
+        .rarity = RarityID::kSuper,
+        .attributes = { .stack_damage = 8748.0 }
+    },
+    {
+        .name = "Triangle",
+        .description = "Each copy of this petal equipped grants additional damage to it.",
+        .health = 65610.0,
+        .damage = 32805.0,
+        .radius = 10.0,
+        .reload = 2.0,
+        .count = 1,
+        .rarity = RarityID::kUnique,
+        .attributes = { .stack_damage = 26244.0 }
     }
 }};
 
@@ -21763,15 +21863,106 @@ std::array<struct MobData, MobID::kNumMobs> const MOB_DATA = {{
     },
     {
         .name = "Loot Chest",
-        .description = "A friendly treasure chest. Walk up to open it.",
+        .description = "A friendly treasure chest. Break it open for loot.",
         .rarity = RarityID::kUnusual,
-        .health = {500000.0},
+        .health = {3200.0},
         .damage = 0.0,
         .radius = {30.0},
         .xp = 0,
         .drops = {},
         .attributes = { .stationary = 1 }
     },
+    {
+        .name = "Training Dummy",
+        .description = "A stationary practice target. Shows hit damage and DPS, resets after 3 seconds without damage, and gives no rewards.",
+        .rarity = RarityID::kCommon,
+        .health = {1000.0},
+        .damage = 0.0,
+        .radius = {35.2},
+        .xp = 0,
+        .drops = {},
+        .attributes = { .aggro_radius = 0, .stationary = 1 }
+    },
+    // ---- Ant Nest factions (Fire left / Termite right) ----
+    {
+        .name = "Baby Fire Ant",
+        .description = "Weak and defenseless, but on fireeeeeeeeeeeeee.",
+        .rarity = RarityID::kCommon,
+        .health = {25.0},
+        .damage = 10.0,
+        .radius = {14.0},
+        .xp = 1,
+        .drops = {
+            PetalID::kLight, PetalID::kYucca, PetalID::kLeaf, PetalID::kMatAntShell
+        },
+        .attributes = {}
+    },
+    {
+        .name = "Worker Fire Ant",
+        .description = "This ant is on fireeeeeeeeeeeeee.",
+        .rarity = RarityID::kCommon,
+        .health = {62.5},
+        .damage = 20.0,
+        .radius = {14.0},
+        .xp = 1,
+        .drops = {
+            PetalID::kYucca, PetalID::kCorn, PetalID::kMatAntShell, PetalID::kMatFormicAcid
+        },
+        .attributes = {}
+    },
+    {
+        .name = "Soldier Fire Ant",
+        .description = "It's got wings and it's ready to use them. And it's on fire.",
+        .rarity = RarityID::kUnusual,
+        .health = {100.0},
+        .damage = 20.0,
+        .radius = {14.0},
+        .xp = 1,
+        .drops = {
+            PetalID::kYucca, PetalID::kBone, PetalID::kMatAntShell, PetalID::kWing
+        },
+        .attributes = { .aggro_radius = 650 }
+    },
+    {
+        .name = "Baby Termite",
+        .description = "Weak and defenseless, but big dreams. These creatures appear to be connected somehow.",
+        .rarity = RarityID::kCommon,
+        .health = {25.0},
+        .damage = 10.0,
+        .radius = {14.0},
+        .xp = 1,
+        .drops = {
+            PetalID::kLight, PetalID::kLeaf, PetalID::kBone, PetalID::kTriangle
+        },
+        .attributes = { .share_damage = 1 }
+    },
+    {
+        .name = "Worker Termite",
+        .description = "It's a bit temperamental, probably from working all the time. These creatures appear to be connected somehow.",
+        .rarity = RarityID::kCommon,
+        .health = {60.0},
+        .damage = 10.0,
+        .radius = {14.0},
+        .xp = 1,
+        .drops = {
+            PetalID::kBone, PetalID::kTriangle, PetalID::kTriangleUnusual, PetalID::kMatAntShell
+        },
+        .attributes = { .share_damage = 1 }
+    },
+    {
+        .name = "Soldier Termite",
+        .description = "It's got wings and it's ready to use them. These creatures appear to be connected somehow.",
+        .rarity = RarityID::kUnusual,
+        .health = {100.0},
+        .damage = 10.0,
+        .radius = {14.0},
+        .xp = 1,
+        .drops = {
+            PetalID::kTriangle, PetalID::kTriangleUnusual, PetalID::kTriangleRare, PetalID::kTriangleEpic,
+            PetalID::kTriangleLegendary, PetalID::kTriangleMythic, PetalID::kTriangleUltra, PetalID::kBone
+        },
+        .attributes = { .aggro_radius = 420, .share_damage = 1 }
+    }
 }};
 
 uint8_t is_chase_loot_petal(PetalID::T id) {
@@ -21904,6 +22095,11 @@ uint32_t level_to_score(uint32_t level) {
         score += add;
     }
     return score;
+}
+
+uint32_t score_soft_cap() {
+    // Headroom above current grind tops (~Lv180–220); never near UINT32_MAX.
+    return level_to_score(300);
 }
 
 uint32_t loadout_slots_at_level(uint32_t level) {

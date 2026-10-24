@@ -56,8 +56,16 @@ static void draw_animated_water(Renderer &r, uint8_t map_id,
 }
 
 void _apply_damage_filter(Renderer &ctx, Entity const &ent) {
-    ctx.set_global_alpha(1 - ent.deletion_animation);
-    ctx.scale(1 + 0.5 * ent.deletion_animation);
+    float const del = ent.deletion_animation;
+    // Mob corpses pose in render_mob (tip/squash); only fade here — no inflate.
+    uint8_t const mob_corpse =
+        del > 0.f && ent.has_component(kMob) && !ent.has_component(kFlower);
+    if (mob_corpse)
+        ctx.set_global_alpha(1.f - del * 0.88f);
+    else {
+        ctx.set_global_alpha(1.f - del);
+        ctx.scale(1.f + 0.5f * del);
+    }
     if (ent.damage_flash > 0.66)
         ctx.add_color_filter(0xffffffff, ent.damage_flash);
     else if (ent.damage_flash > 0.1)
@@ -87,15 +95,17 @@ void Game::render_game() {
     }
     {
         RenderContext context(&renderer);
-        renderer.reset_transform();
-        // Stable void color outside the arena (no FOV-tinted wash — that pulsed).
-        renderer.set_fill(0xff2a2624);
-        renderer.fill_rect(0, 0, renderer.width, renderer.height);
-    }
-    {
-        RenderContext context(&renderer);
         uint8_t mid = Game::simulation.arena_info.map_id;
         if (mid >= MapID::kNumMaps) mid = MapID::kGarden;
+        TerrainArt::ThemeMaterial const &tm = TerrainArt::theme(mid);
+        {
+            RenderContext void_ctx(&renderer);
+            renderer.reset_transform();
+            // Outside-arena void: tint toward map ground (was flat charcoal —
+            // unbaked chunks / wipe frames read as 全灰黑 vs title preview).
+            renderer.set_fill(Renderer::MIX(0xff2a2624, tm.ground, 0.45f));
+            renderer.fill_rect(0, 0, renderer.width, renderer.height);
+        }
         float scale = 1.f / (2.f * camera.get_fov() * Game::camera_zoom * Ui::scale);
         float leftX = camera.get_camera_x() - renderer.width * scale;
         float rightX = camera.get_camera_x() + renderer.width * scale;

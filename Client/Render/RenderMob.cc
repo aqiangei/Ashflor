@@ -46,6 +46,29 @@ void render_mob(Renderer &ctx, Entity const &ent) {
             .color = ent.get_color()
         };
     }
+    // Falling mob corpse: tip + squash + cool wash (mirrors party flower corpses).
+    // Flower-mobs use RenderFlower's corpse path; skip double-pose here.
+    uint8_t const is_corpse = ent.deletion_animation > 0.f
+        && !ent.has_component(kFlower);
+    if (is_corpse) {
+        float const t = fclamp(ent.deletion_animation, 0.f, 1.f);
+        float const tip = -0.55f * t;
+        float const squash = 1.f - 0.22f * t;
+        {
+            RenderContext shadow(&ctx);
+            ctx.set_global_alpha(0.22f + 0.12f * t);
+            ctx.set_fill(0xff000000);
+            ctx.begin_path();
+            ctx.ellipse(4.f, ent.get_radius() * 0.55f,
+                ent.get_radius() * (0.95f + 0.15f * t),
+                ent.get_radius() * (0.32f + 0.08f * t));
+            ctx.fill();
+        }
+        ctx.translate(0.f, ent.get_radius() * 0.10f * t);
+        ctx.rotate(tip);
+        ctx.scale(1.f, squash);
+        ctx.add_color_filter(0xff4a5a6a, 0.28f + 0.22f * t);
+    }
     uint8_t const map_id = Game::simulation.arena_info.map_id;
     std::string_view const nm = (ent.has_component(kName) && !ent.get_name().empty())
         ? std::string_view(ent.get_name()) : std::string_view{};
@@ -81,7 +104,7 @@ void render_mob(Renderer &ctx, Entity const &ent) {
             || nm.find("掉队") != std::string_view::npos
             || nm.find("Lost") != std::string_view::npos
             || nm.find("Stray") != std::string_view::npos));
-    if (is_spirit) {
+    if (is_spirit && !is_corpse) {
         float const x = ent.get_x();
         float const y = ent.get_y();
         uint32_t const key = EntityID::make_hash(ent.id);

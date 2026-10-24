@@ -5,6 +5,7 @@
 #include <Shared/StaticDefinitions.hh>
 #include <Shared/LoadoutPreset.hh>
 #include <Shared/Talent.hh>
+#include <Server/TrainingDummy.hh>
 
 #include <array>
 #include <cstdint>
@@ -51,6 +52,12 @@ public:
     std::array<LoadoutPreset, LOADOUT_PRESET_COUNT> loadout_presets = {};
     // 0..19 active cloud preset; LOADOUT_PRESET_COUNT = none yet
     uint8_t active_loadout_preset = LOADOUT_PRESET_COUNT;
+    // Actual result of the last apply/save, possibly with missing/lower petals.
+    // Used to distinguish manual edits from a partially resolved preset.
+    LoadoutPreset last_applied_loadout;
+    std::array<TrainingDummy::Stats, RarityID::kNumRarities> training_stats = {};
+    uint64_t training_equipment = 0;
+    bool training_dirty = false;
     uint32_t bonus_day = 0;
     uint32_t daily_bonus_seconds = 0;
     uint32_t offline_bonus_seconds = 0;

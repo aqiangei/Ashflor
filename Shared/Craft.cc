@@ -257,15 +257,30 @@ namespace Craft {
     }
 
     uint8_t is_shop_combo(PetalID::T id) {
-        for (PetalID::T c : kCombos)
+        if (id == PetalID::kNone || id >= PetalID::kNumPetals) return 0;
+        char const *n = PETAL_DATA[id].name;
+        if (n == nullptr) return 0;
+        for (PetalID::T c : kCombos) {
             if (c == id) return 1;
+            // Any rarity rung of a listed combo family is purchasable.
+            if (c < PetalID::kNumPetals && PETAL_DATA[c].name != nullptr
+                && std::strcmp(PETAL_DATA[c].name, n) == 0)
+                return 1;
+        }
         return 0;
     }
 
     uint8_t is_craftable_special(PetalID::T id) {
         if (is_honey_or_meteor_family(id)) return 1;
-        for (PetalID::T s : kSpecials)
+        if (id == PetalID::kNone || id >= PetalID::kNumPetals) return 0;
+        char const *n = PETAL_DATA[id].name;
+        if (n == nullptr) return 0;
+        for (PetalID::T s : kSpecials) {
             if (s == id) return 1;
+            if (s < PetalID::kNumPetals && PETAL_DATA[s].name != nullptr
+                && std::strcmp(PETAL_DATA[s].name, n) == 0)
+                return 1;
+        }
         return 0;
     }
 
@@ -282,8 +297,22 @@ namespace Craft {
 
     uint32_t buy_combo_cost(PetalID::T id) {
         if (!is_shop_combo(id)) return 999999;
+        // Ladder SKUs may not be recipe results — price from the family's base recipe
+        // then scale by rarity pack cost.
+        PetalID::T recipe_id = id;
         uint16_t idx = Recipe::find_by_result(id);
-        if (idx == (uint16_t) -1) return 900;
+        if (idx == (uint16_t) -1) {
+            for (PetalID::T c : kCombos) {
+                if (c < PetalID::kNumPetals && PETAL_DATA[c].name != nullptr
+                    && PETAL_DATA[id].name != nullptr
+                    && std::strcmp(PETAL_DATA[c].name, PETAL_DATA[id].name) == 0) {
+                    recipe_id = c;
+                    idx = Recipe::find_by_result(c);
+                    break;
+                }
+            }
+        }
+        if (idx == (uint16_t) -1) return chase_price(PETAL_DATA[id].rarity, 1.6);
         Recipe::Def const &rec = Recipe::recipe_at(idx);
         uint32_t sum = 0;
         for (uint8_t i = 0; i < rec.ingredient_count; ++i) {
@@ -294,7 +323,37 @@ namespace Craft {
             sum += unit * (uint32_t) rec.ingredients[i].count;
         }
         // Convenience premium vs farming mats + hammer (~40%).
-        return (uint32_t) std::lround((double) sum * 1.40) + 40;
+        uint32_t base = (uint32_t) std::lround((double) sum * 1.40) + 40;
+        uint8_t br = PETAL_DATA[recipe_id].rarity;
+        uint8_t r = PETAL_DATA[id].rarity;
+        if (r > br && br < RarityID::kNumRarities && r < RarityID::kNumRarities
+            && BUY_RARITY[br] > 0) {
+            double scale = (double) BUY_RARITY[r] / (double) BUY_RARITY[br];
+            base = (uint32_t) std::lround((double) base * scale);
+        }
+        return base ? base : 1;
+    }
+
+    // Map any rarity rung back to the seed SKU used in the chase-price table.
+    static PetalID::T special_price_seed(PetalID::T id) {
+        if (id == PetalID::kNone || id >= PetalID::kNumPetals) return PetalID::kNone;
+        char const *n = PETAL_DATA[id].name;
+        if (n == nullptr) return PetalID::kNone;
+        static PetalID::T const kSeeds[] = {
+            PetalID::kAccelerator, PetalID::kMagnet, PetalID::kFaster,
+            PetalID::kBubble, PetalID::kWeb, PetalID::kSalt, PetalID::kMonstera,
+            PetalID::kGoldenLeaf, PetalID::kYinYang, PetalID::kCutter,
+            PetalID::kHeaviest, PetalID::kLotus, PetalID::kBone,
+            PetalID::kAntennae, PetalID::kObserver, PetalID::kThirdEye,
+            PetalID::kMoon, PetalID::kYggdrasil
+        };
+        for (PetalID::T s : kSeeds) {
+            if (s == id) return s;
+            if (s < PetalID::kNumPetals && PETAL_DATA[s].name != nullptr
+                && std::strcmp(PETAL_DATA[s].name, n) == 0)
+                return s;
+        }
+        return PetalID::kNone;
     }
 
     uint32_t buy_special_cost(PetalID::T id) {
@@ -308,7 +367,9 @@ namespace Craft {
         uint8_t r = PETAL_DATA[id].rarity;
         // Fixed chase SKUs: util × pack. Minutes from DPS/HP/coin model — see
         // todo/shop-economy-rebalance-2026-10-23.md §Batch C.
-        switch (id) {
+        // Price by family seed so every rarity rung of Accelerator/etc. sells.
+        PetalID::T seed = special_price_seed(id);
+        switch (seed) {
             case PetalID::kAccelerator: return chase_price(r, 1.40); // ~8m soft Unusual
             case PetalID::kMagnet: return chase_price(r, 1.85);      // ~11m soft Unusual
             case PetalID::kFaster: return chase_price(r, 1.15);
@@ -383,11 +444,27 @@ namespace Craft {
     static std::vector<ShopOffer> g_offers;
     static uint8_t g_offers_ready = 0;
 
+    // Push every same-name rarity rung for a seed SKU (dedupe by id).
+    static void push_rarity_ladder(std::vector<ShopOffer> &out, PetalID::T seed,
+                                   uint8_t tab) {
+        if (seed == PetalID::kNone || seed >= PetalID::kNumPetals) return;
+        uint8_t seen[RarityID::kNumRarities] = {};
+        for (uint8_t r = 0; r < RarityID::kNumRarities; ++r) {
+            PetalID::T id = petal_at_rarity(seed, r);
+            if (id == PetalID::kNone || id >= PetalID::kNumPetals) continue;
+            uint8_t rr = PETAL_DATA[id].rarity;
+            if (rr >= RarityID::kNumRarities || seen[rr]) continue;
+            seen[rr] = 1;
+            out.push_back({ id, tab, 0, 0, 0 });
+        }
+    }
+
     static void build_offers() {
         if (g_offers_ready) return;
         g_offers.clear();
+        // City curios / chase specials: full rarity ladders (not just the seed id).
         for (PetalID::T id : kSpecials)
-            g_offers.push_back({ id, kShopSpecials, 0, 0, 0 });
+            push_rarity_ladder(g_offers, id, kShopSpecials);
         // Paid full-server top banner (aqa-style); prompt for text on buy.
         g_offers.push_back({ PetalID::kNone, kShopSpecials, 0, 0, 1 });
         for (uint32_t id = 1; id < (uint32_t) PetalID::kNumPetals; ++id) {
@@ -402,10 +479,11 @@ namespace Craft {
             uint8_t tab = (r <= RarityID::kUnusual) ? kShopMaterials : kShopRareMats;
             g_offers.push_back({ (PetalID::T) id, tab, 0, 0, 0 });
         }
+        // Assemble combos: every rarity rung that exists for the family.
         for (PetalID::T id : kCombos)
-            g_offers.push_back({ id, kShopCombos, 0, 0, 0 });
-        // Random packs: Common → Legendary (Mythic+ too swingy / Unique gated)
-        for (uint8_t r = RarityID::kCommon; r <= RarityID::kLegendary; ++r)
+            push_rarity_ladder(g_offers, id, kShopCombos);
+        // Random packs: Common → Mythic (Ultra+ still craft/drop gated)
+        for (uint8_t r = RarityID::kCommon; r <= RarityID::kMythic; ++r)
             g_offers.push_back({ PetalID::kNone, kShopRandom, 1, r, 0 });
         g_offers_ready = 1;
     }

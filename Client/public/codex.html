@@ -1,0 +1,1484 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Ashflor 图鉴 · 世界与机制</title>
+<style>
+  :root {
+    --bg: #0f1a14;
+    --ink: #e8f2e4;
+    --muted: #8aa892;
+    --line: #2a3d30;
+    --card: #15241c;
+    --accent: #5ecf7a;
+    --accent2: #c9a227;
+    --panel: #1a2c22;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; min-height: 100vh; color: var(--ink);
+    font-family: "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+    background:
+      radial-gradient(ellipse at 12% -10%, #1e3a28 0%, transparent 42%),
+      radial-gradient(ellipse at 88% 110%, #243a4a 0%, transparent 40%),
+      var(--bg);
+  }
+  a { color: var(--accent); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  header {
+    display: flex; flex-wrap: wrap; align-items: baseline; gap: 12px 20px;
+    max-width: 1180px; margin: 0 auto; padding: 22px 16px 8px;
+  }
+  header h1 {
+    margin: 0; font-size: 1.55rem; font-weight: 750; letter-spacing: -0.02em;
+  }
+  header .nav { margin-left: auto; font-size: 0.88rem; color: var(--muted); }
+  .lead {
+    max-width: 1180px; margin: 0 auto; padding: 0 16px 18px;
+    color: var(--muted); font-size: 0.92rem; line-height: 1.45;
+  }
+  main { max-width: 1180px; margin: 0 auto; padding: 0 16px 64px; }
+  .sec { margin-bottom: 28px; }
+  .sec-h {
+    display: flex; align-items: baseline; gap: 10px; margin: 0 0 12px;
+  }
+  .sec-h h2 { margin: 0; font-size: 1.12rem; font-weight: 700; }
+  .sec-h span { color: var(--muted); font-size: 0.78rem; }
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(148px, 1fr));
+    gap: 10px;
+  }
+  .grid.mech {
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  }
+  .tile {
+    position: relative; overflow: hidden; cursor: pointer;
+    border: 1px solid var(--line); border-radius: 14px;
+    background: var(--card); padding: 0; text-align: left; color: inherit;
+    font: inherit; transition: transform .18s ease, border-color .18s ease, box-shadow .18s;
+  }
+  .tile:hover, .tile:focus-visible {
+    transform: translateY(-2px);
+    border-color: var(--accent);
+    box-shadow: 0 10px 28px rgba(0,0,0,.35);
+    outline: none;
+  }
+  .tile canvas {
+    display: block; width: 100%; height: 96px;
+    background: #0a120e;
+  }
+  .tile .body { padding: 10px 12px 12px; }
+  .tile .t { font-weight: 700; font-size: 0.95rem; line-height: 1.2; }
+  .tile .s { color: var(--muted); font-size: 0.74rem; margin-top: 4px; line-height: 1.35; }
+  .tile .tag {
+    position: absolute; top: 8px; left: 8px;
+    font-size: 0.65rem; font-weight: 700; letter-spacing: .04em;
+    padding: 3px 7px; border-radius: 999px;
+    background: rgba(15,26,20,.72); color: var(--accent); border: 1px solid var(--line);
+  }
+  .tabs {
+    display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0 14px;
+  }
+  .tabs button {
+    font: inherit; cursor: pointer; color: var(--muted);
+    background: var(--panel); border: 1px solid var(--line);
+    border-radius: 999px; padding: 6px 12px; font-size: 0.8rem;
+  }
+  .tabs button.on { color: #0f1a14; background: var(--accent); border-color: var(--accent); font-weight: 700; }
+  .gallery {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(112px, 1fr));
+    gap: 8px;
+  }
+  .chip {
+    border: 1px solid var(--line); border-radius: 10px; background: var(--card);
+    padding: 8px; cursor: pointer; text-align: center; color: inherit; font: inherit;
+  }
+  .chip:hover { border-color: var(--accent); }
+  .chip canvas { display: block; width: 64px; height: 64px; margin: 0 auto 6px; }
+  .chip .n { font-size: 0.72rem; font-weight: 600; line-height: 1.25; }
+  .chip .r { font-size: 0.62rem; color: var(--muted); margin-top: 2px; }
+  .tools {
+    display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 10px;
+  }
+  .tools input, .tools select {
+    font: inherit; color: var(--ink); background: var(--panel);
+    border: 1px solid var(--line); border-radius: 8px; padding: 7px 10px;
+  }
+  .tools input { flex: 1; min-width: 160px; }
+  .err { color: #e8a060; padding: 20px; }
+  .overlay {
+    position: fixed; inset: 0; z-index: 80;
+    background: rgba(6,12,9,.72); backdrop-filter: blur(4px);
+    display: flex; align-items: stretch; justify-content: center;
+    padding: 24px 12px; overflow-y: auto;
+  }
+  .overlay[hidden] { display: none !important; }
+  .sheet {
+    width: min(820px, 100%); margin: auto; background: var(--panel);
+    border: 1px solid var(--line); border-radius: 18px; overflow: hidden;
+    box-shadow: 0 24px 60px rgba(0,0,0,.45);
+  }
+  .sheet-art {
+    position: relative; height: 200px; background: #0a120e;
+  }
+  .sheet-art canvas { width: 100%; height: 100%; display: block; }
+  .sheet-x {
+    position: absolute; top: 10px; right: 10px; z-index: 2;
+    width: 36px; height: 36px; border-radius: 50%;
+    border: 1px solid var(--line); background: rgba(15,26,20,.8);
+    color: var(--ink); font-size: 1.2rem; cursor: pointer; line-height: 1;
+  }
+  .sheet-body { padding: 18px 20px 24px; }
+  .sheet-body h3 { margin: 0 0 6px; font-size: 1.35rem; }
+  .sheet-body .en { color: var(--accent2); font-size: 0.82rem; margin-bottom: 10px; }
+  .sheet-body .tagline { color: var(--accent); font-size: 0.95rem; margin: 0 0 12px; }
+  .sheet-body p { margin: 0; color: #c5d8c8; line-height: 1.55; font-size: 0.95rem; white-space: pre-wrap; }
+  .sheet-meta {
+    display: flex; flex-wrap: wrap; gap: 8px; margin: 14px 0 0;
+  }
+  .pill {
+    font-size: 0.72rem; padding: 4px 9px; border-radius: 999px;
+    border: 1px solid var(--line); background: var(--card); color: var(--muted);
+  }
+  .loading { color: var(--muted); padding: 40px; text-align: center; }
+  .sheet-extra { margin-top: 16px; }
+  .sheet-extra h4 {
+    margin: 16px 0 8px; font-size: 0.85rem; color: var(--accent);
+    font-weight: 700; letter-spacing: 0.02em;
+  }
+  .sheet-extra h4:first-child { margin-top: 0; }
+  .bilingual { display: grid; gap: 8px; }
+  .bilingual .zh { color: #c5d8c8; line-height: 1.55; font-size: 0.95rem; white-space: pre-wrap; }
+  .bilingual .en { color: var(--muted); line-height: 1.5; font-size: 0.84rem; white-space: pre-wrap; }
+  .kv {
+    display: grid;
+    grid-template-columns: minmax(110px, 34%) 1fr;
+    gap: 0;
+    font-size: 0.82rem;
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    overflow: hidden;
+  }
+  .kv div {
+    padding: 6px 10px; border-bottom: 1px solid var(--line);
+  }
+  .kv div:nth-last-child(-n+2) { border-bottom: none; }
+  .kv .k { color: var(--muted); background: #122018; }
+  .kv .v { color: var(--ink); font-variant-numeric: tabular-nums; word-break: break-word; }
+  .kv .v a { color: var(--accent); }
+  table.drops {
+    width: 100%; border-collapse: collapse; font-size: 0.8rem;
+  }
+  table.drops th, table.drops td {
+    text-align: left; padding: 7px 8px; border-bottom: 1px solid var(--line);
+  }
+  table.drops th { color: var(--muted); font-weight: 600; font-size: 0.7rem; }
+  table.drops tr { cursor: pointer; }
+  table.drops tr:hover td { background: #1e3228; }
+  table.drops .pct { color: var(--accent2); font-weight: 700; font-variant-numeric: tabular-nums; }
+  ol.flow {
+    margin: 0; padding: 0 0 0 1.2rem;
+    font-size: 0.84rem; line-height: 1.45;
+  }
+  ol.flow li { margin: 0.45rem 0; color: var(--ink); }
+  ol.flow .en { display: block; color: var(--muted); font-size: 0.78rem; margin-top: 2px; }
+  .ladder {
+    display: flex; flex-wrap: wrap; gap: 6px;
+  }
+  .ladder button {
+    font: inherit; cursor: pointer; color: var(--ink);
+    background: var(--card); border: 1px solid var(--line);
+    border-radius: 8px; padding: 5px 8px; font-size: 0.72rem;
+  }
+  .ladder button.on { border-color: var(--accent); color: var(--accent); }
+  .rarity-tabs { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 8px; }
+  .rarity-tabs button {
+    font: inherit; cursor: pointer; color: var(--muted);
+    background: var(--card); border: 1px solid var(--line);
+    border-radius: 999px; padding: 4px 9px; font-size: 0.72rem;
+  }
+  .rarity-tabs button.on { color: #0f1a14; background: var(--accent); border-color: var(--accent); font-weight: 700; }
+  .rules-box {
+    background: var(--card); border: 1px solid var(--line); border-radius: 12px;
+    padding: 12px 14px; font-size: 0.82rem; color: #c5d8c8; line-height: 1.5;
+  }
+  .rules-box .en { color: var(--muted); font-size: 0.78rem; margin-top: 6px; }
+  .chip .s2 { font-size: 0.6rem; color: var(--accent2); margin-top: 2px; }
+  .art-gallery {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(132px, 1fr));
+    gap: 10px;
+  }
+  .art-card {
+    display: block; text-align: left; color: inherit; font: inherit;
+    background: var(--card); border: 1px solid var(--line); border-radius: 12px;
+    padding: 6px; cursor: pointer;
+  }
+  .art-card:hover { border-color: var(--accent); }
+  .art-card canvas {
+    display: block; width: 100%; height: 90px; border-radius: 8px; background: #0a120e;
+  }
+  .art-card .n { font-size: 0.78rem; font-weight: 700; margin-top: 6px; line-height: 1.25; }
+  .art-card .s { font-size: 0.65rem; color: var(--muted); margin-top: 2px; line-height: 1.3; }
+  .proc-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+    gap: 8px;
+  }
+  .proc-tile {
+    text-align: left; color: inherit; font: inherit; cursor: pointer;
+    background: var(--card); border: 1px solid var(--line); border-radius: 12px;
+    padding: 12px 14px;
+  }
+  .proc-tile:hover { border-color: var(--accent); }
+  .proc-tile .t { font-weight: 700; font-size: 0.92rem; }
+  .proc-tile .s { color: var(--muted); font-size: 0.74rem; margin-top: 4px; line-height: 1.35; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Ashflor 图鉴</h1>
+  <div class="nav"><a href="/live">← Live 控制台</a> · <a href="/">回游戏</a></div>
+</header>
+<p class="lead">八域与机制置顶可点进中英文详情。花瓣/怪物/世界实体美术与游戏内同一套 C++ 绘制。点开看全部数值与掉落概率。</p>
+<main id="app"><div class="loading">加载图鉴数据与美术模块…</div></main>
+<script src="/gardn-art.js"></script>
+
+<div class="overlay" id="overlay" hidden>
+  <div class="sheet" role="dialog" aria-modal="true">
+    <div class="sheet-art">
+      <canvas id="sheetCanvas" width="820" height="200"></canvas>
+      <button type="button" class="sheet-x" id="btnClose" aria-label="关闭">×</button>
+    </div>
+    <div class="sheet-body">
+      <h3 id="sheetTitle">—</h3>
+      <div class="en" id="sheetEn"></div>
+      <p class="tagline" id="sheetTag"></p>
+      <div id="sheetDetail" class="bilingual"></div>
+      <div class="sheet-meta" id="sheetMeta"></div>
+      <div class="sheet-extra" id="sheetExtra"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+(function () {
+  const app = document.getElementById("app");
+  const overlay = document.getElementById("overlay");
+  const sheetCanvas = document.getElementById("sheetCanvas");
+  const sheetTitle = document.getElementById("sheetTitle");
+  const sheetEn = document.getElementById("sheetEn");
+  const sheetTag = document.getElementById("sheetTag");
+  const sheetDetail = document.getElementById("sheetDetail");
+  const sheetMeta = document.getElementById("sheetMeta");
+  const sheetExtra = document.getElementById("sheetExtra");
+  document.getElementById("btnClose").onclick = closeSheet;
+  overlay.addEventListener("click", (e) => { if (e.target === overlay) closeSheet(); });
+  document.addEventListener("keydown", (e) => { if (e.key === "Escape") closeSheet(); });
+
+  let DATA = null;
+  let petalById = new Map();
+  let mobById = new Map();
+  let animId = 0;
+  let sheetKind = null;
+  let sheetPayload = null;
+  let Art = null; // gardn-art Module (in-game Renderer draws)
+
+  // ThemeArt::Visual enum (ThemeArt.hh)
+  const VIS = {
+    main_npc: 1, wayside: 2, escort: 3, pad: 4, crate: 5,
+    chest: 6, mirage: 7, flee: 8, height: 9, lore: 10
+  };
+
+  async function bootArt() {
+    if (Art) return Art;
+    if (typeof createGardnArt !== "function") throw new Error("gardn-art.js 未加载");
+    Art = await createGardnArt({
+      locateFile: (p) => (p.endsWith(".wasm") ? "/gardn-art.wasm" : p)
+    });
+    if (!Art.TextDecoder) Art.TextDecoder = new TextDecoder();
+    Art._ashflor_art_boot();
+    return Art;
+  }
+
+  function artSourceCanvas() {
+    const id = Art._ashflor_art_ctx_id();
+    const ctx = Art.ctxs && Art.ctxs[id];
+    return ctx && ctx.canvas ? ctx.canvas : null;
+  }
+
+  function blitArt(dest, cssW, cssH) {
+    const src = artSourceCanvas();
+    if (!src || !dest) return false;
+    const dpr = Math.min(2, window.devicePixelRatio || 1);
+    const w = Math.max(8, Math.floor((cssW || dest.clientWidth || 96) * dpr));
+    const h = Math.max(8, Math.floor((cssH || dest.clientHeight || 96) * dpr));
+    if (dest.width !== w || dest.height !== h) {
+      dest.width = w; dest.height = h;
+    }
+    const c = dest.getContext("2d");
+    c.setTransform(1, 0, 0, 1, 0, 0);
+    c.clearRect(0, 0, w, h);
+    c.drawImage(src, 0, 0, w, h);
+    return true;
+  }
+
+  function drawPetalArt(dest, petal, cssW, cssH) {
+    if (!Art || !petal) return false;
+    const dpr = Math.min(2, window.devicePixelRatio || 1);
+    const w = Math.max(8, Math.floor((cssW || 96) * dpr));
+    const h = Math.max(8, Math.floor((cssH || 96) * dpr));
+    Art._ashflor_art_draw_petal(petal.id | 0, w, h);
+    return blitArt(dest, cssW || 96, cssH || 96);
+  }
+
+  function drawMobArt(dest, mob, cssW, cssH) {
+    if (!Art || !mob) return false;
+    const dpr = Math.min(2, window.devicePixelRatio || 1);
+    const w = Math.max(8, Math.floor((cssW || 96) * dpr));
+    const h = Math.max(8, Math.floor((cssH || 96) * dpr));
+    Art._ashflor_art_draw_mob(mob.id | 0, mob.rarity | 0, w, h);
+    return blitArt(dest, cssW || 96, cssH || 96);
+  }
+
+  function drawThemeArt(dest, visual, mapId, anim, seed, cssW, cssH, name) {
+    if (!Art || !(visual > 0)) return false;
+    const dpr = Math.min(2, window.devicePixelRatio || 1);
+    const w = Math.max(8, Math.floor((cssW || 160) * dpr));
+    const h = Math.max(8, Math.floor((cssH || 96) * dpr));
+    let namePtr = 0;
+    if (name && Art._malloc && Art.stringToUTF8 && Art.lengthBytesUTF8) {
+      const n = Art.lengthBytesUTF8(name) + 1;
+      namePtr = Art._malloc(n);
+      if (namePtr) Art.stringToUTF8(name, namePtr, n);
+    }
+    try {
+      Art._ashflor_art_draw_theme(visual | 0, mapId | 0, w, h, anim || 0, seed >>> 0, namePtr);
+    } finally {
+      if (namePtr && Art._free) Art._free(namePtr);
+    }
+    return blitArt(dest, cssW || 160, cssH || 96);
+  }
+
+  function worldEntitiesFor(filterFn) {
+    return (DATA.world_entities || []).filter(filterFn);
+  }
+
+  function paintArtGallery(host, list, opts) {
+    host.innerHTML = "";
+    const grid = document.createElement("div");
+    grid.className = "art-gallery";
+    const anim = performance.now() / 1000;
+    list.forEach((e, i) => {
+      const card = document.createElement("button");
+      card.type = "button";
+      card.className = "art-card";
+      card.innerHTML = `<canvas width="120" height="90"></canvas><div class="n"></div><div class="s"></div>`;
+      card.querySelector(".n").textContent = e.name_zh || e.name_en || "?";
+      const map = (DATA.maps || []).find(m => m.id === e.map_id);
+      card.querySelector(".s").textContent =
+        (map ? map.name_zh + " · " : "") + (e.art_id || "") + (e.kind ? " · " + e.kind : "");
+      const c = card.querySelector("canvas");
+      if (e.visual > 0) {
+        drawThemeArt(c, e.visual, e.map_id | 0, anim + i * 0.2, (i * 17 + 3) >>> 0, 120, 90, e.name_zh);
+      } else {
+        const ctx = c.getContext("2d");
+        ctx.fillStyle = "#122018";
+        ctx.fillRect(0, 0, 120, 90);
+        ctx.fillStyle = "#8aa892";
+        ctx.font = "12px sans-serif";
+        ctx.textAlign = "center";
+        ctx.fillText("真实怪物", 60, 48);
+      }
+      card.onclick = () => openSheet("world", e);
+      grid.appendChild(card);
+    });
+    if (!list.length) {
+      host.innerHTML = `<p class="en">（无条目）</p>`;
+      return;
+    }
+    host.appendChild(grid);
+    if (opts && opts.hint) {
+      const p = document.createElement("p");
+      p.className = "en";
+      p.style.marginTop = "8px";
+      p.textContent = opts.hint;
+      host.appendChild(p);
+    }
+  }
+
+  function escHtml(s) {
+    return String(s == null ? "" : s)
+      .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;");
+  }
+  function fmt(v) {
+    if (v == null || v === "") return "—";
+    if (typeof v === "number") {
+      if (!isFinite(v)) return String(v);
+      // Kill binary float junk like 55.00000000000001
+      const r = Math.round(v * 1e6) / 1e6;
+      if (Math.abs(r - Math.round(r)) < 1e-9) return String(Math.round(r));
+      return String(+r.toPrecision(6));
+    }
+    return String(v);
+  }
+  function pct(frac) {
+    return fmt((Number(frac) || 0) * 100) + "%";
+  }
+  function setBilingual(zh, en) {
+    sheetDetail.innerHTML =
+      `<div class="zh">${escHtml(zh || "（无）")}</div>` +
+      (en ? `<div class="en">${escHtml(en)}</div>` : "");
+  }
+  function kvRows(rows) {
+    if (!rows || !rows.length) return "";
+    return `<div class="kv">${rows.map(([k, v]) =>
+      `<div class="k">${escHtml(k)}</div><div class="v">${v}</div>`
+    ).join("")}</div>`;
+  }
+  function attrRows(attrs) {
+    if (!attrs) return [];
+    const labels = {
+      clump_radius: "聚合半径", secondary_reload: "副冷却", constant_heal: "持续治疗/s",
+      burst_heal: "爆发治疗", mass: "质量", armor: "护甲", poison_armor: "毒抗",
+      dandelion_inflict_seconds: "禁疗秒", slow_inflict_seconds: "减速秒",
+      vision_factor: "视野倍率", extra_body_damage: "额外体伤", extra_rotation_speed: "额外转速",
+      extra_range: "额外射程", extra_health: "额外生命", damage_reflection: "反伤",
+      extra_damage_factor: "伤害倍率", extra_reload_factor: "冷却倍率",
+      move_speed_factor: "移速倍率", magnet_radius: "磁铁半径",
+      aura_heal: "光环治疗/s", aura_radius: "光环半径", aura_duration: "光环持续",
+      poison_dps: "毒伤/s", poison_time: "毒时长", burn_dps: "灼伤/s", burn_time: "灼伤时长",
+      armor_penetration: "护甲穿透", bonus_vs_poisoned: "对中毒加成", bonus_vs_slowed: "对减速加成",
+      hit_cycle: "击中周期", hit_cycle_factor: "周期伤害倍率", snare_seconds: "禁锢秒",
+      splash_damage: "溅射伤害", splash_radius: "溅射半径",
+      execute_threshold: "斩杀阈值", execute_factor: "斩杀倍率",
+      taunt_radius: "嘲讽半径", on_hit_heal: "击中回血",
+      radial_pulse_damage: "脉冲伤害", radial_pulse_radius: "脉冲半径",
+      aura_slow_seconds: "光环减速", defend_only: "仅防御", icon_angle: "图标角",
+      split_projectile: "分裂弹", rotation_style: "旋转样式",
+      spawns: "召唤怪ID", spawn_count: "召唤数量", equipment: "装备位"
+    };
+    const skipDefault = {
+      mass: 0.1, vision_factor: 1, extra_damage_factor: 1, extra_reload_factor: 1,
+      move_speed_factor: 1, hit_cycle_factor: 2, execute_factor: 1.5,
+      rotation_style: "passive", equipment: "none", spawns: 106
+    };
+    // spawns default is kNumMobs which varies — treat MobID::kNumMobs-ish high as empty later
+    const rows = [];
+    for (const [k, label] of Object.entries(labels)) {
+      if (!(k in attrs)) continue;
+      const v = attrs[k];
+      if (v === 0 || v === "none" || v === "passive") continue;
+      if (skipDefault[k] !== undefined && v === skipDefault[k]) continue;
+      if (k === "spawns" && (v == null || v >= 90)) continue;
+      rows.push([label + " / " + k, escHtml(fmt(v))]);
+    }
+    return rows;
+  }
+  function dropsTable(entries) {
+    const list = entries || [];
+    if (!list.length) return `<p class="en">无掉落表</p>`;
+    let html = `<table class="drops"><thead><tr>
+      <th>花瓣</th><th>EN</th><th>稀有度</th><th>权重</th><th>概率</th><th>种子ID</th><th></th>
+    </tr></thead><tbody>`;
+    for (const d of list) {
+      html += `<tr data-petal="${d.petal}">
+        <td>${escHtml(d.name_zh || d.name || "#" + d.petal)}</td>
+        <td>${escHtml(d.name || "")}</td>
+        <td>${escHtml(d.rarity_zh || "")}</td>
+        <td>${escHtml(fmt(d.weight))}</td>
+        <td class="pct">${escHtml(fmt(d.pct))}%</td>
+        <td>#${d.seed}${d.chase ? " · chase" : ""}</td>
+        <td>→</td>
+      </tr>`;
+    }
+    html += `</tbody></table>`;
+    return html;
+  }
+  function renderMobDropsExtra(mob, rarityView) {
+    const block = (mob.drops_by_rarity || []).find(x => x.rarity === rarityView)
+      || { entries: mob.drops || [] };
+    const tabs = (DATA.rarities || []).map(r =>
+      `<button type="button" data-r="${r.id}" class="${r.id === rarityView ? "on" : ""}">${escHtml(r.name_zh)}</button>`
+    ).join("");
+    return `<h4>掉落表 · 按查看稀有度加权（与游戏内图鉴同源 mob_loot_weights）</h4>
+      <div class="rarity-tabs" id="dropRarityTabs">${tabs}</div>
+      <div id="dropTableHost">${dropsTable(block.entries)}</div>
+      <p class="en" style="margin-top:8px">另：每次掉落还会再 roll 稀有度带 自身20% / −1 60% / −2 20%，再映射到同名阶梯。</p>`;
+  }
+
+  function hex(c) {
+    if (!c) return "#5ecf7a";
+    if (c[0] === "#") return c;
+    return "#" + c;
+  }
+  function parseColor(c) {
+    const h = hex(c).replace("#", "");
+    const n = parseInt(h.length === 3 ? h.split("").map(x => x + x).join("") : h, 16);
+    return { r: (n >> 16) & 255, g: (n >> 8) & 255, b: n & 255 };
+  }
+  function rarityColor(id) {
+    const r = (DATA && DATA.rarities || []).find(x => x.id === id);
+    return r ? r.color : "#888";
+  }
+
+  // --- Procedural art (canvas lite, map / mech / entity mood) ---
+  function drawMapArt(ctx, w, h, map, t) {
+    const col = parseColor(map.color);
+    const g = ctx.createLinearGradient(0, 0, w, h);
+    g.addColorStop(0, `rgb(${col.r},${col.g},${col.b})`);
+    g.addColorStop(1, `rgb(${Math.max(0,col.r-60)},${Math.max(0,col.g-40)},${Math.max(0,col.b-30)})`);
+    ctx.fillStyle = g;
+    ctx.fillRect(0, 0, w, h);
+    ctx.save();
+    ctx.translate(w * 0.5, h * 0.55);
+    const id = map.id | 0;
+    const breath = Math.sin(t * 0.9 + id) * 4;
+    if (id === 0) { // garden
+      ctx.fillStyle = "#4A7A3A";
+      ellipse(ctx, 0, 18 + breath * 0.2, 42, 22); ctx.fill();
+      ctx.fillStyle = "#F0D878";
+      circle(ctx, 0, -8, 28); ctx.fill();
+      ctx.fillStyle = "#6FAF4A";
+      leaf(ctx, -34, -20 + breath, -0.6);
+      leaf(ctx, 30, -18 - breath * 0.5, 0.5);
+      eyes(ctx, 0, -10, 8, 3.2);
+    } else if (id === 1) { // desert
+      ctx.fillStyle = "#C89256";
+      ctx.beginPath(); ctx.moveTo(-50, 40); ctx.lineTo(50, 40); ctx.lineTo(40, -5); ctx.lineTo(-40, -5); ctx.fill();
+      ctx.fillStyle = "#79583D";
+      ellipse(ctx, 0, -8, 32, 28); ctx.fill();
+      ctx.fillStyle = "#D8A45D";
+      ellipse(ctx, 0, -22, 34, 16); ctx.fill();
+      eyes(ctx, 0, -6, 9, 2.8);
+    } else if (id === 2) { // ocean
+      for (let i = 0; i < 4; i++) {
+        ctx.strokeStyle = `rgba(180,230,255,${0.25 + i * 0.1})`;
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        for (let x = -60; x <= 60; x += 4) {
+          const y = Math.sin(x * 0.08 + t * 1.2 + i) * (6 + i * 2) + i * 10;
+          if (x === -60) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+        }
+        ctx.stroke();
+      }
+      ctx.fillStyle = "#7ec8e3";
+      ellipse(ctx, breath, -6, 26, 20); ctx.fill();
+      eyes(ctx, breath, -8, 7, 2.5);
+    } else if (id === 3) { // polar
+      ctx.fillStyle = "#dfe6ea";
+      ellipse(ctx, 0, 10, 40, 28); ctx.fill();
+      ctx.fillStyle = "#9aa3ab";
+      ellipse(ctx, 0, -12, 28, 24); ctx.fill();
+      ctx.fillStyle = "#fff";
+      ellipse(ctx, 0, -18, 22, 14); ctx.fill();
+      eyes(ctx, 0, -14, 7, 2.4);
+    } else if (id === 4) { // jungle
+      ctx.fillStyle = "#2d6a4f";
+      for (let i = -2; i <= 2; i++) {
+        ellipse(ctx, i * 18, -10 + Math.abs(i) * 4 + breath * 0.3, 16, 28); ctx.fill();
+      }
+      ctx.fillStyle = "#95d5b2";
+      circle(ctx, 0, 12, 22); ctx.fill();
+      eyes(ctx, 0, 10, 7, 2.6);
+    } else if (id === 5) { // ant hell
+      ctx.fillStyle = "#a98467";
+      ellipse(ctx, -16, 4, 18, 14); ctx.fill();
+      ellipse(ctx, 8, 0, 22, 16); ctx.fill();
+      ellipse(ctx, 28, -8, 14, 12); ctx.fill();
+      ctx.strokeStyle = "#5c4030"; ctx.lineWidth = 2.5;
+      for (let i = 0; i < 3; i++) {
+        ctx.beginPath(); ctx.moveTo(-10, 10 + i * 4); ctx.lineTo(-34, 18 + i * 5); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(10, 8 + i * 4); ctx.lineTo(36, 16 + i * 5); ctx.stroke();
+      }
+      eyes(ctx, 28, -10, 5, 2);
+    } else if (id === 6) { // volcano
+      ctx.fillStyle = "#4a4e69";
+      ctx.beginPath(); ctx.moveTo(-48, 36); ctx.lineTo(0, -36 + breath); ctx.lineTo(48, 36); ctx.fill();
+      ctx.fillStyle = "#e85d04";
+      ctx.beginPath(); ctx.moveTo(-12, 8); ctx.lineTo(0, -20); ctx.lineTo(12, 8); ctx.fill();
+      ctx.fillStyle = "#ffba08";
+      circle(ctx, 0, -8, 8 + Math.sin(t * 2) * 1.5); ctx.fill();
+    } else { // capital
+      ctx.fillStyle = "#c9a227";
+      ctx.fillRect(-36, -8, 72, 44);
+      ctx.fillStyle = "#5c4a1e";
+      ctx.fillRect(-40, -18, 16, 54);
+      ctx.fillRect(24, -18, 16, 54);
+      ctx.fillStyle = "#f1e3a0";
+      ctx.beginPath(); ctx.moveTo(-8, -18); ctx.lineTo(0, -40 + breath * 0.5); ctx.lineTo(8, -18); ctx.fill();
+      eyes(ctx, 0, 8, 10, 2.8);
+    }
+    ctx.restore();
+  }
+
+  function drawMechArt(ctx, w, h, mech, t) {
+    const hues = {
+      rarity: ["#9ca3af","#3b82f6","#a855f7","#eab308","#ef4444","#22c55e","#06b6d4","#f97316","#fbbf24"],
+      craft: "#5ecf7a", loadout: "#7dd3fc", combat: "#f87171", xp: "#c9a227",
+      talent: "#a78bfa", drop: "#fbbf24", world: "#34d399", social: "#60a5fa", bonus: "#f472b6"
+    };
+    ctx.fillStyle = "#0d1812";
+    ctx.fillRect(0, 0, w, h);
+    ctx.save();
+    ctx.translate(w / 2, h / 2);
+    const id = mech.id;
+    if (id === "rarity") {
+      const cols = hues.rarity;
+      cols.forEach((c, i) => {
+        const a = (i / cols.length) * Math.PI * 2 + t * 0.4;
+        const r = 38 + Math.sin(t + i) * 3;
+        ctx.fillStyle = c;
+        circle(ctx, Math.cos(a) * r, Math.sin(a) * r, 7); ctx.fill();
+      });
+    } else if (id === "craft") {
+      for (let i = 0; i < 5; i++) {
+        const a = i * Math.PI * 2 / 5 - Math.PI / 2 + t * 0.2;
+        ctx.fillStyle = hues.craft;
+        circle(ctx, Math.cos(a) * 32, Math.sin(a) * 32, 10); ctx.fill();
+      }
+      ctx.fillStyle = "#fbbf24";
+      circle(ctx, 0, 0, 14 + Math.sin(t * 2) * 2); ctx.fill();
+    } else if (id === "combat") {
+      ctx.strokeStyle = "#f87171"; ctx.lineWidth = 3;
+      ctx.beginPath(); ctx.arc(0, 0, 36, 0, Math.PI * 2); ctx.stroke();
+      for (let i = 0; i < 6; i++) {
+        const a = t * 1.5 + i * Math.PI / 3;
+        ctx.fillStyle = i % 2 ? "#fda4af" : "#fff";
+        circle(ctx, Math.cos(a) * 36, Math.sin(a) * 36, 6); ctx.fill();
+      }
+      ctx.fillStyle = "#fee2e2";
+      circle(ctx, 0, 0, 14); ctx.fill();
+    } else {
+      const c = hues[id] || varAccent();
+      ctx.fillStyle = c;
+      const pulse = 28 + Math.sin(t * 1.4) * 4;
+      ctx.globalAlpha = 0.25; circle(ctx, 0, 0, pulse + 18); ctx.fill();
+      ctx.globalAlpha = 0.55; circle(ctx, 0, 0, pulse); ctx.fill();
+      ctx.globalAlpha = 1; circle(ctx, 0, 0, 16); ctx.fill();
+      ctx.fillStyle = "#0f1a14";
+      ctx.font = "bold 13px sans-serif";
+      ctx.textAlign = "center"; ctx.textBaseline = "middle";
+      ctx.fillText((mech.title || "?").slice(0, 2), 0, 1);
+    }
+    ctx.restore();
+  }
+
+  function drawArtKind(ctx, w, h, kind, mapId, t) {
+    const maps = DATA.maps || [];
+    const map = maps[mapId % maps.length] || { color: "#5ecf7a", id: 0 };
+    const col = parseColor(map.color);
+    ctx.fillStyle = `rgb(${Math.floor(col.r*0.25)},${Math.floor(col.g*0.3)},${Math.floor(col.b*0.28)})`;
+    ctx.fillRect(0, 0, w, h);
+    ctx.save();
+    ctx.translate(w / 2, h / 2 + 4);
+    const b = Math.sin(t * 0.8) * 3;
+    const id = kind.id;
+    if (id === "main_npc" || id === "wayside") {
+      ctx.fillStyle = map.color;
+      ellipse(ctx, 0, 10, 28, 22); ctx.fill();
+      ctx.fillStyle = "#f5e6b8";
+      circle(ctx, 0, -10 + b * 0.3, 18); ctx.fill();
+      eyes(ctx, 0, -10, 6, 2.4);
+      if (id === "wayside") {
+        ctx.fillStyle = "#6FAF4A";
+        leaf(ctx, 22, -4, 0.4);
+      }
+    } else if (id === "escort") {
+      ctx.fillStyle = "#a5f3fc";
+      circle(ctx, 0, b, 20); ctx.fill();
+      ctx.globalAlpha = 0.35;
+      circle(ctx, 0, b, 30); ctx.fill();
+      ctx.globalAlpha = 1;
+      eyes(ctx, 0, b - 2, 6, 2);
+    } else if (id === "pad") {
+      ctx.fillStyle = "#86efac";
+      ellipse(ctx, 0, 8, 40, 14); ctx.fill();
+      ctx.strokeStyle = "#166534"; ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.ellipse(0, 8, 28, 8, 0, 0, Math.PI * 2); ctx.stroke();
+      ctx.fillStyle = "#bbf7d0";
+      circle(ctx, 0, -6 + b, 10); ctx.fill();
+    } else if (id === "crate" || id === "chest" || id === "mirage") {
+      const alpha = id === "mirage" ? 0.45 : 1;
+      ctx.globalAlpha = alpha;
+      ctx.fillStyle = id === "chest" ? "#c9a227" : "#a97449";
+      roundRect(ctx, -26, -16 + b * 0.2, 52, 36, 4); ctx.fill();
+      ctx.strokeStyle = "#5c4030"; ctx.lineWidth = 2;
+      roundRect(ctx, -26, -16 + b * 0.2, 52, 36, 4); ctx.stroke();
+      if (id === "chest") {
+        ctx.fillStyle = "#fde68a";
+        ctx.fillRect(-6, -4, 12, 10);
+      }
+      ctx.globalAlpha = 1;
+    } else if (id === "flee") {
+      ctx.fillStyle = "#4d7c0f";
+      ellipse(ctx, b * 2, 6, 32, 20); ctx.fill();
+      ctx.fillStyle = "#a3e635";
+      ellipse(ctx, b * 2 - 8, -8, 14, 10); ctx.fill();
+      eyes(ctx, b * 2, 2, 8, 2.2);
+    } else if (id === "height") {
+      for (let i = 0; i < 3; i++) {
+        ctx.fillStyle = i === 2 ? "#fef08a" : "#86efac";
+        ellipse(ctx, (i - 1) * 22, 16 - i * 14 + b * 0.2, 12 + i * 2, 10 + i * 3); ctx.fill();
+      }
+    } else { // lore
+      ctx.fillStyle = "#d6d3d1";
+      roundRect(ctx, -18, -24, 36, 48, 3); ctx.fill();
+      ctx.fillStyle = "#78716c";
+      ctx.fillRect(-10, -12, 20, 3);
+      ctx.fillRect(-10, -4, 16, 3);
+      ctx.fillRect(-10, 4, 18, 3);
+    }
+    ctx.restore();
+  }
+
+  function drawPetalChip(ctx, w, h, petal) {
+    const col = parseColor(rarityColor(petal.rarity));
+    ctx.clearRect(0, 0, w, h);
+    ctx.fillStyle = `rgba(${col.r},${col.g},${col.b},0.18)`;
+    circle(ctx, w / 2, h / 2, 28); ctx.fill();
+    ctx.fillStyle = hex(rarityColor(petal.rarity));
+    const n = 5 + (petal.id % 3);
+    ctx.save();
+    ctx.translate(w / 2, h / 2);
+    for (let i = 0; i < n; i++) {
+      const a = (i / n) * Math.PI * 2 - Math.PI / 2;
+      ctx.beginPath();
+      ctx.ellipse(Math.cos(a) * 10, Math.sin(a) * 10, 9, 5, a, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.fillStyle = "#fff";
+    circle(ctx, 0, 0, 6); ctx.fill();
+    ctx.restore();
+  }
+
+  function drawMobChip(ctx, w, h, mob) {
+    const col = parseColor(rarityColor(mob.rarity));
+    ctx.clearRect(0, 0, w, h);
+    ctx.fillStyle = `rgba(${col.r},${col.g},${col.b},0.2)`;
+    circle(ctx, w / 2, h / 2, 28); ctx.fill();
+    ctx.fillStyle = hex(rarityColor(mob.rarity));
+    ctx.save();
+    ctx.translate(w / 2, h / 2);
+    const seg = Math.min(4, Math.max(1, mob.segments | 0));
+    for (let i = 0; i < seg; i++) {
+      ellipse(ctx, (i - (seg - 1) / 2) * 10, 0, 11 - i, 9); ctx.fill();
+    }
+    eyes(ctx, (seg > 1 ? (seg - 1) * 5 : 0), -2, 5, 1.8);
+    ctx.restore();
+  }
+
+  function circle(ctx, x, y, r) { ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); }
+  function ellipse(ctx, x, y, rx, ry) { ctx.beginPath(); ctx.ellipse(x, y, rx, ry, 0, 0, Math.PI * 2); }
+  function eyes(ctx, cx, cy, spread, r) {
+    ctx.fillStyle = "#1a1a1a";
+    circle(ctx, cx - spread / 2, cy, r); ctx.fill();
+    circle(ctx, cx + spread / 2, cy, r); ctx.fill();
+  }
+  function leaf(ctx, x, y, rot) {
+    ctx.save(); ctx.translate(x, y); ctx.rotate(rot);
+    ellipse(ctx, 0, 0, 12, 5); ctx.fill();
+    ctx.restore();
+  }
+  function roundRect(ctx, x, y, w, h, r) {
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.arcTo(x + w, y, x + w, y + h, r);
+    ctx.arcTo(x + w, y + h, x, y + h, r);
+    ctx.arcTo(x, y + h, x, y, r);
+    ctx.arcTo(x, y, x + w, y, r);
+    ctx.closePath();
+  }
+  function varAccent() { return "#5ecf7a"; }
+
+  function paintTileCanvas(canvas, paint) {
+    const dpr = Math.min(2, window.devicePixelRatio || 1);
+    const w = canvas.clientWidth || 160;
+    const h = canvas.clientHeight || 96;
+    canvas.width = Math.floor(w * dpr);
+    canvas.height = Math.floor(h * dpr);
+    const ctx = canvas.getContext("2d");
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    paint(ctx, w, h, performance.now() / 1000);
+  }
+
+  function openSheet(kind, payload) {
+    sheetKind = kind;
+    sheetPayload = payload;
+    overlay.hidden = false;
+    sheetExtra.innerHTML = "";
+    if (kind === "map") {
+      fillMapSheet(payload);
+    } else if (kind === "mech") {
+      fillMechSheet(payload);
+    } else if (kind === "art") {
+      fillArtKindSheet(payload);
+    } else if (kind === "process") {
+      fillProcessSheet(payload);
+    } else if (kind === "world") {
+      fillWorldSheet(payload);
+    } else if (kind === "petal") {
+      fillPetalSheet(payload);
+    } else if (kind === "mob") {
+      fillMobSheet(payload, payload.rarity | 0);
+    }
+    startSheetAnim();
+  }
+
+  function fillMechSheet(m) {
+    sheetTitle.textContent = m.title;
+    sheetEn.textContent = (m.title_en || "") + " · " + m.id;
+    sheetTag.textContent = (m.summary || "") + (m.summary_en ? " · " + m.summary_en : "");
+    setBilingual(m.detail, m.detail_en);
+    const nStats = (m.stats || []).length;
+    const nSteps = (m.steps || []).length;
+    sheetMeta.innerHTML =
+      `<span class="pill">机制</span>` +
+      `<span class="pill">数值 ${nStats}</span>` +
+      `<span class="pill">流程 ${nSteps}</span>`;
+    let extra = "";
+    if (nStats) {
+      const rows = m.stats.map(s => [s.k, escHtml(s.v)]);
+      extra += `<h4>全部数值（代码常量 / 公式）</h4>${kvRows(rows)}`;
+    }
+    if (nSteps) {
+      extra += `<h4>代码流程机制</h4><ol class="flow">`;
+      for (const s of m.steps) {
+        extra += `<li>${escHtml(s.zh || "")}` +
+          (s.en ? `<span class="en">${escHtml(s.en)}</span>` : "") +
+          `</li>`;
+      }
+      extra += `</ol>`;
+    }
+    if (!extra) extra = `<h4>暂无结构化数据</h4>`;
+    sheetExtra.innerHTML = extra;
+  }
+
+  function fillMapSheet(m) {
+    sheetTitle.textContent = m.name_zh;
+    sheetEn.textContent = m.name_en || "";
+    sheetTag.textContent = (m.tagline || "") + (m.tagline_en ? " · " + m.tagline_en : "");
+    setBilingual(m.body, m.body_en);
+    sheetMeta.innerHTML = `<span class="pill">地图 #${m.id}</span><span class="pill">本图全部实体与事件</span>`;
+    const spawn = (DATA.map_spawns || []).find(x => x.map_id === m.id);
+    const mobIds = (spawn && spawn.mobs) || [];
+    let extra = "";
+    if (mobIds.length) {
+      extra += `<h4>本图刷怪（${mobIds.length}）· 点开看掉落</h4><table class="drops"><thead><tr><th>怪物</th><th>稀有度</th><th>XP</th></tr></thead><tbody>`;
+      for (const mid of mobIds) {
+        const mob = mobById.get(mid);
+        if (!mob) {
+          extra += `<tr><td>#${mid}</td><td>—</td><td>—</td></tr>`;
+          continue;
+        }
+        extra += `<tr data-mob="${mid}"><td>${escHtml(mob.name_zh || mob.name)} (#${mid})</td><td>${escHtml(mob.rarity_zh || "")}</td><td>${escHtml(fmt(mob.xp))}</td></tr>`;
+      }
+      extra += `</tbody></table>`;
+    } else {
+      extra += `<p class="en">暂无刷怪表（等待服务端 map_spawns）</p>`;
+    }
+    const list = worldEntitiesFor(e => e.map_id === m.id);
+    extra += `<h4>本图全部流程实体（${list.length}）· 点卡片看文案与美术</h4><div id="mapArtHost"></div>`;
+    sheetExtra.innerHTML = extra;
+    paintArtGallery(sheetExtra.querySelector("#mapArtHost"), list, {
+      hint: "含仪式 NPC / 路旁 / 护送 / 宝箱推箱 / 96 事件中本图全部槽位与列高子实体。"
+    });
+    sheetExtra.querySelectorAll("[data-mob]").forEach(el => {
+      el.addEventListener("click", () => {
+        const q = mobById.get(+el.getAttribute("data-mob"));
+        if (q) openSheet("mob", q);
+      });
+    });
+  }
+
+  function fillArtKindSheet(a) {
+    sheetTitle.textContent = a.name_zh;
+    sheetEn.textContent = (a.name_en || "") + " · " + a.id;
+    sheetTag.textContent = (a.role || "") + (a.role_en ? " · " + a.role_en : "");
+    setBilingual(
+      "下列为代码里实际刷出的全部「" + a.name_zh + "」变体，美术与游戏内 ThemeArt 同源（按地图换色/造型）。点进看流程与传说文案。",
+      "Every in-code spawn of this art kind. ThemeArt matches in-game (per-map colors/silhouettes). Click for flow + lore."
+    );
+    sheetMeta.innerHTML = `<span class="pill">程序美术 · ${escHtml(a.id)}</span>`;
+    const list = worldEntitiesFor(e => e.art_id === a.id);
+    sheetExtra.innerHTML = `<h4>全部变体（${list.length}）</h4><div id="artKindHost"></div>`;
+    paintArtGallery(sheetExtra.querySelector("#artKindHost"), list);
+  }
+
+  function fillProcessSheet(p) {
+    sheetTitle.textContent = p.title;
+    sheetEn.textContent = (p.title_en || "") + " · " + p.id;
+    sheetTag.textContent = "代码流程速查";
+    setBilingual(p.detail, p.detail_en);
+    sheetMeta.innerHTML = `<span class="pill">流程</span>`;
+    // Related entities by kind keyword
+    const key = p.id || "";
+    let list = [];
+    if (key.includes("ritual")) list = worldEntitiesFor(e => e.art_id === "main_npc" || e.art_id === "crate" || e.art_id === "pad");
+    else if (key.includes("escort")) list = worldEntitiesFor(e => e.art_id === "escort");
+    else if (key.includes("explore_pads")) list = worldEntitiesFor(e => e.kind === "explore_pads");
+    else if (key.includes("lore")) list = worldEntitiesFor(e => e.art_id === "lore");
+    else if (key.includes("flee")) list = worldEntitiesFor(e => e.art_id === "flee");
+    else if (key.includes("height")) list = worldEntitiesFor(e => e.art_id === "height");
+    else if (key.includes("timed")) list = worldEntitiesFor(e => e.kind === "kTimedTouch");
+    else if (key.includes("ambush")) list = worldEntitiesFor(e => e.kind === "kAmbush");
+    else if (key.includes("mirage")) list = worldEntitiesFor(e => e.art_id === "mirage");
+    else if (key.includes("sleep")) list = worldEntitiesFor(e => e.kind === "kSleepMob");
+    else if (key.includes("chest")) list = worldEntitiesFor(e => e.art_id === "chest");
+    sheetExtra.innerHTML = `<h4>相关实体美术（${list.length}）</h4><div id="procArtHost"></div>`;
+    paintArtGallery(sheetExtra.querySelector("#procArtHost"), list);
+  }
+
+  function fillWorldSheet(e) {
+    const map = (DATA.maps || []).find(m => m.id === e.map_id);
+    sheetTitle.textContent = e.name_zh || e.name_en;
+    sheetEn.textContent = (e.name_en || "") + (map ? " · " + map.name_en : "");
+    sheetTag.textContent = (map ? map.name_zh + " · " : "") + (e.art_id || "") + " · " + (e.kind || "");
+    const zh = [e.flow_zh, e.lore_zh, e.alert_zh ? ("警觉名：" + e.alert_zh) : "", e.awake_zh ? ("惊醒名：" + e.awake_zh) : ""]
+      .filter(Boolean).join("\n\n");
+    const en = [e.flow_en, e.lore_en].filter(Boolean).join("\n\n");
+    setBilingual(zh, en);
+    sheetMeta.innerHTML =
+      `<span class="pill">${escHtml(e.group || "")}</span>` +
+      `<span class="pill">visual ${e.visual}</span>` +
+      `<span class="pill">map ${e.map_id}</span>`;
+    sheetExtra.innerHTML = `<h4>美术预览（八域同种可切换）</h4><div class="art-gallery" id="worldArtHost"></div>`;
+    const host = sheetExtra.querySelector("#worldArtHost");
+    // Same art_id across maps for comparison
+    const siblings = worldEntitiesFor(x => x.art_id === e.art_id && x.name_zh === e.name_zh);
+    const show = siblings.length ? siblings : [e];
+    // Also show all 8 map variants of same art kind if unique name
+    const byMap = [];
+    for (let mid = 0; mid < 8; mid++) {
+      const hit = worldEntitiesFor(x => x.art_id === e.art_id && x.map_id === mid)[0];
+      if (hit) byMap.push(hit);
+    }
+    paintArtGallery(host, show.length > 1 ? show : (byMap.length ? byMap : [e]));
+  }
+
+  function fillPetalSheet(p) {
+    sheetTitle.textContent = p.name_zh || p.name;
+    sheetEn.textContent = p.name || "";
+    sheetTag.textContent = `${p.rarity_zh || p.rarity_en || ""} · HP ${fmt(p.hp)} · DMG ${fmt(p.dmg)} · ×${fmt(p.count)} · CD ${fmt(p.reload)}s`;
+    setBilingual(p.desc_zh || p.desc, p.desc);
+    const mapPills = (p.maps || []).map(id => {
+      const m = (DATA.maps || []).find(x => x.id === id);
+      return `<span class="pill">${escHtml(m ? (m.name_zh || m.name_en) : ("地图"+id))}</span>`;
+    }).join("");
+    sheetMeta.innerHTML =
+      `<span class="pill">花瓣 #${p.id}</span>` +
+      `<span class="pill">${escHtml(p.rarity_zh || "")} / ${escHtml(p.rarity_en || "")}</span>` +
+      (p.chase ? `<span class="pill">chase 特殊掉落</span>` : "") +
+      (p.can_upgrade ? `<span class="pill">可合成 → #${p.craft_next}</span>` : `<span class="pill">阶梯顶/不可升</span>`) +
+      (mapPills || `<span class="pill">无固定刷怪地图</span>`);
+
+    const ladder = p.ladder || [];
+    let extra = "";
+    if (ladder.length) {
+      extra += `<h4>同名全部稀有度（点切换查看数值）</h4><div class="rarity-tabs" id="petalRarityTabs">`;
+      for (const id of ladder) {
+        const q = petalById.get(id);
+        const on = id === p.id ? " on" : "";
+        const label = q ? (q.rarity_zh || q.rarity) : ("#" + id);
+        extra += `<button type="button" class="${on}" data-petal="${id}">${escHtml(label)}</button>`;
+      }
+      extra += `</div>`;
+    }
+
+    const core = [
+      ["ID", String(p.id)],
+      ["中文名", escHtml(p.name_zh || "")],
+      ["English", escHtml(p.name || "")],
+      ["稀有度", `${escHtml(p.rarity_zh || "")} (${escHtml(p.rarity_en || "")}) #${p.rarity}`],
+      ["出现地图", escHtml(mapNamesShort(p.maps))],
+      ["生命 HP", fmt(p.hp)],
+      ["伤害 DMG", fmt(p.dmg)],
+      ["碰撞半径", fmt(p.radius)],
+      ["冷却 reload (s)", fmt(p.reload)],
+      ["槽内数量 count", fmt(p.count)],
+      ["掉落权重倍率", fmt(p.drop_weight_mult)],
+      ["可合成升阶", p.can_upgrade ? "是" : "否"],
+      ["合成下一阶 ID", p.craft_next ? `#${p.craft_next}` : "—"],
+    ];
+    extra += `<h4>当前稀有度数值</h4>${kvRows(core)}`;
+    const attrs = attrRows(p.attrs);
+    if (attrs.length) extra += `<h4>全部属性 attrs（非默认）</h4>${kvRows(attrs)}`;
+    if (p.attrs) {
+      const all = Object.keys(p.attrs).sort().map(k => [k, escHtml(fmt(p.attrs[k]))]);
+      extra += `<h4>原始 attrs 全表</h4>${kvRows(all)}`;
+    }
+    // Compare all rarities side table
+    if (ladder.length > 1) {
+      extra += `<h4>稀有度对照</h4><table class="drops"><thead><tr><th>稀有度</th><th>HP</th><th>DMG</th><th>CD</th><th>×</th><th>ID</th></tr></thead><tbody>`;
+      for (const id of ladder) {
+        const q = petalById.get(id);
+        if (!q) continue;
+        const on = id === p.id ? ` style="background:#1e3228"` : "";
+        extra += `<tr data-petal="${id}"${on}><td>${escHtml(q.rarity_zh || "")}</td><td>${escHtml(fmt(q.hp))}</td><td>${escHtml(fmt(q.dmg))}</td><td>${escHtml(fmt(q.reload))}</td><td>${escHtml(fmt(q.count))}</td><td>#${id}</td></tr>`;
+      }
+      extra += `</tbody></table>`;
+    }
+    const droppers = [];
+    const seedIds = new Set(ladder.length ? ladder : [p.id]);
+    for (const m of (DATA.mobs || [])) {
+      const hit = (m.drops || []).find(d => seedIds.has(d.seed) || seedIds.has(d.petal));
+      if (hit) droppers.push({ mob: m, pct: hit.pct });
+    }
+    if (droppers.length) {
+      extra += `<h4>哪些怪掉这个种类</h4><table class="drops"><thead><tr><th>怪物</th><th>地图</th><th>概率</th></tr></thead><tbody>`;
+      for (const x of droppers) {
+        extra += `<tr data-mob="${x.mob.id}"><td>${escHtml(x.mob.name_zh || x.mob.name)} (#${x.mob.id})</td><td>${escHtml(mapNamesShort(x.mob.maps))}</td><td class="pct">${escHtml(fmt(x.pct))}%</td></tr>`;
+      }
+      extra += `</tbody></table>`;
+    }
+    sheetExtra.innerHTML = extra;
+    sheetExtra.querySelectorAll("[data-petal]").forEach(el => {
+      el.addEventListener("click", () => {
+        const id = +el.getAttribute("data-petal");
+        const q = petalById.get(id);
+        if (q) openSheet("petal", q);
+      });
+    });
+    sheetExtra.querySelectorAll("[data-mob]").forEach(el => {
+      el.addEventListener("click", () => {
+        const id = +el.getAttribute("data-mob");
+        const q = mobById.get(id);
+        if (q) openSheet("mob", q);
+      });
+    });
+  }
+
+  function fillMobSheet(m, rarityView) {
+    if (rarityView == null) rarityView = m.rarity | 0;
+    sheetTitle.textContent = m.name_zh || m.name;
+    sheetEn.textContent = m.name || "";
+    const rvZh = ((DATA.rarities || []).find(r => r.id === rarityView) || {}).name_zh || rarityView;
+    sheetTag.textContent = `查看稀有度 ${rvZh} · 基础 XP ${fmt(m.xp)} · DMG ${fmt(m.dmg)} · HP ${fmt(m.hp_lo)}–${fmt(m.hp_hi)}`;
+    setBilingual(m.desc_zh || m.desc, m.desc);
+    sheetMeta.innerHTML =
+      `<span class="pill">怪物 #${m.id}</span>` +
+      `<span class="pill">默认 ${escHtml(m.rarity_zh || "")}</span>` +
+      `<span class="pill">${escHtml(mapNamesShort(m.maps))}</span>` +
+      (m.boss ? `<span class="pill">Boss</span>` : "") +
+      `<span class="pill">段数 ${fmt(m.segments)}</span>`;
+
+    const core = [
+      ["ID", String(m.id)],
+      ["中文名", escHtml(m.name_zh || "")],
+      ["English", escHtml(m.name || "")],
+      ["默认稀有度", `${escHtml(m.rarity_zh || "")} (${escHtml(m.rarity_en || "")}) #${m.rarity}`],
+      ["出现地图", escHtml(mapNamesShort(m.maps))],
+      ["生命范围", `${fmt(m.hp_lo)} – ${fmt(m.hp_hi)}`],
+      ["伤害", fmt(m.dmg)],
+      ["半径范围", `${fmt(m.radius_lo)} – ${fmt(m.radius_hi)}`],
+      ["经验 XP", fmt(m.xp)],
+      ["仇恨半径", fmt(m.aggro)],
+      ["段数 segments", fmt(m.segments)],
+      ["静止 stationary", m.stationary ? "是" : "否"],
+      ["毒伤/s", fmt(m.poison_dps)],
+      ["毒时长", fmt(m.poison_time)],
+      ["Boss", m.boss ? "是" : "否"],
+    ];
+    sheetExtra.innerHTML = `<h4>基础数值</h4>${kvRows(core)}` + renderMobDropsExtra(m, rarityView);
+
+    const tabs = sheetExtra.querySelector("#dropRarityTabs");
+    if (tabs) {
+      tabs.addEventListener("click", (ev) => {
+        const b = ev.target.closest("button[data-r]");
+        if (!b) return;
+        fillMobSheet(m, +b.getAttribute("data-r"));
+        startSheetAnim();
+      });
+    }
+    sheetExtra.querySelectorAll("tr[data-petal]").forEach(el => {
+      el.addEventListener("click", () => {
+        const id = +el.getAttribute("data-petal");
+        const q = petalById.get(id);
+        if (q) openSheet("petal", q);
+      });
+    });
+  }
+  function closeSheet() {
+    overlay.hidden = true;
+    sheetKind = null;
+    cancelAnimationFrame(animId);
+  }
+  function startSheetAnim() {
+    cancelAnimationFrame(animId);
+    const loop = () => {
+      if (overlay.hidden) return;
+      const w = sheetCanvas.clientWidth || 820;
+      const h = sheetCanvas.clientHeight || 200;
+      const t = performance.now() / 1000;
+      let ok = false;
+      if (Art) {
+        if (sheetKind === "map") {
+          ok = drawThemeArt(sheetCanvas, VIS.main_npc, sheetPayload.id | 0, t, (sheetPayload.id | 0) + 1, w, h);
+        } else if (sheetKind === "art") {
+          const vis = VIS[sheetPayload.id] || VIS.main_npc;
+          const sample = worldEntitiesFor(e => e.art_id === sheetPayload.id)[0];
+          ok = drawThemeArt(sheetCanvas, vis, sample ? sample.map_id : 0, t, 7, w, h, sample && sample.name_zh);
+        } else if (sheetKind === "world") {
+          ok = drawThemeArt(sheetCanvas, sheetPayload.visual | 0, sheetPayload.map_id | 0, t, 9, w, h, sheetPayload.name_zh);
+        } else if (sheetKind === "process") {
+          const sample = worldEntitiesFor(e => true)[0];
+          ok = drawThemeArt(sheetCanvas, VIS.main_npc, 0, t, 3, w, h, sample && sample.name_zh);
+        } else if (sheetKind === "petal") {
+          ok = drawPetalArt(sheetCanvas, sheetPayload, w, h);
+        } else if (sheetKind === "mob") {
+          ok = drawMobArt(sheetCanvas, sheetPayload, w, h);
+        }
+      }
+      if (!ok) {
+        const dpr = Math.min(2, window.devicePixelRatio || 1);
+        sheetCanvas.width = Math.floor(w * dpr);
+        sheetCanvas.height = Math.floor(h * dpr);
+        const ctx = sheetCanvas.getContext("2d");
+        ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+        if (sheetKind === "map") drawMapArt(ctx, w, h, sheetPayload, t);
+        else if (sheetKind === "mech") drawMechArt(ctx, w, h, sheetPayload, t);
+        else if (sheetKind === "art") drawArtKind(ctx, w, h, sheetPayload, 0, t);
+        else if (sheetKind === "petal") {
+          ctx.fillStyle = "#0a120e"; ctx.fillRect(0, 0, w, h);
+          const tmp = document.createElement("canvas");
+          tmp.width = 64; tmp.height = 64;
+          drawPetalChip(tmp.getContext("2d"), 64, 64, sheetPayload);
+          ctx.drawImage(tmp, w / 2 - 48, h / 2 - 48, 96, 96);
+        } else if (sheetKind === "mob") {
+          ctx.fillStyle = "#0a120e"; ctx.fillRect(0, 0, w, h);
+          const tmp = document.createElement("canvas");
+          tmp.width = 64; tmp.height = 64;
+          drawMobChip(tmp.getContext("2d"), 64, 64, sheetPayload);
+          ctx.drawImage(tmp, w / 2 - 48, h / 2 - 48, 96, 96);
+        }
+      } else if (sheetKind === "mech") {
+        const dpr = Math.min(2, window.devicePixelRatio || 1);
+        sheetCanvas.width = Math.floor(w * dpr);
+        sheetCanvas.height = Math.floor(h * dpr);
+        const ctx = sheetCanvas.getContext("2d");
+        ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+        drawMechArt(ctx, w, h, sheetPayload, t);
+      }
+      // Animate theme / keep static petals after first paint
+      if (sheetKind === "map" || sheetKind === "art" || sheetKind === "world" || sheetKind === "process" || sheetKind === "mech" || !Art)
+        animId = requestAnimationFrame(loop);
+    };
+    loop();
+  }
+
+  function tileEl(tag, title, sub, paintJs, paintArt, onOpen) {
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "tile";
+    btn.innerHTML = `<span class="tag">${tag}</span><canvas></canvas><div class="body"><div class="t"></div><div class="s"></div></div>`;
+    btn.querySelector(".t").textContent = title;
+    btn.querySelector(".s").textContent = sub;
+    const canvas = btn.querySelector("canvas");
+    const redraw = () => {
+      if (Art && paintArt && paintArt(canvas)) return;
+      paintTileCanvas(canvas, paintJs);
+    };
+    btn.addEventListener("click", onOpen);
+    requestAnimationFrame(redraw);
+    // Theme tiles animate; petal/mob static — light refresh for theme only
+    if (paintArt) setInterval(redraw, 120);
+    else setInterval(redraw, 400);
+    return btn;
+  }
+
+  function renderFront(root) {
+    // Drop / craft rules reference for designers
+    if (DATA.rules) {
+      const secR = document.createElement("section");
+      secR.className = "sec";
+      secR.innerHTML = `<div class="sec-h"><h2>掉落 / 合成规则速查</h2><span>改数值时对照</span></div>`;
+      const box = document.createElement("div");
+      box.className = "rules-box";
+      const bands = (DATA.rules.mob_drop_rarity_bands || [])
+        .map(b => `${b.pct}% ${b.zh}`).join(" · ");
+      const craft = (DATA.rules.craft_success || []).map((p, i) => {
+        const r = (DATA.rarities || [])[i];
+        return `${r ? r.name_zh : i}→ ${pct(p)}`;
+      }).join(" · ");
+      const er = DATA.rules.event_rarity_normal || {};
+      box.innerHTML =
+        `<div><b>怪掉稀有度带</b>：${escHtml(bands)}</div>` +
+        `<div style="margin-top:6px"><b>合成成功率</b>：${escHtml(craft)}</div>` +
+        `<div style="margin-top:6px"><b>事件/宝箱稀有度（普通档）</b>：究极 ${pct(er.ultra)} · 超凡 ${pct(er.super)} · 唯一 ${pct(er.unique)}；全池占比 ${pct(DATA.rules.event_full_pool_pct)}</div>` +
+        `<div class="en">${escHtml(DATA.rules.notes_en || "")}</div>` +
+        `<div style="margin-top:6px">${escHtml(DATA.rules.notes_zh || "")}</div>`;
+      secR.appendChild(box);
+      root.appendChild(secR);
+    }
+
+    // Process flows (from code)
+    if (DATA.processes && DATA.processes.length) {
+      const secP = document.createElement("section");
+      secP.className = "sec";
+      secP.innerHTML = `<div class="sec-h"><h2>代码流程</h2><span>点进看步骤 + 相关全部美术</span></div>`;
+      const pg = document.createElement("div");
+      pg.className = "proc-grid";
+      DATA.processes.forEach(p => {
+        const b = document.createElement("button");
+        b.type = "button";
+        b.className = "proc-tile";
+        b.innerHTML = `<div class="t"></div><div class="s"></div>`;
+        b.querySelector(".t").textContent = p.title;
+        b.querySelector(".s").textContent = (p.title_en || "") + " — " + (p.detail || "").slice(0, 48) + "…";
+        b.onclick = () => openSheet("process", p);
+        pg.appendChild(b);
+      });
+      secP.appendChild(pg);
+      root.appendChild(secP);
+    }
+
+    // Worlds first
+    const secW = document.createElement("section");
+    secW.className = "sec";
+    secW.innerHTML = `<div class="sec-h"><h2>世界介绍</h2><span>八域 · 点进看本图全部事件与美术</span></div>`;
+    const gw = document.createElement("div");
+    gw.className = "grid";
+    (DATA.maps || []).forEach(m => {
+      gw.appendChild(tileEl("世界", m.name_zh, (m.tagline || "") + (m.tagline_en ? " / " + m.tagline_en : ""),
+        (ctx, w, h, t) => drawMapArt(ctx, w, h, m, t),
+        (canvas) => drawThemeArt(canvas, VIS.main_npc, m.id | 0, performance.now() / 1000, (m.id | 0) + 3, canvas.clientWidth || 160, canvas.clientHeight || 96),
+        () => openSheet("map", m)));
+    });
+    secW.appendChild(gw);
+    root.appendChild(secW);
+
+    // Mechanics second
+    const secM = document.createElement("section");
+    secM.className = "sec";
+    secM.innerHTML = `<div class="sec-h"><h2>游戏机制</h2><span>点进看完整中英文说明</span></div>`;
+    const gm = document.createElement("div");
+    gm.className = "grid mech";
+    (DATA.mechanics || []).forEach(c => {
+      gm.appendChild(tileEl("机制", c.title, c.summary,
+        (ctx, w, h, t) => drawMechArt(ctx, w, h, c, t),
+        null,
+        () => openSheet("mech", c)));
+    });
+    secM.appendChild(gm);
+    root.appendChild(secM);
+
+    // Art kinds
+    const secA = document.createElement("section");
+    secA.className = "sec";
+    secA.innerHTML = `<div class="sec-h"><h2>世界实体 · 程序美术</h2><span>点进看该种类全部变体图文</span></div>`;
+    const ga = document.createElement("div");
+    ga.className = "grid";
+    (DATA.art_kinds || []).forEach((k, i) => {
+      const vis = VIS[k.id] || VIS.main_npc;
+      ga.appendChild(tileEl("实体", k.name_zh, (k.role || "") + (k.role_en ? " / " + k.role_en : ""),
+        (ctx, w, h, t) => drawArtKind(ctx, w, h, k, i % 8, t),
+        (canvas) => drawThemeArt(canvas, vis, i % 8, performance.now() / 1000, i + 11, canvas.clientWidth || 160, canvas.clientHeight || 96),
+        () => openSheet("art", k)));
+    });
+    secA.appendChild(ga);
+    root.appendChild(secA);
+
+    // Petals + mobs galleries
+    renderEntityGalleries(root);
+  }
+
+  function petalKinds() {
+    const by = new Map();
+    for (const p of (DATA.petals || [])) {
+      const key = p.name || ("#" + p.id);
+      if (!by.has(key)) by.set(key, []);
+      by.get(key).push(p);
+    }
+    return [...by.values()].map(arr => {
+      arr.sort((a, b) => (a.rarity | 0) - (b.rarity | 0) || a.id - b.id);
+      const maps = new Set();
+      arr.forEach(p => (p.maps || []).forEach(m => maps.add(m)));
+      return {
+        key: arr[0].name || String(arr[0].id),
+        name: arr[0].name,
+        name_zh: arr[0].name_zh,
+        ladder: arr,
+        rep: arr[0],
+        maps: [...maps].sort((a, b) => a - b),
+        rarities: arr.map(p => p.rarity_zh || p.rarity).join("/")
+      };
+    });
+  }
+
+  function itemOnMap(maps, mapId) {
+    if (mapId < 0) return true;
+    return (maps || []).includes(mapId);
+  }
+
+  function mapNamesShort(maps) {
+    if (!maps || !maps.length) return "无固定地图";
+    return maps.map(id => {
+      const m = (DATA.maps || []).find(x => x.id === id);
+      return m ? (m.name_zh || m.name_en || id) : String(id);
+    }).join(" · ");
+  }
+
+  function renderEntityGalleries(root) {
+    const sec = document.createElement("section");
+    sec.className = "sec";
+    sec.innerHTML = `<div class="sec-h"><h2>花瓣与怪物</h2><span>按种类 · 可按地图筛选</span></div>`;
+    const tabs = document.createElement("div");
+    tabs.className = "tabs";
+    const tools = document.createElement("div");
+    tools.className = "tools";
+    const search = document.createElement("input");
+    search.placeholder = "搜索中英文名…";
+    const mapSel = document.createElement("select");
+    mapSel.innerHTML = `<option value="-1">全部地图</option>` +
+      (DATA.maps || []).map(m => `<option value="${m.id}">${escHtml(m.name_zh || m.name_en || ("地图"+m.id))}</option>`).join("");
+    const raritySel = document.createElement("select");
+    raritySel.innerHTML = `<option value="-1">全部稀有度（列表不按稀有度拆行）</option>` +
+      (DATA.rarities || []).map(r => `<option value="${r.id}">预览用：${r.name_zh}</option>`).join("");
+    tools.appendChild(search);
+    tools.appendChild(mapSel);
+    tools.appendChild(raritySel);
+    const gallery = document.createElement("div");
+    gallery.className = "gallery";
+    const countHint = document.createElement("div");
+    countHint.className = "en";
+    countHint.style.margin = "6px 0 0";
+
+    let mode = "petals";
+    const kinds = petalKinds();
+    const mobs = (DATA.mobs || []).slice().sort((a, b) =>
+      String(a.name_zh || a.name).localeCompare(String(b.name_zh || b.name), "zh"));
+
+    function mkTab(id, label) {
+      const b = document.createElement("button");
+      b.type = "button";
+      b.textContent = label;
+      b.className = id === mode ? "on" : "";
+      b.onclick = () => { mode = id; [...tabs.children].forEach(x => x.classList.toggle("on", x === b)); paint(); };
+      return b;
+    }
+    const tabPetals = mkTab("petals", `花瓣种类 (${kinds.length})`);
+    const tabMobs = mkTab("mobs", `怪物种类 (${mobs.length})`);
+    tabs.appendChild(tabPetals);
+    tabs.appendChild(tabMobs);
+
+    function paint() {
+      const q = search.value.trim().toLowerCase();
+      const mapId = parseInt(mapSel.value, 10);
+      const rr = parseInt(raritySel.value, 10);
+      gallery.innerHTML = "";
+      let shown = 0;
+      if (mode === "petals") {
+        for (const k of kinds) {
+          if (!itemOnMap(k.maps, mapId)) continue;
+          const blob = `${k.name_zh||""} ${k.name||""}`.toLowerCase();
+          if (q && !blob.includes(q)) continue;
+          const preview = (rr >= 0 ? k.ladder.find(p => p.rarity === rr) : null) || k.rep;
+          const chip = document.createElement("button");
+          chip.type = "button";
+          chip.className = "chip";
+          chip.innerHTML = `<canvas width="64" height="64"></canvas><div class="n"></div><div class="r"></div><div class="s2"></div>`;
+          chip.querySelector(".n").textContent = k.name_zh || k.name;
+          chip.querySelector(".r").textContent = `${k.ladder.length} 阶 · ${k.rarities}`;
+          chip.querySelector(".s2").textContent = mapNamesShort(k.maps);
+          const c = chip.querySelector("canvas");
+          if (!Art || !drawPetalArt(c, preview, 64, 64))
+            drawPetalChip(c.getContext("2d"), 64, 64, preview);
+          chip.onclick = () => openSheet("petal", preview);
+          gallery.appendChild(chip);
+          shown++;
+        }
+      } else {
+        for (const item of mobs) {
+          if (!itemOnMap(item.maps, mapId)) continue;
+          const blob = `${item.name_zh||""} ${item.name||""} #${item.id}`.toLowerCase();
+          if (q && !blob.includes(q)) continue;
+          const chip = document.createElement("button");
+          chip.type = "button";
+          chip.className = "chip";
+          chip.innerHTML = `<canvas width="64" height="64"></canvas><div class="n"></div><div class="r"></div><div class="s2"></div>`;
+          chip.querySelector(".n").textContent = item.name_zh || item.name;
+          chip.querySelector(".r").textContent = (item.boss ? "Boss · " : "") + (item.rarity_zh || "");
+          chip.querySelector(".s2").textContent = mapNamesShort(item.maps) +
+            ` · XP ${fmt(item.xp)} · 掉 ${(item.drops || []).length}`;
+          const c = chip.querySelector("canvas");
+          // Preview art at selected rarity when possible
+          const view = Object.assign({}, item, { rarity: rr >= 0 ? rr : (item.rarity | 0) });
+          if (!Art || !drawMobArt(c, view, 64, 64))
+            drawMobChip(c.getContext("2d"), 64, 64, item);
+          chip.onclick = () => openSheet("mob", item);
+          gallery.appendChild(chip);
+          shown++;
+        }
+      }
+      countHint.textContent = shown
+        ? `显示 ${shown} 种` + (mapId >= 0 ? ` · 地图筛选已开` : "")
+        : "";
+      if (!gallery.children.length) {
+        gallery.innerHTML = `<div class="err" style="grid-column:1/-1">没有匹配项</div>`;
+      }
+    }
+    search.oninput = paint;
+    mapSel.onchange = paint;
+    raritySel.onchange = paint;
+    sec.appendChild(tabs);
+    sec.appendChild(tools);
+    sec.appendChild(countHint);
+    sec.appendChild(gallery);
+    root.appendChild(sec);
+    paint();
+  }
+
+  // Deep link: ?map=0 / ?mech=rarity / ?petal=12 / ?mob=3
+  function applyHash() {
+    const u = new URL(location.href);
+    const mapQ = u.searchParams.get("map");
+    const mechQ = u.searchParams.get("mech") || (location.hash.match(/^#mech-(.+)$/) || [])[1];
+    const artQ = u.searchParams.get("art");
+    const petalQ = u.searchParams.get("petal");
+    const mobQ = u.searchParams.get("mob");
+    if (mapQ != null && DATA.maps) {
+      const m = DATA.maps.find(x => String(x.id) === String(mapQ));
+      if (m) openSheet("map", m);
+    } else if (mechQ && DATA.mechanics) {
+      const c = DATA.mechanics.find(x => x.id === mechQ);
+      if (c) openSheet("mech", c);
+    } else if (artQ && DATA.art_kinds) {
+      const a = DATA.art_kinds.find(x => x.id === artQ);
+      if (a) openSheet("art", a);
+    } else if (petalQ != null) {
+      const p = petalById.get(+petalQ);
+      if (p) openSheet("petal", p);
+    } else if (mobQ != null) {
+      const m = mobById.get(+mobQ);
+      if (m) openSheet("mob", m);
+    }
+  }
+
+  Promise.all([
+    fetch("/api/codex", { cache: "no-store" }).then(r => {
+      if (!r.ok) throw new Error("HTTP " + r.status);
+      return r.json();
+    }),
+    bootArt().catch(e => {
+      console.warn("gardn-art failed, falling back to placeholder art", e);
+      return null;
+    })
+  ]).then(([data]) => {
+      DATA = data;
+      petalById = new Map((data.petals || []).map(p => [p.id, p]));
+      mobById = new Map((data.mobs || []).map(m => [m.id, m]));
+      app.innerHTML = "";
+      renderFront(app);
+      applyHash();
+    })
+    .catch(err => {
+      app.innerHTML = `<div class="err">图鉴加载失败：${err.message || err}</div>`;
+    });
+})();
+</script>
+</body>
+</html>

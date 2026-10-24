@@ -1,11 +1,13 @@
 #ifdef WASM_SERVER
 #include <Server/Chat.hh>
+#include <Server/FeedbackStore.hh>
 #include <Server/Client.hh>
 #include <Server/DevCheats.hh>
 #include <Server/RateLimit.hh>
 #include <Server/Server.hh>
 
 #include <Shared/Binary.hh>
+#include <Shared/ClientAddress.hh>
 #include <Shared/Config.hh>
 
 #include <cstdlib>
@@ -36,6 +38,10 @@ extern "C" {
 
     EMSCRIPTEN_KEEPALIVE char *health_json() {
         return heap_strdup_std(Server::health_json());
+    }
+
+    EMSCRIPTEN_KEEPALIVE char *feedback_page_json(unsigned before) {
+        return heap_strdup_std(FeedbackStore::page_json(before));
     }
 
     EMSCRIPTEN_KEEPALIVE char *live_catalog_json() {
@@ -79,9 +85,10 @@ extern "C" {
     }
 
     EMSCRIPTEN_KEEPALIVE char *live_admin_spawn(int map_id, int mob_id, float x, float y,
-                                                char const *near_who) {
+                                                char const *near_who, int count) {
         return heap_strdup_std(Server::live_admin_spawn(
-            (uint8_t) map_id, (uint32_t) mob_id, x, y, near_who ? near_who : ""));
+            (uint8_t) map_id, (uint32_t) mob_id, x, y, near_who ? near_who : "",
+            (uint32_t) (count < 1 ? 1 : count)));
     }
 
     // Local QA only — Node sets this when ASHFLOR_DEV_CHEATS=1 (never on prod).
@@ -89,12 +96,11 @@ extern "C" {
         DevCheats::set_enabled(on ? 1 : 0);
     }
 
-    void on_connect(int ws_id, char const *ip) {
+    void on_connect(int ws_id, char const *ip, char const *forwarded) {
         std::printf("client connect: [%d]\n", ws_id);
         WebSocket *ws = new WebSocket(ws_id);
         Client *client = ws->getUserData();
-        if (ip != nullptr && ip[0] != '\0')
-            client->remote_ip = ip;
+        client->remote_ip = ClientAddress::resolve(ip ? ip : "", forwarded ? forwarded : "");
         WS_MAP.insert({ws_id, ws});
         if (!RateLimit::allow_connect(client->remote_ip)) {
             // Leave WS_MAP entry; on_disconnect deletes it after close.
@@ -216,6 +222,11 @@ WebSocketServer::WebSocketServer() {
                 } catch (e) {
                     sendJson(200, body);
                 }
+                return;
+            }
+            if (path === "/api/feedback") {
+                const before = Number(new URL(req.url, "http://localhost").searchParams.get("before")) || 0;
+                sendJson(200, fromWasm(_feedback_page_json(before)));
                 return;
             }
             if (path === "/api/live") {
@@ -411,12 +422,15 @@ WebSocketServer::WebSocketServer() {
                         }
                         if (action === "spawn") {
                             const p = cstr(j["near"] || "");
+                            let count = Number(j["count"]) | 0;
+                            if (count < 1) count = 1;
                             const out = fromWasm(_live_admin_spawn(
                                 Number(j["map_id"]) | 0,
                                 Number(j["mob_id"]) | 0,
                                 Number(j["x"]) || 0,
                                 Number(j["y"]) || 0,
-                                p));
+                                p,
+                                count));
                             _free(p);
                             sendJson(200, out);
                             return;
@@ -438,6 +452,9 @@ WebSocketServer::WebSocketServer() {
                 case "/codex":
                 case "/codex.html":
                     file = "codex.html";
+                    break;
+                case "/feedback.html":
+                    file = "feedback.html";
                     break;
                 case "/deploy-info.json":
                     encodeType = "application/json; charset=utf-8";
@@ -530,7 +547,7 @@ WebSocketServer::WebSocketServer() {
             }
             if (file && fs.existsSync(file)) {
                 // HTML/SW: revalidate. Icons + JS/WASM: long-cache
-                const cacheCtl = (file === "index.html" || file === "sw.js" || file === "live.html" || file === "deploy-info.json")
+                const cacheCtl = (file === "index.html" || file === "sw.js" || file === "feedback.html" || file === "live.html" || file === "deploy-info.json")
                     ? "no-cache"
                     : "public, max-age=31536000, immutable";
                 const headers = {
@@ -595,19 +612,15 @@ WebSocketServer::WebSocketServer() {
         wss.on("connection", function(ws, req) {
             const ws_id = curr_id;
             Module.ws_connections[ws_id] = ws;
-            // Prefer first X-Forwarded-For hop (player); X-Real-IP may be edge IP after multi-proxy.
-            let ip = "";
+            const ip = String(req && req.socket && req.socket.remoteAddress || "");
             const xff = (req && req.headers && req.headers["x-forwarded-for"]) || "";
-            if (xff) ip = String(xff).split(",")[0].trim();
-            if (!ip && req && req.headers && req.headers["x-real-ip"])
-                ip = String(req.headers["x-real-ip"]).trim();
-            if (!ip && req && req.socket && req.socket.remoteAddress)
-                ip = String(req.socket.remoteAddress);
-            if (ip.indexOf("::ffff:") === 0) ip = ip.slice(7);
             const ipLen = lengthBytesUTF8(ip) + 1;
             const ipPtr = _malloc(ipLen);
             stringToUTF8(ip, ipPtr, ipLen);
-            _on_connect(ws_id, ipPtr);
+            const xffPtr = _malloc(lengthBytesUTF8(String(xff)) + 1);
+            stringToUTF8(String(xff), xffPtr, lengthBytesUTF8(String(xff)) + 1);
+            _on_connect(ws_id, ipPtr, xffPtr);
+            _free(xffPtr);
             _free(ipPtr);
             curr_id = (curr_id + 1) | 0;
             ws.on("message", function(message) {

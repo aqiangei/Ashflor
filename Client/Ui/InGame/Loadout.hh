@@ -70,6 +70,10 @@ namespace Ui {
 
     Element *make_loadout_backgrounds();
     Element *make_rotation_wheel();
+    // True while the spin wheel is held (mobile must not treat as joystick/pinch).
+    uint8_t rotation_wheel_touch_busy(uint32_t touch_id = (uint32_t) -1);
+    // Screen hit-test for the spin wheel disc.
+    uint8_t rotation_wheel_hit(float x, float y);
     void make_petal_tooltips();
 
     void forward_secondary_select();

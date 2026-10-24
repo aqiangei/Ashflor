@@ -16,6 +16,9 @@ namespace DOM {
     std::string retrieve_text(char const *, uint32_t);
     void update_text(char const *, std::string const &, uint32_t);
     void open_page(char const *);
+    void open_feedback_board();
+    void feedback_result(uint8_t result, uint32_t id);
+    void open_qq_group();
     void focus_element(char const *);
     void blur_active();
     // Persist VERSION_HASH so locateFile / script URLs keep matching after first load

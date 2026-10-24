@@ -1,4 +1,5 @@
 #include <Client/Game.hh>
+#include <Client/DOM.hh>
 
 #include <Client/I18n.hh>
 #include <Client/Input.hh>
@@ -26,9 +27,32 @@
 
 using namespace Game;
 
+bool Game::near_training_dummies() {
+    if (!alive() || simulation.arena_info.map_id != MapID::kGarden) return false;
+    auto const &player = simulation.get_ent(player_id);
+    float dx = (player.get_x() - MAP_SPAWN_X) / 1200.f;
+    float dy = (player.get_y() - MAP_SPAWN_Y) / 1000.f;
+    return dx * dx + dy * dy <= 1.f;
+}
+
+void Game::reset_training() {
+    if (!socket.ready) return;
+    training_readouts = {};
+    Writer writer(static_cast<uint8_t *>(OUTGOING_PACKET));
+    writer.write<uint8_t>(Serverbound::kTrainingReset);
+    socket.send(writer.packet, writer.at - writer.packet);
+}
+
 void Game::on_message(uint8_t *ptr, uint32_t len) {
     Reader reader(ptr);
     switch(reader.read<uint8_t>()) {
+        case Clientbound::kTrainingStats:
+            for (auto &stats : training_readouts) {
+                stats.last = reader.read<std::string>();
+                stats.dps = reader.read<std::string>();
+                stats.total = reader.read<std::string>();
+            }
+            break;
         case Clientbound::kAccountResult: {
             uint8_t result = reader.read<uint8_t>();
             uint32_t level = reader.read<uint32_t>();
@@ -272,10 +296,17 @@ void Game::on_message(uint8_t *ptr, uint32_t len) {
             }
             break;
         }
+        case Clientbound::kFeedbackResult: {
+            uint8_t result = reader.read<uint8_t>();
+            uint32_t id = reader.read<uint32_t>();
+            DOM::feedback_result(result, id);
+            break;
+        }
         case Clientbound::kLoadoutPresetSync: {
             uint8_t result = reader.read<uint8_t>();
             uint8_t index = reader.read<uint8_t>();
             for (LoadoutPreset &preset : loadout_presets) {
+                preset.secondary.fill(PetalID::kNone);
                 preset.slot_count = reader.read<uint8_t>();
                 if (preset.slot_count > MAX_SLOT_COUNT) preset.slot_count = 0;
                 for (PetalID::T &id : preset.petals) {
@@ -284,6 +315,19 @@ void Game::on_message(uint8_t *ptr, uint32_t len) {
                 }
                 for (uint8_t i = 0; i < TalentID::kNum; ++i)
                     preset.talent_ranks[i] = reader.read<uint8_t>();
+            }
+            // Older servers omit this extension; both rows use the same preset.
+            if (reader.at < ptr + len && reader.read<uint8_t>() == 1) {
+                Validator secondary_data(reader.at, ptr + len);
+                bool valid = true;
+                for (uint32_t i = 0; i < LOADOUT_PRESET_COUNT * MAX_SLOT_COUNT; ++i)
+                    if (!secondary_data.validate_uint16()) { valid = false; break; }
+                if (valid)
+                    for (LoadoutPreset &preset : loadout_presets)
+                        for (PetalID::T &id : preset.secondary) {
+                            id = reader.read<PetalID::T>();
+                            if (id >= PetalID::kNumPetals) id = PetalID::kNone;
+                        }
             }
             if (result == kPresetSaved)
                 loadout_preset_status = I18n::use_chinese
@@ -546,17 +590,25 @@ void Game::sync_auto_party_opt() {
 }
 
 void Game::send_inputs() {
-    // Desktop: chat stays open while moving (mouse aim). Mobile chat freezes.
-    // Any clicked popup stops the flower.
-    uint8_t blocked = Input::freeze_input || Game::pause_menu_open
+    // Chat freezes only keyboard-move + mobile (WASD/joystick type names).
+    // Mouse-aim keeps steering while the chat field is focused.
+    // Pause stops movement but still sends attack/defend so ESC invert toggles
+    // take effect immediately (hold=cancel always-on).
+    uint8_t move_blocked = Input::freeze_input || Game::pause_menu_open
         || Game::leave_confirm_open || Game::game_panel_blocking()
         || Game::guild_panel_open || Game::invite_open || Game::chat_menu_open
         || Game::update_poster_open
         || Ui::panel_open != Ui::Panel::kNone
-        || (Game::chat_open && Input::mobile_controls());
-    float x = blocked ? 0.f : Input::game_inputs.x;
-    float y = blocked ? 0.f : Input::game_inputs.y;
-    uint8_t flags = blocked ? 0 : Input::game_inputs.flags;
+        || (Game::chat_open && (Input::mobile_controls() || Input::keyboard_movement));
+    uint8_t flags_blocked = Input::freeze_input || Game::leave_confirm_open
+        || Game::game_panel_blocking()
+        || Game::guild_panel_open || Game::invite_open || Game::chat_menu_open
+        || Game::update_poster_open
+        || Ui::panel_open != Ui::Panel::kNone
+        || (Game::chat_open && (Input::mobile_controls() || Input::keyboard_movement));
+    float x = move_blocked ? 0.f : Input::game_inputs.x;
+    float y = move_blocked ? 0.f : Input::game_inputs.y;
+    uint8_t flags = flags_blocked ? 0 : Input::game_inputs.flags;
     static double last_sent_at = -1000;
     static float last_x = 0, last_y = 0;
     static uint8_t last_flags = 0, last_rot = 0;
@@ -828,6 +880,16 @@ void Game::apply_loadout_preset(uint8_t index) {
     socket.send(writer.packet, writer.at - writer.packet);
 }
 
+void Game::post_feedback(std::string const &text) {
+    if (!account_logged_in) { DOM::feedback_result(kFeedbackNeedAccount, 0); return; }
+    if (!socket.ready) { DOM::feedback_result(kFeedbackStorageError, 0); return; }
+    if (text.empty() || text.size() > 960) { DOM::feedback_result(kFeedbackInvalid, 0); return; }
+    Writer writer(static_cast<uint8_t *>(OUTGOING_PACKET));
+    writer.write<uint8_t>(Serverbound::kFeedbackPost);
+    writer.write<std::string>(text);
+    socket.send(writer.packet, writer.at - writer.packet);
+}
+
 uint8_t Game::withdraw_bank_petal(PetalID::T id, uint8_t dest) {
     if (!socket.ready || id == PetalID::kNone || id >= PetalID::kNumPetals
         || craft_bank[id] == 0) return 0;
@@ -933,9 +995,14 @@ uint8_t Game::try_mobile_l_preset_slot(uint8_t primary_index) {
     return 1;
 }
 
+uint8_t Game::loadout_preview_bank() {
+    return preset_ghost_bank != 0 ? preset_ghost_bank : (mobile_l_preset_pick ? 2 : 0);
+}
+
 PetalID::T Game::preset_ghost_petal(uint8_t primary_index) {
-    if (preset_ghost_bank == 0 || primary_index >= MAX_SLOT_COUNT) return PetalID::kNone;
-    uint8_t idx = (uint8_t) ((preset_ghost_bank == 1 ? 0 : 10) + primary_index);
+    uint8_t const bank = loadout_preview_bank();
+    if (bank == 0 || primary_index >= MAX_SLOT_COUNT) return PetalID::kNone;
+    uint8_t idx = (uint8_t) ((bank == 1 ? 0 : 10) + primary_index);
     if (idx >= LOADOUT_PRESET_COUNT) return PetalID::kNone;
     LoadoutPreset const &p = loadout_presets[idx];
     if (p.slot_count == 0) return PetalID::kNone;

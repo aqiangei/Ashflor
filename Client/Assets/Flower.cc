@@ -16,6 +16,9 @@ void draw_static_flower(Renderer &ctx, FlowerRenderAttributes attributes) {
         base_color = 0xffce76db;
     else if (BitMath::at(attributes.face_flags, FaceFlags::kDandelioned)) 
         base_color = Renderer::MIX(base_color, 0xffffffff, 0.4);
+    else if (BitMath::at(attributes.face_flags, FaceFlags::kDeadEyes))
+        // Desaturate + darken — corpse / death pose, not a bright living petal.
+        base_color = Renderer::MIX(Renderer::HSV(base_color, 0.35f), 0xff2a3038, 0.45f);
     ctx.set_stroke(Renderer::HSV(base_color, 0.8));
     ctx.set_fill(base_color);
     ctx.set_line_width(3);

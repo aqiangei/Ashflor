@@ -338,7 +338,7 @@
           </div>
           <div>
             <label>数量</label>
-            <input id="giveCount" type="number" min="1" max="10" value="1" title="每次最多 10 个">
+            <input id="giveCount" type="number" min="1" max="100" value="1" title="每次最多 100 个">
           </div>
         </div>
         <p class="hint" id="giveRarityHint" style="margin-top:6px">选择花瓣后显示可用等级</p>
@@ -367,6 +367,13 @@
         <input id="mobFilter" autocomplete="off" placeholder="如：蜜蜂 / Bee / boss">
         <label>怪物</label>
         <select id="spawnMob"></select>
+        <div class="row2">
+          <div>
+            <label>数量</label>
+            <input id="spawnCount" type="number" min="1" max="10" value="1" title="每次最多 10 只">
+          </div>
+          <div></div>
+        </div>
         <div class="row2">
           <div><label>X（可选）</label><input id="spawnX" type="number" placeholder="自动"></div>
           <div><label>Y（可选）</label><input id="spawnY" type="number" placeholder="自动"></div>
@@ -440,7 +447,7 @@
           <option value="5">蚁穴</option>
           <option value="6">火山</option>
           <option value="7">王城</option>
-          <option value="255">未知</option>
+          <option value="255">全服/未知</option>
         </select>
       </label>
       <label>类型
@@ -448,11 +455,14 @@
           <option value="">全部</option>
           <option value="0">击杀</option>
           <option value="1">合成</option>
-          <option value="2">公告</option>
+          <option value="2">公告全部</option>
+          <option value="2:ops">控制台公告</option>
+          <option value="2:shop">商店广播</option>
         </select>
       </label>
       <button type="button" id="bcApply">筛选</button>
     </div>
+    <p class="hint" style="margin-top:6px">控制台/Live 发的公告发送者为 aqa（旧数据可能显示「公告」）；商店购买的是玩家名。筛「控制台公告」或搜 aqa 可查。</p>
     <div class="feed" id="feed"><div class="empty-msg">暂无播报</div></div>
   </div>
 
@@ -672,9 +682,25 @@ function debounce(fn, ms) {
 function syncGiveCountLimit() {
   const cnt = $("giveCount");
   if (!cnt) return;
+  cnt.min = 1;
+  cnt.max = 100;
+  let n = Number(cnt.value);
+  if (!Number.isFinite(n) || n < 1) n = 1;
+  if (n > 100) n = 100;
+  if (String(n) !== cnt.value) cnt.value = String(n);
+  cnt.title = "每次最多发 100 个";
+}
+
+function syncSpawnCountLimit() {
+  const cnt = $("spawnCount");
+  if (!cnt) return;
+  cnt.min = 1;
   cnt.max = 10;
-  if (Number(cnt.value) > 10) cnt.value = 10;
-  cnt.title = "每次最多发 10 个";
+  let n = Number(cnt.value);
+  if (!Number.isFinite(n) || n < 1) n = 1;
+  if (n > 10) n = 10;
+  if (String(n) !== cnt.value) cnt.value = String(n);
+  cnt.title = "每次最多刷 10 只";
 }
 
 function refreshGiveRarity() {
@@ -724,7 +750,7 @@ function refreshPetalSelect() {
   }
   items.sort((a, b) => String(a.name_zh || a.name).localeCompare(String(b.name_zh || b.name), "zh"));
   fillSelect($("givePetal"), items, (p) =>
-    `${p.name_zh || p.name} / ${p.name}（${(p.rarities || []).map((r) => RARITY_ZH[r] || r).join("/")}）`
+    `${p.name_zh || p.name} / ${p.name}`
   );
   refreshGiveRarity();
 }
@@ -1181,11 +1207,13 @@ $("petalFilter").oninput = debounce(refreshPetalSelect, 120);
 $("givePetal").onchange = refreshGiveRarity;
 if ($("giveRarity")) $("giveRarity").onchange = syncGiveCountLimit;
 if ($("giveCount")) {
-  $("giveCount").addEventListener("input", () => {
-    syncGiveCountLimit();
-    const max = Number($("giveCount").max) || 10;
-    if (Number($("giveCount").value) > max) $("giveCount").value = max;
-  });
+  $("giveCount").addEventListener("input", syncGiveCountLimit);
+  $("giveCount").addEventListener("change", syncGiveCountLimit);
+}
+if ($("spawnCount")) {
+  $("spawnCount").addEventListener("input", syncSpawnCountLimit);
+  $("spawnCount").addEventListener("change", syncSpawnCountLimit);
+  syncSpawnCountLimit();
 }
 $("mobFilter").oninput = debounce(refreshMobSelect, 120);
 bindPlayerCombo("giveWho", "giveWhoMenu", null);
@@ -1220,7 +1248,7 @@ $("btnGive").onclick = async () => {
     $("btnGive").disabled = true;
     syncGiveCountLimit();
     let count = Number($("giveCount").value) || 1;
-    if (count > 10) count = 10;
+    if (count > 100) count = 100;
     const j = await admin({
       action: "give",
       who: $("giveWho").value.trim(),
@@ -1241,6 +1269,8 @@ $("btnSpawn").onclick = async () => {
       const it = playerChoices().find((p) => p.value === near || p.label === near);
       if (it) syncSpawnMapFromPlayer(it);
     }
+    syncSpawnCountLimit();
+    const count = Number($("spawnCount").value) || 1;
     const j = await admin({
       action: "spawn",
       map_id: Number($("spawnMap").value),
@@ -1248,6 +1278,7 @@ $("btnSpawn").onclick = async () => {
       near,
       x: Number($("spawnX").value) || 0,
       y: Number($("spawnY").value) || 0,
+      count,
     });
     flashOk(j.msg);
   } catch (e) { flashErr(e.message); }
@@ -1579,18 +1610,24 @@ function fmtTs(ms) {
   return `${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`;
 }
 
-function mapLabel(id) {
-  // map = where it was sent from; never label as「全服」(that is channel/kind)
-  if (id == null || id === "" || id === 255 || id === "255") return "未知";
+function mapLabel(id, kind) {
+  // Announce with map 255 = ops console (no specific map). Chat keeps「未知」.
+  if (id == null || id === "" || id === 255 || id === "255")
+    return (kind === 2) ? "全服" : "未知";
   const n = Number(id);
   return (MAP_NAMES[n] != null) ? MAP_NAMES[n] : ("地图" + id);
 }
 
 function bcFilters() {
+  const raw = ($("bcKind") && $("bcKind").value) || "";
+  let kind = raw, source = "";
+  if (raw === "2:ops") { kind = "2"; source = "ops"; }
+  else if (raw === "2:shop") { kind = "2"; source = "shop"; }
   return {
     day: ($("bcDay") && $("bcDay").value) || "",
     player: (($("bcPlayer") && $("bcPlayer").value) || "").trim(),
-    kind: ($("bcKind") && $("bcKind").value) || "",
+    kind,
+    source,
     map: ($("bcMap") && $("bcMap").value) || ""
   };
 }
@@ -1626,10 +1663,21 @@ function renderBcFeed(stickBottom) {
     : `<div class="feed-load">已到最早</div>`;
   feed.innerHTML = head + bcRows.map((b) => {
     const k = b.kind === 0 ? "kill" : (b.kind === 1 ? "craft" : "announce");
-    const tag = KIND_ZH[b.kind] || "公告";
+    let tag = KIND_ZH[b.kind] || "公告";
+    let who = b.sender || "";
+    if (b.kind === 2) {
+      const ops = b.src === "ops" || who === "公告" ||
+        (who === "aqa" && !(String(b.text || "").startsWith("aqa：")));
+      if (ops) {
+        tag = "控制台";
+        who = "aqa";
+      } else {
+        tag = "商店";
+      }
+    }
     return `<div class="row kind-${k}" data-id="${b.id}">` +
-      `<span class="meta">${esc(fmtTs(b.ts))} · ${esc(mapLabel(b.map))} · ${tag}</span>` +
-      `<span class="who">${esc(b.sender)}</span>${esc(b.text)}</div>`;
+      `<span class="meta">${esc(fmtTs(b.ts))} · ${esc(mapLabel(b.map, b.kind))} · ${tag}</span>` +
+      `<span class="who">${esc(who)}</span> ${esc(b.text)}</div>`;
   }).join("");
   if (stickBottom || nearBottom) feed.scrollTop = feed.scrollHeight;
 }
@@ -1697,10 +1745,15 @@ async function fetchBcPage(beforeId, prepend) {
       day: f.day,
       player: f.player,
       kind: f.kind,
+      source: f.source || "",
       map: f.map
     });
     const r = await fetch("/api/broadcasts" + q, { cache: "no-store" });
-    const j = await r.json();
+    const raw = await r.text();
+    if (!r.ok) throw new Error(r.status + " " + (raw.slice(0, 80) || r.statusText));
+    let j;
+    try { j = JSON.parse(raw); }
+    catch (_) { throw new Error("返回非 JSON：" + raw.slice(0, 80)); }
     const rows = j.rows || [];
     if (prepend) {
       const prevH = $("feed").scrollHeight;
@@ -1740,7 +1793,11 @@ async function fetchChatPage(beforeId, prepend) {
       map: f.map
     });
     const r = await fetch("/api/chatlog" + q, { cache: "no-store" });
-    const j = await r.json();
+    const raw = await r.text();
+    if (!r.ok) throw new Error(r.status + " " + (raw.slice(0, 80) || r.statusText));
+    let j;
+    try { j = JSON.parse(raw); }
+    catch (_) { throw new Error("返回非 JSON：" + raw.slice(0, 80)); }
     const rows = j.rows || [];
     if (prepend) {
       const feed = $("chatFeed");
@@ -1784,7 +1841,7 @@ function bindHistoryFeeds() {
   if ($("bcApply")) {
     $("bcApply").addEventListener("click", () => {
       const f = bcFilters();
-      bcFilterActive = !!(f.day || f.player || f.kind || f.map);
+      bcFilterActive = !!(f.day || f.player || f.kind || f.source || f.map);
       fetchBcPage(0, false);
     });
   }
@@ -1810,6 +1867,7 @@ setInterval(async () => {
     const f = chatFilters();
     const q = qsFrom({ before: 0, limit: 40, day: f.day, player: f.player, channel: f.channel, map: f.map });
     const r = await fetch("/api/chatlog" + q, { cache: "no-store" });
+    if (!r.ok) return;
     const j = await r.json();
     const rows = j.rows || [];
     if (!chatRows.length) {

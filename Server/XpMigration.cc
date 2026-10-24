@@ -202,8 +202,10 @@ uint32_t XpMigration::run_once() {
         if (row.has_account) {
             Account *acc = AccountStore::find(row.name);
             if (acc != nullptr) {
+                acc->score = new_sc;
                 acc->level = new_lv;
                 Talent::clamp_ranks(acc->talent_ranks, acc->level);
+                AccountStore::mark_dirty();
             }
         }
         LeaderboardStore::force_set_level_score(row.name, new_lv, new_sc);
@@ -249,5 +251,87 @@ uint32_t XpMigration::run_once() {
               << " safe_gray_score_align=" << lb_align
               << " safe=" << safe_n << " gray=" << gray_n
               << " (petals/coins/crafts untouched)" << std::endl;
+    return changed;
+}
+
+uint32_t XpMigration::scrub_overflow() {
+    uint32_t cap = score_soft_cap(); // level_to_score(300)
+    uint32_t s_soft = level_to_score(kSoft);
+    uint32_t s_lo = 0, s_hi = 0;
+    score_band(s_lo, s_hi);
+
+    struct Hit {
+        std::string name;
+        uint32_t old_level = 0;
+        uint32_t old_score = 0;
+        uint8_t has_account = 0;
+    };
+    std::vector<Hit> hits;
+    uint32_t max_score = s_soft;
+
+    auto consider = [&](std::string const &name, uint32_t sc, uint32_t lv, uint8_t has_acc) {
+        // Overflow pin, past soft XP ceiling, or stale level high-water
+        // (older curves could leave level >> score_to_level(UINT32_MAX)=462).
+        if (!(sc >= cap || sc == UINT32_MAX || lv > 300)) return;
+        for (auto const &h : hits)
+            if (h.name == name) return;
+        Hit h;
+        h.name = name;
+        h.old_level = lv;
+        h.old_score = sc > 0 ? sc : level_to_score(lv > 0 ? lv : 1);
+        h.has_account = has_acc;
+        if (h.old_score > max_score) max_score = h.old_score;
+        hits.push_back(std::move(h));
+    };
+
+    AccountStore::for_each_account([&](std::string const &user, Account &acc) {
+        consider(user, acc.score, acc.level, 1);
+    });
+    LeaderboardStore::for_each_entry_mutable([&](LeaderboardEntry &e) {
+        consider(e.name, e.score, e.level, AccountStore::find(e.name) != nullptr ? 1 : 0);
+    });
+
+    if (hits.empty()) {
+        std::cout << "[xp-mig] overflow scrub: clean" << std::endl;
+        return 0;
+    }
+
+    uint32_t s_ref = max_score;
+    if (s_ref < s_soft + 1000000u) s_ref = s_soft + 1000000u;
+
+    std::ostringstream log;
+    log << "# xp_overflow_scrub\n";
+    uint32_t changed = 0;
+    for (auto const &row : hits) {
+        uint32_t new_sc = compress_score(row.old_score, s_soft, s_ref, s_lo, s_hi);
+        uint32_t new_lv = score_to_level(new_sc);
+        if (new_lv < kAnchor + 1) new_lv = kAnchor + 1;
+        if (new_lv > kCap) new_lv = kCap;
+        uint32_t lo = level_to_score(new_lv);
+        uint32_t hi = level_to_score(new_lv + 1);
+        if (hi > lo) hi -= 1;
+        if (new_sc < lo) new_sc = lo;
+        if (new_sc > hi) new_sc = hi;
+
+        if (row.has_account) {
+            Account *acc = AccountStore::find(row.name);
+            if (acc != nullptr) {
+                acc->score = new_sc;
+                acc->level = new_lv;
+                Talent::clamp_ranks(acc->talent_ranks, acc->level);
+                AccountStore::mark_dirty();
+            }
+        }
+        LeaderboardStore::force_set_level_score(row.name, new_lv, new_sc);
+        log << row.name
+            << " overflow lv " << row.old_level << "->" << new_lv
+            << " score " << row.old_score << "->" << new_sc << "\n";
+        ++changed;
+    }
+
+    AccountStore::save();
+    LeaderboardStore::flush();
+    write_text("xp_overflow_scrub.log", log.str());
+    std::cout << "[xp-mig] overflow scrub rewritten=" << changed << std::endl;
     return changed;
 }

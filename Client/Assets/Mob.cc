@@ -1,6 +1,7 @@
 #include <Client/Assets/Assets.hh>
 
 #include <Client/StaticData.hh>
+#include <Shared/RarityScale.hh>
 
 #include <Helpers/Bits.hh>
 #include <Helpers/Math.hh>
@@ -16,8 +17,51 @@ void draw_static_mob(MobID::T mob_id, Renderer &ctx, MobRenderAttributes attr) {
     uint32_t seed = attr.seed;
     uint32_t base_color = 0xffffe763;
     switch(mob_id) {
-        case MobID::kBabyAnt:
-            SET_BASE_COLOR(0xff555555)
+        case MobID::kTrainingDummy: {
+            ctx.scale(radius / 44.f);
+            uint32_t color = RARITY_COLORS[attr.color < RarityID::kNumRarities ? attr.color : 0];
+            ctx.set_fill(0x30000000);
+            ctx.begin_path();
+            ctx.ellipse(0, 42, 49, 13);
+            ctx.fill();
+            ctx.round_line_cap();
+            ctx.set_line_width(13);
+            ctx.set_stroke(0xff654a32);
+            ctx.begin_path();
+            ctx.move_to(0, -42); ctx.line_to(0, 43);
+            ctx.move_to(-44, -7); ctx.line_to(44, -7);
+            ctx.move_to(-28, 43); ctx.line_to(28, 43);
+            ctx.stroke();
+            ctx.set_line_width(7);
+            ctx.set_stroke(0xffbc9159);
+            ctx.begin_path();
+            ctx.move_to(-42, -7); ctx.line_to(42, -7);
+            ctx.move_to(-26, 43); ctx.line_to(26, 43);
+            ctx.stroke();
+            ctx.set_fill(0xffead1a1);
+            ctx.set_stroke(0xff785b3b);
+            ctx.set_line_width(3);
+            ctx.begin_path(); ctx.arc(0, -37, 16); ctx.fill(); ctx.stroke();
+            ctx.set_fill(color);
+            ctx.begin_path(); ctx.arc(0, 0, 31); ctx.fill(); ctx.stroke();
+            ctx.set_fill(0xfff6ead0);
+            ctx.begin_path(); ctx.arc(0, 0, 21); ctx.fill();
+            ctx.set_fill(color);
+            ctx.begin_path(); ctx.arc(0, 0, 12); ctx.fill();
+            ctx.set_fill(0xff654a32);
+            ctx.begin_path(); ctx.arc(0, 0, 4); ctx.fill();
+            break;
+        }
+        case MobID::kBabyFireAnt:
+        case MobID::kBabyTermite:
+        case MobID::kBabyAnt: {
+            // Authored at base physics radius; live radius was only on the head
+            // so rarity scale swallowed antennae into a featureless blob.
+            float const kDesign = 14.f * MOB_RADIUS_MULTIPLIER;
+            ctx.scale(radius / kDesign);
+            SET_BASE_COLOR(
+                mob_id == MobID::kBabyFireAnt ? 0xffa33a2a :
+                mob_id == MobID::kBabyTermite ? 0xffd4a84a : 0xff555555)
             ctx.set_stroke(0xff292929);
             ctx.set_line_width(7);
             ctx.round_line_cap();
@@ -30,12 +74,19 @@ void draw_static_mob(MobID::T mob_id, Renderer &ctx, MobRenderAttributes attr) {
             ctx.set_fill(base_color);
             ctx.set_stroke(Renderer::HSV(base_color, 0.8));
             ctx.begin_path();
-            ctx.arc(0,0,radius);
+            ctx.arc(0, 0, kDesign);
             ctx.fill();
             ctx.stroke();
             break;
-        case MobID::kWorkerAnt:
-            SET_BASE_COLOR(0xff555555)
+        }
+        case MobID::kWorkerFireAnt:
+        case MobID::kWorkerTermite:
+        case MobID::kWorkerAnt: {
+            float const kDesign = 14.f * MOB_RADIUS_MULTIPLIER;
+            ctx.scale(radius / kDesign);
+            SET_BASE_COLOR(
+                mob_id == MobID::kWorkerFireAnt ? 0xffa33a2a :
+                mob_id == MobID::kWorkerTermite ? 0xffd4a84a : 0xff555555)
             ctx.set_fill(base_color);
             ctx.set_stroke(Renderer::HSV(base_color, 0.8));
             ctx.set_line_width(7);
@@ -54,12 +105,19 @@ void draw_static_mob(MobID::T mob_id, Renderer &ctx, MobRenderAttributes attr) {
             ctx.set_fill(base_color);
             ctx.set_stroke(Renderer::HSV(base_color, 0.8));
             ctx.begin_path();
-            ctx.arc(4,0,radius);
+            ctx.arc(4, 0, kDesign);
             ctx.fill();
             ctx.stroke();
             break;
-        case MobID::kSoldierAnt:
-            SET_BASE_COLOR(0xff555555)
+        }
+        case MobID::kSoldierFireAnt:
+        case MobID::kSoldierTermite:
+        case MobID::kSoldierAnt: {
+            float const kDesign = 14.f * MOB_RADIUS_MULTIPLIER;
+            ctx.scale(radius / kDesign);
+            SET_BASE_COLOR(
+                mob_id == MobID::kSoldierFireAnt ? 0xffa33a2a :
+                mob_id == MobID::kSoldierTermite ? 0xffd4a84a : 0xff555555)
             ctx.set_fill(base_color);
             ctx.set_stroke(Renderer::HSV(base_color, 0.8));
             ctx.set_line_width(7);
@@ -97,10 +155,11 @@ void draw_static_mob(MobID::T mob_id, Renderer &ctx, MobRenderAttributes attr) {
             ctx.set_fill(base_color);
             ctx.set_stroke(Renderer::HSV(base_color, 0.8));
             ctx.begin_path();
-            ctx.arc(4,0,radius);
+            ctx.arc(4, 0, kDesign);
             ctx.fill();
             ctx.stroke();
             break;
+        }
         case MobID::kBee:
             SET_BASE_COLOR(0xffffe763)
             ctx.set_fill(0xff333333);

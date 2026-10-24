@@ -14,7 +14,7 @@
 #endif
 
 // Keep loot reachable: eject from impassable terrain.
-// Team-tagged drops stay private (no FFA unlock) — only owner/party may see or pick.
+// Tagged drops stay private (no FFA unlock) — only the owner may see or pick.
 void tick_drop_behavior(Simulation *sim, Entity &drop) {
     if (drop.pending_delete) return;
     if (!drop.has_component(kDrop) || !drop.has_component(kPhysics)) return;

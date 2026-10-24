@@ -18,11 +18,11 @@ static char const *const RARITY_ZH[RarityID::kNumRarities] = {
 };
 
 static char const *const ZONE_ZH[] = {
-    "花园", "沙漠", "海洋", "雪原", "丛林", "蚁穴", "火山", "王城"
+    "花园", "沙漠", "海洋", "雪原", "丛林", "蚁穴", "火山", "王城", "蚁巢"
 };
 
 static char const *const MAP_EN[] = {
-    "Garden", "Desert", "Ocean", "Snow", "Jungle", "Ant Hell", "Volcano", "Royal Capital"
+    "Garden", "Desert", "Ocean", "Snow", "Jungle", "Ant Hell", "Volcano", "Royal Capital", "Ant Nest"
 };
 
 static char const *const ROYAL_ZONE_ZH[] = {
@@ -385,11 +385,15 @@ char const *I18n::petal_desc(PetalID::T id) {
 }
 
 char const *I18n::mob_name(MobID::T id) {
+    if (id == MobID::kTrainingDummy) return use_chinese ? "测试假人" : "Training Dummy";
     if (id >= MobID::kNumMobs) return "";
     return use_chinese ? MOB_NAME_ZH[id] : MOB_DATA[id].name;
 }
 
 char const *I18n::mob_desc(MobID::T id) {
+    if (id == MobID::kTrainingDummy) return use_chinese
+        ? "固定的伤害测试目标，显示单次伤害、DPS 和累计伤害；停止受伤 3 秒后重置，不产出奖励。"
+        : MOB_DATA[id].description;
     if (id >= MobID::kNumMobs) return "";
     return use_chinese ? MOB_DESC_ZH[id] : MOB_DATA[id].description;
 }

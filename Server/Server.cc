@@ -6,6 +6,7 @@
 #include <Server/Client.hh>
 #include <Server/DevCheats.hh>
 #include <Server/Game.hh>
+#include <Server/FeedbackStore.hh>
 #include <Server/Guild.hh>
 #include <Server/LeaderboardStore.hh>
 #include <Server/RateLimit.hh>
@@ -32,6 +33,7 @@
 
 #include <algorithm>
 #include <chrono>
+#include <cmath>
 #include <cstdio>
 #include <iostream>
 #include <new>
@@ -315,7 +317,7 @@ static void json_append_slot_list(std::string &out, PetalID::T const *slots, uin
 
 std::string Server::live_status_json() {
     static char const *const MAP_ZH[MapID::kNumMaps] = {
-        "花园", "沙漠", "海洋", "雪原", "丛林", "蚁穴", "火山", "王城"
+        "花园", "沙漠", "海洋", "雪原", "丛林", "蚁穴", "火山", "王城", "蚁巢"
     };
     auto now_ms = (uint64_t) std::chrono::duration_cast<std::chrono::milliseconds>(
         std::chrono::system_clock::now().time_since_epoch()).count();
@@ -777,7 +779,7 @@ std::string Server::live_map_layout_json() {
     if (!cached.empty()) return cached;
 
     static char const *const MAP_ZH[MapID::kNumMaps] = {
-        "花园", "沙漠", "海洋", "雪原", "丛林", "蚁穴", "火山", "王城"
+        "花园", "沙漠", "海洋", "雪原", "丛林", "蚁穴", "火山", "王城", "蚁巢"
     };
     constexpr uint32_t kOutlineCap = 32;
     float oxs[kOutlineCap];
@@ -915,9 +917,9 @@ std::string Server::live_admin_announce(std::string const &text) {
         t.pop_back();
     if (t.empty()) return live_admin_err("公告内容为空");
     if (t.size() > 200) return live_admin_err("公告过长（最多200字）");
-    // Do NOT spoof as player "aqa" — that looked like the owner typed in nearby chat.
-    // Banner flag is whisper_to "banner" (see Chat::broadcast_server_banner).
-    Chat::broadcast_server_banner("公告", t);
+    // Sender "aqa" matches Live board copy; in-game top banner is keyed by
+    // whisper_to "banner" (not by spoofing nearby chat).
+    Chat::broadcast_server_banner("aqa", t, "aqa");
     return live_admin_ok("已全服公告");
 }
 
@@ -927,7 +929,7 @@ std::string Server::live_admin_give(std::string const &who, uint32_t petal_id, u
     if (petal_id == 0 || petal_id >= PetalID::kNumPetals)
         return live_admin_err("无效花瓣 id");
     if (count < 1) count = 1;
-    if (count > 10) return live_admin_err("每次最多发放 10 个");
+    if (count > 100) return live_admin_err("每次最多发放 100 个");
 
     PetalID::T give_id = (PetalID::T) petal_id;
     char const *base_en = PETAL_DATA[petal_id].name ? PETAL_DATA[petal_id].name : "?";
@@ -990,12 +992,16 @@ std::string Server::live_admin_give(std::string const &who, uint32_t petal_id, u
 }
 
 std::string Server::live_admin_spawn(uint8_t map_id, uint32_t mob_id, float x, float y,
-                                    std::string const &near_who) {
+                                    std::string const &near_who, uint32_t count) {
     if (Server::games == nullptr) return live_admin_err("服务器未就绪");
     if (map_id >= MapID::kNumMaps || !map_is_open(map_id))
         return live_admin_err("无效或未开放地图");
     if (mob_id == 0 || mob_id >= MobID::kNumMobs) return live_admin_err("无效怪物 id");
-    float sx = x, sy = y;
+    if (count < 1) count = 1;
+    if (count > 10) return live_admin_err("每次最多刷 10 只");
+
+    float base_x = x, base_y = y;
+    uint8_t near_mode = 0; // 0=fixed, 1=near player, 2=arena spawn
     if (!near_who.empty()) {
         Client *c = live_find_client(near_who);
         if (c == nullptr) return live_admin_err("找不到参照玩家：" + near_who);
@@ -1005,27 +1011,63 @@ std::string Server::live_admin_spawn(uint8_t map_id, uint32_t mob_id, float x, f
         if (!c->alive()) return live_admin_err("参照玩家未存活");
         Entity &cam = c->game->simulation.get_ent(c->camera);
         Entity &pl = c->game->simulation.get_ent(cam.get_player());
-        sx = pl.get_x() + (frand() - 0.5f) * 400.f;
-        sy = pl.get_y() + (frand() - 0.5f) * 400.f;
-    } else if (!(sx > 0.f && sy > 0.f && sx < ARENA_WIDTH && sy < ARENA_HEIGHT)) {
-        sx = MAP_SPAWN_X + (frand() - 0.5f) * 600.f;
-        sy = MAP_SPAWN_Y + (frand() - 0.5f) * 600.f;
+        base_x = pl.get_x();
+        base_y = pl.get_y();
+        near_mode = 1;
+    } else if (!(base_x > 0.f && base_y > 0.f && base_x < ARENA_WIDTH && base_y < ARENA_HEIGHT)) {
+        // Never default onto the hub pad — that is how the center got farm-dumped.
+        base_x = MAP_SPAWN_X + 2800.f;
+        base_y = MAP_SPAWN_Y;
+        near_mode = 2;
     }
     if (map_id >= MapID::kNumMaps) return live_admin_err("无效地图");
     Simulation *sim = &Server::games[map_id].simulation;
-    Map::resolve_circle_terrain(map_id, sx, sy, 80.f);
-    alloc_mob(sim, (MobID::T) mob_id, sx, sy, NULL_ENTITY);
+
+    float last_x = base_x, last_y = base_y;
+    uint32_t spawned = 0;
+    for (uint32_t i = 0; i < count; ++i) {
+        float sx = base_x, sy = base_y;
+        if (near_mode == 1) {
+            sx = base_x + (frand() - 0.5f) * 400.f;
+            sy = base_y + (frand() - 0.5f) * 400.f;
+        } else if (near_mode == 2) {
+            sx = base_x + (frand() - 0.5f) * 600.f;
+            sy = base_y + (frand() - 0.5f) * 600.f;
+        } else if (count > 1) {
+            sx = base_x + (frand() - 0.5f) * 120.f;
+            sy = base_y + (frand() - 0.5f) * 120.f;
+        }
+        Map::resolve_circle_terrain(map_id, sx, sy, 80.f);
+        // Push out of respawn ellipse if a near-player dump landed on the pad.
+        if (Map::in_spawn_plaza(sx, sy)) {
+            float ang = frand() * 6.2831853f;
+            sx = MAP_SPAWN_X + std::cos(ang) * 2200.f;
+            sy = MAP_SPAWN_Y + std::sin(ang) * 1700.f;
+            Map::resolve_circle_terrain(map_id, sx, sy, 80.f);
+            if (Map::in_spawn_plaza(sx, sy)) continue;
+        }
+        Entity &mob = alloc_mob(sim, (MobID::T) mob_id, sx, sy, NULL_ENTITY);
+        BitMath::set(mob.flags, EntityFlags::kHasCulling);
+        last_x = sx;
+        last_y = sy;
+        ++spawned;
+    }
+    if (spawned == 0) return live_admin_err("落点都在出生广场内，已拒绝刷怪");
+    count = spawned;
+
     std::string msg = "已在";
     static char const *const MAP_ZH[MapID::kNumMaps] = {
-        "花园", "沙漠", "海洋", "雪原", "丛林", "蚁穴", "火山", "王城"
+        "花园", "沙漠", "海洋", "雪原", "丛林", "蚁穴", "火山", "王城", "蚁巢"
     };
     msg += MAP_ZH[map_id];
     msg += " 刷出 ";
+    msg += std::to_string(count);
+    msg += "×";
     msg += MOB_DATA[mob_id].name;
     msg += " @(";
-    msg += std::to_string((int) sx);
+    msg += std::to_string((int) last_x);
     msg += ",";
-    msg += std::to_string((int) sy);
+    msg += std::to_string((int) last_y);
     msg += ")";
     return live_admin_ok(msg);
 }
@@ -1035,20 +1077,21 @@ void Server::init() {
     Guild::load();
     LeaderboardStore::load();
     Chat::load();
+    FeedbackStore::load();
     // Correct XP-inflation levels only (safe/gray untouched; no inventory wipe).
     XpMigration::run_once();
+    // Re-scrub UINT32_MAX / absurd leftovers (v2 sentinel skips; new pins happen).
+    XpMigration::scrub_overflow();
     // Seed the ranked "level" column from the saved accounts
     AccountStore::seed_leaderboard_levels();
     LeaderboardStore::flush();
     if (Server::games == nullptr)
         Server::games = new GameInstance[MapID::kNumMaps];
-    // Each open map: layout ensure + GameInstance::init, called separately
-    // (not a kNumMaps loop — closed biomes stay cold).
-    MapGen::ensure(MapID::kGarden);
-    Server::games[MapID::kGarden].init(MapID::kGarden);
-    MapGen::ensure(MapID::kOcean);
-    Server::games[MapID::kOcean].init(MapID::kOcean);
-    MapGen::ensure(MapID::kRoyalCapital);
-    Server::games[MapID::kRoyalCapital].init(MapID::kRoyalCapital);
+    // Each open map: ensure + init separately (keeps layout work per-map).
+    for (uint8_t oi = 0; oi < OPEN_MAP_COUNT; ++oi) {
+        uint8_t mid = OPEN_MAPS[oi];
+        MapGen::ensure(mid);
+        Server::games[mid].init(mid);
+    }
     Server::run();
 }

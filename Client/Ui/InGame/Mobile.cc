@@ -36,6 +36,7 @@ static uint8_t mobile_hud() {
 
 uint8_t Ui::mobile_touch_is_control(uint32_t touch_id) {
     if (touch_id == (uint32_t) -1) return 0;
+    if (Ui::rotation_wheel_touch_busy(touch_id)) return 1;
     return touch_id == g_mobile_joy_touch
         || touch_id == g_mobile_atk_touch
         || touch_id == g_mobile_def_touch
@@ -164,9 +165,10 @@ void MobileJoyStick::poll_events(ScreenEvent const &event) {
     // Bag/craft drawer sits on the left pad — never steal its taps.
     if (Game::game_panel != Game::kPanelNone && !is_pressed)
         return;
-    // The floating pad must also leave the bottom equipment bar alone.
+    // The floating pad must also leave the bottom equipment bar / spin wheel alone.
     if (Input::is_mobile && !is_pressed
-        && Ui::loadout_bar_hit(event.x, event.y))
+        && (Ui::loadout_bar_hit(event.x, event.y)
+            || Ui::rotation_wheel_hit(event.x, event.y)))
         return;
     if (Input::is_mobile && is_pressed && event.id != persistent_touch_id)
         return;
@@ -224,7 +226,12 @@ public:
                 down = 1;
             }
         }
-        if (!down && Game::timestamp >= pulse_until) {
+        // Invert: hold = cancel always-on. Pulse after a tap must NOT keep the
+        // flag latched or invert reads "held" until you press again.
+        uint8_t const invert = (flag_bit == InputFlags::kAttacking)
+            ? Input::invert_attack : Input::invert_defend;
+        uint8_t const pulse_active = !invert && Game::timestamp < pulse_until;
+        if (!down && !pulse_active) {
             if (flag_bit == InputFlags::kAttacking && hold_id == g_mobile_atk_touch)
                 g_mobile_atk_touch = (uint32_t) -1;
             if (flag_bit == InputFlags::kDefending && hold_id == g_mobile_def_touch)
@@ -352,8 +359,8 @@ class MobileSwapButton final : public Element {
     static void arm_l_pick() {
         Game::mobile_l_preset_pick = 1;
         Game::loadout_preset_status = I18n::use_chinese
-            ? "点槽切 L 背包：当前为 L1，其它首次为空（再点 R 取消）"
-            : "Tap slot for L bag: current=L1, others start empty (R cancels)";
+            ? "已显示 L1～L0 首花瓣预览，松手后点主槽切配装；点 R 取消"
+            : "L1-L0 previews shown: release, then tap a primary slot; R cancels";
     }
 public:
     MobileSwapButton()
@@ -361,7 +368,11 @@ public:
             .fill = 0x50404040,
             .line_width = 0,
             .round_radius = kRadius * 1.2f,
-            .should_render = [](){ return mobile_hud(); },
+            .should_render = [](){
+                return Input::mobile_controls() && (Game::alive() || Game::on_game_screen)
+                    && !Game::chat_open && !Game::pause_menu_open
+                    && !Game::leave_confirm_open && !Game::game_panel_blocking();
+            },
             .no_animation = 1
         }), hold_id((uint32_t)-1), held(0), long_fired(0), press_at(0) {}
 
@@ -373,6 +384,14 @@ public:
         held = 0;
         hold_id = (uint32_t)-1;
         long_fired = 0;
+    }
+
+    void on_render_skip(Renderer &ctx) override {
+        if (hold_id == g_mobile_swap_touch) g_mobile_swap_touch = (uint32_t)-1;
+        held = long_fired = 0;
+        hold_id = (uint32_t)-1;
+        Game::mobile_l_preset_pick = 0;
+        Element::on_render_skip(ctx);
     }
 
     void on_render(Renderer &ctx) override {

@@ -404,6 +404,7 @@ namespace TreasureSites {
             { kAntHell, (uint8_t)(sizeof(kAntHell) / sizeof(kAntHell[0])), PetalID::kMatAntShell },
             { kVolcano, (uint8_t)(sizeof(kVolcano) / sizeof(kVolcano[0])), PetalID::kMatSulfur },
             { kRoyal, (uint8_t)(sizeof(kRoyal) / sizeof(kRoyal[0])), PetalID::kMatSteel },
+            { kAntHell, (uint8_t)(sizeof(kAntHell) / sizeof(kAntHell[0])), PetalID::kMatAntShell }, // Ant Nest
         };
         if (map_id >= MapID::kNumMaps) map_id = 0;
         return kPacks[map_id];

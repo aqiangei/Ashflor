@@ -36,6 +36,7 @@ ThemePalette const kThemes[MapID::kNumMaps] = {
     { MapTheme::ANT_HILL, MapTheme::ANT_WATER, MapTheme::ANT_CHANNEL },
     { MapTheme::VOLCANO_HILL, MapTheme::VOLCANO_WATER, MapTheme::VOLCANO_CHANNEL },
     { MapTheme::ROYAL_HILL, MapTheme::ROYAL_WATER, MapTheme::ROYAL_CHANNEL },
+    { MapTheme::ANT_HILL, MapTheme::ANT_WATER, MapTheme::ANT_CHANNEL }, // Ant Nest
 };
 
 uint32_t rng_u(uint32_t &s) {
@@ -1004,26 +1005,163 @@ void gen_jungle(MapTerrain &t, ThemePalette const &p, uint32_t &rng, float W, fl
 }
 
 void gen_ant_hell(MapTerrain &t, ThemePalette const &p, uint32_t &rng, float W, float H, float cx, float cy) {
-    // Dirt walls = hills; passable tunnels = gaps. Dense chamber network.
+    // Original Ant Hell — dirt walls = hills; passable tunnels = gaps.
     float gap = rng_range(rng, 1000.f, 1300.f);
     float wall = rng_range(rng, 480.f, 640.f);
     maze_cell(t, p, rng, 20, W * 0.08f, H * 0.08f, W * 0.50f, H * 0.50f, wall, gap * 0.55f);
     maze_cell(t, p, rng, 40, W * 0.48f, H * 0.08f, W * 0.92f, H * 0.50f, wall, gap * 0.55f);
     maze_cell(t, p, rng, 60, W * 0.08f, H * 0.48f, W * 0.50f, H * 0.92f, wall, gap * 0.55f);
     maze_cell(t, p, rng, 80, W * 0.48f, H * 0.48f, W * 0.92f, H * 0.92f, wall, gap * 0.55f);
-    // Cross tunnels (corridor paint marks the travel lanes)
     corridor_h(t, p, 100, W * 0.15f, W * 0.85f, H * 0.35f, gap * 0.85f, wall * 0.7f, 0);
     corridor_v(t, p, 110, H * 0.15f, H * 0.85f, W * 0.35f, gap * 0.85f, wall * 0.7f, 0);
     corridor_h(t, p, 120, W * 0.15f, W * 0.85f, H * 0.65f, gap * 0.85f, wall * 0.7f, 0);
-    // Queen chamber — fixed block (21.0, 14.0) for stable Boss / docs
     {
         float qx = W * (21.f / 28.f);
         float qy = H * (14.f / 20.f);
         ring_valley(t, p, rng, qx, qy, 1200.f, 500.f, 2.4f, 0.45f, 140, 0);
         g_boss[MapID::kAntHell] = { qx, qy, (uint8_t)MobID::kQueenAnt };
     }
-    // Water pool chambers
     ring_valley(t, p, rng, W * 0.22f, H * 0.22f, 750.f, 360.f, 0.6f, 0.5f, 160, 1);
+}
+
+void gen_ant_nest(MapTerrain &t, ThemePalette const &p, uint32_t &rng, float W, float H, float cx, float cy) {
+#include <Shared/AntNestLayout.inc>
+    // Player nest layout: black = dirt walls, colored chambers = walkable.
+    for (uint32_t i = 0; i < kAntNestWallCount; ++i) {
+        float const *r = kAntNestWalls[i];
+        hill_box(t, p, (uint8_t)(20 + (i % 200)),
+                 W * r[0], H * r[1], W * r[2], H * r[3]);
+    }
+    push_feat(t, TerrainKind::kChannel, TerrainShape::kAABB, 0,
+              W * 0.18f, H * 0.28f, W * 0.42f, H * 0.72f, p.channel, 200, 0.f);
+    push_feat(t, TerrainKind::kChannel, TerrainShape::kAABB, 0,
+              W * 0.38f, H * 0.22f, W * 0.62f, H * 0.78f, p.channel, 201, 0.f);
+    push_feat(t, TerrainKind::kChannel, TerrainShape::kAABB, 0,
+              W * 0.58f, H * 0.28f, W * 0.88f, H * 0.72f, p.channel, 202, 0.f);
+    push_feat(t, TerrainKind::kChannel, TerrainShape::kAABB, 0,
+              cx - 1600.f, cy - 1200.f, cx + 1600.f, cy + 1200.f, p.channel, 210, 0.f);
+    {
+        float qx = cx + 800.f;
+        float qy = cy + 400.f;
+        ring_valley(t, p, rng, qx, qy, 1100.f, 480.f, 2.4f, 0.45f, 140, 0);
+        g_boss[MapID::kAntNest] = { qx, qy, (uint8_t)MobID::kQueenAnt };
+    }
+    ring_valley(t, p, rng, W * 0.22f, H * 0.22f, 700.f, 340.f, 0.6f, 0.5f, 160, 1);
+}
+
+// Left Fire · Center Black · Right Termite. Later overlays win in get_zone_from_pos.
+void build_zones_ant_nest(MapZones &zones, uint8_t map_id, float W, float H, float cx, float cy) {
+    zones.clear();
+    MapZones const &tmpl = MAPS[map_id];
+    ZoneDefinition soft = tmpl.size() > 2 ? tmpl[2] : tmpl[0];
+    ZoneDefinition mid  = tmpl.size() > 1 ? tmpl[1] : tmpl[0];
+    ZoneDefinition hard = tmpl[0];
+
+    auto fire_spawns = [](ZoneDefinition z, uint8_t diff) {
+        z.name = "Fire Ant Nest";
+        z.difficulty = diff;
+        z.drop_multiplier = zone_drop_tilt(diff);
+        z.spawns.clear();
+        z.spawns.push({ MobID::kSoldierFireAnt, 140000 });
+        z.spawns.push({ MobID::kWorkerFireAnt, 120000 });
+        z.spawns.push({ MobID::kBabyFireAnt, 100000 });
+        z.spawns.push({ MobID::kAntHole, 8000 });
+        z.spawns.push({ MobID::kSquare, 1 });
+        return z;
+    };
+    auto black_spawns = [](ZoneDefinition z, uint8_t diff) {
+        z.name = "Black Ant Nest";
+        z.difficulty = diff;
+        z.drop_multiplier = zone_drop_tilt(diff);
+        z.spawns.clear();
+        z.spawns.push({ MobID::kSoldierAnt, 130000 });
+        z.spawns.push({ MobID::kWorkerAnt, 120000 });
+        z.spawns.push({ MobID::kBabyAnt, 100000 });
+        z.spawns.push({ MobID::kAntHole, 10000 });
+        if (diff >= 3) z.spawns.push({ MobID::kQueenAnt, 4000 });
+        z.spawns.push({ MobID::kSquare, 1 });
+        return z;
+    };
+    auto term_spawns = [](ZoneDefinition z, uint8_t diff) {
+        z.name = "Termite Nest";
+        z.difficulty = diff;
+        z.drop_multiplier = zone_drop_tilt(diff);
+        z.spawns.clear();
+        z.spawns.push({ MobID::kSoldierTermite, 150000 });
+        z.spawns.push({ MobID::kWorkerTermite, 110000 });
+        z.spawns.push({ MobID::kBabyTermite, 90000 });
+        z.spawns.push({ MobID::kSquare, 1 });
+        return z;
+    };
+
+    float const L1 = W * 0.38f;
+    float const L2 = W * 0.62f;
+    float hub_hw = 2800.f, hub_hh = 2200.f;
+
+    {
+        ZoneDefinition z = black_spawns(soft, 0);
+        z.density = soft.density * 0.5f;
+        push_zone(zones, z, 0, 0, W, H, 0, RARITY_COLORS[0]);
+    }
+
+    static float const kInset[9] = {
+        0.00f, 0.065f, 0.140f, 0.220f, 0.300f, 0.350f, 0.400f, 0.445f, 0.55f
+    };
+    auto dens_for = [](uint32_t diff) -> float {
+        static float const k[] = {
+            0.70f, 1.70f, 2.90f, 2.85f, 2.90f, 3.30f, 3.50f, 3.65f, 3.80f
+        };
+        return k[diff > MAX_DIFFICULTY ? MAX_DIFFICULTY : diff];
+    };
+    auto pool = [&](uint32_t diff) -> ZoneDefinition {
+        if (diff <= RarityID::kUnusual) return soft;
+        if (diff <= RarityID::kEpic) return mid;
+        return hard;
+    };
+
+    for (uint32_t step = 0; step <= MAX_DIFFICULTY; ++step) {
+        uint32_t diff = MAX_DIFFICULTY - step;
+        float m = kInset[step];
+        float l = W * m, top = H * m, r = W * (1.f - m), b = H * (1.f - m);
+        if (diff == 0) {
+            l = cx - hub_hw; top = cy - hub_hh;
+            r = cx + hub_hw; b = cy + hub_hh;
+        }
+        ZoneDefinition base = pool(diff);
+        base.density = dens_for(diff);
+
+        {
+            ZoneDefinition z = fire_spawns(base, (uint8_t)diff);
+            float rr = std::min(r, L1);
+            if (rr > l + 80.f)
+                push_zone(zones, z, l, top, rr, b, (uint8_t)diff, RARITY_COLORS[diff]);
+        }
+        {
+            ZoneDefinition z = black_spawns(base, (uint8_t)diff);
+            float ll = std::max(l, L1), rr = std::min(r, L2);
+            if (rr > ll + 80.f)
+                push_zone(zones, z, ll, top, rr, b, (uint8_t)diff, RARITY_COLORS[diff]);
+        }
+        {
+            ZoneDefinition z = term_spawns(base, (uint8_t)diff);
+            float ll = std::max(l, L2);
+            if (r > ll + 80.f)
+                push_zone(zones, z, ll, top, r, b, (uint8_t)diff, RARITY_COLORS[diff]);
+        }
+    }
+
+    {
+        ZoneDefinition z = black_spawns(soft, 0);
+        z.name = "Ant Nest Hub";
+        z.density = soft.density * 0.55f;
+        z.spawns.clear();
+        z.spawns.push({ MobID::kBabyAnt, 180000 });
+        z.spawns.push({ MobID::kWorkerAnt, 120000 });
+        z.spawns.push({ MobID::kAntHole, 40000 });
+        z.spawns.push({ MobID::kSquare, 1 });
+        push_zone(zones, z, cx - hub_hw, cy - hub_hh, cx + hub_hw, cy + hub_hh,
+                  0, MapTheme::ANT_GROUND);
+    }
 }
 
 void gen_volcano(MapTerrain &t, ThemePalette const &p, uint32_t &rng, float W, float H, float cx, float cy) {
@@ -1065,41 +1203,38 @@ void gen_volcano(MapTerrain &t, ThemePalette const &p, uint32_t &rng, float W, f
     g_boss[MapID::kVolcano] = { W * 0.78f, H * 0.25f, (uint8_t)MobID::kMoltenOverlord };
 }
 
-// Exactly 6 large AABBs from MAPS template — no specialty eco scatter.
+// Royal Capital zones. get_zone_from_pos: last matching overlay (i>=1) wins.
 void build_zones_royal(MapZones &zones, uint8_t map_id, float W, float H, float cx, float cy) {
     zones.clear();
     MapZones const &tmpl = MAPS[map_id];
-    // Keep spawn plaza at MAP_SPAWN as Outer Wall (index 0 wins when no overlay).
-    float plaza_hw = 5400.f;
-    float plaza_hh = 4200.f;
-    for (uint32_t i = 0; i < tmpl.size() && i < 6; ++i) {
+    // Old bug: zone 0 = full arena Common → G-key / spawns looked low-rarity everywhere.
+    float plaza_hw = 3200.f;
+    float plaza_hh = 2600.f;
+    float pl = cx - plaza_hw, pr = cx + plaza_hw;
+    float pt = cy - plaza_hh, pb = cy + plaza_hh;
+
+    // [0] Outer Wall plaza (fallback + hub density)
+    if (tmpl.size() > 0) {
+        ZoneDefinition z = tmpl[0];
+        push_zone(zones, z, pl, pt, pr, pb, z.difficulty, z.color);
+    }
+    // [1] Full-map Rare base so corners are not empty→Common / Unusual
+    if (tmpl.size() > 1) {
+        ZoneDefinition fill = tmpl[1];
+        fill.difficulty = RarityID::kRare;
+        fill.color = RARITY_COLORS[RarityID::kRare];
+        fill.name = "Outer Reach";
+        push_zone(zones, fill, 0, 0, W, H, fill.difficulty, fill.color);
+    }
+    // [2..] District overlays from template (Epic→Ultra)
+    for (uint32_t i = 1; i < tmpl.size() && i < 6; ++i) {
         ZoneDefinition z = tmpl[i];
-        if (i == 0) {
-            push_zone(zones, z, 0, 0, W, H, z.difficulty, z.color);
-            continue;
-        }
-        // Shrink overlays away from center spawn so Outer Wall remains under MAP_SPAWN.
-        float l = z.left, t = z.top, r = z.right, b = z.bottom;
-        if (l < cx + plaza_hw && r > cx - plaza_hw && t < cy + plaza_hh && b > cy - plaza_hh) {
-            // Prefer cutting the side closest to center so plaza stays clear.
-            float cut_l = (cx - plaza_hw) - l;
-            float cut_r = r - (cx + plaza_hw);
-            float cut_t = (cy - plaza_hh) - t;
-            float cut_b = b - (cy + plaza_hh);
-            if (cut_l > 0 && cut_l <= cut_r && cut_l <= cut_t && cut_l <= cut_b)
-                r = cx - plaza_hw;
-            else if (cut_r > 0 && cut_r <= cut_t && cut_r <= cut_b)
-                l = cx + plaza_hw;
-            else if (cut_t > 0 && cut_t <= cut_b)
-                b = cy - plaza_hh;
-            else if (cut_b > 0)
-                t = cy + plaza_hh;
-        }
-        if (r - l < 800.f || b - t < 800.f) {
-            push_zone(zones, z, z.left, z.top, z.right, z.bottom, z.difficulty, z.color);
-            continue;
-        }
-        push_zone(zones, z, l, t, r, b, z.difficulty, z.color);
+        push_zone(zones, z, z.left, z.top, z.right, z.bottom, z.difficulty, z.color);
+    }
+    // Final plaza Common so spawn hub stays Outer Wall over Unusual fill
+    if (tmpl.size() > 0) {
+        ZoneDefinition z = tmpl[0];
+        push_zone(zones, z, pl, pt, pr, pb, z.difficulty, z.color);
     }
 }
 
@@ -1202,6 +1337,10 @@ void generate_one(uint8_t map_id) {
         build_zones_royal(zones, map_id, W, H, cx, cy);
         berm(terrain, pal, rng, W, H, cx, cy);
         gen_royal(terrain, pal, rng, W, H, cx, cy);
+    } else if (map_id == MapID::kAntNest) {
+        build_zones_ant_nest(zones, map_id, W, H, cx, cy);
+        berm(terrain, pal, rng, W, H, cx, cy);
+        gen_ant_nest(terrain, pal, rng, W, H, cx, cy);
     } else {
         build_zones(zones, map_id, rng, W, H, cx, cy);
         berm(terrain, pal, rng, W, H, cx, cy);

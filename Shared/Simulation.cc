@@ -29,6 +29,7 @@ void Simulation::reset() {
     boss_respawn_ticks = 0;
     boss_ever_spawned = 0;
     boss_ent = NULL_ENTITY;
+    training_dummies = {};
     tick_index = 0;
     #endif
 }

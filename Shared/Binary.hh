@@ -21,7 +21,9 @@ enum Clientbound {
     kBoostUpdate,
     kLeaderboardStats, // multi-category stats board (name/value rows)
     kLifeSummary, // this-life mob kills + petal pickups (shown on death)
-    kLootToast // petal_id, amount, title — auto fade reward popup
+    kLootToast, // petal_id, amount, title — auto fade reward popup
+    kFeedbackResult, // result(u8), persisted message id(u32)
+    kTrainingStats // personal only: 9 x [last hit, DPS, total damage] strings
 };
 
 enum InviteType : uint8_t {
@@ -67,7 +69,20 @@ enum Serverbound {
     kBoostToggle, // arg = 0/1 — pause or resume triple-drop bonus timers
     kGuildSetAnno, // announcement text (leader only)
     kTalentSetRank, // u8 talent_id, u8 target_rank — jump / rollback on one branch
-    kAutoPartyOpt // u8 1 = disable nearby auto-join (manual invite still ok)
+    kAutoPartyOpt, // u8 1 = disable nearby auto-join (manual invite still ok)
+    kFeedbackPost, // UTF-8 string; author is the authenticated account
+    kTrainingReset // start a new personal training round
+};
+
+enum FeedbackResultCode : uint8_t {
+    kFeedbackPosted = 0,
+    kFeedbackNeedAccount,
+    kFeedbackInvalid,
+    kFeedbackTooFast,
+    kFeedbackStorageError,
+    kFeedbackDuplicate,
+    kFeedbackQuota,
+    kFeedbackBusy
 };
 
 // Categories shown as separate columns on the leaderboard board.

@@ -388,7 +388,7 @@ inline std::array const MAPS = std::to_array<MapZones>({
             .difficulty = 0, .color = RARITY_COLORS[RarityID::kCommon], .name = "Outer Wall"
         },
         {
-            // 1 Common Quarter �?Unusual band
+            // 1 Common Quarter — Epic band
             .left = 800, .top = 7500, .right = 12500, .bottom = 19200,
             .density = 3.50f, .drop_multiplier = 0.09,
             .spawns = {
@@ -396,20 +396,20 @@ inline std::array const MAPS = std::to_array<MapZones>({
                 { MobID::kCoinBeetle, 200000 }, { MobID::kWanderingGuard, 250000 },
                 { MobID::kSquare, 1 }
             },
-            .difficulty = RarityID::kUnusual, .color = RARITY_COLORS[RarityID::kUnusual], .name = "Common Quarter"
+            .difficulty = RarityID::kEpic, .color = RARITY_COLORS[RarityID::kEpic], .name = "Common Quarter"
         },
         {
-            // 2 Royal Garden �?Rare
+            // 2 Royal Garden — Legendary
             .left = 15500, .top = 3500, .right = 27200, .bottom = 16500,
             .density = 2.4f, .drop_multiplier = 0.17,
             .spawns = {
                 { MobID::kRoyalBee, 450000 }, { MobID::kThornBug, 350000 },
                 { MobID::kCoinBeetle, 200000 }, { MobID::kSquare, 1 }
             },
-            .difficulty = RarityID::kRare, .color = RARITY_COLORS[RarityID::kRare], .name = "Royal Garden"
+            .difficulty = RarityID::kLegendary, .color = RARITY_COLORS[RarityID::kLegendary], .name = "Royal Garden"
         },
         {
-            // 3 Barracks �?Epic
+            // 3 Barracks — Mythic
             .left = 5000, .top = 400, .right = 23000, .bottom = 7200,
             .density = 2.5f, .drop_multiplier = 0.19,
             .spawns = {
@@ -417,10 +417,10 @@ inline std::array const MAPS = std::to_array<MapZones>({
                 { MobID::kSpearSentinel, 300000 }, { MobID::kStoneBeetle, 150000 },
                 { MobID::kSquare, 1 }
             },
-            .difficulty = RarityID::kEpic, .color = RARITY_COLORS[RarityID::kEpic], .name = "Barracks"
+            .difficulty = RarityID::kMythic, .color = RARITY_COLORS[RarityID::kMythic], .name = "Barracks"
         },
         {
-            // 4 Ruined Quarter �?Legendary
+            // 4 Ruined Quarter — Ultra
             .left = 600, .top = 800, .right = 10500, .bottom = 9500,
             .density = 3.2f, .drop_multiplier = 0.55,
             .spawns = {
@@ -428,10 +428,10 @@ inline std::array const MAPS = std::to_array<MapZones>({
                 { MobID::kMimicChest, 200000 }, { MobID::kRustMite, 150000 },
                 { MobID::kSquare, 1 }
             },
-            .difficulty = RarityID::kLegendary, .color = RARITY_COLORS[RarityID::kLegendary], .name = "Ruined Quarter"
+            .difficulty = RarityID::kUltra, .color = RARITY_COLORS[RarityID::kUltra], .name = "Ruined Quarter"
         },
         {
-            // 5 Royal Palace �?Mythic
+            // 5 Royal Palace — Super
             .left = 14500, .top = 4500, .right = 24500, .bottom = 11500,
             .density = 3.3f, .drop_multiplier = 0.58,
             .spawns = {
@@ -439,7 +439,49 @@ inline std::array const MAPS = std::to_array<MapZones>({
                 { MobID::kFallenKnight, 250000 }, { MobID::kWanderingGuard, 100000 },
                 { MobID::kSquare, 1 }
             },
-            .difficulty = RarityID::kMythic, .color = RARITY_COLORS[RarityID::kMythic], .name = "Royal Palace"
+            .difficulty = RarityID::kSuper, .color = RARITY_COLORS[RarityID::kSuper], .name = "Royal Palace"
+        }
+    }),
+    // ---- Ant Nest (player layout; geometry/spawns rewritten by build_zones_ant_nest) ----
+    MapZones({
+        {
+            .left = 0, .top = 0, .right = (float)ARENA_WIDTH, .bottom = (float)ARENA_HEIGHT,
+            .density = 3.4f, .drop_multiplier = 0.58,
+            .spawns = {
+                { MobID::kSoldierAnt, 160000 }, { MobID::kWorkerAnt, 140000 },
+                { MobID::kAntHole, 18000 }, { MobID::kQueenAnt, 8000 },
+                { MobID::kSquare, 1 }
+            },
+            .difficulty = 3, .color = 0xff582f0e, .name = "Ant Nest"
+        },
+        {
+            .left = 2200, .top = 2200, .right = 15800, .bottom = 15800,
+            .density = 2.8f, .drop_multiplier = 0.28,
+            .spawns = {
+                { MobID::kWorkerAnt, 150000 }, { MobID::kSoldierAnt, 120000 },
+                { MobID::kBabyAnt, 100000 }, { MobID::kAntHole, 12000 },
+                { MobID::kSquare, 1 }
+            },
+            .difficulty = 2, .color = 0xff6f4518, .name = "Ant Nest"
+        },
+        {
+            .left = 4800, .top = 4800, .right = 13200, .bottom = 13200,
+            .density = 2.7f, .drop_multiplier = 0.10,
+            .spawns = {
+                { MobID::kBabyAnt, 180000 }, { MobID::kWorkerAnt, 120000 },
+                { MobID::kAntHole, 3000 }, { MobID::kSquare, 1 }
+            },
+            .difficulty = 1, .color = 0xffa98467, .name = "Ant Nest"
+        },
+        {
+            .left = 7200, .top = 7200, .right = 10800, .bottom = 10800,
+            .density = 2.55f, .drop_multiplier = 0.02,
+            .spawns = {
+                { MobID::kBabyAnt, 200000 }, { MobID::kWorkerAnt, 160000 },
+                { MobID::kAntHole, 40000 }, { MobID::kSoldierAnt, 50000 },
+                { MobID::kSquare, 1 }
+            },
+            .difficulty = 0, .color = MapTheme::ANT_GROUND, .name = "Ant Nest"
         }
     })
 });
@@ -460,10 +502,13 @@ struct MapPortalDef {
 };
 
 inline std::array const MAP_PORTALS = std::to_array<MapPortalDef>({
-    // Open maps only (Garden / Ocean / Royal). Closed biomes omitted.
     // Garden east → Royal Capital plaza
     { MapID::kGarden, MapID::kRoyalCapital,
       ARENA_WIDTH * 0.88f, ARENA_HEIGHT * 0.50f, 220.f,
+      MAP_SPAWN_X, MAP_SPAWN_Y },
+    // Desert west → Royal Capital plaza
+    { MapID::kDesert, MapID::kRoyalCapital,
+      ARENA_WIDTH * 0.12f, ARENA_HEIGHT * 0.50f, 220.f,
       MAP_SPAWN_X, MAP_SPAWN_Y },
     // Ocean west → Royal Capital plaza
     { MapID::kOcean, MapID::kRoyalCapital,
@@ -473,9 +518,17 @@ inline std::array const MAP_PORTALS = std::to_array<MapPortalDef>({
     { MapID::kRoyalCapital, MapID::kGarden,
       ARENA_WIDTH * 0.10f, ARENA_HEIGHT * 0.50f, 240.f,
       MAP_SPAWN_X, MAP_SPAWN_Y },
-    // Royal east gate → Ocean hub
-    { MapID::kRoyalCapital, MapID::kOcean,
+    // Royal east gate → Desert hub
+    { MapID::kRoyalCapital, MapID::kDesert,
       ARENA_WIDTH * 0.90f, ARENA_HEIGHT * 0.50f, 240.f,
+      MAP_SPAWN_X, MAP_SPAWN_Y },
+    // Royal south → Ocean hub (east gate already Desert)
+    { MapID::kRoyalCapital, MapID::kOcean,
+      ARENA_WIDTH * 0.50f, ARENA_HEIGHT * 0.90f, 240.f,
+      MAP_SPAWN_X, MAP_SPAWN_Y },
+    // Royal north → Volcano hub
+    { MapID::kRoyalCapital, MapID::kVolcano,
+      ARENA_WIDTH * 0.50f, ARENA_HEIGHT * 0.10f, 240.f,
       MAP_SPAWN_X, MAP_SPAWN_Y },
 });
 
@@ -507,6 +560,8 @@ uint8_t is_chase_loot_petal(PetalID::T id);
 extern uint32_t score_to_pass_level(uint32_t);
 extern uint32_t score_to_level(uint32_t);
 extern uint32_t level_to_score(uint32_t);
+// Soft XP ceiling (level_to_score(300)). Stops overflow pinning UINT32_MAX as #1.
+extern uint32_t score_soft_cap();
 extern uint32_t loadout_slots_at_level(uint32_t);
 
 extern float hp_at_level(uint32_t);

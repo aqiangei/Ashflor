@@ -57,6 +57,8 @@ static uint32_t craft_line_color(Game::ChatLine const &line) {
         r = r * 10u + (unsigned) (c - '0');
     }
     if (r >= RarityID::kNumRarities) return 0;
+    // Unique petal tint is dark gunmetal — unreadable on chat. Use bright gold.
+    if (r == RarityID::kUnique) return 0xffffd24a;
     return RARITY_COLORS[r] | 0xff000000;
 }
 

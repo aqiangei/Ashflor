@@ -5,6 +5,7 @@
 #include <Shared/Entity.hh>
 #include <Shared/StaticData.hh>
 
+#include <Helpers/Bits.hh>
 #include <Helpers/Vector.hh>
 
 static bool _is_controlled_flower(Simulation *sim, Entity const &ent) {
@@ -40,7 +41,16 @@ EntityID find_nearest_enemy(Simulation *simulation, Entity const &entity, float 
         if (!sim->ent_alive(ent.id)) return;
         if (ent.get_team() == entity.get_team()) return;
         if (ent.immunity_ticks > 0) return;
-        if (!ent.has_component(kMob) && !ent.has_component(kFlower)) return;
+        // Thrown honey uses kIsDetached + kIsDespawning (despawn timer).
+        uint8_t const is_honey_bait = ent.has_component(kPetal)
+            && petal_is_honey(ent.get_petal_id())
+            && (BitMath::at(ent.flags, EntityFlags::kIsDetached)
+                || BitMath::at(ent.flags, EntityFlags::kIsDespawning));
+        if (!ent.has_component(kMob) && !ent.has_component(kFlower) && !is_honey_bait)
+            return;
+        // Party revive corpses are Flower visuals only — never aggro bait.
+        if (ent.has_component(kFlower) && !ent.has_component(kHealth))
+            return;
         // Players / bots / their summons never aggro other player-faction flowers
         if (seeker_player && is_player_faction(sim, ent)) return;
         // Hub respawn pad only: wild mobs never acquire aggro on players inside
@@ -48,13 +58,20 @@ EntityID find_nearest_enemy(Simulation *simulation, Entity const &entity, float 
         if (!seeker_player && is_player_faction(sim, ent)
             && Map::in_spawn_sanctuary(ent.get_x(), ent.get_y()))
             return;
-        if (sim->ent_alive(entity.get_parent())) {
-            Entity &parent = sim->get_ent(entity.get_parent());
-            float dist = Vector(ent.get_x()-parent.get_x(),ent.get_y()-parent.get_y()).magnitude();
+        // Hatch pets: leash aggro to the owning flower, not an egg petal.
+        EntityID home_id = entity.get_parent();
+        if (!(entity.base_entity == entity.id) && sim->ent_alive(entity.base_entity)
+            && sim->get_ent(entity.base_entity).has_component(kFlower))
+            home_id = entity.base_entity;
+        if (sim->ent_alive(home_id)) {
+            Entity &home = sim->get_ent(home_id);
+            float dist = Vector(ent.get_x()-home.get_x(),ent.get_y()-home.get_y()).magnitude();
             if (dist > SUMMON_RETREAT_RADIUS) return;
         }
         float dist = Vector(ent.get_x()-entity.get_x(),ent.get_y()-entity.get_y()).magnitude();
-        if (dist < min_dist) { min_dist = dist; ret = ent.id; }
+        // Detached honey is preferred bait — treat as closer so mobs peel off the flower.
+        float score = is_honey_bait ? dist * 0.28f : dist;
+        if (score < min_dist) { min_dist = score; ret = ent.id; }
     });
     return ret;
 }

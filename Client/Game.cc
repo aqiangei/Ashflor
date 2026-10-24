@@ -150,6 +150,7 @@ namespace Game {
     std::array<LoadoutPreset, LOADOUT_PRESET_COUNT> loadout_presets = {};
     uint8_t active_loadout_preset = LOADOUT_PRESET_COUNT;
     std::string loadout_preset_status;
+    std::array<TrainingReadout, RarityID::kNumRarities> training_readouts = {};
     uint8_t mobile_l_preset_pick = 0;
     uint8_t preset_ghost_bank = 0;
     uint8_t rot_speed_setting = Talent::kRotSettingDefault;
@@ -480,6 +481,7 @@ void Game::reset() {
     talent_pending = 0;
     talent_status.clear();
     loadout_presets = {};
+    training_readouts = {};
     active_loadout_preset = LOADOUT_PRESET_COUNT;
     loadout_preset_status.clear();
     mobile_l_preset_pick = 0;
@@ -1273,7 +1275,7 @@ void Game::tick(double time) {
             bool const l_held = Input::keys_held.contains('L');
             Game::preset_ghost_bank = k_held ? 1 : (l_held ? 2 : 0);
             if (k_held || l_held) {
-                for (uint8_t i = 0; i < Game::loadout_count && i < MAX_SLOT_COUNT; ++i) {
+                for (uint8_t i = 0; i < MAX_SLOT_COUNT; ++i) {
                     if (!Input::keys_held_this_tick.contains(SLOT_KEYBINDS[i])) continue;
                     uint8_t const idx = (uint8_t) ((k_held ? 0 : 10) + i);
                     Game::apply_loadout_preset(idx);
@@ -1331,9 +1333,11 @@ void Game::tick(double time) {
 
     //no rendering past this point
     // Touch HUD owns movement/flags when Request Mobile is on.
-    // Chat open: stand still — text field owns WASD/Space (type names safely).
-    // Keyboard-move stays on the keyboard branch (zeros), never mouse-aim.
-    if (chat_open) {
+    // Chat: keyboard-move + mobile stand still (WASD types names). Mouse-aim
+    // keeps cursor steering so desktop chat does not freeze the flower.
+    uint8_t chat_freeze_move = chat_open
+        && (Input::mobile_controls() || Input::keyboard_movement);
+    if (chat_freeze_move) {
         Input::game_inputs.x = 0;
         Input::game_inputs.y = 0;
         Input::game_inputs.flags = 0;
@@ -1356,29 +1360,33 @@ void Game::tick(double time) {
                 Input::game_inputs.y = my * s;
             }
         }
-        // primary = Space / LMB (attack); secondary = Shift / RMB (defend).
-        // Invert: hold = normal stance, release = always attack/defend.
-        uint8_t primary = Input::keys_held.contains(' ')
-            || BitMath::at(Input::mouse_buttons_state, Input::LeftMouse);
-        uint8_t secondary = Input::keys_held.contains('\x10')
-            || (BitMath::at(Input::mouse_buttons_state, Input::RightMouse) && !chat_menu_open);
-        uint8_t attack = Input::invert_attack ? !primary : primary;
-        uint8_t defend = Input::invert_defend ? !secondary : secondary;
-        Input::game_inputs.flags = (attack << InputFlags::kAttacking) | (defend << InputFlags::kDefending);
+        // Chat: still steer with mouse, but do not attack/defend while typing.
+        if (chat_open) {
+            Input::game_inputs.flags = 0;
+        } else {
+            // primary = Space / LMB (attack); secondary = Shift / RMB (defend).
+            // Invert: hold = normal stance, release = always attack/defend.
+            uint8_t primary = Input::keys_held.contains(' ')
+                || BitMath::at(Input::mouse_buttons_state, Input::LeftMouse);
+            uint8_t secondary = Input::keys_held.contains('\x10')
+                || (BitMath::at(Input::mouse_buttons_state, Input::RightMouse) && !chat_menu_open);
+            uint8_t attack = Input::invert_attack ? !primary : primary;
+            uint8_t defend = Input::invert_defend ? !secondary : secondary;
+            Input::game_inputs.flags = (attack << InputFlags::kAttacking) | (defend << InputFlags::kDefending);
+        }
     } else if (Input::mobile_controls()) {
-        // Touch A/B write held flags; invert flips hold→cancel always-on.
-        if (Input::invert_attack) {
-            if (BitMath::at(Input::game_inputs.flags, InputFlags::kAttacking))
-                BitMath::unset(Input::game_inputs.flags, InputFlags::kAttacking);
-            else
-                BitMath::set(Input::game_inputs.flags, InputFlags::kAttacking);
-        }
-        if (Input::invert_defend) {
-            if (BitMath::at(Input::game_inputs.flags, InputFlags::kDefending))
-                BitMath::unset(Input::game_inputs.flags, InputFlags::kDefending);
-            else
-                BitMath::set(Input::game_inputs.flags, InputFlags::kDefending);
-        }
+        // A/B wrote raw hold into flags during UI render. Rebuild so invert is
+        // always-on unless holding (hold = cancel), with no sticky pulse latch.
+        uint8_t const atk_held =
+            BitMath::at(Input::game_inputs.flags, InputFlags::kAttacking);
+        uint8_t const def_held =
+            BitMath::at(Input::game_inputs.flags, InputFlags::kDefending);
+        uint8_t const attack = Input::invert_attack ? !atk_held : atk_held;
+        uint8_t const defend = Input::invert_defend ? !def_held : def_held;
+        Input::game_inputs.flags &=
+            (uint8_t) ~((1u << InputFlags::kAttacking) | (1u << InputFlags::kDefending));
+        if (attack) BitMath::set(Input::game_inputs.flags, InputFlags::kAttacking);
+        if (defend) BitMath::set(Input::game_inputs.flags, InputFlags::kDefending);
     }
 
     // Talent editing takes the pointer and keyboard focus. Mouse-aim movement

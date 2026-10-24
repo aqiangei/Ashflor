@@ -441,7 +441,7 @@ uint8_t Party::respond(Client *target, std::string const &from_name, uint8_t acc
     return 1;
 }
 
-void Party::on_death(Client *client, float x, float y) {
+void Party::on_death(Client *client, float x, float y, uint8_t color, uint8_t equip_flags) {
     if (client == nullptr || client->game == nullptr) return;
     // Keep explore escort alive — spirit walks to treasure even if the player dies.
     WorldEvent::clear_client(client);
@@ -463,7 +463,9 @@ void Party::on_death(Client *client, float x, float y) {
     client->corpse_y = y;
     client->corpse_ttl = CORPSE_TTL;
     client->revive_progress = 0;
-    Entity &corpse = alloc_corpse(sim, camera.get_team(), x, y, player_name(client));
+    Entity &corpse = alloc_corpse(
+        sim, camera.get_team(), x, y, player_name(client), color, equip_flags
+    );
     client->corpse_id = corpse.id;
     std::string msg = "[队伍] " + player_name(client) + " 倒下了，站在尸体旁 3 秒可复活。";
     for (Client *c : client->game->clients) {
@@ -474,7 +476,7 @@ void Party::on_death(Client *client, float x, float y) {
     }
 }
 
-static void do_revive(Client *dead) {
+static void do_revive(Client *dead, Client *reviver) {
     if (dead == nullptr || dead->game == nullptr || !dead->awaiting_revive) return;
     Simulation *sim = &dead->game->simulation;
     if (!sim->ent_exists(dead->camera)) return;
@@ -500,7 +502,9 @@ static void do_revive(Client *dead) {
     Party::apply_team(dead);
     WorldExplore::on_player_spawned(dead);
     WorldEvent::clear_client(dead);
-    std::string msg = "[队伍] " + player_name(dead) + " 已被复活！";
+    std::string msg = reviver != nullptr
+        ? "[队伍] " + player_name(dead) + " 被 " + player_name(reviver) + " 复活了！"
+        : "[队伍] " + player_name(dead) + " 已被复活！";
     for (Client *c : dead->game->clients) {
         if (c != nullptr && c->party_id == dead->party_id) {
             Party::notify(c, msg);
@@ -607,6 +611,7 @@ void Party::tick(GameInstance *game) {
         }
         if (!sim->ent_exists(dead->camera)) continue;
         uint32_t best = 0;
+        Client *who = nullptr;
         for (Client *reviver : game->clients) {
             if (reviver == nullptr || reviver == dead) continue;
             if (!same_party(dead, reviver) || !reviver->alive()) continue;
@@ -615,6 +620,7 @@ void Party::tick(GameInstance *game) {
             float dy = player.get_y() - dead->corpse_y;
             if (dx * dx + dy * dy > REVIVE_RADIUS * REVIVE_RADIUS) continue;
             best = dead->revive_progress + 1;
+            who = reviver;
             break;
         }
         if (best == 0) {
@@ -628,6 +634,6 @@ void Party::tick(GameInstance *game) {
         if (dead->revive_progress % 5 == 0 || dead->revive_progress >= REVIVE_TICKS)
             send_update(dead);
         if (dead->revive_progress >= REVIVE_TICKS)
-            do_revive(dead);
+            do_revive(dead, who);
     }
 }

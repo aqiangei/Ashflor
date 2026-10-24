@@ -1258,8 +1258,27 @@ static void tick_digger(Simulation *sim, Entity &ent) {
 
 void tick_ai_behavior(Simulation *sim, Entity &ent) {
     if (ent.pending_delete) return;
+    if (TrainingDummy::is_dummy(ent)) {
+        ent.target = NULL_ENTITY;
+        ent.acceleration.set(0, 0);
+        ent.ai_tick = 0;
+        return;
+    }
     if (sim->ent_alive(ent.seg_head)) return;
     ent.acceleration.set(0,0);
+    // Zone wilds that get kited into the hub pad: drop chase and walk home so
+    // the respawn ellipse does not become a farm dump.
+    if (BitMath::at(ent.flags, EntityFlags::kSpawnedFromZone)
+        && (ent.get_parent() == NULL_ENTITY)
+        && Map::in_spawn_plaza(ent.get_x(), ent.get_y())
+        && ent.zone != 0xFF
+        && ent.get_mob_id() != MobID::kTrainingDummy) {
+        ent.target = NULL_ENTITY;
+        if (ent.ai_state != AIState::kReturning) {
+            ent.ai_state = AIState::kReturning;
+            ent.ai_tick = 0;
+        }
+    }
     if (!sim->ent_alive(ent.target) && sim->ent_alive(ent.last_damaged_by)) {
         // Hub sanctuary only: hits from a player inside the respawn pad do not start a chase.
         Entity &attacker = sim->get_ent(ent.last_damaged_by);
@@ -1273,24 +1292,39 @@ void tick_ai_behavior(Simulation *sim, Entity &ent) {
             }
         }
     }
-    if (!(ent.get_parent() == NULL_ENTITY)) {
-        if (!sim->ent_alive(ent.get_parent())) {
+    // Hatch summons leash to the owning flower (base_entity), not a dying egg petal.
+    EntityID leash_id = ent.get_parent();
+    if (!(ent.base_entity == ent.id) && sim->ent_alive(ent.base_entity)
+        && sim->get_ent(ent.base_entity).has_component(kFlower))
+        leash_id = ent.base_entity;
+    if (!(leash_id == NULL_ENTITY)) {
+        if (!sim->ent_alive(leash_id)) {
             if (BitMath::at(ent.flags, EntityFlags::kDieOnParentDeath))
                 sim->request_delete(ent.id);
-            ent.set_parent(NULL_ENTITY);
+            if (ent.get_parent() == leash_id)
+                ent.set_parent(NULL_ENTITY);
         } else {
-            Entity const &parent = sim->get_ent(ent.get_parent());
-            Vector delta(parent.get_x() - ent.get_x(), parent.get_y() - ent.get_y());
+            Entity const &home = sim->get_ent(leash_id);
+            Vector delta(home.get_x() - ent.get_x(), home.get_y() - ent.get_y());
             if (delta.magnitude() > SUMMON_RETREAT_RADIUS) {
                 ent.target = NULL_ENTITY;
+                // Returning walks toward get_parent(); keep that synced to flower.
+                if (!(ent.get_parent() == leash_id))
+                    ent.set_parent(leash_id);
                 ent.ai_state = AIState::kReturning;
             }
             if (sim->ent_alive(ent.target)) {
                 Entity const &target = sim->get_ent(ent.target);
-                delta = Vector(parent.get_x() - target.get_x(), parent.get_y() - target.get_y());
+                delta = Vector(home.get_x() - target.get_x(), home.get_y() - target.get_y());
                 if (delta.magnitude() > SUMMON_RETREAT_RADIUS)
                     ent.target = NULL_ENTITY;
             }
+        }
+    } else if (!(ent.get_parent() == NULL_ENTITY)) {
+        if (!sim->ent_alive(ent.get_parent())) {
+            if (BitMath::at(ent.flags, EntityFlags::kDieOnParentDeath))
+                sim->request_delete(ent.id);
+            ent.set_parent(NULL_ENTITY);
         }
     }
     if (BitMath::at(ent.flags, EntityFlags::kIsCulled)) {
@@ -1299,7 +1333,9 @@ void tick_ai_behavior(Simulation *sim, Entity &ent) {
         return;
     }
     // WorldExplore escorts: named, no damage, scripted path — do not wander/aggro.
-    if (ent.damage <= 0.f && ent.score_reward == 0
+    // Never freeze player hatch summons (they share kNoDrops with escorts).
+    if (!is_player_faction(sim, ent)
+        && ent.damage <= 0.f && ent.score_reward == 0
         && BitMath::at(ent.flags, EntityFlags::kNoDrops)
         && ent.has_component(kName) && ent.get_nametag_visible()) {
         ent.target = NULL_ENTITY;
@@ -1316,7 +1352,9 @@ void tick_ai_behavior(Simulation *sim, Entity &ent) {
             ent.target = NULL_ENTITY;
     }
     switch(ent.get_mob_id()) {
-        case MobID::kBabyAnt:            
+        case MobID::kBabyAnt:
+        case MobID::kBabyFireAnt:
+        case MobID::kBabyTermite:
         case MobID::kLadybug:
         case MobID::kMassiveLadybug:
             tick_default_passive(sim, ent);
@@ -1334,11 +1372,15 @@ void tick_ai_behavior(Simulation *sim, Entity &ent) {
             tick_centipede_neutral(sim, ent, 1.33);
             break;
         case MobID::kWorkerAnt:
+        case MobID::kWorkerFireAnt:
+        case MobID::kWorkerTermite:
         case MobID::kDarkLadybug:
         case MobID::kShinyLadybug:
             tick_default_neutral(sim, ent);
             break;
         case MobID::kSoldierAnt:
+        case MobID::kSoldierFireAnt:
+        case MobID::kSoldierTermite:
         case MobID::kBeetle:
         case MobID::kMassiveBeetle:
             tick_default_aggro(sim, ent, 0.95);

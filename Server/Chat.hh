@@ -73,9 +73,11 @@ namespace Chat {
     // Oldest→newest recent slice for /api/live
     void recent_broadcasts(std::vector<LiveBroadcast> &out);
     // Page older history: before_id=0 means latest page; else entries with id < before_id
+    // source: "" | "ops" (控制台/aqa) | "shop" (玩家商店广播)
     std::string query_broadcasts_json(uint32_t before_id, uint32_t limit,
                                       std::string const &day, std::string const &player,
-                                      int kind_filter, int map_filter);
+                                      int kind_filter, int map_filter,
+                                      std::string const &source = {});
     std::string query_chatlog_json(uint32_t before_id, uint32_t limit,
                                    std::string const &day, std::string const &player,
                                    int channel_filter, int map_filter);

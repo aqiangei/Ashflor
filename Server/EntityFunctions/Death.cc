@@ -8,6 +8,7 @@
 #include <Server/PetalTracker.hh>
 #include <Server/Server.hh>
 #include <Server/Spawn.hh>
+#include <Server/Treasure.hh>
 
 #include <Shared/Craft.hh>
 #include <Shared/Entity.hh>
@@ -236,8 +237,11 @@ static void _add_mob_xp(Simulation *sim, EntityID const killer_id, Entity const 
                 if (!sim->ent_alive(cam.get_player())) continue;
                 Entity &flower = sim->get_ent(cam.get_player());
                 if (!flower.has_component(kScore)) continue;
-                uint32_t next = flower.get_score() + xp;
-                if (next < flower.get_score()) next = UINT32_MAX;
+                uint32_t cur = flower.get_score();
+                uint32_t cap = score_soft_cap();
+                if (cur >= cap) continue;
+                uint32_t next = cur + xp;
+                if (next < cur || next > cap) next = cap;
                 flower.set_score(next);
                 if (Client *ow = Server::client_by_camera(sim, cam.id))
                     AccountStore::note_score(ow, next);
@@ -247,15 +251,21 @@ static void _add_mob_xp(Simulation *sim, EntityID const killer_id, Entity const 
         }
     }
     {
-        uint32_t next = killer.get_score() + xp;
-        if (next < killer.get_score()) next = UINT32_MAX;
-        killer.set_score(next);
-        if (Client *ow = Server::client_by_camera(sim, killer.get_parent()))
-            AccountStore::note_score(ow, next);
+        uint32_t cur = killer.get_score();
+        uint32_t cap = score_soft_cap();
+        if (cur < cap) {
+            uint32_t next = cur + xp;
+            if (next < cur || next > cap) next = cap;
+            killer.set_score(next);
+            if (Client *ow = Server::client_by_camera(sim, killer.get_parent()))
+                AccountStore::note_score(ow, next);
+        }
     }
 }
 
 void entity_on_death(Simulation *sim, Entity const &ent) {
+    // Administrative cleanup must not count practice targets as mob kills.
+    if (TrainingDummy::is_dummy(ent)) return;
     //don't do on_death for any despawned entity
     uint8_t natural_despawn = BitMath::at(ent.flags, EntityFlags::kIsDespawning) && ent.despawn_tick == 0;
     // XP from mobs only — never from flower death (old PvP score-steal removed).
@@ -278,6 +288,9 @@ void entity_on_death(Simulation *sim, Entity const &ent) {
         else camera.set_killed_by("");
     }
     if (ent.has_component(kMob)) {
+        // Explore loot chests: kill-to-open rewards (not walk-up).
+        if (!natural_despawn && ent.get_mob_id() == MobID::kLootChest)
+            Treasure::on_loot_chest_killed(sim, ent);
         // Credit this-life mob kill to the damaging flower (heads only).
         if (!natural_despawn
             && !ent.has_component(kSegmented)
@@ -300,7 +313,8 @@ void entity_on_death(Simulation *sim, Entity const &ent) {
                 ? ent.get_rarity() : mob_data.rarity;
 
             // Private loot per camera. Party: if party damage sum ≥ threshold,
-            // every alive mate gets their own roll tagged to their camera.
+            // every connected mate on this map gets a roll tagged to their
+            // camera, including downed mates who can collect after respawn.
             EntityID claim_cams[16];
             float claim_dmg[16];
             uint8_t claim_n = 0;
@@ -333,7 +347,8 @@ void entity_on_death(Simulation *sim, Entity const &ent) {
             EntityID recipients[32];
             uint8_t recip_n = 0;
             auto add_recipient = [&](EntityID cam) {
-                if (cam.null() || recip_n >= 32) return;
+                if (cam.null() || recip_n >= 32 || !sim->ent_alive(cam)
+                    || !sim->get_ent(cam).has_component(kCamera)) return;
                 for (uint8_t i = 0; i < recip_n; ++i)
                     if (recipients[i] == cam) return;
                 recipients[recip_n++] = cam;
@@ -368,9 +383,9 @@ void entity_on_death(Simulation *sim, Entity const &ent) {
                     if (game != nullptr) {
                         for (Client *m : game->clients) {
                             if (m == nullptr || m->party_id != c->party_id) continue;
-                            if (!m->alive() || m->game == nullptr) continue;
+                            if (m->game == nullptr) continue;
                             if (&m->game->simulation != sim) continue;
-                            if (!sim->ent_exists(m->camera)) continue;
+                            if (!sim->ent_alive(m->camera)) continue;
                             add_recipient(m->camera);
                         }
                     } else {
@@ -490,14 +505,12 @@ void entity_on_death(Simulation *sim, Entity const &ent) {
                 }
             };
 
-            if (recip_n == 0) {
-                roll_for_owner(NULL_ENTITY, 0.f);
-            } else {
-                for (uint8_t i = 0; i < recip_n; ++i) {
-                    float ang = (recip_n == 1) ? 0.f
-                        : (float) i * (2.f * (float) M_PI / (float) recip_n);
-                    roll_for_owner(recipients[i], ang);
-                }
+            // No eligible player means no loot. Never create a public fallback
+            // pile that a bystander/teammate can see, magnetize or take.
+            for (uint8_t i = 0; i < recip_n; ++i) {
+                float ang = (recip_n == 1) ? 0.f
+                    : (float) i * (2.f * (float) M_PI / (float) recip_n);
+                roll_for_owner(recipients[i], ang);
             }
         }
         if (ent.get_mob_id() == MobID::kAntHole && 
@@ -616,7 +629,7 @@ void entity_on_death(Simulation *sim, Entity const &ent) {
             // Nosave: sync write of accounts.dat on death stalls the whole server tick
             AccountStore::capture_nosave(owner);
             client_send_life_summary(owner);
-            Party::on_death(owner, death_x, death_y);
+            Party::on_death(owner, death_x, death_y, ent.get_color(), ent.get_equip_flags());
         }
     } else if (ent.has_component(kDrop)) {
         if (BitMath::at(ent.flags, EntityFlags::kIsDespawning))

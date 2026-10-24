@@ -491,6 +491,7 @@ uint8_t Ui::loadout_bar_hit(float x, float y) {
         if (dist < (slot->width + pad) * Ui::scale / 2)
             return 1;
     }
+    if (Ui::rotation_wheel_hit(x, y)) return 1;
     return 0;
 }
 
@@ -862,22 +863,26 @@ UiLoadoutPetal::UiLoadoutPetal(uint8_t pos) : Element(60, 60),
 }
 
 void UiLoadoutPetal::on_render(Renderer &ctx) {
+    if (Game::loadout_preview_bank() != 0 && static_pos < Game::loadout_count && !selected) {
+        rendering_tooltip = 0;
+        return;
+    }
     if (last_id == PetalID::kNone) return;
     ctx.scale(width / 60);
     if (static_pos < Game::loadout_count && PETAL_DATA[last_id].count != 0)
         draw_loadout_background(ctx, last_id, (float) reload, 1, (float) health);
     else
         draw_loadout_background(ctx, last_id);
-    // Unique level badge — top of the plate so it doesn't cover the petal name.
-    if (loadout_slot_is_leveled(static_pos, last_id)) {
+    // Unique level badge — top-right of the plate (name sits at the bottom).
+    if (Craft::can_level_petal(last_id) && Game::petal_levels[last_id] > 0
+        && loadout_slot_is_leveled(static_pos, last_id)) {
         RenderContext c(&ctx);
         std::string lv = std::format("Lv.{}", Game::petal_levels[last_id]);
         ctx.set_fill(Chrome::kGold);
         ctx.set_stroke(0xff111111);
-        ctx.set_text_size(10);
-        ctx.set_line_width(1.1f);
+        ctx.set_text_size(11);
+        ctx.set_line_width(1.25f);
         float tw = (float) ctx.get_text_size(lv.c_str());
-        // 60×60 cell centered at origin: top-right of the plate (name is at bottom).
         ctx.translate(28.f - tw, -26.f);
         ctx.stroke_text(lv.c_str());
         ctx.fill_text(lv.c_str());
@@ -932,6 +937,11 @@ void UiLoadoutPetal::poll_events(ScreenEvent const &event) {
 }
 
 void UiLoadoutPetal::on_event(uint8_t event) {
+    if (Game::loadout_preview_bank() != 0 && static_pos < Game::loadout_count
+        && (!Game::mobile_l_preset_pick || event != kMouseDown)) {
+        rendering_tooltip = 0;
+        return;
+    }
     if (loadout_editable() && event == kMouseDown) {
         // Sticky L-pick (mobile long-press R): slot index → L bank, no drag.
         if (Game::mobile_l_preset_pick && static_pos < Game::loadout_count) {

@@ -31,6 +31,7 @@ set(SOURCES
     Client.cc
     Codex.cc
     DevCheats.cc
+    FeedbackStore.cc
     Game.cc
     LeaderboardStore.cc
     Main.cc
@@ -42,6 +43,7 @@ set(SOURCES
     Simulation.cc
     Spawn.cc
     TeamManager.cc
+    TrainingDummy.cc
     Treasure.cc
     WorldEvent.cc
     WorldExplore.cc
