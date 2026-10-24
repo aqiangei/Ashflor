@@ -9,6 +9,8 @@
 #include <Client/Ui/StaticText.hh>
 
 #include <Client/Assets/Assets.hh>
+#include <Shared/Entity.hh>
+#include <Shared/Simulation.hh>
 
 #include <cmath>
 
@@ -42,8 +44,23 @@ void DeadFlowerIcon::on_render(Renderer &ctx) {
     {
         RenderContext c(&ctx);
         ctx.rotate(-0.2);
-        float flower_radius = width / 3;
-        draw_static_flower(ctx, { .radius = 25, .mouth = 5, .face_flags = (1<<FaceFlags::kDeadEyes), .equip_flags = equip_flags });
+        // Prefer last living / corpse color so death UI matches in-world flower
+        // (normal hue + X eyes — not a greyed-out special palette).
+        uint8_t color = 0;
+        if (Game::simulation.ent_exists(Game::player_id))
+            color = Game::simulation.get_ent(Game::player_id).get_color();
+        else if (Game::simulation.ent_exists(Game::camera_id)) {
+            EntityID pid = Game::simulation.get_ent(Game::camera_id).get_player();
+            if (Game::simulation.ent_exists(pid))
+                color = Game::simulation.get_ent(pid).get_color();
+        }
+        draw_static_flower(ctx, {
+            .radius = 25,
+            .mouth = 5,
+            .face_flags = (1 << FaceFlags::kDeadEyes),
+            .equip_flags = equip_flags,
+            .color = color
+        });
     }
     for (uint32_t i = 0; i < physical_loadout.size(); ++i) {
         float angle = 2 * M_PI * i / physical_loadout.size() + 0.5;

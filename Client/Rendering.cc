@@ -56,16 +56,10 @@ static void draw_animated_water(Renderer &r, uint8_t map_id,
 }
 
 void _apply_damage_filter(Renderer &ctx, Entity const &ent) {
+    // Gardn death feel: inflate + fade (~150ms). Party downed tip stays in render_flower.
     float const del = ent.deletion_animation;
-    // Mob corpses pose in render_mob (tip/squash); only fade here — no inflate.
-    uint8_t const mob_corpse =
-        del > 0.f && ent.has_component(kMob) && !ent.has_component(kFlower);
-    if (mob_corpse)
-        ctx.set_global_alpha(1.f - del * 0.88f);
-    else {
-        ctx.set_global_alpha(1.f - del);
-        ctx.scale(1.f + 0.5f * del);
-    }
+    ctx.set_global_alpha(1.f - del);
+    ctx.scale(1.f + 0.5f * del);
     if (ent.damage_flash > 0.66)
         ctx.add_color_filter(0xffffffff, ent.damage_flash);
     else if (ent.damage_flash > 0.1)
@@ -218,6 +212,14 @@ void Game::render_game() {
     });
     simulation.for_each<kDrop>([&](Simulation *sim, Entity const &ent){
         if (!visible(ent)) return;
+        // Settings: hide Common/Unusual piles unless "show low rarity drops" is on.
+        if (!Game::show_low_rarity_drops) {
+            PetalID::T did = ent.get_drop_id();
+            if (did != PetalID::kNone && did < PetalID::kNumPetals) {
+                uint8_t r = PETAL_DATA[did].rarity;
+                if (r <= RarityID::kUnusual) return;
+            }
+        }
         RenderContext context(&renderer);
         renderer.translate(ent.get_x(), ent.get_y());
         renderer.rotate(ent.get_angle() + (ent.animation - 1) * 3 * M_PI);
@@ -297,6 +299,12 @@ void Game::render_game() {
             stroke_hitbox(ent, 0xccffcc44);
         });
         simulation.for_each<kDrop>([&](Simulation *, Entity const &ent){
+            if (!Game::show_low_rarity_drops) {
+                PetalID::T did = ent.get_drop_id();
+                if (did != PetalID::kNone && did < PetalID::kNumPetals
+                    && PETAL_DATA[did].rarity <= RarityID::kUnusual)
+                    return;
+            }
             stroke_hitbox(ent, 0xcc4488ff);
         });
         simulation.for_each<kWeb>([&](Simulation *, Entity const &ent){

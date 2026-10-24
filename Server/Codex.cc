@@ -157,6 +157,11 @@ static MapIntro const kCodexMaps[MapID::kNumMaps] = {
       "按稀有度切开的城区：外墙→街区→禁苑→军营→废墟→王宫。街角掮客与骑士护送游走其间；终局压力与终局掉落同在。",
       "Districts by rarity: outer wall → quarter → garden → barracks → ruins → palace. Corner brokers and knight escorts; endgame pressure and endgame loot together.",
       0xffc9a227 },
+    { "蚁巢", "Ant Nest",
+      "三族分庭的洞穴", "Three-faction nest caverns",
+      "玩家手绘巢穴：左火蚁、中黑蚁、右白蚁。窄道连通各室；兵白蚁掉落三角形。勿与旧「蚁穴」混淆。",
+      "Hand-drawn nest: fire ants left, black ants center, termites right. Narrow tunnels link chambers; soldier termites drop Triangle. Not the old Ant Hell.",
+      0xffc48a55 },
 };
 
 struct MechChapter {
@@ -447,6 +452,31 @@ static void emit_petal_attrs(std::string &out, PetalAttributes const &a) {
     jkv_f(out, "burn_time", a.burn_damage.time, f);
     jkv_f(out, "armor_penetration", a.armor_penetration, f);
     jkv_f(out, "bonus_vs_poisoned", a.bonus_vs_poisoned, f);
+    jkv_f(out, "stack_damage", a.stack_damage, f);
+    jkv_f(out, "attraction_radius", a.attraction_radius, f);
+    jkv_u(out, "fixed_orbit_range", a.fixed_orbit_range, f);
+    jkv_f(out, "crit_chance", a.crit_chance, f);
+    jkv_f(out, "crit_factor", a.crit_factor, f);
+    jkv_f(out, "luck", a.luck, f);
+    jkv_f(out, "armor_shred", a.armor_shred, f);
+    jkv_f(out, "body_radius_bonus", a.body_radius_bonus, f);
+    jkv_f(out, "heal_amp", a.heal_amp, f);
+    jkv_f(out, "damage_absorb", a.damage_absorb, f);
+    jkv_f(out, "solo_damage_factor", a.solo_damage_factor, f);
+    jkv_f(out, "petal_evasion", a.petal_evasion, f);
+    jkv_f(out, "flower_evasion", a.flower_evasion, f);
+    jkv_f(out, "nazar_mitigation", a.nazar_mitigation, f);
+    jkv_u(out, "nazar_charges", a.nazar_charges, f);
+    jkv_f(out, "petal_hp_factor", a.petal_hp_factor, f);
+    jkv_f(out, "vs_projectile_factor", a.vs_projectile_factor, f);
+    jkv_f(out, "lightning_damage", a.lightning_damage, f);
+    jkv_u(out, "lightning_chains", a.lightning_chains, f);
+    jkv_f(out, "on_hit_heal_ratio", a.on_hit_heal_ratio, f);
+    jkv_f(out, "hit_interval_seconds", a.hit_interval_seconds, f);
+    jkv_u(out, "phase_through", a.phase_through, f);
+    jkv_f(out, "aggro_shrink", a.aggro_shrink, f);
+    jkv_f(out, "mana_gen", a.mana_gen, f);
+    jkv_f(out, "mana_cap", a.mana_cap, f);
     jkv_f(out, "bonus_vs_slowed", a.bonus_vs_slowed, f);
     jkv_u(out, "hit_cycle", a.hit_cycle, f);
     jkv_f(out, "hit_cycle_factor", a.hit_cycle_factor, f);

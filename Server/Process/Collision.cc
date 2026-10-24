@@ -5,6 +5,7 @@
 #include <Server/Loot.hh>
 #include <Server/PetalTracker.hh>
 #include <Server/Server.hh>
+#include <Server/TrainingDummy.hh>
 
 #include <Shared/Simulation.hh>
 #include <Shared/Entity.hh>
@@ -189,8 +190,16 @@ void on_collide(Simulation *sim, Entity &ent1, Entity &ent2) {
         if (try_iron_guard(ent1, ent2) || try_iron_guard(ent2, ent1))
             return;
         if (ent1.health > 0 && ent2.health > 0) {
-            inflict_damage(sim, ent1.id, ent2.id, ent1.damage, DamageType::kContact);
-            inflict_damage(sim, ent2.id, ent1.id, ent2.damage, DamageType::kContact);
+            // Dummies keep damage==0 so flower bodies are safe in the plaza;
+            // petals still take rarity-scaled return hits for durability practice.
+            float d1 = ent1.damage;
+            float d2 = ent2.damage;
+            if (TrainingDummy::is_dummy(ent1) && ent2.has_component(kPetal))
+                d1 = TrainingDummy::petal_contact_damage(ent1);
+            if (TrainingDummy::is_dummy(ent2) && ent1.has_component(kPetal))
+                d2 = TrainingDummy::petal_contact_damage(ent2);
+            inflict_damage(sim, ent1.id, ent2.id, d1, DamageType::kContact);
+            inflict_damage(sim, ent2.id, ent1.id, d2, DamageType::kContact);
         }
         if (ent1.health == 0) sim->request_delete(ent1.id);
         if (ent2.health == 0) sim->request_delete(ent2.id);

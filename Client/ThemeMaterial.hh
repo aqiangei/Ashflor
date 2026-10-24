@@ -81,7 +81,14 @@ namespace TerrainArt {
               0xff3E4355, 0xff8B8D98, 0xffB5B4BB, 0xff646878, 0xff2A2E3A,
               0xff4A6D8C, 0x6680A8C8, 0xffC94D4C, 0x99D5AD55,
               Style::kMasonry, 7.5f, 12.f, 22.f, 64.f },
+            // Ant Nest — same dirt palette as Ant Hell (must match kNumMaps)
+            { 0xffC9A477, 0x40A77E58, 0x55E0BF92,
+              0xff4B3026, 0xff704A35, 0xffA77751, 0xff856044, 0xff38241E,
+              0xff582F0E, 0x668C5E3B, 0xffB08968, 0x99D9C09B,
+              Style::kDirt, 7.5f, 18.f, 32.f, 68.f },
         };
+        static_assert(sizeof(kTable) / sizeof(kTable[0]) == MapID::kNumMaps,
+                      "ThemeMaterial table must cover every MapID");
         if (map_id >= MapID::kNumMaps) map_id = 0;
         return kTable[map_id];
     }

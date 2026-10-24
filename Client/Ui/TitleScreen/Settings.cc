@@ -27,41 +27,61 @@ static Element *settings_toggle_row(uint8_t *flag, I18n::Str label, float toggle
     }, 0, 8, { .h_justify = Style::Left });
 }
 
+static Element *settings_section(I18n::Str title, std::vector<Element *> rows,
+                                 float title_sz, float gap) {
+    std::vector<Element *> kids;
+    kids.push_back(new Ui::DynamicText(title_sz, [title](){ return I18n::tr(title); }, {
+        .fill = Chrome::kGold,
+        .h_justify = Style::Left
+    }));
+    kids.insert(kids.end(), rows.begin(), rows.end());
+    return new Ui::VContainer(kids, 0, gap, {
+        .h_justify = Style::Left, .no_animation = 1
+    });
+}
+
 Element *Ui::make_settings_panel() {
     uint8_t const mobile = Input::is_mobile;
     float const toggle = mobile ? 28.f : 30.f;
     float const label = mobile ? 14.f : 16.f;
     float const pad = mobile ? 14.f : 20.f;
-    float const gap = mobile ? 8.f : 10.f;
+    float const gap = mobile ? 6.f : 8.f;
+    float const section_gap = mobile ? 12.f : 14.f;
+    float const title_sz = mobile ? 13.f : 14.f;
 
     auto row = [&](uint8_t *flag, I18n::Str text) {
         return settings_toggle_row(flag, text, toggle, label);
     };
 
-    std::vector<Element *> toggles = {
-        row(&I18n::use_chinese, I18n::kLanguage),
+    Element *controls = settings_section(I18n::kSettingsControls, {
         row(&Input::keyboard_movement, I18n::kKeyboardMovement),
         row(&Input::movement_helper, I18n::kMovementHelper),
         row(&Input::invert_attack, I18n::kInvertAttack),
         row(&Input::invert_defend, I18n::kInvertDefend),
-        row(&Input::disable_auto_party, I18n::kDisableAutoParty),
         row(&Input::request_mobile, I18n::kRequestMobile),
-        row(&Game::show_debug, I18n::kDebugStats),
+    }, title_sz, gap);
+
+    Element *display = settings_section(I18n::kSettingsDisplay, {
+        row(&I18n::use_chinese, I18n::kLanguage),
+        row(&Game::show_low_rarity_drops, I18n::kShowLowRarityDrops),
         row(&Game::show_hitboxes, I18n::kShowHitboxes),
-    };
+        row(&Game::show_debug, I18n::kDebugStats),
+    }, title_sz, gap);
+
+    Element *social = settings_section(I18n::kSettingsSocial, {
+        row(&Input::disable_auto_party, I18n::kDisableAutoParty),
+    }, title_sz, gap);
 
     Element *toggles_block = nullptr;
     if (mobile) {
-        // Two short columns so the sheet fits the phone viewport.
-        size_t mid = (toggles.size() + 1) / 2;
-        std::vector<Element *> left(toggles.begin(), toggles.begin() + (std::ptrdiff_t) mid);
-        std::vector<Element *> right(toggles.begin() + (std::ptrdiff_t) mid, toggles.end());
         toggles_block = new Ui::HContainer({
-            new Ui::VContainer(left, 0, 8, { .h_justify = Style::Left, .no_animation = 1 }),
-            new Ui::VContainer(right, 0, 8, { .h_justify = Style::Left, .no_animation = 1 })
+            new Ui::VContainer({ controls, social }, 0, section_gap, {
+                .h_justify = Style::Left, .no_animation = 1
+            }),
+            display
         }, 0, 14, { .h_justify = Style::Left, .no_animation = 1 });
     } else {
-        toggles_block = new Ui::VContainer(toggles, 0, gap, {
+        toggles_block = new Ui::VContainer({ controls, display, social }, 0, section_gap, {
             .h_justify = Style::Left, .no_animation = 1
         });
     }
@@ -114,9 +134,7 @@ Element *Ui::make_settings_panel() {
             { .fill = Chrome::kBtnMoss, .line_width = 0, .round_radius = Chrome::kRadius }
         ),
         new Ui::DynamicText(mobile ? 12.f : 12.f, [](){
-            return I18n::use_chinese
-                ? std::string{"github.com/trigonal-bacon/gardn"}
-                : std::string{"github.com/trigonal-bacon/gardn"};
+            return std::string{"github.com/trigonal-bacon/gardn"};
         }, { .fill = 0xff8ab4a0, .h_justify = Style::Left })
     }, pad, gap, {
         .fill = Chrome::kPanelDeep,

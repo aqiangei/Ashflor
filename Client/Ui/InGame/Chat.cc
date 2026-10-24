@@ -430,8 +430,9 @@ Element *Ui::make_chat_panel() {
     };
     scroll->style.h_justify = Style::Left;
 
-    float const input_w = mobile ? 180.f : 360.f;
-    float const input_h = mobile ? 36.f : 32.f;
+    // Mobile: taller/wider target — was easy to miss under the left HUD column.
+    float const input_w = mobile ? 200.f : 360.f;
+    float const input_h = mobile ? 44.f : 32.f;
     chat_input = new ChatTextInput(Game::chat_draft, input_w, input_h, MAX_CHAT_LENGTH, {
         .line_width = 0,
         .round_radius = 10.f,
@@ -487,6 +488,7 @@ Element *Ui::make_chat_panel() {
     Element *elt = new Ui::VContainer({ scroll, input_row, tab_hint }, 10, 4, {
         .fill = 0x990F2038,
         .round_radius = 12.f,
+        .layer = 1, // above mobile joystick pad for taps
         .animate = [](Element *elt, Renderer &) {
             // Cool translucent chat overlay; whisper mode gets a violet tint.
             uint8_t whisper = Game::chat_channel == ChatChannel::kChatWhisper;
@@ -507,8 +509,10 @@ Element *Ui::make_chat_panel() {
         .h_justify = Style::Left,
         .v_justify = Style::Bottom
     });
-    elt->x = mobile ? 52.f : 72.f;
-    elt->y = -16;
+    // Desktop: beside left HUD. Mobile: clear side plaques + sit above the
+    // huge left-bottom joystick pad so the input is actually tappable.
+    elt->x = mobile ? 12.f : 72.f;
+    elt->y = mobile ? -220.f : -16.f;
     Ui::chat_panel_root = elt;
     return elt;
 }

@@ -524,6 +524,96 @@ void draw_static_petal_single(PetalID::T id, Renderer &ctx) {
             ctx.stroke();
             break;
         }
+
+        case PetalID::kLentil: {
+            ctx.save();
+            ctx.rotate(0.785398f);
+            ctx.set_fill(0xffebb134);
+            ctx.set_stroke(0xffc4942d);
+            ctx.set_line_width(3);
+            ctx.begin_path();
+            ctx.ellipse(0, 0, r * 0.85f, r * 1.05f);
+            ctx.fill();
+            ctx.stroke();
+            ctx.set_fill(0x66ffe9a0);
+            ctx.begin_path();
+            ctx.ellipse(-r * 0.2f, -r * 0.25f, r * 0.28f, r * 0.4f);
+            ctx.fill();
+            ctx.restore();
+            break;
+        }
+        case PetalID::kSawblade: {
+            ctx.set_fill(0xff9a9a9a);
+            ctx.set_stroke(0xff6e6e6e);
+            ctx.set_line_width(2.5f);
+            ctx.begin_path();
+            ctx.arc(0, 0, r * 0.55f);
+            ctx.fill();
+            ctx.stroke();
+            ctx.set_fill(0xffb8b8b8);
+            ctx.set_stroke(0xff5a5a5a);
+            ctx.set_line_width(2);
+            ctx.begin_path();
+            uint32_t const teeth = 12;
+            for (uint32_t i = 0; i < teeth; ++i) {
+                float a0 = (float) i * (float) (2 * M_PI) / (float) teeth;
+                float a1 = a0 + (float) (2 * M_PI) / (float) teeth;
+                float amid = (a0 + a1) * 0.5f;
+                float tip = amid - 0.08f;
+                if (i == 0) ctx.move_to(cosf(a0) * r * 0.62f, sinf(a0) * r * 0.62f);
+                ctx.line_to(cosf(tip) * r, sinf(tip) * r);
+                ctx.line_to(cosf(a1) * r * 0.62f, sinf(a1) * r * 0.62f);
+            }
+            ctx.close_path();
+            ctx.fill();
+            ctx.stroke();
+            ctx.set_fill(0xff5a5a5a);
+            ctx.begin_path();
+            ctx.arc(0, 0, r * 0.22f);
+            ctx.fill();
+            ctx.set_fill(0xff3a3a3a);
+            ctx.begin_path();
+            ctx.arc(0, 0, r * 0.12f);
+            ctx.fill();
+            break;
+        }
+        case PetalID::kDice: {
+            ctx.set_fill(0xffffffff);
+            ctx.set_stroke(0xff333333);
+            ctx.set_line_width(2.5f);
+            ctx.begin_path();
+            ctx.round_rect(-r, -r, 2 * r, 2 * r, r * 0.25f);
+            ctx.fill();
+            ctx.stroke();
+            ctx.set_fill(0xff222222);
+            for (float px : {-0.4f, 0.4f})
+                for (float py : {-0.4f, 0.4f}) {
+                    ctx.begin_path();
+                    ctx.arc(px * r, py * r, r * 0.14f);
+                    ctx.fill();
+                }
+            ctx.begin_path();
+            ctx.arc(0, 0, r * 0.14f);
+            ctx.fill();
+            break;
+        }
+        case PetalID::kLightning: {
+            ctx.set_fill(0xffffe066);
+            ctx.set_stroke(0xffc9a227);
+            ctx.set_line_width(2.5f);
+            ctx.begin_path();
+            ctx.move_to(-0.2f * r, -r);
+            ctx.line_to(0.35f * r, -0.1f * r);
+            ctx.line_to(0.05f * r, -0.1f * r);
+            ctx.line_to(0.4f * r, r);
+            ctx.line_to(-0.35f * r, 0.15f * r);
+            ctx.line_to(-0.05f * r, 0.15f * r);
+            ctx.close_path();
+            ctx.fill();
+            ctx.stroke();
+            break;
+        }
+
         case PetalID::kMoon: {
             ctx.set_fill(0xff878787);
             ctx.set_stroke(0xff6d6d6d);
@@ -5769,16 +5859,21 @@ void draw_loadout_background(Renderer &ctx, PetalID::T id, float reload, uint8_t
     ctx.rect(-25, -25, 50, 50);
     ctx.fill();
     ctx.clip();
-    // Live durability: pale wash on the missing bottom portion only. Drawn under
-    // the petal icon so the art stays sharp while the slot still reads as worn.
+    // Live durability: missing bottom uses a deepened rarity tint (same hue as
+    // the slot), not a generic white/grey wash — Unusual stays green, etc.
     if (health < 0.995f) {
         float missing = 1.f - health;
         if (missing < 0.f) missing = 0.f;
         if (missing > 1.f) missing = 1.f;
         float h = 50.f * missing;
         float y = 25.f - h;
+        uint8_t const rar = PETAL_DATA[id].rarity % RarityID::kNumRarities;
+        uint32_t const base = RARITY_COLORS[rar];
+        // Darken toward black while keeping hue, then opaque enough to read.
+        uint32_t wash_col = Renderer::MIX(Renderer::HSV(base, 0.65f), 0xff000000, 0.42f);
+        wash_col = (wash_col & 0x00ffffffu) | 0xb8000000u;
         RenderContext wash(&ctx);
-        ctx.set_fill(0x55ffffff);
+        ctx.set_fill(wash_col);
         ctx.begin_path();
         ctx.rect(-25, y, 50, h);
         ctx.fill();

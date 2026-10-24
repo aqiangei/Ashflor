@@ -152,6 +152,8 @@ namespace Game {
     extern uint8_t leaving_to_title; // soft-leave in progress — don't force game UI / auto-respawn
     extern uint8_t show_debug;
     extern uint8_t show_hitboxes;
+    // 0 = hide Common/Unusual ground drops (default); 1 = show them.
+    extern uint8_t show_low_rarity_drops;
     extern uint8_t selected_map; // MapID for title-screen world select
     extern uint8_t minimap_expanded; // 0 compact full-map, 1 larger full-map (toggle M)
     struct OnlineRosterEntry {
@@ -281,6 +283,7 @@ namespace Game {
     void save_loadout_preset(uint8_t index);
     void apply_loadout_preset(uint8_t index);
     void post_feedback(std::string const &text);
+    void set_feedback_resolved(uint32_t id, uint8_t resolved);
     // Equip one copy from backpack stacks. dest 0xFF = auto (empty/Basic/…).
     // Returns 1 if equipped into an empty/Basic slot; 0 if barred (full bar).
     uint8_t withdraw_bank_petal(PetalID::T id, uint8_t dest = (uint8_t) -1);

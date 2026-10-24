@@ -18,6 +18,7 @@
 
 #include <array>
 #include <cmath>
+#include <cstring>
 
 struct PlayerBuffs {
     float extra_rot = 0;
@@ -26,14 +27,54 @@ struct PlayerBuffs {
     float vision_factor = 1;
     float move_speed_factor = 1;
     float magnet_radius = 0;
+    float attraction_radius = 0; // Lentil: sum of equipped attraction_radius
     float extra_health = 0;
+    float body_radius_bonus = 0;
+    float heal_amp = 0;
+    float luck = 0;
+    float damage_absorb = 0;
+    float flower_evasion = 0;
+    float nazar_mitigation = 0;
+    uint8_t nazar_charges = 0;
+    float mana_gen = 0;
+    float mana_cap = 0;
+    float petal_hp_factor = 1;
     float extra_damage = 0;
     float damage_factor = 1;
     float reload_factor = 1;
+    float aggro_shrink = 0;
     uint8_t yinyang_count = 0;
     uint8_t is_poisonous = 0;
     uint8_t equip_flags = 0;
 };
+
+// Triangle (florr): same-rarity copies add stack_damage each.
+// Unique is boosted by Super Triangles instead (wiki).
+static uint32_t _triangle_stack_sources(Entity const &player, PetalID::T id) {
+    PetalID::T src = id;
+    if (id == PetalID::kTriangleUnique)
+        src = PetalID::kTriangleSuper;
+    uint32_t n = 0;
+    for (uint32_t si = 0; si < player.get_loadout_count(); ++si) {
+        if (player.get_loadout_ids(si) == src)
+            ++n;
+    }
+    return n;
+}
+
+static float _triangle_base_damage(PetalID::T id, uint32_t sources) {
+    struct PetalData const &pd = PETAL_DATA[id];
+    float stack = pd.attributes.stack_damage;
+    if (id == PetalID::kTriangleUnique)
+        stack = PETAL_DATA[PetalID::kTriangleSuper].attributes.stack_damage;
+    if (stack <= 0.f) return pd.damage;
+    // Normal: N copies → base + stack*(N-1). Unique: +stack per Super (Unique itself
+    // is not a Super, so multiply by Super count directly).
+    if (id == PetalID::kTriangleUnique)
+        return pd.damage + stack * (float)sources;
+    if (sources < 1) sources = 1;
+    return pd.damage + stack * (float)(sources - 1);
+}
 
 struct RotationCenter {
     float x;
@@ -87,17 +128,42 @@ static struct PlayerBuffs _get_petal_passive_buffs(
         else if (move > 0.f && move < 1.f)
             buffs.move_speed_factor *= move;
         buffs.magnet_radius = std::fmax(buffs.magnet_radius, attrs.magnet_radius * lv_mult);
+        if (attrs.attraction_radius > 0.f)
+            buffs.attraction_radius += attrs.attraction_radius * lv_mult;
+        if (attrs.body_radius_bonus > 0.f)
+            buffs.body_radius_bonus += attrs.body_radius_bonus;
+        if (attrs.heal_amp > 0.f)
+            buffs.heal_amp = std::fmax(buffs.heal_amp, attrs.heal_amp);
+        if (attrs.luck > 0.f)
+            buffs.luck += attrs.luck;
+        if (attrs.damage_absorb > 0.f)
+            buffs.damage_absorb += attrs.damage_absorb * lv_mult;
+        if (attrs.flower_evasion > 0.f)
+            buffs.flower_evasion = std::fmin(0.75f, buffs.flower_evasion + attrs.flower_evasion);
+        if (attrs.nazar_charges > 0) {
+            buffs.nazar_charges = attrs.nazar_charges;
+            buffs.nazar_mitigation = attrs.nazar_mitigation;
+        }
+        if (attrs.mana_gen > 0.f)
+            buffs.mana_gen += attrs.mana_gen;
+        if (attrs.mana_cap > 0.f)
+            buffs.mana_cap += attrs.mana_cap;
+        if (attrs.petal_hp_factor > 1.f)
+            buffs.petal_hp_factor = std::fmax(buffs.petal_hp_factor, attrs.petal_hp_factor);
+        if (attrs.aggro_shrink > 0.f)
+            buffs.aggro_shrink = std::fmax(buffs.aggro_shrink, attrs.aggro_shrink);
         buffs.extra_range = std::fmax(attrs.extra_range * lv_mult, buffs.extra_range);
         buffs.extra_damage = std::fmax(buffs.extra_damage, attrs.extra_body_damage * lv_mult);
         buffs.damage_factor *= Craft::level_scale_factor(attrs.extra_damage_factor, lv_mult);
         buffs.reload_factor *= Craft::level_scale_factor(attrs.extra_reload_factor, lv_mult);
-        if (slot_petal_id == PetalID::kYinYang)
+        // Name match — ladder rarities (Common…Unique) must not miss the base ID.
+        if (petal_name_is(slot_petal_id, "Yin Yang"))
             ++buffs.yinyang_count;
         if (!player.loadout[i].already_spawned) continue;
         // constant_heal is data-driven (HP/s). Yucca keeps classic defend-only gating;
         // all other petals with the attr heal while the slot is spawned.
         if (attrs.constant_heal > 0.f) {
-            if (slot_petal_id == PetalID::kYucca) {
+            if (petal_name_is(slot_petal_id, "Yucca")) {
                 if (BitMath::at(player.input, InputFlags::kDefending)
                     && !BitMath::at(player.input, InputFlags::kAttacking))
                     buffs.heal += attrs.constant_heal * lv_mult / TPS;
@@ -109,6 +175,7 @@ static struct PlayerBuffs _get_petal_passive_buffs(
         buffs.extra_health += attrs.extra_health * lv_mult;
         player.damage_reflection = std::fmax(player.damage_reflection, attrs.damage_reflection);
         player.poison_armor = std::fmax(player.poison_armor, attrs.poison_armor * lv_mult / TPS);
+        // Poison-body Cactus is a single ID (name shares "Cactus" with HP cactus).
         if (slot_petal_id == PetalID::kPoisonCactus)
             buffs.is_poisonous = 1;
         // King's Oath: low-HP damage surge (on top of petal extra_damage_factor)
@@ -197,8 +264,8 @@ void tick_player_behavior(Simulation *sim, Entity &player) {
         }
     }
     buffs.reload_factor *= talent_reload;
-    // Golden Leaf CDR cap (50%): stacked leaves + Unique Lv + talent cannot
-    // push below kReloadFactorFloor (was ≤0 → invisible petals / particles only).
+    // Golden Leaf CDR cap (99%): stacked leaves + Unique Lv + talent cannot
+    // push below kReloadFactorFloor (≤0 deleted petal art; ≥2-tick floor below).
     if (buffs.reload_factor < Craft::kReloadFactorFloor)
         buffs.reload_factor = Craft::kReloadFactorFloor;
     if (buffs.reload_factor > Craft::kReloadFactorCeil)
@@ -215,6 +282,13 @@ void tick_player_behavior(Simulation *sim, Entity &player) {
             AccountStore::note_score(owner, sc);
     }
     player.health = health_ratio * player.max_health;
+    // Air / Soil: body size (cap so spatial hash stays valid)
+    if (!player.has_component(kMob)) {
+        float br = BASE_FLOWER_RADIUS + buffs.body_radius_bonus;
+        if (br < 12.f) br = 12.f;
+        if (br > 70.f) br = 70.f;
+        player.set_radius(br);
+    }
     if (buffs.heal > 0)
         inflict_heal(sim, player, buffs.heal);
     if (buffs.is_poisonous)
@@ -270,6 +344,8 @@ void tick_player_behavior(Simulation *sim, Entity &player) {
             float ty = vy - dy / dist * radial;
             drop.velocity.x -= tx * 0.35f;
             drop.velocity.y -= ty * 0.35f;
+            // Let Motion skip terrain so berms/walls don't block the suck.
+            BitMath::set(drop.flags, EntityFlags::kMagnetPull);
         });
     }
 
@@ -317,19 +393,12 @@ void tick_player_behavior(Simulation *sim, Entity &player) {
                 if (petal_slot.reload >= reload_time) {
                     petal_slot.ent_id = alloc_petal(sim, slot_petal_id, player).id;
                     Entity &spawned = sim->get_ent(petal_slot.ent_id);
-                    // Triangle: each same-ID copy adds stack_damage (florr wiki).
-                    if (petal_data.attributes.stack_damage > 0.f) {
-                        uint32_t copies = 0;
-                        for (uint32_t si = 0; si < player.get_loadout_count(); ++si) {
-                            if (player.get_loadout_ids(si) == slot_petal_id)
-                                ++copies;
-                        }
-                        if (copies < 1) copies = 1;
-                        spawned.damage = petal_data.damage
-                            + petal_data.attributes.stack_damage * (float)(copies - 1);
-                    }
+                    // Triangle: base only for 1 copy; each extra same-rarity adds stack.
+                    if (petal_data.attributes.stack_damage > 0.f)
+                        spawned.damage = _triangle_base_damage(
+                            slot_petal_id, _triangle_stack_sources(player, slot_petal_id));
                     spawned.damage *= buffs.damage_factor;
-                    float hp_mult = talent_petal_hp;
+                    float hp_mult = talent_petal_hp * buffs.petal_hp_factor;
                     // Unique level: only the first primary copy of this ID.
                     float lv_mult = _slot_is_leveled_copy(player, i, slot_petal_id)
                         ? _owner_level_mult(petal_levels, slot_petal_id) : 1.f;
@@ -354,6 +423,18 @@ void tick_player_behavior(Simulation *sim, Entity &player) {
             }
             if (sim->ent_alive(petal_slot.ent_id)) {
                 Entity &petal = sim->get_ent(petal_slot.ent_id);
+                // Keep Triangle stack in sync when the player adds/removes copies
+                // mid-life (spawn-only calc left the first petal stuck at 1-stack).
+                if (petal_data.attributes.stack_damage > 0.f
+                    && !BitMath::at(petal.flags, EntityFlags::kIsDespawning)) {
+                    float dmg = _triangle_base_damage(
+                        slot_petal_id, _triangle_stack_sources(player, slot_petal_id));
+                    dmg *= buffs.damage_factor;
+                    float lv_mult = _slot_is_leveled_copy(player, i, slot_petal_id)
+                        ? _owner_level_mult(petal_levels, slot_petal_id) : 1.f;
+                    if (lv_mult != 1.f) dmg *= lv_mult;
+                    petal.damage = dmg;
+                }
                 if (petal.max_health > 0.f) {
                     float hr = petal.health / petal.max_health;
                     if (hr < 0.f) hr = 0.f;
@@ -365,6 +446,17 @@ void tick_player_behavior(Simulation *sim, Entity &player) {
                 if (petal.has_component(kPetal) && 
                     !BitMath::at(petal.flags, EntityFlags::kIsDespawning) &&
                     !BitMath::at(petal.flags, EntityFlags::kIsDetached)) {
+                    // Rose / burst-heal seeking the flower: skip orbit so a still
+                    // player does not keep yanking the petal back to the ring.
+                    game_tick_t const sec_reload_ticks =
+                        (game_tick_t)(petal_data.attributes.secondary_reload * TPS);
+                    uint8_t const seeking_burst_heal =
+                        petal_data.attributes.burst_heal > 0
+                        && petal_data.attributes.secondary_reload > 0
+                        && petal.secondary_reload > sec_reload_ticks
+                        && player.health < player.max_health
+                        && player.dandy_ticks == 0;
+                    if (!seeking_burst_heal) {
                     //petal rotation behavior
                     Vector wanting;
                     Vector delta(rotation_center.x - petal.get_x(), rotation_center.y - petal.get_y());
@@ -372,9 +464,15 @@ void tick_player_behavior(Simulation *sim, Entity &player) {
                         wanting.unit_normal(2 * M_PI * rot_pos / rotation_count + player.heading_angle);
 
                     float range = rotation_center.r + PETAL_ORBIT_IDLE;
-                    if (BitMath::at(player.input, InputFlags::kAttacking)) { 
-                        if (petal_data.attributes.defend_only == 0) 
-                            range = rotation_center.r + PETAL_ORBIT_ATTACK + buffs.extra_range; 
+                    uint8_t const attacking =
+                        BitMath::at(player.input, InputFlags::kAttacking);
+                    if (attacking) {
+                        if (petal_data.attributes.defend_only == 0) {
+                            // Sawblade ignores Reach / Third Eye orbit extension.
+                            float extra = petal_data.attributes.fixed_orbit_range
+                                ? 0.f : buffs.extra_range;
+                            range = rotation_center.r + PETAL_ORBIT_ATTACK + extra;
+                        }
                         if (petal_name_is(petal.get_petal_id(), "Wing")) {
                             float wave = sinf((float) petal.lifetime / (0.4 * TPS));
                             wave = wave * wave;
@@ -392,52 +490,110 @@ void tick_player_behavior(Simulation *sim, Entity &player) {
                     }
                     wanting += delta;
                     wanting *= 0.5f;
+                    // Lentil: when attacking, snap petals toward the nearest enemy
+                    // within the stacked attraction radius of the petal.
+                    if (attacking && buffs.attraction_radius > 0.f
+                        && petal_data.attributes.defend_only == 0) {
+                        float const ar = buffs.attraction_radius;
+                        float best = ar;
+                        float tx = 0.f, ty = 0.f;
+                        uint8_t found = 0;
+                        float const px = petal.get_x();
+                        float const py = petal.get_y();
+                        sim->spatial_hash.query(px, py, ar, ar,
+                            [&](Simulation *s, Entity &ent) {
+                            if (!s->ent_alive(ent.id)) return;
+                            if (ent.get_team() == player.get_team()) return;
+                            if (ent.immunity_ticks > 0) return;
+                            if (!ent.has_component(kMob) && !ent.has_component(kFlower))
+                                return;
+                            if (ent.has_component(kFlower) && !ent.has_component(kHealth))
+                                return;
+                            if (is_player_faction(s, ent)) return;
+                            float dx = ent.get_x() - px;
+                            float dy = ent.get_y() - py;
+                            float dist = std::sqrt(dx * dx + dy * dy);
+                            if (dist < best) {
+                                best = dist;
+                                tx = ent.get_x();
+                                ty = ent.get_y();
+                                found = 1;
+                            }
+                        });
+                        if (found) {
+                            Vector pull(tx - px, ty - py);
+                            // Strong snap so light petals land on the target.
+                            pull.set_magnitude(std::fmax(180.f, ar * 8.f));
+                            wanting += pull;
+                        }
+                    }
                     petal.acceleration = wanting;
-                    game_tick_t sec_reload_ticks = petal_data.attributes.secondary_reload * TPS;
+                    }
                     if (petal_data.attributes.spawns != MobID::kNumMobs &&
                         petal.secondary_reload > sec_reload_ticks) {
                         uint8_t spawn_id = petal_data.attributes.spawns;
                         uint8_t const petal_r = petal_data.rarity;
-                        Entity &mob = alloc_mob(sim, spawn_id, petal.get_x(), petal.get_y(), petal.get_team(), [&](Entity &mob){
-                            // Always leash to the flower — egg petals die / orbit and
-                            // must not be the AI parent (that parked summons in place).
-                            mob.set_parent(player.id);
-                            mob.set_color(player.get_color());
-                            mob.base_entity = player.id;
-                            BitMath::set(mob.flags, EntityFlags::kDieOnParentDeath);
-                            BitMath::set(mob.flags, EntityFlags::kNoDrops);
-                            BitMath::set(mob.flags, EntityFlags::kIsDetached);
-                            // Keep score_reward so escort-freeze (0 dmg + 0 xp + NoDrops)
-                            // cannot match hatch pets.
-                            if (mob.score_reward == 0)
-                                mob.score_reward = 1;
-                            // Match egg petal rarity (zone spawns already do this).
-                            uint8_t base_r = MOB_DATA[spawn_id].rarity;
-                            uint8_t spawn_r = petal_r;
-                            if (spawn_r >= RarityID::kNumRarities) spawn_r = base_r;
-                            if (spawn_r < base_r) spawn_r = base_r;
-                            mob.set_rarity(spawn_r);
-                            float th = mob_spawn_threat_mult(base_r, spawn_r);
-                            mob.max_health *= th;
-                            mob.health = mob.max_health;
-                            mob.damage *= mob_spawn_damage_mult(base_r, spawn_r);
-                            if (mob.damage <= 0.f)
-                                mob.damage = 1.f;
-                            float rs = mob_rarity_radius_mult(spawn_r);
-                            if (rs != 1.f) {
-                                float nr = mob.get_radius() * rs;
-                                mob.set_radius(nr);
-                                mob.mass = (1 + nr / BASE_FLOWER_RADIUS)
-                                    * (MOB_DATA[spawn_id].attributes.stationary ? 10000.f : 1.f);
+                        // Wiki Stick: 4 sandstorms, 20s life, fixed summon HP/DMG ladder.
+                        bool const is_stick = petal_data.name
+                            && std::strcmp(petal_data.name, "Stick") == 0;
+                        uint8_t summon_n = 1;
+                        if (is_stick && petal_data.attributes.spawn_count > 0)
+                            summon_n = petal_data.attributes.spawn_count;
+                        // Common..Unique — matches florrio Stick summon table (Unique=Eternal).
+                        static float const kStickSummonStat[RarityID::kNumRarities] = {
+                            30.f, 90.f, 270.f, 810.f, 2430.f, 7290.f, 21870.f, 65610.f, 196830.f
+                        };
+                        for (uint8_t si = 0; si < summon_n; ++si) {
+                            Entity &mob = alloc_mob(sim, spawn_id, petal.get_x(), petal.get_y(), petal.get_team(), [&](Entity &mob){
+                                // Always leash to the flower — egg petals die / orbit and
+                                // must not be the AI parent (that parked summons in place).
+                                mob.set_parent(player.id);
+                                mob.set_color(player.get_color());
+                                mob.base_entity = player.id;
+                                BitMath::set(mob.flags, EntityFlags::kDieOnParentDeath);
+                                BitMath::set(mob.flags, EntityFlags::kNoDrops);
+                                BitMath::set(mob.flags, EntityFlags::kIsDetached);
+                                // Keep score_reward so escort-freeze (0 dmg + 0 xp + NoDrops)
+                                // cannot match hatch pets.
+                                if (mob.score_reward == 0)
+                                    mob.score_reward = 1;
+                                // Match egg petal rarity (zone spawns already do this).
+                                uint8_t base_r = MOB_DATA[spawn_id].rarity;
+                                uint8_t spawn_r = petal_r;
+                                if (spawn_r >= RarityID::kNumRarities) spawn_r = base_r;
+                                if (spawn_r < base_r) spawn_r = base_r;
+                                mob.set_rarity(spawn_r);
+                                if (is_stick) {
+                                    float const st = kStickSummonStat[spawn_r];
+                                    mob.max_health = st;
+                                    mob.health = st;
+                                    mob.damage = st;
+                                } else {
+                                    float th = mob_spawn_threat_mult(base_r, spawn_r);
+                                    mob.max_health *= th;
+                                    mob.health = mob.max_health;
+                                    mob.damage *= mob_spawn_damage_mult(base_r, spawn_r);
+                                    if (mob.damage <= 0.f)
+                                        mob.damage = 1.f;
+                                }
+                                float rs = mob_rarity_radius_mult(spawn_r);
+                                if (rs != 1.f) {
+                                    float nr = mob.get_radius() * rs;
+                                    mob.set_radius(nr);
+                                    mob.mass = (1 + nr / BASE_FLOWER_RADIUS)
+                                        * (MOB_DATA[spawn_id].attributes.stationary ? 10000.f : 1.f);
+                                }
+                            });
+
+                            if (petal_data.attributes.spawn_count == 0) {
+                                petal_slot.ent_id = mob.id;
+                                sim->request_delete(petal.id);
+                                break;
                             }
-                        });
-                    
-                        if (petal_data.attributes.spawn_count == 0) {
-                            petal_slot.ent_id = mob.id;
-                            sim->request_delete(petal.id);
-                            break;
-                        } else {
-                            entity_set_despawn_tick(mob, sec_reload_ticks * petal_data.attributes.spawn_count);
+                            game_tick_t life = is_stick
+                                ? (game_tick_t)(20 * TPS)
+                                : (game_tick_t)(sec_reload_ticks * petal_data.attributes.spawn_count);
+                            entity_set_despawn_tick(mob, life);
                             petal.secondary_reload = 0;
                             // Parent stays the flower (set above); do not rebind to petal.
                         }

@@ -92,6 +92,7 @@ namespace Game {
     uint8_t leaving_to_title = 0;
     uint8_t show_debug = 0;
     uint8_t show_hitboxes = 0;
+    uint8_t show_low_rarity_drops = 0;
     uint8_t selected_map = MapID::kGarden;
     uint8_t minimap_expanded = 0;
     std::vector<OnlineRosterEntry> online_roster;
@@ -335,12 +336,6 @@ void Game::init() {
         Ui::make_leave_confirm()
     );
     game_ui_window.add_child(
-        Ui::make_chat_panel()
-    );
-    game_ui_window.add_child(
-        Ui::make_chat_context_menu()
-    );
-    game_ui_window.add_child(
         Ui::make_invite_toast()
     );
     game_ui_window.add_child(
@@ -372,6 +367,14 @@ void Game::init() {
     );
     game_ui_window.add_child(
         Ui::make_boost_panel()
+    );
+    // Chat last among game HUD: mobile left-bottom must beat side buttons +
+    // the huge joystick pad in reverse poll order (Window::poll_events).
+    game_ui_window.add_child(
+        Ui::make_chat_panel()
+    );
+    game_ui_window.add_child(
+        Ui::make_chat_context_menu()
     );
     Ui::make_petal_tooltips();
     Ui::make_mob_tooltips();

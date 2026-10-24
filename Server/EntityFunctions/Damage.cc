@@ -10,8 +10,10 @@
 #include <Shared/Simulation.hh>
 #include <Shared/SpawnRules.hh>
 #include <Shared/StaticData.hh>
+#include <Helpers/Math.hh>
 
 #include <cmath>
+#include <cstring>
 
 #ifndef M_PI
 #define M_PI 3.14159265358979323846
@@ -44,7 +46,9 @@ void inflict_damage(Simulation *sim, EntityID const atk_id, EntityID const def_i
     }
     // Explore guide spirits / treasure NPCs: scripted props, never die to petals or mobs.
     // Hatch summons share kNoDrops — never treat player-faction pets as immortal props.
+    // Training dummies also match the 0-damage/NoDrops pattern but must take hits.
     if (defender.has_component(kMob)
+        && !TrainingDummy::is_dummy(defender)
         && !is_player_faction(sim, defender)
         && defender.damage <= 0.f && defender.score_reward == 0
         && BitMath::at(defender.flags, EntityFlags::kNoDrops)
@@ -56,15 +60,84 @@ void inflict_damage(Simulation *sim, EntityID const atk_id, EntityID const def_i
         if (is_player_faction(sim, attacker) && is_player_faction(sim, defender))
             return;
     }
+    // Flower defensive wiki attrs (Cotton absorb / Talisman evasion / Nazar)
+    if (defender.has_component(kFlower) && !defender.has_component(kMob)
+        && type != DamageType::kReflect) {
+        float evade = 0.f;
+        float absorb = 0.f;
+        float nazar = 0.f;
+        for (uint32_t si = 0; si < defender.get_loadout_count(); ++si) {
+            PetalID::T pid = defender.get_loadout_ids(si);
+            if (pid == PetalID::kNone || pid >= PetalID::kNumPetals) continue;
+            PetalAttributes const &B = PETAL_DATA[pid].attributes;
+            if (B.flower_evasion > evade) evade = B.flower_evasion;
+            if (B.damage_absorb > 0.f) absorb += B.damage_absorb;
+            if (B.nazar_charges > 0 && B.nazar_mitigation > nazar)
+                nazar = B.nazar_mitigation;
+        }
+        if (evade > 0.f && frand() < evade)
+            return;
+        if (absorb > 0.f) amt = fmaxf(0.f, amt - absorb);
+        if (nazar > 0.f) amt *= fmaxf(0.05f, 1.f - nazar);
+    }
     // Petal contact modifiers (read live from PETAL_DATA).
     if (type == DamageType::kContact && sim->ent_alive(atk_id)) {
         Entity &atk = sim->get_ent(atk_id);
         if (atk.has_component(kPetal)) {
+            // Glass: phase through — petal takes no contact durability loss as defender
+            if (defender.has_component(kPetal)) {
+                PetalAttributes const &Pd = PETAL_DATA[defender.get_petal_id()].attributes;
+                if (Pd.phase_through)
+                    return;
+            }
             PetalAttributes const &A = PETAL_DATA[atk.get_petal_id()].attributes;
+            // Wiki: petal evasion (Poker Chip) — chance to take no durability hit as defender petal
+            if (defender.has_component(kPetal)) {
+                PetalAttributes const &D = PETAL_DATA[defender.get_petal_id()].attributes;
+                if (D.petal_evasion > 0.f && frand() < D.petal_evasion)
+                    return;
+                if (A.vs_projectile_factor > 1.f)
+                    amt *= A.vs_projectile_factor;
+            }
+            // Wiki: Glass hit interval — skip if recently hit by this petal instance
+            if (A.hit_interval_seconds > 0.f) {
+                game_tick_t need = (game_tick_t)(A.hit_interval_seconds * TPS);
+                if (need < 1) need = 1;
+                if (atk.secondary_reload < need) return;
+                atk.secondary_reload = 0;
+            }
             if (A.bonus_vs_poisoned > 0 && (training_stats ? training_stats->poison_ticks : defender.poison_ticks) > 0)
                 amt *= (1.f + A.bonus_vs_poisoned);
             if (A.bonus_vs_slowed > 0 && (training_stats ? training_stats->slow_ticks : defender.slow_ticks) > 0)
                 amt *= (1.f + A.bonus_vs_slowed);
+            // Wiki: Dice crit (base chance; luck from flower buffs applied as flat add via petal luck attr sum later)
+            float crit_p = A.crit_chance;
+            if (crit_p > 0.f && sim->ent_alive(atk.get_parent())) {
+                Entity &flower = sim->get_ent(atk.get_parent());
+                if (flower.has_component(kFlower)) {
+                    for (uint32_t si = 0; si < flower.get_loadout_count(); ++si) {
+                        PetalID::T pid = flower.get_loadout_ids(si);
+                        if (pid == PetalID::kNone || pid >= PetalID::kNumPetals) continue;
+                        crit_p += PETAL_DATA[pid].attributes.luck * 0.04f;
+                    }
+                }
+            }
+            if (crit_p > 0.f && frand() < crit_p)
+                amt *= (A.crit_factor > 1.f ? A.crit_factor : 35.f);
+            // Wiki: Bean solo bonus
+            if (A.solo_damage_factor > 1.f && sim->ent_alive(atk.get_parent())) {
+                Entity &flower = sim->get_ent(atk.get_parent());
+                uint8_t ally = 0;
+                float const fx = flower.get_x(), fy = flower.get_y();
+                sim->spatial_hash.query(fx, fy, 400.f, 400.f, [&](Simulation *s, Entity &ent) {
+                    if (ally) return;
+                    if (!ent.has_component(kFlower) || !ent.has_component(kHealth)) return;
+                    if (ent.id == flower.id) return;
+                    if (ent.get_team() != flower.get_team()) return;
+                    ally = 1;
+                });
+                if (!ally) amt *= A.solo_damage_factor;
+            }
             if (A.hit_cycle > 1) {
                 ++atk.contact_hit_count;
                 if (atk.contact_hit_count >= A.hit_cycle) {
@@ -72,16 +145,29 @@ void inflict_damage(Simulation *sim, EntityID const atk_id, EntityID const def_i
                     amt *= (A.hit_cycle_factor > 0.f ? A.hit_cycle_factor : 2.f);
                 }
             }
-            if (A.execute_threshold > 0.f && defender.max_health > 0.f
+            // Claw wiki: bonus when target ABOVE 80% HP (invert execute gate)
+            if (A.execute_threshold >= 0.79f && A.execute_threshold <= 0.81f
+                && defender.max_health > 0.f
+                && defender.health / defender.max_health > A.execute_threshold)
+                amt *= (A.execute_factor > 0.f ? A.execute_factor : 1.5f);
+            else if (A.execute_threshold > 0.f && A.execute_threshold < 0.79f
+                && defender.max_health > 0.f
                 && defender.health / defender.max_health <= A.execute_threshold)
                 amt *= (A.execute_factor > 0.f ? A.execute_factor : 1.5f);
             float armor_mit = defender.armor;
+            if (A.armor_shred > 0.f)
+                armor_mit = fmaxf(0.f, armor_mit - A.armor_shred);
             if (A.armor_penetration > 0.f) {
                 float pen = A.armor_penetration;
                 if (pen > 1.f) pen = 1.f;
                 armor_mit *= (1.f - pen);
             }
             amt -= armor_mit;
+            // Lightning contact burst (Lightning / Laser / Blueberries)
+            if (A.lightning_damage > 0.f && !A.battery_charges) {
+                float flash = A.lightning_damage;
+                if (flash > amt) amt = flash;
+            }
         } else {
             amt -= defender.armor;
         }
@@ -129,6 +215,17 @@ void inflict_damage(Simulation *sim, EntityID const atk_id, EntityID const def_i
     } else {
         defender.health = fclamp(defender.health - amt, 0, defender.health);
         damage_dealt = old_health - defender.health;
+    }
+    // Wiki Bone: each hit halves remaining petal armor (after mitigation).
+    if (type == DamageType::kContact
+        && damage_dealt > 0.f
+        && defender.has_component(kPetal)
+        && defender.armor > 0.f) {
+        PetalID::T const pid = defender.get_petal_id();
+        if (pid < PetalID::kNumPetals
+            && PETAL_DATA[pid].name
+            && std::strcmp(PETAL_DATA[pid].name, "Bone") == 0)
+            defender.armor *= 0.5f;
     }
     // Record before reflection can kill the source. All player-owned damage,
     // including reflection and summons, contributes to the personal claim.
@@ -264,6 +361,34 @@ void inflict_damage(Simulation *sim, EntityID const atk_id, EntityID const def_i
             if (flower.has_component(kFlower) && flower.has_component(kHealth))
                 inflict_heal(sim, flower, A.on_hit_heal);
         }
+        if (A.on_hit_heal_ratio > 0.f && sim->ent_alive(attacker.get_parent())) {
+            Entity &flower = sim->get_ent(attacker.get_parent());
+            if (flower.has_component(kFlower) && flower.has_component(kHealth))
+                inflict_heal(sim, flower, damage_dealt * A.on_hit_heal_ratio);
+        }
+        // Lightning chain to nearby enemies
+        if (A.lightning_damage > 0.f && A.lightning_chains > 1) {
+            float const R = 180.f;
+            float const px = defender.get_x();
+            float const py = defender.get_y();
+            float const chain_dmg = A.lightning_damage * 0.65f;
+            uint8_t left = A.lightning_chains - 1;
+            EntityID atk_team = attacker.get_team();
+            EntityID skip = def_id;
+            EntityID src = atk_id;
+            sim->spatial_hash.query(px, py, R, R, [&](Simulation *s, Entity &ent) {
+                if (left == 0) return;
+                if (ent.id == skip) return;
+                if (!ent.has_component(kHealth)) return;
+                if (ent.get_team() == atk_team) return;
+                if (ent.has_component(kPetal) || ent.has_component(kDrop)) return;
+                float dx = ent.get_x() - px;
+                float dy = ent.get_y() - py;
+                if (dx * dx + dy * dy > R * R) return;
+                --left;
+                inflict_damage(s, src, ent.id, chain_dmg, DamageType::kSplash);
+            });
+        }
         if (A.taunt_radius > 0.f && sim->ent_alive(attacker.base_entity)) {
             float const R = A.taunt_radius;
             float const px = defender.get_x();
@@ -305,5 +430,16 @@ void inflict_heal(Simulation *sim, Entity &ent, float amt) {
     DEBUG_ONLY(assert(ent.has_component(kHealth));)
     if (ent.pending_delete || ent.health <= 0) return;
     if (ent.dandy_ticks > 0) return;
+    // Basil: amplify healing received
+    if (ent.has_component(kFlower) && !ent.has_component(kMob) && amt > 0.f) {
+        float amp = 0.f;
+        for (uint32_t si = 0; si < ent.get_loadout_count(); ++si) {
+            PetalID::T pid = ent.get_loadout_ids(si);
+            if (pid == PetalID::kNone || pid >= PetalID::kNumPetals) continue;
+            float a = PETAL_DATA[pid].attributes.heal_amp;
+            if (a > amp) amp = a;
+        }
+        if (amp > 0.f) amt *= (1.f + amp);
+    }
     ent.health = fclamp(ent.health + amt, 0, ent.max_health);
 }

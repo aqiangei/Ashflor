@@ -177,6 +177,10 @@ namespace I18n {
         kAcquireShop,
         kAcquireMerge,
         kAcquireStarter,
+        kShowLowRarityDrops,
+        kSettingsControls,
+        kSettingsDisplay,
+        kSettingsSocial,
         kCount
     };
 

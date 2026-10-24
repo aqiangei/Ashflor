@@ -168,7 +168,8 @@ public:
     X(15, Game::guest_talent_ranks) \
     X(17, Game::rot_speed_setting) \
     X(21, Game::show_debug) \
-    X(23, Game::show_hitboxes)
+    X(23, Game::show_hitboxes) \
+    X(24, Game::show_low_rarity_drops)
 
 #define X(ct, name) static auto checker_##ct = MutationObserver(name);
 STORED
@@ -244,6 +245,7 @@ void Storage::retrieve() {
                 Game::show_debug = BitMath::at(b2, 0);
                 Input::disable_auto_party = BitMath::at(b2, 1);
                 Game::show_hitboxes = BitMath::at(b2, 2);
+                Game::show_low_rarity_drops = BitMath::at(b2, 3);
             }
         } else {
             Input::request_mobile = Input::is_mobile;
@@ -343,6 +345,7 @@ void Storage::retrieve() {
                     remain = (uint32_t) ((StorageProtocol::buffer + len - reader.at) / 4);
                 uint32_t bank_n = PetalID::kNumPetals;
                 // Newest→oldest append waves (must match AccountStore::load).
+                constexpr uint32_t kWikiImportAdded = 612; // wiki petal import wave
                 constexpr uint32_t kTriangleAdded = 9; // Triangle Common..Unique
                 constexpr uint32_t kHoneyMeteorLadderAdded = 16;
                 constexpr uint32_t kHoneyMeteorAdded = 2;
@@ -363,7 +366,8 @@ void Storage::retrieve() {
                 auto sub = [](uint32_t cur, uint32_t amt) -> uint32_t {
                     return cur > amt ? cur - amt : cur;
                 };
-                uint32_t const prev_triangle = sub(n, kTriangleAdded);
+                uint32_t const prev_wiki = sub(n, kWikiImportAdded);
+                uint32_t const prev_triangle = sub(prev_wiki, kTriangleAdded);
                 uint32_t const prev_honey_meteor_ladder = sub(prev_triangle, kHoneyMeteorLadderAdded);
                 uint32_t const prev_honey_meteor = sub(prev_honey_meteor_ladder, kHoneyMeteorAdded);
                 uint32_t const prev_monstera_ladder = sub(prev_honey_meteor, kMonsteraLadderAdded);
@@ -380,7 +384,7 @@ void Storage::retrieve() {
                 uint32_t const prev_ladder = sub(prev_jungle, kLadderAdded);
                 uint32_t const prev_royal = sub(prev_ladder, kRoyalAdded);
                 uint32_t const bank_candidates[] = {
-                    n, prev_triangle, prev_honey_meteor_ladder, prev_honey_meteor, prev_monstera_ladder,
+                    n, prev_wiki, prev_triangle, prev_honey_meteor_ladder, prev_honey_meteor, prev_monstera_ladder,
                     prev_anthell, prev_super,
                     prev_cross, prev_basecraft, prev_mats, prev_monstera, prev_coin,
                     prev_common, prev_stinger, prev_jungle, prev_ladder, prev_royal
@@ -550,6 +554,7 @@ void Storage::set() {
             (Game::show_debug ? 1 : 0)
             | ((Input::disable_auto_party ? 1 : 0) << 1)
             | ((Game::show_hitboxes ? 1 : 0) << 2)
+            | ((Game::show_low_rarity_drops ? 1 : 0) << 3)
         );
         StorageProtocol::store("settings", writer.at - writer.base);
     }

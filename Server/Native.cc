@@ -39,6 +39,12 @@ static std::string read_file_bin(std::string const &path) {
     return ss.str();
 }
 
+// uWS may yield a string_view with nullptr data when the key is absent.
+static std::string query_str(std::string_view q) {
+    if (q.empty() || q.data() == nullptr) return {};
+    return std::string(q.data(), q.size());
+}
+
 static char const *mime_for(std::string const &path) {
     auto ends = [&](char const *suf) {
         size_t n = std::char_traits<char>::length(suf);
@@ -228,6 +234,45 @@ uWS::App Server::server = uWS::App()
             body.replace(pos + 5, end - (pos + 5), ts);
         }
     }
+    // Stamp deploy metadata so /live "当前部署" works on native (Wasm does this in JS).
+    char const *auth_env = std::getenv("ASHFLOR_LIVE_AUTH");
+    uint8_t auth_on = (auth_env != nullptr && std::string(auth_env) == "1");
+    std::string cache_v;
+    {
+        std::string html = read_file_bin("index.html");
+        auto p = html.find("var cacheV = '");
+        if (p != std::string::npos) {
+            p += 14;
+            auto e = html.find('\'', p);
+            if (e != std::string::npos) cache_v = html.substr(p, e - p);
+        }
+    }
+    std::string deploy_raw = read_file_bin("deploy-info.json");
+    while (!deploy_raw.empty() && (deploy_raw.back() == '\n' || deploy_raw.back() == '\r'
+           || deploy_raw.back() == ' ' || deploy_raw.back() == '\t'))
+        deploy_raw.pop_back();
+    // Strip outer braces; if missing/invalid, synthesize a minimal object.
+    std::string deploy_inner;
+    if (deploy_raw.size() >= 2 && deploy_raw.front() == '{' && deploy_raw.back() == '}')
+        deploy_inner = deploy_raw.substr(1, deploy_raw.size() - 2);
+    else
+        deploy_inner = "\"summary\":\"\"";
+    // Ensure cache_v / auth_required override any stale deploy-info fields.
+    while (!deploy_inner.empty() && (deploy_inner.back() == ' ' || deploy_inner.back() == '\n'
+           || deploy_inner.back() == '\r' || deploy_inner.back() == '\t'))
+        deploy_inner.pop_back();
+    if (!deploy_inner.empty() && deploy_inner.back() != ',')
+        deploy_inner += ',';
+    deploy_inner += "\"cache_v\":\"" + cache_v + "\",\"auth_required\":";
+    deploy_inner += auth_on ? "true" : "false";
+    if (!body.empty() && body.back() == '}') {
+        body.pop_back();
+        body += ",\"auth_required\":";
+        body += auth_on ? "true" : "false";
+        body += ",\"deploy\":{";
+        body += deploy_inner;
+        body += "}}";
+    }
     send_json(res, 200, body);
 })
 .get("/api/live-pos", [](auto *res, auto * /*req*/) {
@@ -237,30 +282,68 @@ uWS::App Server::server = uWS::App()
     send_json(res, 200, Server::live_catalog_json());
 })
 .get("/api/feedback", [](auto *res, auto *req) {
-    std::string before(req->getQuery("before"));
+    std::string before = query_str(req->getQuery("before"));
     send_json(res, 200, FeedbackStore::page_json((uint32_t) std::strtoul(before.c_str(), nullptr, 10)));
 })
+.options("/api/feedback", [](auto *res, auto * /*req*/) {
+    res->writeStatus("204 No Content");
+    res->writeHeader("Access-Control-Allow-Origin", "*");
+    res->writeHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+    res->writeHeader("Access-Control-Allow-Headers", "Content-Type");
+    res->end();
+})
+.post("/api/feedback", [](auto *res, auto * /*req*/) {
+    auto body = std::make_shared<std::string>();
+    auto done = std::make_shared<uint8_t>(0);
+    res->onAborted([done]() { *done = 1; });
+    res->onData([res, body, done](std::string_view chunk, bool isLast) {
+        if (*done) return;
+        body->append(chunk.data(), chunk.size());
+        if (body->size() > 2048) {
+            *done = 1;
+            send_json(res, 400, "{\"ok\":false,\"msg\":\"body too large\"}");
+            return;
+        }
+        if (!isLast) return;
+        *done = 1;
+        std::string j = std::move(*body);
+        std::string action = json_raw_field(j, "action");
+        if (action.empty()) action = "set_handled";
+        std::string key = json_raw_field(j, "key");
+        if (action == "auth") {
+            send_json(res, 200, FeedbackStore::auth_json(key));
+            return;
+        }
+        if (action != "set_handled") {
+            send_json(res, 400, "{\"ok\":false,\"msg\":\"unknown action\"}");
+            return;
+        }
+        uint32_t id = (uint32_t) json_int(j, "id", 0);
+        uint8_t handled = (uint8_t) (json_int(j, "handled", 0) ? 1 : 0);
+        send_json(res, 200, FeedbackStore::set_handled_json(id, handled, key));
+    });
+})
 .get("/api/broadcasts", [](auto *res, auto *req) {
-    uint32_t before = (uint32_t) std::strtoul(std::string(req->getQuery("before")).c_str(), nullptr, 10);
-    uint32_t limit = (uint32_t) std::strtoul(std::string(req->getQuery("limit")).c_str(), nullptr, 10);
+    uint32_t before = (uint32_t) std::strtoul(query_str(req->getQuery("before")).c_str(), nullptr, 10);
+    uint32_t limit = (uint32_t) std::strtoul(query_str(req->getQuery("limit")).c_str(), nullptr, 10);
     if (limit == 0) limit = 60;
-    std::string day(req->getQuery("day"));
-    std::string player(req->getQuery("player"));
-    std::string kind_s(req->getQuery("kind"));
-    std::string map_s(req->getQuery("map"));
-    std::string source(req->getQuery("source"));
+    std::string day = query_str(req->getQuery("day"));
+    std::string player = query_str(req->getQuery("player"));
+    std::string kind_s = query_str(req->getQuery("kind"));
+    std::string map_s = query_str(req->getQuery("map"));
+    std::string source = query_str(req->getQuery("source"));
     int kind = kind_s.empty() ? -1 : (int) std::strtol(kind_s.c_str(), nullptr, 10);
     int map = map_s.empty() ? -1 : (int) std::strtol(map_s.c_str(), nullptr, 10);
     send_json(res, 200, Chat::query_broadcasts_json(before, limit, day, player, kind, map, source));
 })
 .get("/api/chatlog", [](auto *res, auto *req) {
-    uint32_t before = (uint32_t) std::strtoul(std::string(req->getQuery("before")).c_str(), nullptr, 10);
-    uint32_t limit = (uint32_t) std::strtoul(std::string(req->getQuery("limit")).c_str(), nullptr, 10);
+    uint32_t before = (uint32_t) std::strtoul(query_str(req->getQuery("before")).c_str(), nullptr, 10);
+    uint32_t limit = (uint32_t) std::strtoul(query_str(req->getQuery("limit")).c_str(), nullptr, 10);
     if (limit == 0) limit = 60;
-    std::string day(req->getQuery("day"));
-    std::string player(req->getQuery("player"));
-    std::string ch_s(req->getQuery("channel"));
-    std::string map_s(req->getQuery("map"));
+    std::string day = query_str(req->getQuery("day"));
+    std::string player = query_str(req->getQuery("player"));
+    std::string ch_s = query_str(req->getQuery("channel"));
+    std::string map_s = query_str(req->getQuery("map"));
     int channel = ch_s.empty() ? -1 : (int) std::strtol(ch_s.c_str(), nullptr, 10);
     int map = map_s.empty() ? -1 : (int) std::strtol(map_s.c_str(), nullptr, 10);
     send_json(res, 200, Chat::query_chatlog_json(before, limit, day, player, channel, map));

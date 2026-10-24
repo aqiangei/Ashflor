@@ -25,7 +25,7 @@ struct MobRenderAttributes {
     FlowerRenderAttributes flower_attrs;
 };
 
-// reload: 0..1 CD pie. health: 0..1 live durability (bottom pale wash when < 1).
+// reload: 0..1 CD pie. health: 0..1 live durability (bottom rarity-tint wash when < 1).
 void draw_loadout_background(Renderer &, PetalID::T, float reload=1, uint8_t draw_name=1, float health=1);
 
 void draw_static_flower(Renderer &, FlowerRenderAttributes);

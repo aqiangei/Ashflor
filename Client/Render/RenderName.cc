@@ -83,9 +83,7 @@ static void wrap_speech(Renderer &ctx, std::string const &text, float max_w,
 void render_name(Renderer &ctx, Entity const &ent) {
     float rad = ent.get_radius();
     ctx.set_global_alpha(1 - ent.deletion_animation);
-    if (!(ent.has_component(kMob) && !ent.has_component(kFlower)
-          && ent.deletion_animation > 0.f))
-        ctx.scale(1 + 0.5 * ent.deletion_animation);
+    ctx.scale(1 + 0.5 * ent.deletion_animation);
 
     // 1) Chat bubble above head (brief)
     if (ent.has_component(kName) && !ent.get_name().empty()) {

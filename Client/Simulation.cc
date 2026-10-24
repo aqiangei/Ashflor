@@ -64,12 +64,9 @@ void Entity::tick_lerp(float amt) {
         }
         radius.step(amt);
         angle.step_angle(phys_amt);
-        if (pending_delete) {
-            // Mobs linger ~750ms as a tipped corpse; other ents keep the snap fade.
-            float const fade_ms =
-                (has_component(kMob) && !has_component(kFlower)) ? 750.f : 150.f;
-            deletion_animation = fclamp(deletion_animation + Ui::dt / fade_ms, 0, 1);
-        }
+        if (pending_delete)
+            // Match server deletion_tick (~TPS/5 ≈ 200ms): finish inflate before hard delete.
+            deletion_animation = fclamp(deletion_animation + Ui::dt / 150.f, 0, 1);
     }
     if (has_component(kCamera)) {
         camera_x.step(cam_amt);
@@ -115,7 +112,9 @@ void Entity::tick_lerp(float amt) {
             Particle::clear_combat_accum(id);
 
         health_ratio.step(amt);
-        if (damaged == 1 && damage_flash < 0.1 && !pending_delete)
+        // Flash even on the lethal packet (pending_delete same tick) so one-shots
+        // still read as a hit before the inflate-fade, not a silent vanish.
+        if (damaged == 1 && damage_flash < 0.1)
             damage_flash = 1;
         else
             damage_flash = lerp(damage_flash, 0, amt);

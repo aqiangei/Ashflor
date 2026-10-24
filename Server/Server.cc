@@ -245,14 +245,16 @@ void Server::tick() {
         Server::stop();
 }
 
-static void json_escape_append(std::string &out, std::string const &s) {
-    for (unsigned char c : s) {
+static void json_escape_append(std::string &out, char const *s) {
+    if (s == nullptr) return;
+    for (unsigned char c; (c = (unsigned char) *s) != 0; ++s) {
+        // range-for over string would construct from null; walk C string instead
         switch (c) {
-            case '"': out += "\\\""; break;
-            case '\\': out += "\\\\"; break;
-            case '\n': out += "\\n"; break;
-            case '\r': out += "\\r"; break;
-            case '\t': out += "\\t"; break;
+            case '"': out += "\\\""; continue;
+            case '\\': out += "\\\\"; continue;
+            case '\n': out += "\\n"; continue;
+            case '\r': out += "\\r"; continue;
+            case '\t': out += "\\t"; continue;
             default:
                 if (c < 0x20) {
                     char buf[8];
@@ -261,9 +263,13 @@ static void json_escape_append(std::string &out, std::string const &s) {
                 } else {
                     out += (char) c;
                 }
-                break;
+                continue;
         }
     }
+}
+
+static void json_escape_append(std::string &out, std::string const &s) {
+    json_escape_append(out, s.c_str());
 }
 
 static char const *live_rarity_zh(uint8_t rarity) {
@@ -624,19 +630,9 @@ std::string Server::health_json() {
     uint8_t ok = 1;
     if (Server::is_draining) ok = 0;
     if (Server::last_tick_ms >= 100.0) ok = 0;
-    uint32_t entities = 0;
-    uint32_t entities_max = 0;
-    if (Server::games != nullptr) {
-        for (uint8_t mi = 0; mi < MapID::kNumMaps; ++mi) {
-            uint32_t n = Server::games[mi].simulation.entity_count();
-            entities += n;
-            if (n > entities_max) entities_max = n;
-        }
-    }
-    char buf[640];
+    char buf[512];
     std::snprintf(buf, sizeof(buf),
         "{\"ok\":%s,\"status\":\"%s\",\"online\":%u,\"draining\":%s,"
-        "\"entities\":%u,\"entities_max_map\":%u,\"entity_cap\":%u,"
         "\"tick\":{\"last_ms\":%.2f,\"max_ms_60s\":%.2f,\"overruns_60s\":%u,\"samples_60s\":%u,"
         "\"phases\":{\"spawn_ms\":%.2f,\"hash_ms\":%.2f,\"ai_ms\":%.2f,\"collide_ms\":%.2f,"
         "\"spawn_max_ms\":%.2f,\"hash_max_ms\":%.2f,\"ai_max_ms\":%.2f,\"collide_max_ms\":%.2f}}}",
@@ -644,7 +640,6 @@ std::string Server::health_json() {
         ok ? "ok" : "bad",
         Server::player_count,
         Server::is_draining ? "true" : "false",
-        entities, entities_max, ENTITY_CAP,
         Server::last_tick_ms,
         Server::max_tick_ms_window,
         Server::tick_overruns_window,

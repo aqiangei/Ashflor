@@ -306,6 +306,7 @@ namespace TreasureSites {
             PetalID::kMatLeaf, PetalID::kMatSand, PetalID::kMatWaterDrop,
             PetalID::kMatIceCrystal, PetalID::kMatVine, PetalID::kMatAntShell,
             PetalID::kMatSulfur, PetalID::kMatSteel,
+            PetalID::kMatAntShell, // Ant Nest
         };
         if (mid >= MapID::kNumMaps) mid = 0;
         return kMats[mid];
@@ -317,6 +318,7 @@ namespace TreasureSites {
             PetalID::kMatTwig, PetalID::kMatVenomBarb, PetalID::kMatSeaSalt,
             PetalID::kMatSnowFluff, PetalID::kMatResin, PetalID::kMatAntenna,
             PetalID::kMatFireCrystal, PetalID::kMatGear,
+            PetalID::kMatAntenna, // Ant Nest
         };
         if (mid >= MapID::kNumMaps) mid = 0;
         return kMats[mid];
@@ -328,6 +330,7 @@ namespace TreasureSites {
             PetalID::kMatPollenDust, PetalID::kMatCactusSap, PetalID::kMatSeashell,
             PetalID::kMatColdIron, PetalID::kMatSpore, PetalID::kMatFormicAcid,
             PetalID::kMatLavaRock, PetalID::kMatHolyShard,
+            PetalID::kMatFormicAcid, // Ant Nest
         };
         if (mid >= MapID::kNumMaps) mid = 0;
         return kMats[mid];

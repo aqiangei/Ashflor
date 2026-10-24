@@ -54,10 +54,7 @@ void render_health(Renderer &ctx, Entity const &ent) {
     float const rad = ent.get_radius();
     float w = rad * 1.33f;
     float bar_w = 2 * w;
-    // Match body filter: mob corpses do not balloon the chrome.
-    if (!(ent.has_component(kMob) && !ent.has_component(kFlower)
-          && ent.deletion_animation > 0.f))
-        ctx.scale(1 + 0.5 * ent.deletion_animation);
+    ctx.scale(1 + 0.5 * ent.deletion_animation);
     // Origin = left end of the HP bar (below the entity). Extra clearance so
     // oversized mob art (beyond physics radius) does not swallow the chrome.
     float y_below = rad + 18.f + std::min(rad * 0.22f, 48.f);

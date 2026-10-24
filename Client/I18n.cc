@@ -197,6 +197,10 @@ static char const *const EN[I18n::kCount] = {
     "Shop",
     "Merge 5× lower rarity",
     "Starter",
+    "Show Common/Unusual drops",
+    "Controls",
+    "Display",
+    "Social",
 };
 
 static char const *const ZH[I18n::kCount] = {
@@ -367,6 +371,10 @@ static char const *const ZH[I18n::kCount] = {
     "商店",
     "5合1升稀有",
     "初始赠送",
+    "显示普通/罕见掉落",
+    "操作",
+    "显示",
+    "社交",
 };
 
 char const *I18n::tr(Str id) {

@@ -8,6 +8,8 @@
 #include <Helpers/Bits.hh>
 #include <Helpers/Vector.hh>
 
+#include <cmath>
+
 static bool _is_controlled_flower(Simulation *sim, Entity const &ent) {
     if (!ent.has_component(kFlower)) return false;
     if (!sim->ent_alive(ent.get_parent())) return false;
@@ -69,6 +71,18 @@ EntityID find_nearest_enemy(Simulation *simulation, Entity const &entity, float 
             if (dist > SUMMON_RETREAT_RADIUS) return;
         }
         float dist = Vector(ent.get_x()-entity.get_x(),ent.get_y()-entity.get_y()).magnitude();
+        // Poo: shrink flower aggro range from mob seekers
+        if (!seeker_player && ent.has_component(kFlower) && !ent.has_component(kMob)) {
+            float shrink = 0.f;
+            for (uint32_t si = 0; si < ent.get_loadout_count(); ++si) {
+                PetalID::T pid = ent.get_loadout_ids(si);
+                if (pid == PetalID::kNone || pid >= PetalID::kNumPetals) continue;
+                float s = PETAL_DATA[pid].attributes.aggro_shrink;
+                if (s > shrink) shrink = s;
+            }
+            if (shrink > 0.f && dist > radius * (1.f - fminf(0.85f, shrink)))
+                return;
+        }
         // Detached honey is preferred bait — treat as closer so mobs peel off the flower.
         float score = is_honey_bait ? dist * 0.28f : dist;
         if (score < min_dist) { min_dist = score; ret = ent.id; }

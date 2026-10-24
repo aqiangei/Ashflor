@@ -194,9 +194,18 @@ void DOM::open_feedback_board() {
                 else if (event.data["kind"] === "ashflor-feedback-post"
                     && typeof event.data["text"] === "string")
                     _ashflor_feedback_post(stringToNewUTF8(event.data["text"]));
+                else if (event.data["kind"] === "ashflor-feedback-resolve"
+                    && typeof event.data["id"] === "number")
+                    _ashflor_feedback_resolve(
+                        event.data["id"] >>> 0,
+                        event.data["resolved"] ? 1 : 0);
             };
             window.addEventListener("message", Module.feedbackListener);
         }
+        // Named tab reuse. If this game tab itself is still named "ashflor-feedback"
+        // (e.g. feedback "返回游戏" fell back to location=/ without clearing name),
+        // window.open would navigate *this* page — clear first.
+        if (window.name === "ashflor-feedback") window.name = "";
         Module.feedbackWindow = window.open("/feedback.html", "ashflor-feedback");
         if (Module.feedbackWindow) {
             Module.feedbackWindow.postMessage(Module.feedbackSession, location.origin);
@@ -210,6 +219,10 @@ extern "C" EMSCRIPTEN_KEEPALIVE void ashflor_feedback_post(char *text) {
     std::free(text);
 }
 
+extern "C" EMSCRIPTEN_KEEPALIVE void ashflor_feedback_resolve(uint32_t id, uint8_t resolved) {
+    Game::set_feedback_resolved(id, resolved);
+}
+
 void DOM::feedback_result(uint8_t result, uint32_t id) {
     EM_ASM({
         if (!Module.feedbackWindow || Module.feedbackWindow.closed) return;
@@ -219,6 +232,18 @@ void DOM::feedback_result(uint8_t result, uint32_t id) {
         reply["id"] = $1;
         Module.feedbackWindow.postMessage(reply, location.origin);
     }, result, id);
+}
+
+void DOM::feedback_resolve_result(uint8_t result, uint32_t id, uint8_t resolved) {
+    EM_ASM({
+        if (!Module.feedbackWindow || Module.feedbackWindow.closed) return;
+        const reply = Object.create(null);
+        reply["kind"] = "ashflor-feedback-resolved";
+        reply["result"] = $0;
+        reply["id"] = $1;
+        reply["resolved"] = $2;
+        Module.feedbackWindow.postMessage(reply, location.origin);
+    }, result, id, resolved);
 }
 
 void DOM::open_qq_group() {

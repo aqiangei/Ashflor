@@ -44,17 +44,17 @@ namespace Craft {
     constexpr uint32_t kMaxPetalLevel = 65535;
     constexpr float kLevelStatPerLevel = 0.12f; // +12% combat / additive attrs per level
     // Global petal CD after Golden Leaf × talent: never faster than this fraction
-    // of base reload (50% CDR cap). Prevents stack/Lv from deleting petal art.
-    constexpr float kReloadFactorFloor = 0.50f;
+    // of base reload (99% CDR cap). Flower still clamps reload to ≥2 ticks for art.
+    constexpr float kReloadFactorFloor = 0.01f;
     constexpr float kReloadFactorCeil = 4.f;
     // Multiplicative attrs (speed, CDR, vision…): scale the deviation from 1.
-    // CDR (factor<1) soft-capped per leaf so Unique Lv cannot erase the floor alone.
+    // CDR softens toward kReloadFactorFloor (99% cap); no per-leaf 40% ceiling.
     inline float level_scale_factor(float factor, float lv_mult) {
         if (lv_mult <= 1.0001f) return factor;
         if (factor >= 1.f)
             return 1.f + (factor - 1.f) * lv_mult;
         float depth = (1.f - factor) * lv_mult;
-        if (depth > 0.40f) depth = 0.40f; // deepest single-leaf cut ≈ −40%
+        if (depth > 1.f - kReloadFactorFloor) depth = 1.f - kReloadFactorFloor;
         float out = 1.f - depth;
         return out < kReloadFactorFloor ? kReloadFactorFloor : out;
     }

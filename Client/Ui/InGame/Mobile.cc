@@ -165,6 +165,16 @@ void MobileJoyStick::poll_events(ScreenEvent const &event) {
     // Bag/craft drawer sits on the left pad — never steal its taps.
     if (Game::game_panel != Game::kPanelNone && !is_pressed)
         return;
+    // Chat input / history (bottom-left) — pad must not eat open/type taps.
+    if (Input::is_mobile && !is_pressed && Ui::chat_panel_root != nullptr
+        && Ui::chat_panel_root->visible) {
+        Element *c = Ui::chat_panel_root;
+        float hw = c->width * Ui::scale * 0.5f;
+        float hh = c->height * Ui::scale * 0.5f;
+        if (std::fabs(event.x - c->screen_x) <= hw
+            && std::fabs(event.y - c->screen_y) <= hh)
+            return;
+    }
     // The floating pad must also leave the bottom equipment bar / spin wheel alone.
     if (Input::is_mobile && !is_pressed
         && (Ui::loadout_bar_hit(event.x, event.y)

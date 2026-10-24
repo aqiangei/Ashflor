@@ -114,27 +114,12 @@ static void ensure_boss(Simulation *sim) {
         Entity &b = sim->get_ent(sim->boss_ent);
         if (is_map_boss(b)) return;
     }
-    // Stale boss_ent cache: reattach before burning respawn CD (avoids false
-    // "dead" windows and duplicate spawn attempts after slot recycle).
-    {
-        bool alive = false;
-        sim->for_each<kMob>([&](Simulation *, Entity &m) {
-            if (is_map_boss(m)) {
-                alive = true;
-                sim->boss_ent = m.id;
-            }
-        });
-        if (alive) {
-            sim->boss_respawn_ticks = 0;
-            return;
-        }
-    }
     if (sim->boss_ever_spawned) {
         if (sim->boss_respawn_ticks <= 0)
             sim->boss_respawn_ticks = 45 * (int32_t)TPS;
         if (--sim->boss_respawn_ticks > 0) return;
     }
-    // CD finished — confirm still absent before allocating a Unique boss.
+    // Only scan when we are about to spawn (first time or CD finished).
     {
         bool alive = false;
         sim->for_each<kMob>([&](Simulation *, Entity &m) {
@@ -143,10 +128,7 @@ static void ensure_boss(Simulation *sim) {
                 sim->boss_ent = m.id;
             }
         });
-        if (alive) {
-            sim->boss_respawn_ticks = 0;
-            return;
-        }
+        if (alive) return;
     }
     Map::resolve_circle_terrain(sim->map_id, bx, by, 100.f);
     std::cout << "[boss] map " << (int)sim->map_id << " spawning " << MOB_DATA[mob_id].name

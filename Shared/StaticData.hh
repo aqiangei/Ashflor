@@ -56,6 +56,10 @@ inline uint8_t petal_is_moon(PetalID::T id) {
         || (id >= PetalID::kMoonCommon && id <= PetalID::kMoonSuper);
 }
 
+inline uint8_t petal_is_bone(PetalID::T id) {
+    return petal_name_is(id, "Bone");
+}
+
 using MapZones = StaticArray<struct ZoneDefinition, MAX_ZONES_PER_MAP>;
 using MapTerrain = StaticArray<struct TerrainFeature, MAX_TERRAIN_PER_MAP>;
 

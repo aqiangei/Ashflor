@@ -69,18 +69,18 @@ public:
     uint64_t last_server_chat_ms = 0; // 全服频道单独冷却
     std::string last_whisper_from; // for /r /reply
     // Per-map ritual claim bits (bit ritual_idx) — session only
-    uint8_t treasure_ritual_claimed[8] = {};
+    uint8_t treasure_ritual_claimed[MapID::kNumMaps] = {};
     // Per-map chest claim bits (bit chest_idx) — session only
-    uint8_t treasure_chest_claimed[8] = {};
+    uint8_t treasure_chest_claimed[MapID::kNumMaps] = {};
     uint32_t treasure_hint_cd = 0; // ticks until next NPC hint
     // WorldExplore: per-map follow + 3-touch (session). Step is for current map only.
-    uint8_t explore_follow_done[8] = {};
-    uint8_t explore_puzzle_done[8] = {};
+    uint8_t explore_follow_done[MapID::kNumMaps] = {};
+    uint8_t explore_puzzle_done[MapID::kNumMaps] = {};
     uint8_t explore_puzzle_step = 0;
     uint32_t explore_follow_cd = 0;
     EntityID explore_follower = NULL_ENTITY;
     // WorldEvent: per-map claim bits (slot 0..15) — session
-    uint16_t world_event_claimed[8] = {};
+    uint16_t world_event_claimed[MapID::kNumMaps] = {};
     // Timed-touch attempt (current map only)
     uint8_t timed_touch_mask = 0;
     uint8_t timed_touch_event = 255; // index into map event list

@@ -63,7 +63,8 @@ void tick_petal_behavior(Simulation *sim, Entity &petal) {
             // Straight bait toss — slower than Missile so mobs can catch it.
             petal.acceleration.unit_normal(petal.get_angle()).set_magnitude(0.7f * PLAYER_ACCELERATION);
         } else if (petal_name_is(pid, "Peas") || petal_name_is(pid, "Glass Storm")) {
-            petal.acceleration.unit_normal(petal.heading_angle).set_magnitude(2.0 * PLAYER_ACCELERATION);
+            // Sustained push so peas keep range after the initial spray burst.
+            petal.acceleration.unit_normal(petal.heading_angle).set_magnitude(2.6f * PLAYER_ACCELERATION);
         } else if (petal_is_moon(pid)) {
             // Orbit the flower: advance angle every tick (all Moon ladder IDs).
             float dir = (petal.id.id % 2) ? 1.f : -1.f;
@@ -133,7 +134,10 @@ void tick_petal_behavior(Simulation *sim, Entity &petal) {
     }
     if (petal_data.attributes.burst_heal > 0 && player.health < player.max_health && player.dandy_ticks == 0) {
         Vector delta(player.get_x() - petal.get_x(), player.get_y() - petal.get_y());
-        if (delta.magnitude() < petal.get_radius()) {
+        // Touch the flower body (not only the tiny core). Old check used petal
+        // radius alone (~10) so a stationary player rarely absorbed the rose.
+        float const reach = player.get_radius() + petal.get_radius();
+        if (delta.magnitude() < reach) {
             inflict_heal(sim, player, petal_data.attributes.burst_heal * lv_mult);
             sim->request_delete(petal.id);
             return;
@@ -207,11 +211,15 @@ void tick_petal_behavior(Simulation *sim, Entity &petal) {
         // Full rarity ladders — exact PetalID cases missed every rung but the seed.
         if (BitMath::at(player.input, InputFlags::kAttacking)) {
             float spray_angle = frand() * 2 * M_PI;
+            // Farther spray: higher launch speed + longer life; Motion grants 1 terrain bounce.
+            float const kPeaSpeed = 28.f * PLAYER_ACCELERATION;
+            game_tick_t const kPeaLife = (game_tick_t)(2.25f * TPS);
             petal.friction = DEFAULT_FRICTION;
-            petal.velocity.unit_normal(spray_angle).set_magnitude(20 * PLAYER_ACCELERATION);
+            petal.velocity.unit_normal(spray_angle).set_magnitude(kPeaSpeed);
             petal.set_split_projectile(0);
             petal.heading_angle = spray_angle;
-            entity_set_despawn_tick(petal, 1.0 * TPS);
+            BitMath::unset(petal.flags, EntityFlags::kTerrainBounced);
+            entity_set_despawn_tick(petal, kPeaLife);
             for (uint32_t i = 1; i < petal_data.count; ++i) {
                 Entity &new_petal = alloc_petal(sim, petal.get_petal_id(), player);
                 new_petal.friction = DEFAULT_FRICTION;
@@ -221,8 +229,9 @@ void tick_petal_behavior(Simulation *sim, Entity &petal) {
                 new_petal.heading_angle = spray_angle + (2 * M_PI * i) / petal_data.count;
                 new_petal.velocity
                     .unit_normal(new_petal.heading_angle)
-                    .set_magnitude(20 * PLAYER_ACCELERATION);
-                entity_set_despawn_tick(new_petal, 1.0 * TPS);
+                    .set_magnitude(kPeaSpeed);
+                BitMath::unset(new_petal.flags, EntityFlags::kTerrainBounced);
+                entity_set_despawn_tick(new_petal, kPeaLife);
             }
         }
     } else switch (pid) {

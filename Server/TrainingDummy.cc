@@ -94,6 +94,13 @@ void prepare(Client *client) {
 }
 }
 
+float TrainingDummy::petal_contact_damage(Entity const &dummy) {
+    uint8_t r = dummy.get_rarity();
+    if (r >= RarityID::kNumRarities) r = 0;
+    // ~basic mob body at Common; higher dummy tiers chip petals harder.
+    return 10.f * mob_spawn_damage_mult(RarityID::kCommon, r);
+}
+
 void TrainingDummy::ensure(Simulation *sim) {
     if (sim->map_id != MapID::kGarden) return;
     for (uint8_t rarity = 0; rarity < RarityID::kNumRarities; ++rarity) {

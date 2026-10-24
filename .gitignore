@@ -1,14 +1,8 @@
 build/
-build-native/
-build-native-check/
 wasm_build/
 node_modules/
 .vs/
 .vscode/
-__pycache__/
-*.bak
-*.bak-*
-Client/build-art/
 gardn-client.js
 gardn-client.wasm
 gardn-client.js.br
