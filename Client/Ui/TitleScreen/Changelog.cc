@@ -45,6 +45,8 @@ static Element *make_changelog_contents() {
     Element *elt = new Ui::VContainer({
         make_date("2026年10月24日", "October 24th 2026"),
         make_entries({
+            {"Unique 等级：登录包/进图同步下发；游客本地存档，避免重连/发版后装备栏 Lv 消失",
+             "Unique levels: push on login+spawn; guest local save so Lv badges survive reconnect/deploy"},
             {"暂停/设置面板随浏览器高度自适应，超出可滚动；窄屏改单列",
              "Pause/settings panels size to viewport with scroll; stack columns on narrow screens"},
             {"设置面板双列+滚动；局内左上角图标两行排布，不再挤成一条",

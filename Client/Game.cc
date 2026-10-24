@@ -141,6 +141,7 @@ namespace Game {
     uint32_t guest_score = 0;
     std::array<PetalID::T, 2 * MAX_SLOT_COUNT> guest_petals = {PetalID::kNone};
     std::array<uint32_t, PetalID::kNumPetals> guest_craft_bank = {};
+    std::array<uint32_t, PetalID::kNumPetals> guest_petal_levels = {};
     uint32_t guest_coins = 0;
     std::array<uint8_t, TalentID::kNum> guest_talent_ranks = {};
     std::array<uint8_t, TalentID::kNum> talent_ranks = {};
@@ -472,11 +473,13 @@ void Game::reset() {
         cached_loadout[i] = PetalID::kNone;
     if (guest_save_valid) {
         craft_bank = guest_craft_bank;
+        petal_levels = guest_petal_levels;
         coins = guest_coins;
         for (uint8_t i = 0; i < TalentID::kNum; ++i)
             talent_ranks[i] = guest_talent_ranks[i];
     } else {
         craft_bank = {};
+        petal_levels = {};
         coins = 0;
         for (uint8_t i = 0; i < TalentID::kNum; ++i)
             talent_ranks[i] = 0;
@@ -493,7 +496,6 @@ void Game::reset() {
     craft_tray_count = 0;
     craft_result_id = PetalID::kNone;
     craft_result_count = 0;
-    petal_levels = {};
     simulation.reset();
 }
 
@@ -519,11 +521,23 @@ void Game::send_guest_progress() {
     writer.write<uint32_t>(guest_coins);
     for (uint8_t i = 0; i < TalentID::kNum; ++i)
         writer.write<uint8_t>(guest_talent_ranks[i]);
+    {
+        uint16_t n_levels = 0;
+        for (uint32_t i = 1; i < PetalID::kNumPetals; ++i)
+            if (guest_petal_levels[i] > 0) ++n_levels;
+        writer.write<uint16_t>(n_levels);
+        for (uint32_t i = 1; i < PetalID::kNumPetals; ++i) {
+            if (guest_petal_levels[i] == 0) continue;
+            writer.write<PetalID::T>((PetalID::T) i);
+            writer.write<uint32_t>(guest_petal_levels[i]);
+        }
+    }
     socket.send(writer.packet, writer.at - writer.packet);
 }
 
 void Game::seed_guest_from_session() {
     guest_craft_bank = craft_bank;
+    guest_petal_levels = petal_levels;
     guest_coins = coins;
     for (uint8_t i = 0; i < TalentID::kNum; ++i)
         guest_talent_ranks[i] = talent_ranks[i];

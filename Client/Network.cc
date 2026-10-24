@@ -93,6 +93,18 @@ void Game::on_message(uint8_t *ptr, uint32_t len) {
             for (uint32_t i = 0; i < PetalID::kNumPetals; ++i)
                 craft_bank[i] = reader.read<uint32_t>();
             coins = reader.read<uint32_t>();
+            // Sparse Unique levels (same layout as kCraftUpdate trailer).
+            {
+                petal_levels = {};
+                uint16_t n_levels = reader.read<uint16_t>();
+                for (uint16_t i = 0; i < n_levels; ++i) {
+                    PetalID::T lid = reader.read<PetalID::T>();
+                    uint32_t lv = reader.read<uint32_t>();
+                    if (lid < PetalID::kNumPetals) petal_levels[lid] = lv;
+                }
+                if (!account_logged_in)
+                    guest_petal_levels = petal_levels;
+            }
             uint64_t token = reader.read<uint64_t>();
             if (account_logged_in)
                 session_token = token;
@@ -120,10 +132,12 @@ void Game::on_message(uint8_t *ptr, uint32_t len) {
                 if (guest_save_valid) {
                     respawn_level = guest_level < 1 ? 1 : guest_level;
                     craft_bank = guest_craft_bank;
+                    petal_levels = guest_petal_levels;
                     coins = guest_coins;
                 } else {
                     respawn_level = 1;
                     craft_bank = {};
+                    petal_levels = {};
                     coins = 0;
                 }
                 on_game_screen = 0;
@@ -181,6 +195,8 @@ void Game::on_message(uint8_t *ptr, uint32_t len) {
                     uint32_t lv = reader.read<uint32_t>();
                     if (lid < PetalID::kNumPetals) petal_levels[lid] = lv;
                 }
+                if (!account_logged_in)
+                    guest_petal_levels = petal_levels;
             }
             // Tray is updated optimistically on craft click; only clamp to owned
             if (craft_tray_id != PetalID::kNone) {

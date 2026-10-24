@@ -305,8 +305,8 @@ void Storage::retrieve() {
             uint8_t first = reader.read<uint8_t>();
             bool guest_ok = true;
             uint8_t petal_u16 = 0;
-            if (first == 4 || first == 3 || first == 2) {
-                uint32_t need = (first == 4)
+            if (first == 5 || first == 4 || first == 3 || first == 2) {
+                uint32_t need = (first >= 4)
                     ? (2 + 4 + 4 + 2 * MAX_SLOT_COUNT) // ver+valid+level+score+petals u16
                     : (2 + 4 + 2 * MAX_SLOT_COUNT);
                 if (len < need) {
@@ -314,11 +314,11 @@ void Storage::retrieve() {
                 } else {
                     Game::guest_save_valid = reader.read<uint8_t>() ? 1 : 0;
                     Game::guest_level = reader.read<uint32_t>();
-                    if (first == 4)
+                    if (first >= 4)
                         Game::guest_score = reader.read<uint32_t>();
                     else
                         Game::guest_score = 0;
-                    petal_u16 = (first == 4 || first == 3) ? 1 : 0;
+                    petal_u16 = (first >= 3) ? 1 : 0;
                 }
             } else {
                 Game::guest_save_valid = first ? 1 : 0;
@@ -437,6 +437,19 @@ void Storage::retrieve() {
                     Game::guest_talent_ranks[1] = reader.read<uint8_t>();
                     guest_talents_loaded = true;
                 }
+                // Optional trailing Unique levels (added after talents).
+                Game::guest_petal_levels = {};
+                if (reader.at + 2 <= StorageProtocol::buffer + len) {
+                    uint16_t n_levels = reader.read<uint16_t>();
+                    for (uint16_t i = 0; i < n_levels; ++i) {
+                        if (reader.at + 2 + 4 > StorageProtocol::buffer + len) break;
+                        uint16_t id = reader.read<uint16_t>();
+                        uint32_t lv = reader.read<uint32_t>();
+                        if (id > 0 && id < PetalID::kNumPetals
+                            && lv > 0 && lv <= Craft::kMaxPetalLevel)
+                            Game::guest_petal_levels[id] = lv;
+                    }
+                }
                 if (Game::guest_coins > 0) {
                     uint64_t sum = (uint64_t) Game::guest_craft_bank[PetalID::kCoin] + Game::guest_coins;
                     if (sum > 1000000000ull) sum = 1000000000ull;
@@ -450,6 +463,7 @@ void Storage::retrieve() {
                 }
                 if (Game::guest_save_valid) {
                     Game::craft_bank = Game::guest_craft_bank;
+                    Game::petal_levels = Game::guest_petal_levels;
                     Game::coins = Game::guest_coins;
                 }
             }
@@ -560,7 +574,7 @@ void Storage::set() {
     }
     {
         Encoder writer(&StorageProtocol::buffer[0]);
-        writer.write<uint8_t>(4); // guest blob: level+score u32 + petal ids u16
+        writer.write<uint8_t>(5); // guest blob + sparse Unique levels trailer
         writer.write<uint8_t>(Game::guest_save_valid);
         writer.write<uint32_t>(Game::guest_level);
         {
@@ -576,6 +590,17 @@ void Storage::set() {
         writer.write<uint32_t>(Game::guest_coins);
         for (uint8_t i = 0; i < TalentID::kNum; ++i)
             writer.write<uint8_t>(Game::guest_talent_ranks[i]);
+        {
+            uint16_t n_levels = 0;
+            for (uint32_t i = 1; i < PetalID::kNumPetals; ++i)
+                if (Game::guest_petal_levels[i] > 0) ++n_levels;
+            writer.write<uint16_t>(n_levels);
+            for (uint32_t i = 1; i < PetalID::kNumPetals; ++i) {
+                if (Game::guest_petal_levels[i] == 0) continue;
+                writer.write<uint16_t>((uint16_t) i);
+                writer.write<uint32_t>(Game::guest_petal_levels[i]);
+            }
+        }
         StorageProtocol::store("guest", writer.at - writer.base);
     }
     {

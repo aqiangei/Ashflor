@@ -248,6 +248,7 @@ namespace Game {
     extern uint32_t guest_score; // full XP; 0 → derive from guest_level
     extern std::array<PetalID::T, 2 * MAX_SLOT_COUNT> guest_petals;
     extern std::array<uint32_t, PetalID::kNumPetals> guest_craft_bank;
+    extern std::array<uint32_t, PetalID::kNumPetals> guest_petal_levels;
     extern uint32_t guest_coins;
     extern std::array<uint8_t, TalentID::kNum> guest_talent_ranks;
     extern std::array<uint8_t, TalentID::kNum> talent_ranks;

@@ -80,6 +80,19 @@ void client_tick_bonus(Client *client) {
 
 static uint8_t try_give_petal(Client *client, PetalID::T id);
 
+static void write_sparse_petal_levels(Writer &writer,
+    std::array<uint32_t, PetalID::kNumPetals> const &levels) {
+    uint16_t n_levels = 0;
+    for (uint32_t i = 1; i < PetalID::kNumPetals; ++i)
+        if (levels[i] > 0) ++n_levels;
+    writer.write<uint16_t>(n_levels);
+    for (uint32_t i = 1; i < PetalID::kNumPetals; ++i) {
+        if (levels[i] == 0) continue;
+        writer.write<PetalID::T>((PetalID::T) i);
+        writer.write<uint32_t>(levels[i]);
+    }
+}
+
 static void send_craft_update(Client *client, uint8_t result, PetalID::T petal,
                               uint16_t amount = 0) {
     Writer writer(Server::OUTGOING_PACKET);
@@ -91,16 +104,7 @@ static void send_craft_update(Client *client, uint8_t result, PetalID::T petal,
     for (uint32_t i = 0; i < PetalID::kNumPetals; ++i)
         writer.write<uint32_t>(client->craft_bank[i]);
     writer.write<uint32_t>(client->coins);
-    // Sparse petal levels: count + (id, level) pairs.
-    uint16_t n_levels = 0;
-    for (uint32_t i = 1; i < PetalID::kNumPetals; ++i)
-        if (client->petal_levels[i] > 0) ++n_levels;
-    writer.write<uint16_t>(n_levels);
-    for (uint32_t i = 1; i < PetalID::kNumPetals; ++i) {
-        if (client->petal_levels[i] == 0) continue;
-        writer.write<PetalID::T>((PetalID::T) i);
-        writer.write<uint32_t>(client->petal_levels[i]);
-    }
+    write_sparse_petal_levels(writer, client->petal_levels);
     client->send_packet(writer.packet, writer.at - writer.packet);
 }
 
@@ -731,6 +735,9 @@ void Client::on_message(WebSocket *ws, std::string_view message, uint64_t code) 
             Guild::send_update(client);
             WorldExplore::on_player_spawned(client);
             WorldEvent::clear_client(client);
+            // Re-push bank + Unique levels after every spawn (WS/deploy drop
+            // clears client petal_levels; login-only sync was easy to miss).
+            client_sync_craft(client);
             break;
         }
         case Serverbound::kAccountAuth: {
@@ -778,6 +785,14 @@ void Client::on_message(WebSocket *ws, std::string_view message, uint64_t code) 
             for (uint32_t i = 0; i < PetalID::kNumPetals; ++i)
                 writer.write<uint32_t>(acc == nullptr ? 0 : acc->craft_bank[i]);
             writer.write<uint32_t>(acc == nullptr ? 0 : acc->coins);
+            // Unique levels in AccountResult so UI badges survive reconnect
+            // without waiting for a later craft sync (deploy / WS drop).
+            if (acc != nullptr)
+                write_sparse_petal_levels(writer, acc->petal_levels);
+            else {
+                static std::array<uint32_t, PetalID::kNumPetals> const kEmptyLevels = {};
+                write_sparse_petal_levels(writer, kEmptyLevels);
+            }
             writer.write<uint64_t>(
                 result == AccountResultCode::kAccountOk
                     ? AccountStore::current_session(client->account_name)
@@ -1520,6 +1535,10 @@ void Client::on_message(WebSocket *ws, std::string_view message, uint64_t code) 
             for (uint32_t i = 0; i < PetalID::kNumPetals; ++i)
                 writer.write<uint32_t>(0);
             writer.write<uint32_t>(0);
+            {
+                static std::array<uint32_t, PetalID::kNumPetals> const kEmptyLevels = {};
+                write_sparse_petal_levels(writer, kEmptyLevels);
+            }
             writer.write<uint64_t>(0);
             client->send_packet(writer.packet, writer.at - writer.packet);
             send_craft_update(client, CraftResultCode::kCraftBankSync, PetalID::kNone);
@@ -1563,28 +1582,41 @@ void Client::on_message(WebSocket *ws, std::string_view message, uint64_t code) 
             if (client->check_invalid(validator.validate_uint32())) return; // score
             for (uint32_t i = 0; i < 2 * MAX_SLOT_COUNT; ++i)
                 if (client->check_invalid(validator.validate_uint16())) return;
-            // Trailing: coins + talents (7xu8 new, or 2xu8 legacy).
+            // Trailing: coins + talents (+ optional sparse Unique levels).
             uint32_t bank_n = 0;
             uint8_t talent_n = TalentID::kNum;
             {
-                Validator probe(validator.at, validator.end);
-                auto try_tail = [](Validator rest, uint8_t tn) -> uint8_t {
+                auto levels_fit = [](uint8_t const *at, uint8_t const *end) -> uint8_t {
+                    if (at == end) return 1;
+                    Reader r(at);
+                    if (r.at >= end) return 0;
+                    uint16_t n = r.read<uint16_t>();
+                    if (r.at > end || n > PetalID::kNumPetals) return 0;
+                    for (uint16_t i = 0; i < n; ++i) {
+                        (void) r.read<PetalID::T>();
+                        (void) r.read<uint32_t>();
+                        if (r.at > end) return 0;
+                    }
+                    return r.at == end;
+                };
+                auto try_tail = [&levels_fit](uint8_t const *at, uint8_t const *end, uint8_t tn) -> uint8_t {
+                    Validator rest(at, end);
                     if (!rest.validate_uint32()) return 0;
                     for (uint8_t i = 0; i < tn; ++i)
                         if (!rest.validate_uint8()) return 0;
-                    return 1;
+                    return levels_fit(rest.at, end);
                 };
+                Validator probe(validator.at, validator.end);
                 while (bank_n < (uint32_t) PetalID::kNumPetals) {
                     Validator trial(probe.at, probe.end);
                     if (!trial.validate_uint32()) break;
-                    Validator rest(trial.at, trial.end);
-                    if (try_tail(rest, TalentID::kNum)) {
+                    if (try_tail(trial.at, trial.end, TalentID::kNum)) {
                         talent_n = TalentID::kNum;
                         probe.at = trial.at;
                         ++bank_n;
                         continue;
                     }
-                    if (try_tail(rest, 2)) {
+                    if (try_tail(trial.at, trial.end, 2)) {
                         talent_n = 2;
                         probe.at = trial.at;
                         ++bank_n;
@@ -1598,6 +1630,18 @@ void Client::on_message(WebSocket *ws, std::string_view message, uint64_t code) 
             if (client->check_invalid(validator.validate_uint32())) return; // coins
             for (uint8_t i = 0; i < talent_n; ++i)
                 if (client->check_invalid(validator.validate_uint8())) return;
+            uint8_t const have_levels = validator.at < validator.end ? 1 : 0;
+            if (have_levels) {
+                Reader probe(validator.at);
+                uint16_t n = probe.read<uint16_t>();
+                if (n > PetalID::kNumPetals) return;
+                for (uint16_t i = 0; i < n; ++i) {
+                    (void) probe.read<PetalID::T>();
+                    (void) probe.read<uint32_t>();
+                    if (probe.at > validator.end) return;
+                }
+                if (probe.at != validator.end) return;
+            }
             uint32_t level = reader.read<uint32_t>();
             if (level < 1) level = 1;
             uint32_t score = reader.read<uint32_t>();
@@ -1622,6 +1666,15 @@ void Client::on_message(WebSocket *ws, std::string_view message, uint64_t code) 
             for (uint8_t i = 0; i < talent_n; ++i) {
                 uint8_t r = reader.read<uint8_t>();
                 if (i < TalentID::kNum) client->talent_ranks[i] = r;
+            }
+            client->petal_levels = {};
+            if (have_levels) {
+                uint16_t n_levels = reader.read<uint16_t>();
+                for (uint16_t i = 0; i < n_levels; ++i) {
+                    PetalID::T lid = reader.read<PetalID::T>();
+                    uint32_t lv = reader.read<uint32_t>();
+                    if (lid < PetalID::kNumPetals) client->petal_levels[lid] = lv;
+                }
             }
             Talent::clamp_ranks(client->talent_ranks, level);
             for (uint32_t i = 0; i < 2 * MAX_SLOT_COUNT; ++i)
