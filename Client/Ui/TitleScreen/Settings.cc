@@ -6,17 +6,43 @@
 #include <Client/Ui/DynamicText.hh>
 #include <Client/Ui/Extern.hh>
 #include <Client/Ui/ScrollContainer.hh>
-#include <Client/Ui/StaticText.hh>
 
 #include <Client/DOM.hh>
 #include <Client/Game.hh>
 #include <Client/I18n.hh>
 #include <Client/Input.hh>
 
+#include <Helpers/Math.hh>
+
+#include <cmath>
 #include <string>
 #include <vector>
 
 using namespace Ui;
+
+namespace {
+
+class AdaptiveScroll final : public Ui::ScrollContainer {
+public:
+    float top_reserve = 0;
+    float bottom_pad = 24.f;
+    float min_h = 140.f;
+
+    AdaptiveScroll(Element *content, float initial_h)
+        : Ui::ScrollContainer(content, initial_h) {
+        always_capture_wheel = 1;
+    }
+
+    void refactor() override {
+        float view_h = (float) (Ui::window_height / Ui::scale);
+        float avail = view_h - top_reserve - bottom_pad;
+        if (avail < min_h) avail = min_h;
+        float const cap = view_h * 0.78f;
+        if (avail > cap) avail = cap;
+        height = avail;
+        Ui::ScrollContainer::refactor();
+    }
+};
 
 static Element *settings_toggle_row(uint8_t *flag, I18n::Str label, float toggle, float text) {
     return new Ui::HContainer({
@@ -41,6 +67,8 @@ static Element *settings_section(I18n::Str title, std::vector<Element *> rows,
     });
 }
 
+} // namespace
+
 Element *Ui::make_settings_panel() {
     uint8_t const mobile = Input::is_mobile;
     float const toggle = mobile ? 26.f : 28.f;
@@ -49,7 +77,8 @@ Element *Ui::make_settings_panel() {
     float const row_gap = mobile ? 8.f : 10.f;
     float const section_gap = mobile ? 16.f : 20.f;
     float const title_sz = mobile ? 12.f : 13.f;
-    float const body_scroll = mobile ? 260.f : 360.f;
+    float const panel_y = mobile ? 72.f : 84.f;
+    float const header_h = (mobile ? 20.f : 24.f) + 12.f + pad * 2.f;
 
     auto row = [&](uint8_t *flag, I18n::Str text) {
         return settings_toggle_row(flag, text, toggle, label);
@@ -74,13 +103,20 @@ Element *Ui::make_settings_panel() {
         row(&Input::disable_auto_party, I18n::kDisableAutoParty),
     }, title_sz, row_gap);
 
-    // Two columns so the sheet stays short instead of one tall packed list.
-    Element *toggles_block = new Ui::HContainer({
-        new Ui::VContainer({ controls, social }, 0, section_gap, {
-            .h_justify = Style::Left, .no_animation = 1
-        }),
-        display
-    }, 0, mobile ? 18.f : 28.f, { .h_justify = Style::Left, .no_animation = 1 });
+    float const view_w = (float) (Ui::window_width / Ui::scale);
+    uint8_t const narrow = mobile || view_w < 720.f;
+    Element *toggles_block = narrow
+        ? (Element *) new Ui::VContainer({
+            controls,
+            display,
+            social
+        }, 0, section_gap, { .h_justify = Style::Left, .no_animation = 1 })
+        : (Element *) new Ui::HContainer({
+            new Ui::VContainer({ controls, social }, 0, section_gap, {
+                .h_justify = Style::Left, .no_animation = 1
+            }),
+            display
+        }, 0, 28.f, { .h_justify = Style::Left, .no_animation = 1 });
 
     Element *actions = new Ui::VContainer({
         new Ui::Button(mobile ? 160.f : 200.f, mobile ? 32.f : 34.f,
@@ -91,7 +127,7 @@ Element *Ui::make_settings_panel() {
             nullptr,
             { .fill = Chrome::kBtnSlate, .line_width = 0, .round_radius = Chrome::kRadius }
         ),
-        new Ui::DynamicText(mobile ? 14.f : 14.f, [](){
+        new Ui::DynamicText(14.f, [](){
             return I18n::use_chinese
                 ? std::string{"交流 QQ 群：227990150"}
                 : std::string{"QQ group: 227990150"};
@@ -106,7 +142,7 @@ Element *Ui::make_settings_panel() {
                 [](Element *, uint8_t e){ if (e == Ui::kClick) DOM::open_qq_group(); }, nullptr,
                 { .fill = Chrome::kBtnSlate, .line_width = 0, .round_radius = Chrome::kRadius })
         }, 0, 10, { .h_justify = Style::Left }),
-        new Ui::DynamicText(mobile ? 13.f : 13.f, [](){ return I18n::tr(I18n::kMadeBy); }, {
+        new Ui::DynamicText(13.f, [](){ return I18n::tr(I18n::kMadeBy); }, {
             .fill = Chrome::kMuted, .h_justify = Style::Left
         }),
         new Ui::DynamicText(12.f, [](){ return I18n::tr(I18n::kAssetCredits); }, {
@@ -135,11 +171,15 @@ Element *Ui::make_settings_panel() {
         actions
     }, 0, section_gap, { .h_justify = Style::Left, .no_animation = 1 });
 
+    auto *scroller = new AdaptiveScroll(scroll_body, 280.f);
+    scroller->top_reserve = panel_y + header_h;
+    scroller->bottom_pad = mobile ? 24.f : 32.f;
+
     Element *elt = new Ui::VContainer({
         new Ui::DynamicText(mobile ? 20.f : 24.f, [](){ return I18n::tr(I18n::kSettings); }, {
             .fill = Chrome::kTitle
         }),
-        new Ui::ScrollContainer(scroll_body, body_scroll)
+        scroller
     }, pad, 12.f, {
         .fill = Chrome::kPanelDeep,
         .line_width = 0,
@@ -154,7 +194,7 @@ Element *Ui::make_settings_panel() {
         .v_justify = Style::Top
     });
     elt->x = 12;
-    elt->y = mobile ? 72.f : 84.f;
+    elt->y = panel_y;
     Ui::Panel::settings = elt;
     return elt;
 }
