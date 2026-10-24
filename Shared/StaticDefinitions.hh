@@ -2147,8 +2147,6 @@ struct PetalAttributes {
     float extra_reload_factor = 1;
     float move_speed_factor = 1; // multiplies flower acceleration when equipped
     float magnet_radius = 0; // attracts drops within this range when equipped
-    float attraction_radius = 0; // Lentil etc.: pull nearby mobs while attacking
-    uint8_t fixed_orbit_range = 0; // 1 = ignore extra_range buff on orbit radius
     // Ground "healing vine" aura: the Monstera petal, once thrown on the ground,
     // roots itself and heals every flower standing inside `aura_radius`.
     float aura_heal = 0;      // HP per second granted inside the aura
