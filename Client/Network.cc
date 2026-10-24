@@ -302,6 +302,13 @@ void Game::on_message(uint8_t *ptr, uint32_t len) {
             DOM::feedback_result(result, id);
             break;
         }
+        case Clientbound::kFeedbackResolveResult: {
+            uint8_t result = reader.read<uint8_t>();
+            uint32_t id = reader.read<uint32_t>();
+            uint8_t resolved = reader.read<uint8_t>() ? 1 : 0;
+            DOM::feedback_resolve_result(result, id, resolved);
+            break;
+        }
         case Clientbound::kLoadoutPresetSync: {
             uint8_t result = reader.read<uint8_t>();
             uint8_t index = reader.read<uint8_t>();
@@ -887,6 +894,26 @@ void Game::post_feedback(std::string const &text) {
     Writer writer(static_cast<uint8_t *>(OUTGOING_PACKET));
     writer.write<uint8_t>(Serverbound::kFeedbackPost);
     writer.write<std::string>(text);
+    socket.send(writer.packet, writer.at - writer.packet);
+}
+
+void Game::set_feedback_resolved(uint32_t id, uint8_t resolved) {
+    if (!account_logged_in) {
+        DOM::feedback_resolve_result(kFeedbackNeedAccount, id, 0);
+        return;
+    }
+    if (!socket.ready) {
+        DOM::feedback_resolve_result(kFeedbackStorageError, id, 0);
+        return;
+    }
+    if (id == 0) {
+        DOM::feedback_resolve_result(kFeedbackInvalid, id, 0);
+        return;
+    }
+    Writer writer(static_cast<uint8_t *>(OUTGOING_PACKET));
+    writer.write<uint8_t>(Serverbound::kFeedbackSetResolved);
+    writer.write<uint32_t>(id);
+    writer.write<uint8_t>(resolved ? 1 : 0);
     socket.send(writer.packet, writer.at - writer.packet);
 }
 

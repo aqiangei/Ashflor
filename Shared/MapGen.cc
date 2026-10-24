@@ -650,7 +650,7 @@ uint8_t channel_cut_band(TerrainFeature const &ch, float L, float T, float R, fl
 
 // After arteries are placed: carve them (and the spawn plaza) out of impassable
 // hills/water so geometry matches collision and cannot trap players in pockets.
-void resolve_terrain_overlaps(MapTerrain &t) {
+void resolve_terrain_overlaps(MapTerrain &t, uint8_t clear_spawn_plaza = 1) {
     MapTerrain channels;
     for (TerrainFeature const &f : t) {
         if (f.kind == TerrainKind::kChannel && channels.size() < MAX_TERRAIN_PER_MAP)
@@ -658,7 +658,8 @@ void resolve_terrain_overlaps(MapTerrain &t) {
     }
 
     float px = MAP_SPAWN_X, py = MAP_SPAWN_Y;
-    // Plaza clear box ≈ spawn ellipse (5200×4000)
+    // Plaza clear box ≈ spawn ellipse (5200×4000). Ant Nest keeps player walls —
+    // punching this would flatten the whole cave into an open field.
     float pl = px - 4800.f, pt = py - 3600.f, pr = px + 4800.f, pb = py + 3600.f;
 
     MapTerrain out;
@@ -677,7 +678,7 @@ void resolve_terrain_overlaps(MapTerrain &t) {
         // Circles / ellipses: drop if center sits on artery or plaza
         if (f.shape == TerrainShape::kCircle || f.shape == TerrainShape::kEllipse) {
             float cx = f.left, cy = f.top;
-            if (Map::in_spawn_plaza(cx, cy) || point_on_channel(channels, cx, cy))
+            if ((clear_spawn_plaza && Map::in_spawn_plaza(cx, cy)) || point_on_channel(channels, cx, cy))
                 continue;
             if (out.size() < MAX_TERRAIN_PER_MAP) out.push(f);
             continue;
@@ -700,7 +701,7 @@ void resolve_terrain_overlaps(MapTerrain &t) {
         rects.push(f);
 
         // Plaza punch
-        {
+        if (clear_spawn_plaza) {
             StaticArray<TerrainFeature, 24> next;
             for (uint32_t i = 0; i < rects.size(); ++i) {
                 TerrainFeature const &r = rects[i];
@@ -742,7 +743,7 @@ void resolve_terrain_overlaps(MapTerrain &t) {
         for (uint32_t i = 0; i < rects.size(); ++i) {
             TerrainFeature const &r = rects[i];
             float cx = 0.5f * (r.left + r.right), cy = 0.5f * (r.top + r.bottom);
-            if (Map::in_spawn_plaza(cx, cy)) continue;
+            if (clear_spawn_plaza && Map::in_spawn_plaza(cx, cy)) continue;
             if (point_on_channel(channels, cx, cy)) continue;
             if (out.size() < MAX_TERRAIN_PER_MAP) out.push(r);
         }
@@ -752,7 +753,7 @@ void resolve_terrain_overlaps(MapTerrain &t) {
     // walks, and the road texture marks the gap (no invisible air-wall cross).
     uint8_t bridge_seed = 200;
     uint32_t n0 = out.size();
-    for (uint32_t i = 0; i < n0 && out.size() < MAX_TERRAIN_PER_MAP; ++i) {
+    for (uint32_t i = 0; i < n0 && out.size() < MAX_TERRAIN_PER_MAP && clear_spawn_plaza; ++i) {
         TerrainFeature const &f = out[i];
         if (!(f.flags & TerrainFlags::kImpassable)) continue;
         if (f.shape != TerrainShape::kRiver) continue;
@@ -1026,27 +1027,17 @@ void gen_ant_hell(MapTerrain &t, ThemePalette const &p, uint32_t &rng, float W, 
 
 void gen_ant_nest(MapTerrain &t, ThemePalette const &p, uint32_t &rng, float W, float H, float cx, float cy) {
 #include <Shared/AntNestLayout.inc>
-    // Player nest layout: black = dirt walls, colored chambers = walkable.
+    (void)rng;
+    // Player nest: black pixels = dirt walls ONLY. Do not carve mega channels /
+    // ring valleys — those + plaza punch flattened the cave into an open field.
     for (uint32_t i = 0; i < kAntNestWallCount; ++i) {
         float const *r = kAntNestWalls[i];
         hill_box(t, p, (uint8_t)(20 + (i % 200)),
                  W * r[0], H * r[1], W * r[2], H * r[3]);
     }
-    push_feat(t, TerrainKind::kChannel, TerrainShape::kAABB, 0,
-              W * 0.18f, H * 0.28f, W * 0.42f, H * 0.72f, p.channel, 200, 0.f);
-    push_feat(t, TerrainKind::kChannel, TerrainShape::kAABB, 0,
-              W * 0.38f, H * 0.22f, W * 0.62f, H * 0.78f, p.channel, 201, 0.f);
-    push_feat(t, TerrainKind::kChannel, TerrainShape::kAABB, 0,
-              W * 0.58f, H * 0.28f, W * 0.88f, H * 0.72f, p.channel, 202, 0.f);
-    push_feat(t, TerrainKind::kChannel, TerrainShape::kAABB, 0,
-              cx - 1600.f, cy - 1200.f, cx + 1600.f, cy + 1200.f, p.channel, 210, 0.f);
-    {
-        float qx = cx + 800.f;
-        float qy = cy + 400.f;
-        ring_valley(t, p, rng, qx, qy, 1100.f, 480.f, 2.4f, 0.45f, 140, 0);
-        g_boss[MapID::kAntNest] = { qx, qy, (uint8_t)MobID::kQueenAnt };
-    }
-    ring_valley(t, p, rng, W * 0.22f, H * 0.22f, 700.f, 340.f, 0.6f, 0.5f, 160, 1);
+    // Queen in a large mid-right chamber of the player layout (not a carved basin).
+    g_boss[MapID::kAntNest] = { W * 0.72f, H * 0.42f, (uint8_t)MobID::kQueenAnt };
+    (void)cx; (void)cy; (void)p;
 }
 
 // Left Fire · Center Black · Right Termite. Later overlays win in get_zone_from_pos.
@@ -1339,8 +1330,10 @@ void generate_one(uint8_t map_id) {
         gen_royal(terrain, pal, rng, W, H, cx, cy);
     } else if (map_id == MapID::kAntNest) {
         build_zones_ant_nest(zones, map_id, W, H, cx, cy);
-        berm(terrain, pal, rng, W, H, cx, cy);
+        // No berm — layout already has a solid black border.
         gen_ant_nest(terrain, pal, rng, W, H, cx, cy);
+        // Keep hand walls: do not plaza-punch / ford-bridge the nest.
+        resolve_terrain_overlaps(terrain, 0);
     } else {
         build_zones(zones, map_id, rng, W, H, cx, cy);
         berm(terrain, pal, rng, W, H, cx, cy);
@@ -1353,10 +1346,10 @@ void generate_one(uint8_t map_id) {
             case MapID::kAntHell: gen_ant_hell(terrain, pal, rng, W, H, cx, cy); break;
             default:              gen_volcano(terrain, pal, rng, W, H, cx, cy); break;
         }
+        // No global cross/diagonal arteries — they punched a beige cross through every
+        // map and fought the biome layout. Theme-local channels (e.g. desert dry river) stay.
+        resolve_terrain_overlaps(terrain);
     }
-    // No global cross/diagonal arteries — they punched a beige cross through every
-    // map and fought the biome layout. Theme-local channels (e.g. desert dry river) stay.
-    resolve_terrain_overlaps(terrain);
 }
 
 } // namespace
@@ -1621,19 +1614,24 @@ void MapGen::ensure(uint8_t map_id) {
     generate_one(map_id);
     g_ready[map_id] = 1;
     uint32_t opened = 0;
-    // Multi-pass: each bridge can unlock more pockets for the next BFS.
-    for (int pass = 0; pass < 5; ++pass) {
-        uint32_t n = open_sealed_pockets(map_id);
-        n += open_blocked_zones(map_id);
-        opened += n;
-        if (!n) break;
+    // Ant Nest is a hand-authored cave: auto-bridges (430–960px channels) would
+    // punch through thin tunnel walls and flatten the layout again.
+    uint8_t const preserve_nest = (map_id == MapID::kAntNest) ? 1 : 0;
+    if (!preserve_nest) {
+        // Multi-pass: each bridge can unlock more pockets for the next BFS.
+        for (int pass = 0; pass < 5; ++pass) {
+            uint32_t n = open_sealed_pockets(map_id);
+            n += open_blocked_zones(map_id);
+            opened += n;
+            if (!n) break;
+        }
+        mark_plaza_rim_exits(map_id);
     }
-    mark_plaza_rim_exits(map_id);
     // Terrain is complete now, so the boss anchor can be validated against it.
     fix_boss_anchor(map_id);
     // Last resort at the same step sample_connectivity uses (220): force AABB
     // bridges for any zone center still off the spawn component.
-    {
+    if (!preserve_nest) {
         constexpr float step = 220.f;
         constexpr float rad = 40.f;
         uint32_t gw = (uint32_t)std::ceil((float)ARENA_WIDTH / step) + 1;

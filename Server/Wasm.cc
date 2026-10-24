@@ -43,6 +43,15 @@ extern "C" {
     EMSCRIPTEN_KEEPALIVE char *feedback_page_json(unsigned before) {
         return heap_strdup_std(FeedbackStore::page_json(before));
     }
+    EMSCRIPTEN_KEEPALIVE char *feedback_set_handled_json(unsigned id, unsigned handled,
+                                                         char const *key) {
+        return heap_strdup_std(FeedbackStore::set_handled_json(
+            id, handled ? 1 : 0, key ? std::string(key) : std::string()));
+    }
+    EMSCRIPTEN_KEEPALIVE char *feedback_auth_json(char const *key) {
+        return heap_strdup_std(FeedbackStore::auth_json(
+            key ? std::string(key) : std::string()));
+    }
 
     EMSCRIPTEN_KEEPALIVE char *live_catalog_json() {
         return heap_strdup_std(Server::live_catalog_json());
@@ -225,6 +234,44 @@ WebSocketServer::WebSocketServer() {
                 return;
             }
             if (path === "/api/feedback") {
+                if (req.method === "OPTIONS") {
+                    res.writeHead(204, {
+                        "Access-Control-Allow-Origin": "*",
+                        "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+                        "Access-Control-Allow-Headers": "Content-Type"
+                    });
+                    res.end();
+                    return;
+                }
+                if (req.method === "POST") {
+                    let raw = "";
+                    req.on("data", c => { raw += c; if (raw.length > 2048) req.destroy(); });
+                    req.on("end", () => {
+                        let id = 0, handled = 0, key = "", action = "set_handled";
+                        try {
+                            const j = JSON.parse(raw || "{}");
+                            action = typeof j.action === "string" && j.action ? j.action : "set_handled";
+                            id = Number(j.id) || 0;
+                            handled = j.handled ? 1 : 0;
+                            key = typeof j.key === "string" ? j.key : "";
+                        } catch (e) {
+                            sendJson(400, "{\"ok\":false,\"msg\":\"bad json\"}");
+                            return;
+                        }
+                        const kPtr = cstr(key);
+                        try {
+                            if (action === "auth")
+                                sendJson(200, fromWasm(_feedback_auth_json(kPtr)));
+                            else if (action === "set_handled")
+                                sendJson(200, fromWasm(_feedback_set_handled_json(id, handled, kPtr)));
+                            else
+                                sendJson(400, "{\"ok\":false,\"msg\":\"unknown action\"}");
+                        } finally {
+                            _free(kPtr);
+                        }
+                    });
+                    return;
+                }
                 const before = Number(new URL(req.url, "http://localhost").searchParams.get("before")) || 0;
                 sendJson(200, fromWasm(_feedback_page_json(before)));
                 return;

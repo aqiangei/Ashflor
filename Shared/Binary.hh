@@ -23,7 +23,8 @@ enum Clientbound {
     kLifeSummary, // this-life mob kills + petal pickups (shown on death)
     kLootToast, // petal_id, amount, title — auto fade reward popup
     kFeedbackResult, // result(u8), persisted message id(u32)
-    kTrainingStats // personal only: 9 x [last hit, DPS, total damage] strings
+    kTrainingStats, // personal only: 9 x [last hit, DPS, total damage] strings
+    kFeedbackResolveResult // result(u8), id(u32), resolved(u8) — author marked issue fixed
 };
 
 enum InviteType : uint8_t {
@@ -71,7 +72,8 @@ enum Serverbound {
     kTalentSetRank, // u8 talent_id, u8 target_rank — jump / rollback on one branch
     kAutoPartyOpt, // u8 1 = disable nearby auto-join (manual invite still ok)
     kFeedbackPost, // UTF-8 string; author is the authenticated account
-    kTrainingReset // start a new personal training round
+    kTrainingReset, // start a new personal training round
+    kFeedbackSetResolved // id(u32), resolved(u8) — author toggles "issue fixed"
 };
 
 enum FeedbackResultCode : uint8_t {
@@ -82,7 +84,9 @@ enum FeedbackResultCode : uint8_t {
     kFeedbackStorageError,
     kFeedbackDuplicate,
     kFeedbackQuota,
-    kFeedbackBusy
+    kFeedbackBusy,
+    kFeedbackNotOwner,
+    kFeedbackNotFound
 };
 
 // Categories shown as separate columns on the leaderboard board.

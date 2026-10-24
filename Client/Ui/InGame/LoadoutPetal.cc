@@ -688,9 +688,11 @@ UiLoadoutPetal::UiLoadoutPetal(uint8_t pos) : Element(60, 60),
                 if (old > reload) reload.set(old);
                 else reload = old;
             }
-            if (player.get_state_loadout_healths(static_pos)) {
+            // Poll every frame (not only on dirty-state). Hits on dummies /
+            // mobs can land between should_render frames and drop the flag.
+            {
                 float hp = player.get_loadout_healths(static_pos) / 255.0f;
-                if (hp < health) health.set(hp);
+                if (hp < (float) health) health.set(hp);
                 else health = hp;
             }
         }

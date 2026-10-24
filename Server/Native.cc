@@ -240,6 +240,44 @@ uWS::App Server::server = uWS::App()
     std::string before(req->getQuery("before"));
     send_json(res, 200, FeedbackStore::page_json((uint32_t) std::strtoul(before.c_str(), nullptr, 10)));
 })
+.options("/api/feedback", [](auto *res, auto * /*req*/) {
+    res->writeStatus("204 No Content");
+    res->writeHeader("Access-Control-Allow-Origin", "*");
+    res->writeHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+    res->writeHeader("Access-Control-Allow-Headers", "Content-Type");
+    res->end();
+})
+.post("/api/feedback", [](auto *res, auto * /*req*/) {
+    auto body = std::make_shared<std::string>();
+    auto done = std::make_shared<uint8_t>(0);
+    res->onAborted([done]() { *done = 1; });
+    res->onData([res, body, done](std::string_view chunk, bool isLast) {
+        if (*done) return;
+        body->append(chunk.data(), chunk.size());
+        if (body->size() > 2048) {
+            *done = 1;
+            send_json(res, 400, "{\"ok\":false,\"msg\":\"body too large\"}");
+            return;
+        }
+        if (!isLast) return;
+        *done = 1;
+        std::string j = std::move(*body);
+        std::string action = json_raw_field(j, "action");
+        if (action.empty()) action = "set_handled";
+        std::string key = json_raw_field(j, "key");
+        if (action == "auth") {
+            send_json(res, 200, FeedbackStore::auth_json(key));
+            return;
+        }
+        if (action != "set_handled") {
+            send_json(res, 400, "{\"ok\":false,\"msg\":\"unknown action\"}");
+            return;
+        }
+        uint32_t id = (uint32_t) json_int(j, "id", 0);
+        uint8_t handled = (uint8_t) (json_int(j, "handled", 0) ? 1 : 0);
+        send_json(res, 200, FeedbackStore::set_handled_json(id, handled, key));
+    });
+})
 .get("/api/broadcasts", [](auto *res, auto *req) {
     uint32_t before = (uint32_t) std::strtoul(std::string(req->getQuery("before")).c_str(), nullptr, 10);
     uint32_t limit = (uint32_t) std::strtoul(std::string(req->getQuery("limit")).c_str(), nullptr, 10);

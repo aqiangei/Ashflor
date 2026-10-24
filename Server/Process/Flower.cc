@@ -26,6 +26,7 @@ struct PlayerBuffs {
     float vision_factor = 1;
     float move_speed_factor = 1;
     float magnet_radius = 0;
+    float attraction_radius = 0; // Lentil: sum of equipped attraction_radius
     float extra_health = 0;
     float extra_damage = 0;
     float damage_factor = 1;
@@ -87,6 +88,8 @@ static struct PlayerBuffs _get_petal_passive_buffs(
         else if (move > 0.f && move < 1.f)
             buffs.move_speed_factor *= move;
         buffs.magnet_radius = std::fmax(buffs.magnet_radius, attrs.magnet_radius * lv_mult);
+        if (attrs.attraction_radius > 0.f)
+            buffs.attraction_radius += attrs.attraction_radius * lv_mult;
         buffs.extra_range = std::fmax(attrs.extra_range * lv_mult, buffs.extra_range);
         buffs.extra_damage = std::fmax(buffs.extra_damage, attrs.extra_body_damage * lv_mult);
         buffs.damage_factor *= Craft::level_scale_factor(attrs.extra_damage_factor, lv_mult);
@@ -197,8 +200,8 @@ void tick_player_behavior(Simulation *sim, Entity &player) {
         }
     }
     buffs.reload_factor *= talent_reload;
-    // Golden Leaf CDR cap (50%): stacked leaves + Unique Lv + talent cannot
-    // push below kReloadFactorFloor (was ≤0 → invisible petals / particles only).
+    // Golden Leaf CDR cap (99%): stacked leaves + Unique Lv + talent cannot
+    // push below kReloadFactorFloor (≤0 deleted petal art; ≥2-tick floor below).
     if (buffs.reload_factor < Craft::kReloadFactorFloor)
         buffs.reload_factor = Craft::kReloadFactorFloor;
     if (buffs.reload_factor > Craft::kReloadFactorCeil)
@@ -365,6 +368,17 @@ void tick_player_behavior(Simulation *sim, Entity &player) {
                 if (petal.has_component(kPetal) && 
                     !BitMath::at(petal.flags, EntityFlags::kIsDespawning) &&
                     !BitMath::at(petal.flags, EntityFlags::kIsDetached)) {
+                    // Rose / burst-heal seeking the flower: skip orbit so a still
+                    // player does not keep yanking the petal back to the ring.
+                    game_tick_t const sec_reload_ticks =
+                        (game_tick_t)(petal_data.attributes.secondary_reload * TPS);
+                    uint8_t const seeking_burst_heal =
+                        petal_data.attributes.burst_heal > 0
+                        && petal_data.attributes.secondary_reload > 0
+                        && petal.secondary_reload > sec_reload_ticks
+                        && player.health < player.max_health
+                        && player.dandy_ticks == 0;
+                    if (!seeking_burst_heal) {
                     //petal rotation behavior
                     Vector wanting;
                     Vector delta(rotation_center.x - petal.get_x(), rotation_center.y - petal.get_y());
@@ -372,9 +386,15 @@ void tick_player_behavior(Simulation *sim, Entity &player) {
                         wanting.unit_normal(2 * M_PI * rot_pos / rotation_count + player.heading_angle);
 
                     float range = rotation_center.r + PETAL_ORBIT_IDLE;
-                    if (BitMath::at(player.input, InputFlags::kAttacking)) { 
-                        if (petal_data.attributes.defend_only == 0) 
-                            range = rotation_center.r + PETAL_ORBIT_ATTACK + buffs.extra_range; 
+                    uint8_t const attacking =
+                        BitMath::at(player.input, InputFlags::kAttacking);
+                    if (attacking) {
+                        if (petal_data.attributes.defend_only == 0) {
+                            // Sawblade ignores Reach / Third Eye orbit extension.
+                            float extra = petal_data.attributes.fixed_orbit_range
+                                ? 0.f : buffs.extra_range;
+                            range = rotation_center.r + PETAL_ORBIT_ATTACK + extra;
+                        }
                         if (petal_name_is(petal.get_petal_id(), "Wing")) {
                             float wave = sinf((float) petal.lifetime / (0.4 * TPS));
                             wave = wave * wave;
@@ -392,8 +412,45 @@ void tick_player_behavior(Simulation *sim, Entity &player) {
                     }
                     wanting += delta;
                     wanting *= 0.5f;
+                    // Lentil: when attacking, snap petals toward the nearest enemy
+                    // within the stacked attraction radius of the petal.
+                    if (attacking && buffs.attraction_radius > 0.f
+                        && petal_data.attributes.defend_only == 0) {
+                        float const ar = buffs.attraction_radius;
+                        float best = ar;
+                        float tx = 0.f, ty = 0.f;
+                        uint8_t found = 0;
+                        float const px = petal.get_x();
+                        float const py = petal.get_y();
+                        sim->spatial_hash.query(px, py, ar, ar,
+                            [&](Simulation *s, Entity &ent) {
+                            if (!s->ent_alive(ent.id)) return;
+                            if (ent.get_team() == player.get_team()) return;
+                            if (ent.immunity_ticks > 0) return;
+                            if (!ent.has_component(kMob) && !ent.has_component(kFlower))
+                                return;
+                            if (ent.has_component(kFlower) && !ent.has_component(kHealth))
+                                return;
+                            if (is_player_faction(s, ent)) return;
+                            float dx = ent.get_x() - px;
+                            float dy = ent.get_y() - py;
+                            float dist = std::sqrt(dx * dx + dy * dy);
+                            if (dist < best) {
+                                best = dist;
+                                tx = ent.get_x();
+                                ty = ent.get_y();
+                                found = 1;
+                            }
+                        });
+                        if (found) {
+                            Vector pull(tx - px, ty - py);
+                            // Strong snap so light petals land on the target.
+                            pull.set_magnitude(std::fmax(180.f, ar * 8.f));
+                            wanting += pull;
+                        }
+                    }
                     petal.acceleration = wanting;
-                    game_tick_t sec_reload_ticks = petal_data.attributes.secondary_reload * TPS;
+                    }
                     if (petal_data.attributes.spawns != MobID::kNumMobs &&
                         petal.secondary_reload > sec_reload_ticks) {
                         uint8_t spawn_id = petal_data.attributes.spawns;

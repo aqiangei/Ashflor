@@ -6,60 +6,108 @@
 
 #include <Client/StaticData.hh>
 #include <Client/I18n.hh>
+#include <Client/Input.hh>
 
 #include <Client/Game.hh>
 
 #include <Shared/Craft.hh>
 #include <Shared/Recipe.hh>
+#include <Shared/StaticData.hh>
 #include <Shared/Talent.hh>
 
+#include <Helpers/Math.hh>
+
+#include <algorithm>
+#include <cstring>
 #include <format>
 #include <string>
 #include <vector>
 
 using namespace Ui;
 
-// Reverse lookup: drop sources / craft / shop / rarity merge for petal tooltips.
+// Drop tables store family seeds; match this rarity rung or same English name.
+static uint8_t drop_seed_matches_petal(PetalID::T seed, PetalID::T want) {
+    if (seed == PetalID::kNone || want == PetalID::kNone) return 0;
+    if (seed == want) return 1;
+    if (seed >= PetalID::kNumPetals || want >= PetalID::kNumPetals) return 0;
+    uint8_t wr = PETAL_DATA[want].rarity;
+    PetalID::T at = Craft::petal_at_rarity(seed, wr);
+    if (at == want) return 1;
+    char const *a = PETAL_DATA[seed].name;
+    char const *b = PETAL_DATA[want].name;
+    return a && b && std::strcmp(a, b) == 0;
+}
+
+// Reverse lookup: drop sources (with %) / craft mats / shop / starter.
 static std::string petal_acquisition_hint(PetalID::T id) {
     if (id == PetalID::kNone || id >= PetalID::kNumPetals) return {};
 
     std::vector<std::string> parts;
+    uint8_t view_r = PETAL_DATA[id].rarity;
 
-    std::vector<MobID::T> bosses;
-    std::vector<MobID::T> trash;
+    struct DropSrc { MobID::T mob; float pct; uint8_t boss; };
+    std::vector<DropSrc> srcs;
     for (MobID::T m = 0; m < MobID::kNumMobs; ++m) {
-        for (PetalID::T d : MOB_DATA[m].drops) {
-            if (d != id) continue;
-            if (is_boss_mob(m)) bosses.push_back(m);
-            else trash.push_back(m);
-            break;
+        auto const &drops = MOB_DATA[m].drops;
+        if (drops.size() == 0) continue;
+        float weights[MAX_DROPS_PER_MOB] = {};
+        float total = Craft::mob_loot_weights(m, view_r, weights);
+        if (total <= 0.f) continue;
+        float best = 0.f;
+        for (uint32_t i = 0; i < drops.size(); ++i) {
+            if (!drop_seed_matches_petal(drops[i], id)) continue;
+            float pct = weights[i] / total * 100.f;
+            if (pct > best) best = pct;
         }
+        if (best > 0.f)
+            srcs.push_back({ m, best, is_boss_mob(m) });
     }
-    if (!bosses.empty() || !trash.empty()) {
+    if (!srcs.empty()) {
+        std::sort(srcs.begin(), srcs.end(), [](DropSrc const &a, DropSrc const &b) {
+            if (a.boss != b.boss) return a.boss > b.boss;
+            return a.pct > b.pct;
+        });
         std::string line = I18n::tr(I18n::kAcquireDrop);
-        std::vector<MobID::T> shown;
-        shown.reserve(3);
-        for (MobID::T m : bosses) {
-            if (shown.size() >= 3) break;
-            shown.push_back(m);
-        }
-        for (MobID::T m : trash) {
-            if (shown.size() >= 3) break;
-            shown.push_back(m);
-        }
+        constexpr size_t kShow = 8;
         char const *sep = I18n::use_chinese ? "、" : ", ";
-        for (size_t i = 0; i < shown.size(); ++i) {
+        size_t n = srcs.size() < kShow ? srcs.size() : kShow;
+        for (size_t i = 0; i < n; ++i) {
             if (i) line += sep;
-            line += I18n::mob_name(shown[i]);
+            line += I18n::mob_name(srcs[i].mob);
+            line += format_pct(srcs[i].pct);
         }
-        size_t total = bosses.size() + trash.size();
-        if (total > shown.size())
-            line += I18n::use_chinese ? " 等" : "…";
+        if (srcs.size() > n) {
+            line += I18n::use_chinese
+                ? std::format(" 等{}种", srcs.size())
+                : std::format(" +{}", srcs.size() - n);
+        }
         parts.push_back(std::move(line));
     }
 
-    if (Recipe::find_by_result(id) != (uint16_t)-1)
-        parts.push_back(I18n::tr(I18n::kAcquireCraft));
+    {
+        uint16_t ri = Recipe::find_by_result(id);
+        if (ri != (uint16_t) -1) {
+            Recipe::Def const &rec = Recipe::recipe_at(ri);
+            std::string line = I18n::tr(I18n::kAcquireCraft);
+            if (rec.ingredient_count > 0) {
+                line += I18n::use_chinese ? "：" : ": ";
+                char const *sep = I18n::use_chinese ? "、" : ", ";
+                for (uint8_t i = 0; i < rec.ingredient_count; ++i) {
+                    if (i) line += sep;
+                    Recipe::Ingredient const &ing = rec.ingredients[i];
+                    line += I18n::petal_name(ing.id);
+                    if (ing.count > 1)
+                        line += std::format("×{}", ing.count);
+                }
+            }
+            parts.push_back(std::move(line));
+        } else if (PETAL_DATA[id].rarity > 0) {
+            // Most petals climb the rarity ladder via 5→1 craft.
+            PetalID::T lower = Craft::petal_at_rarity(id, (uint8_t) (PETAL_DATA[id].rarity - 1));
+            if (lower != PetalID::kNone && lower != id && Craft::can_upgrade_petal(lower))
+                parts.push_back(I18n::tr(I18n::kAcquireMerge));
+        }
+    }
 
     if (Craft::is_shop_purchasable(id))
         parts.push_back(I18n::tr(I18n::kAcquireShop));
@@ -68,7 +116,11 @@ static std::string petal_acquisition_hint(PetalID::T id) {
     if (id == PetalID::kBasic)
         parts.push_back(I18n::tr(I18n::kAcquireStarter));
 
-    if (parts.empty()) return {};
+    if (parts.empty()) {
+        return I18n::use_chinese
+            ? std::string("获取途径：暂无固定掉落（可能来自特殊事件/商店）")
+            : std::string("Source: no fixed mob drop (event/shop?)");
+    }
     std::string out = parts[0];
     for (size_t i = 1; i < parts.size(); ++i) {
         out += " · ";
@@ -96,7 +148,7 @@ static float get_reload_factor() {
         }
     }
     factor *= Talent::reload_mult(Game::talent_ranks[TalentID::kCooldown]);
-    // Match server Golden Leaf CDR cap (50%).
+    // Match server Golden Leaf CDR cap (99%).
     if (factor < Craft::kReloadFactorFloor) factor = Craft::kReloadFactorFloor;
     if (factor > Craft::kReloadFactorCeil) factor = Craft::kReloadFactorCeil;
     return factor;
@@ -112,6 +164,24 @@ static float get_damage_factor() {
     return factor;
 }
 
+// Hold G: tip shows live loadout/talent/leaf multipliers. Default = base stats.
+static uint8_t tooltip_show_buffs() {
+    return Input::keys_held.contains('G') ? 1 : 0;
+}
+
+static float tooltip_dmg_mult() {
+    return tooltip_show_buffs() ? get_damage_factor() : 1.f;
+}
+
+static float tooltip_reload_mult() {
+    return tooltip_show_buffs() ? get_reload_factor() : 1.f;
+}
+
+static float tooltip_petal_hp_mult() {
+    if (!tooltip_show_buffs()) return 1.f;
+    return Talent::petal_health_mult(Game::talent_ranks[TalentID::kPetalArmor]);
+}
+
 static float tooltip_level_mult(PetalID::T id, uint8_t apply_level) {
     if (!apply_level || id == PetalID::kNone || id >= PetalID::kNumPetals) return 1.f;
     return Craft::level_stat_mult(Game::petal_levels[id]);
@@ -125,7 +195,8 @@ static Ui::Element *make_petal_stat_container(PetalID::T id, uint8_t apply_level
         stats.push_back(new Ui::HContainer({
             new Ui::DynamicText(12, [](){ return I18n::tr(I18n::kHealth); }, { .fill = 0xff77ff77 }),
             new Ui::DynamicText(12, [id, apply_level](){
-                return format_number(PETAL_DATA[id].health * tooltip_level_mult(id, apply_level));
+                return format_number(PETAL_DATA[id].health * tooltip_level_mult(id, apply_level)
+                    * tooltip_petal_hp_mult());
             })
         }, 0, 5, { .h_justify = Style::Left }));
     }
@@ -133,7 +204,7 @@ static Ui::Element *make_petal_stat_container(PetalID::T id, uint8_t apply_level
         stats.push_back(new Ui::HContainer({
             new Ui::DynamicText(12, [](){ return I18n::tr(I18n::kDamage); }, { .fill = 0xffff7777 }),
             new Ui::DynamicText(12, [id, apply_level](){
-                return format_number(PETAL_DATA[id].damage * get_damage_factor()
+                return format_number(PETAL_DATA[id].damage * tooltip_dmg_mult()
                     * tooltip_level_mult(id, apply_level));
             })
         }, 0, 5, { .h_justify = Style::Left }));
@@ -513,7 +584,7 @@ static Element *make_petal_tooltip_body(PetalID::T id, uint8_t apply_level) {
         new Ui::HFlexContainer(
             new Ui::DynamicText(20, [id](){ return I18n::petal_name(id); }, { .fill = 0xffffffff, .h_justify = Style::Left }),
             new Ui::DynamicText(16, [=](){
-                float reload = PETAL_DATA[id].reload * get_reload_factor();
+                float reload = PETAL_DATA[id].reload * tooltip_reload_mult();
                 if (reload <= 0.f) return std::string{};
                 if (PETAL_DATA[id].attributes.secondary_reload == 0)
                     return std::format("{:.1f}s ⟳", reload);
@@ -528,9 +599,18 @@ static Element *make_petal_tooltip_body(PetalID::T id, uint8_t apply_level) {
                 return std::format("{} · Lv.{}", I18n::rarity_name(r), Game::petal_levels[id]);
             return std::string{I18n::rarity_name(r)};
         }, { .fill = RARITY_COLORS[PETAL_DATA[id].rarity], .h_justify = Style::Left }),
+        new Ui::DynamicText(11, [](){
+            if (tooltip_show_buffs())
+                return I18n::use_chinese
+                    ? std::string{"【加成后】金叶冷却 · 装备伤害 · 天赋花瓣耐久"}
+                    : std::string{"[Buffed] leaf CDR · gear damage · talent petal HP"};
+            return I18n::use_chinese
+                ? std::string{"按住 G 显示加成后数值"}
+                : std::string{"Hold G for buffed stats"};
+        }, { .fill = 0xffc8e6a0, .h_justify = Style::Left }),
         new Ui::Element(0, 6),
         new Ui::DynamicText(12, [id](){ return I18n::petal_desc(id); }, { .fill = 0xffffffff, .h_justify = Style::Left }),
-        new Ui::DynamicText(11, [id](){ return petal_acquisition_hint(id); }, { .fill = 0xff9ec9a8, .h_justify = Style::Left }),
+        new Ui::DynamicText(12, [id](){ return petal_acquisition_hint(id); }, { .fill = 0xffa8e0b8, .h_justify = Style::Left }),
         new Ui::Element(0, 6),
         make_petal_stat_container(id, apply_level)
     }, 5, 2);

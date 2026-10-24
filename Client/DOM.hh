@@ -18,6 +18,7 @@ namespace DOM {
     void open_page(char const *);
     void open_feedback_board();
     void feedback_result(uint8_t result, uint32_t id);
+    void feedback_resolve_result(uint8_t result, uint32_t id, uint8_t resolved);
     void open_qq_group();
     void focus_element(char const *);
     void blur_active();

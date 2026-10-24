@@ -2082,7 +2082,8 @@ namespace EntityFlags {
         kHasCulling,
         kIsCulled,
         kCPUControlled,
-        kIsDetached
+        kIsDetached,
+        kTerrainBounced // peas etc.: one wall/terrain bounce already spent
     };
 };
 

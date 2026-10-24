@@ -44,7 +44,9 @@ void inflict_damage(Simulation *sim, EntityID const atk_id, EntityID const def_i
     }
     // Explore guide spirits / treasure NPCs: scripted props, never die to petals or mobs.
     // Hatch summons share kNoDrops — never treat player-faction pets as immortal props.
+    // Training dummies also match the 0-damage/NoDrops pattern but must take hits.
     if (defender.has_component(kMob)
+        && !TrainingDummy::is_dummy(defender)
         && !is_player_faction(sim, defender)
         && defender.damage <= 0.f && defender.score_reward == 0
         && BitMath::at(defender.flags, EntityFlags::kNoDrops)
