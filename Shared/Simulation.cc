@@ -1,5 +1,17 @@
 #include <Shared/Simulation.hh>
 
+#include <Helpers/Bits.hh>
+
+#ifdef SERVERSIDE
+#include <Shared/Map.hh>
+#include <Shared/StaticDefinitions.hh>
+#include <Server/PetalTracker.hh>
+#include <Server/TrainingDummy.hh>
+#include <iostream>
+#endif
+
+#include <cstdlib>
+
 #ifdef DEBUG
 #include <iostream>
 
@@ -34,18 +46,125 @@ void Simulation::reset() {
     #endif
 }
 
+uint32_t Simulation::entity_count() const {
+    uint32_t n = 0;
+    for (EntityID::id_type i = 1; i < ENTITY_CAP; ++i)
+        if (BitMath::at_arr(entity_tracker.data(), i)) ++n;
+    return n;
+}
+
+#ifdef SERVERSIDE
+uint32_t Simulation::emergency_reclaim_entities(uint32_t budget) {
+    uint32_t freed = 0;
+    auto force_free = [&](Entity &ent) {
+        if (freed >= budget) return;
+        if (!ent_exists(ent.id)) return;
+        if (ent.has_component(kCamera)) return;
+        if (TrainingDummy::is_dummy(ent)) return;
+        // Living player flower
+        if (ent.has_component(kFlower) && ent.has_component(kHealth) && !ent.has_component(kMob))
+            return;
+        // Map-anchor boss
+        if (ent.has_component(kMob) && ent.zone == 0xFF) return;
+        if (ent.has_component(kDrop))
+            PetalTracker::remove_petal(this, ent.get_drop_id());
+        if (ent.has_component(kMob) && BitMath::at(ent.flags, EntityFlags::kSpawnedFromZone))
+            Map::remove_mob(this, ent);
+        // No entity_on_death — avoid loot alloc recursion under cap pressure.
+        _delete_ent(ent.id);
+        ++freed;
+    };
+
+    auto scan = [&](auto pred) {
+        for (EntityID::id_type i = 1; i < ENTITY_CAP && freed < budget; ++i) {
+            if (!BitMath::at_arr(entity_tracker.data(), i)) continue;
+            Entity &ent = entities[i];
+            if (!pred(ent)) continue;
+            force_free(ent);
+        }
+    };
+
+    scan([&](Entity &e) { return e.pending_delete; });
+    scan([&](Entity &e) {
+        return !e.pending_delete && (e.has_component(kDrop) || e.has_component(kWeb));
+    });
+    scan([&](Entity &e) {
+        return e.has_component(kMob)
+            && BitMath::at(e.flags, EntityFlags::kSpawnedFromZone)
+            && BitMath::at(e.flags, EntityFlags::kIsCulled);
+    });
+    scan([&](Entity &e) {
+        return e.has_component(kMob)
+            && BitMath::at(e.flags, EntityFlags::kSpawnedFromZone);
+    });
+    return freed;
+}
+#endif
+
 Entity &Simulation::alloc_ent() {
+    auto try_claim = [this]() -> Entity * {
+        for (EntityID::id_type i = 1; i < ENTITY_CAP; ++i) {
+            if (BitMath::at_arr(entity_tracker.data(), i)) continue;
+            BitMath::set_arr(entity_tracker.data(), i);
+            entities[i].init();
+            DEBUG_ONLY(std::cout << "ent_create " << EntityID(i, hash_tracker[i]) << "\n";)
+            entities[i].id = EntityID(i, hash_tracker[i]);
+            return &entities[i];
+        }
+        return nullptr;
+    };
+
+    if (Entity *e = try_claim()) return *e;
+
+#ifdef SERVERSIDE
+    // Release builds strip assert(); the old abort() caused silent ABRT
+    // (2026-10-24 14:45) when the pool filled under spawn / admin pressure.
+    uint32_t const before = entity_count();
+    uint32_t freed = emergency_reclaim_entities(96);
+    std::cerr << "[sim] entity cap hit count=" << before
+              << " reclaimed=" << freed << std::endl;
+    if (Entity *e = try_claim()) return *e;
+
+    freed = emergency_reclaim_entities(512);
+    std::cerr << "[sim] entity cap retry reclaimed=" << freed
+              << " count=" << entity_count() << std::endl;
+    if (Entity *e = try_claim()) return *e;
+
+    // Last resort: any mob/drop/web/petal except players/cameras/bosses/dummies.
     for (EntityID::id_type i = 1; i < ENTITY_CAP; ++i) {
-        if (BitMath::at_arr(entity_tracker.data(), i)) continue;
-        BitMath::set_arr(entity_tracker.data(), i);
-        entities[i].init();
-        DEBUG_ONLY(std::cout << "ent_create " << EntityID(i, hash_tracker[i]) << "\n";)
-        entities[i].id = EntityID(i, hash_tracker[i]);
-        return entities[i];
+        if (!BitMath::at_arr(entity_tracker.data(), i)) continue;
+        Entity &ent = entities[i];
+        if (ent.has_component(kCamera)) continue;
+        if (ent.has_component(kFlower) && ent.has_component(kHealth) && !ent.has_component(kMob))
+            continue;
+        if (ent.has_component(kMob) && ent.zone == 0xFF) continue;
+        if (TrainingDummy::is_dummy(ent)) continue;
+        if (!(ent.has_component(kMob) || ent.has_component(kDrop)
+              || ent.has_component(kWeb) || ent.has_component(kPetal)))
+            continue;
+        if (ent.has_component(kDrop))
+            PetalTracker::remove_petal(this, ent.get_drop_id());
+        if (ent.has_component(kMob) && BitMath::at(ent.flags, EntityFlags::kSpawnedFromZone))
+            Map::remove_mob(this, ent);
+        _delete_ent(ent.id);
+        if (Entity *e = try_claim()) {
+            std::cerr << "[sim] entity cap last-resort freed slot=" << (uint32_t)i << std::endl;
+            return *e;
+        }
     }
+
+    std::cerr << "[sim] FATAL entity pool exhausted after reclaim count="
+              << entity_count() << " — recycling slot 1 (no abort)\n";
+    if (BitMath::at_arr(entity_tracker.data(), 1))
+        _delete_ent(EntityID(1, hash_tracker[1]));
+    BitMath::set_arr(entity_tracker.data(), 1);
+    entities[1].init();
+    entities[1].id = EntityID(1, hash_tracker[1]);
+    return entities[1];
+#else
     assert(!"Entity cap reached");
-    // assert may be compiled out; falling off a non-void fn is UB → wasm trap.
     abort();
+#endif
 }
 
 Entity &Simulation::get_ent(EntityID const &id) {

@@ -18,6 +18,10 @@ class Simulation {
     std::array<EntityID::hash_type, ENTITY_CAP> hash_tracker;
     std::array<Entity, ENTITY_CAP> entities;
     StaticArray<EntityID::id_type, ENTITY_CAP> active_entities;
+#ifdef SERVERSIDE
+    // Free disposable ents when the 8192 pool is exhausted (never abort).
+    uint32_t emergency_reclaim_entities(uint32_t budget);
+#endif
 public:
     SERVER_ONLY(std::array<uint32_t, PetalID::kNumPetals> petal_count_tracker;)
     SERVER_ONLY(std::array<uint32_t, MAX_ZONES_PER_MAP> zone_mob_counts;)
@@ -42,6 +46,8 @@ public:
     Entity &get_ent(EntityID const &);
     uint8_t ent_exists(EntityID const &) const;
     uint8_t ent_alive(EntityID const &) const;
+    // Live occupancy (slots 1..ENTITY_CAP-1). Cheap bit walk for health/admin.
+    uint32_t entity_count() const;
     void tick();
     void on_tick();
     void post_tick();

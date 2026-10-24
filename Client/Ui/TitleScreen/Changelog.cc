@@ -45,6 +45,8 @@ static Element *make_changelog_contents() {
     Element *elt = new Ui::VContainer({
         make_date("2026年10月24日", "October 24th 2026"),
         make_entries({
+            {"稳定性：实体池满时回收掉落/休眠野怪，不再 abort（修 14:45 ABRT→WS 1006）；Boss 槽位失效先重绑再进 CD；/health 暴露 entities",
+             "Stability: reclaim drops/culled wildlife when entity pool full (no abort; fixes 14:45 ABRT→WS 1006); reattach boss before CD; /health entities"},
             {"视野同步：取消每客户端 280 实体硬截断（对齐二创）；缩放不再因截尾导致屏内怪闪现消失，仍靠视口 AOI+密度+AI 休眠控成本",
              "View sync: drop 280/client hard cap (like other clones); zoom no longer flickers on-screen mobs; AOI+density+AI cull remain"},
             {"碰撞质感：玩家互推保留 soft-block，浅重叠加最小分离，减轻缓慢穿模；不跳过远距物理碰撞",
