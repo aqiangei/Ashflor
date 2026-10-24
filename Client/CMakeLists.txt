@@ -106,7 +106,7 @@ else()
 endif()
 
 add_link_options(-sEXPORTED_RUNTIME_METHODS=stringToNewUTF8)
-add_link_options(-sEXPORTED_FUNCTIONS=_main,_key_event,_mouse_event,_touch_event,_wheel_event,_clipboard_event,_loop,_on_message,_ashflor_cancel_petal_drags,_ashflor_text_enter,_ashflor_update_poster_close,_ashflor_feedback_post,_ashflor_feedback_resolve)
+add_link_options(-sEXPORTED_FUNCTIONS=_main,_key_event,_mouse_event,_touch_event,_wheel_event,_clipboard_event,_loop,_on_message,_ashflor_cancel_petal_drags,_ashflor_text_enter,_ashflor_update_poster_close,_ashflor_feedback_post)
 # Map/UI statics already ~19MB; without growth, Game::init malloc hits the ceiling and abort()s.
 add_link_options(-sALLOW_MEMORY_GROWTH=1 -sINITIAL_MEMORY=33554432 -sSTACK_SIZE=5242880)
 

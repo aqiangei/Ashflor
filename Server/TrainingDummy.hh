@@ -21,9 +21,6 @@ namespace TrainingDummy {
         return ent.has_component(kMob) && ent.get_mob_id() == MobID::kTrainingDummy;
     }
 
-    // Virtual body damage vs petals only (dummy.damage stays 0 so flowers are safe).
-    float petal_contact_damage(Entity const &dummy);
-
     void ensure(Simulation *);
     Stats *personal_stats(Simulation *, Entity const &, EntityID source);
     void record_damage(Simulation *, Entity &, EntityID source, float);

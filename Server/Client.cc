@@ -805,19 +805,6 @@ void Client::on_message(WebSocket *ws, std::string_view message, uint64_t code) 
             client->send_packet(writer.packet, writer.at - writer.packet);
             break;
         }
-        case Serverbound::kFeedbackSetResolved: {
-            if (client->check_invalid(validator.validate_uint32() && validator.validate_uint8())) return;
-            uint32_t id = reader.read<uint32_t>();
-            uint8_t resolved = reader.read<uint8_t>() ? 1 : 0;
-            uint8_t result = FeedbackStore::set_resolved(client->account_name, id, resolved);
-            Writer writer(Server::OUTGOING_PACKET);
-            writer.write<uint8_t>(Clientbound::kFeedbackResolveResult);
-            writer.write<uint8_t>(result);
-            writer.write<uint32_t>(id);
-            writer.write<uint8_t>(result == kFeedbackPosted ? resolved : (uint8_t) 0);
-            client->send_packet(writer.packet, writer.at - writer.packet);
-            break;
-        }
         case Serverbound::kBoostToggle: {
             if (client->check_invalid(validator.validate_uint8())) return;
             uint8_t on = reader.read<uint8_t>() ? 1 : 0;

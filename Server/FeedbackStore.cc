@@ -22,15 +22,7 @@
 #endif
 
 namespace {
-struct Entry {
-    uint32_t id;
-    uint64_t timestamp;
-    std::string author, text;
-    uint64_t source = 0;
-    uint8_t handled = 0;  // ops marked as processed
-    uint8_t resolved = 0; // author marked issue as fixed
-};
-constexpr char const *kModKey = "aqa";
+struct Entry { uint32_t id; uint64_t timestamp; std::string author, text; uint64_t source = 0; };
 std::deque<Entry> entries;
 std::unordered_map<std::string, uint64_t> attempts;
 std::deque<uint64_t> global_attempts;
@@ -137,26 +129,11 @@ bool parse(std::string const &raw, std::deque<Entry> &out) {
         std::getline(in, tail);
         if (!tail.empty() && tail != "\r") {
             std::istringstream extra(tail);
-            std::string tag;
-            while (extra >> tag) {
-                if (tag.starts_with("ip:")) {
-                    try {
-                        size_t n;
-                        e.source = std::stoull(tag.substr(3), &n);
-                        if (n != tag.size() - 3) return false;
-                    } catch (...) { return false; }
-                } else if (tag.starts_with("done:")) {
-                    std::string v = tag.substr(5);
-                    if (v != "0" && v != "1") return false;
-                    e.handled = (uint8_t) (v[0] - '0');
-                } else if (tag.starts_with("fix:")) {
-                    std::string v = tag.substr(5);
-                    if (v != "0" && v != "1") return false;
-                    e.resolved = (uint8_t) (v[0] - '0');
-                } else {
-                    return false;
-                }
-            }
+            std::string tag, garbage;
+            if (!(extra >> tag) || !tag.starts_with("ip:")) return false;
+            try { size_t n; e.source = std::stoull(tag.substr(3), &n); if (n != tag.size() - 3) return false; }
+            catch (...) { return false; }
+            if (extra >> garbage) return false;
         }
         previous = e.id;
         out.push_back(std::move(e));
@@ -167,9 +144,7 @@ std::string serialize() {
     std::ostringstream out;
     for (auto const &e : entries)
         out << e.id << ' ' << e.timestamp << ' ' << std::quoted(e.author)
-            << ' ' << std::quoted(e.text) << " ip:" << e.source
-            << " done:" << (unsigned) e.handled
-            << " fix:" << (unsigned) e.resolved << '\n';
+            << ' ' << std::quoted(e.text) << " ip:" << e.source << '\n';
     return out.str();
 }
 void snapshot(uint64_t now) {
@@ -313,68 +288,10 @@ std::string FeedbackStore::page_json(uint32_t before) {
         if (n == 30) { more = true; break; }
         if (n++) out += ',';
         out += "{\"id\":" + std::to_string(i->id) + ",\"timestamp\":" + std::to_string(i->timestamp)
-            + ",\"author\":" + json_string(i->author) + ",\"text\":" + json_string(i->text)
-            + ",\"handled\":" + (i->handled ? "1" : "0")
-            + ",\"resolved\":" + (i->resolved ? "1" : "0") + '}';
+            + ",\"author\":" + json_string(i->author) + ",\"text\":" + json_string(i->text) + '}';
         last = i->id;
     }
     return out + "],\"next_before\":" + std::to_string(more ? last : 0) + '}';
-}
-
-std::string FeedbackStore::auth_json(std::string const &key) {
-    if (key != kModKey)
-        return "{\"ok\":false,\"msg\":\"密钥错误\"}";
-    return "{\"ok\":true,\"msg\":\"已验证\"}";
-}
-
-std::string FeedbackStore::set_handled_json(uint32_t id, uint8_t handled, std::string const &key) {
-    if (key != kModKey)
-        return "{\"ok\":false,\"msg\":\"密钥错误\"}";
-    if (!writable)
-        return "{\"ok\":false,\"msg\":\"留言板不可写\"}";
-    if (id == 0)
-        return "{\"ok\":false,\"msg\":\"无效留言\"}";
-    handled = handled ? 1 : 0;
-    Entry *found = nullptr;
-    for (auto &e : entries) {
-        if (e.id == id) { found = &e; break; }
-    }
-    if (!found)
-        return "{\"ok\":false,\"msg\":\"留言不存在\"}";
-    uint8_t prev = found->handled;
-    found->handled = handled;
-    std::string data = serialize();
-    if (!write_atomic(backup, last_saved.empty() ? data : last_saved) || !write_atomic(file, data)) {
-        found->handled = prev;
-        return "{\"ok\":false,\"msg\":\"保存失败\"}";
-    }
-    last_saved = std::move(data);
-    snapshot(now_ms());
-    return "{\"ok\":true,\"msg\":\"已更新\",\"id\":" + std::to_string(id)
-        + ",\"handled\":" + (handled ? "1" : "0") + '}';
-}
-
-uint8_t FeedbackStore::set_resolved(std::string const &author, uint32_t id, uint8_t resolved) {
-    if (author.empty()) return kFeedbackNeedAccount;
-    if (!writable) return kFeedbackStorageError;
-    if (id == 0) return kFeedbackInvalid;
-    resolved = resolved ? 1 : 0;
-    Entry *found = nullptr;
-    for (auto &e : entries) {
-        if (e.id == id) { found = &e; break; }
-    }
-    if (!found) return kFeedbackNotFound;
-    if (account_key(found->author) != account_key(author)) return kFeedbackNotOwner;
-    uint8_t prev = found->resolved;
-    found->resolved = resolved;
-    std::string data = serialize();
-    if (!write_atomic(backup, last_saved.empty() ? data : last_saved) || !write_atomic(file, data)) {
-        found->resolved = prev;
-        return kFeedbackStorageError;
-    }
-    last_saved = std::move(data);
-    snapshot(now_ms());
-    return kFeedbackPosted;
 }
 #ifdef ASHFLOR_FEEDBACK_TEST
 void FeedbackStore::set_test_time(uint64_t time) { test_time = time; }

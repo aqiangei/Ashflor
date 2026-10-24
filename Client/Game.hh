@@ -281,7 +281,6 @@ namespace Game {
     void save_loadout_preset(uint8_t index);
     void apply_loadout_preset(uint8_t index);
     void post_feedback(std::string const &text);
-    void set_feedback_resolved(uint32_t id, uint8_t resolved);
     // Equip one copy from backpack stacks. dest 0xFF = auto (empty/Basic/…).
     // Returns 1 if equipped into an empty/Basic slot; 0 if barred (full bar).
     uint8_t withdraw_bank_petal(PetalID::T id, uint8_t dest = (uint8_t) -1);

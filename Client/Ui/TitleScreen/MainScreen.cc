@@ -296,11 +296,11 @@ Element *Ui::make_title_input_box() {
                     new Ui::HContainer({
                         make_map_select_button(MapID::kJungle, 0xff45b06a, select_map_jungle, darken_map_jungle),
                         make_map_select_button(MapID::kAntHell, 0xffd4a574, select_map_ant_hell, darken_map_ant_hell),
-                        make_map_select_button(MapID::kAntNest, 0xffc48a55, select_map_ant_nest, darken_map_ant_nest),
-                        make_map_select_button(MapID::kVolcano, 0xffff6f4f, select_map_volcano, darken_map_volcano)
+                        make_map_select_button(MapID::kVolcano, 0xffff6f4f, select_map_volcano, darken_map_volcano),
+                        make_map_select_button(MapID::kRoyalCapital, 0xffe8c45a, select_map_royal, darken_map_royal)
                     }, 0, 10, {}),
                     new Ui::HContainer({
-                        make_map_select_button(MapID::kRoyalCapital, 0xffe8c45a, select_map_royal, darken_map_royal)
+                        make_map_select_button(MapID::kAntNest, 0xffc48a55, select_map_ant_nest, darken_map_ant_nest)
                     }, 0, 10, {})
                 }, 0, 10, { .no_animation = 1 }),
                 new Ui::Element(0, 16),
