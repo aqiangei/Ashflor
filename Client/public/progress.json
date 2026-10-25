@@ -1,18 +1,30 @@
 {
   "ok": true,
-  "updated_at": 1792928731454,
+  "updated_at": 1792930423936,
   "days": [
     {
       "date": "2026-10-25",
       "label": "10/25",
       "done": [
         {
+          "text": "右上角在线人数滑动窗口加长地图以下调试信息以上都可以用",
+          "note": "RosterScroll 自适应增高；48 行"
+        },
+        {
           "text": "DBH: 10-25 合成金叶升 Lv.1 后背包没了、合成栏还有",
           "note": "唯一升级成功未返还产品；现与稀有度合成一样 try_give_petal 回 1 片"
         },
         {
+          "text": "闪电无效果不会连锁",
+          "note": "body=0 早退；spawn 把 Unique Lv+amp 写入 damage；最近邻连锁跳跃"
+        },
+        {
           "text": "黄金叶冷却计算出现实际冷却和面板冷却不符",
           "note": "G键 get_reload_factor 漏 Unique Lv；与服首槽 level_scale_factor 对齐"
+        },
+        {
+          "text": "建议在死亡时可以直接使用左上角功能",
+          "note": "topbar/暂停/图鉴/排行榜/离开确认：alive||on_game_screen；toggle_pause/guild 死亡可用"
         },
         {
           "text": "控制台刷怪堆积卡服",
@@ -21,6 +33,10 @@
         {
           "text": "为什么唯一等级老是出现问题，根治",
           "note": "Craft::petal_levels_canonicalize / petal_level_get：落盘/同步/读等级一律按英文名归位到当前 Unique ID；UI/战斗/假人哈希同路径"
+        },
+        {
+          "text": "XD7891",
+          "note": "盘上曾 146；从 103742 备份高水位合并回 Bone/397=155"
         },
         {
           "text": "方块怎么没有用，应该是召唤方块，然后方块特别超模",
@@ -376,12 +392,6 @@
         }
       ],
       "open": [
-        {
-          "text": "闪电无效果不会连锁"
-        },
-        {
-          "text": "建议在死亡时可以直接使用左上角功能"
-        },
         {
           "text": "游戏名是什么"
         },
