@@ -219,7 +219,8 @@ Element *Ui::make_leaderboard() {
     elt->style.should_render = [](){
         if (Ui::panel_open != Panel::kLeaderboard) return false;
         return Game::should_render_title_ui()
-            || (Game::should_render_game_ui() && Game::alive());
+            || (Game::should_render_game_ui()
+                && (Game::alive() || Game::on_game_screen));
     };
     elt->x = 12;
     elt->y = 84;

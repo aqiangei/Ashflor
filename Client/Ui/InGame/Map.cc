@@ -304,7 +304,8 @@ static Element *make_online_roster_list() {
             ? std::format("在线 {} 人", Game::online_roster.size())
             : std::format("Online {}", Game::online_roster.size());
     }, { .fill = 0xffe8dcc8, .h_justify = Style::Left }));
-    for (uint8_t i = 0; i < 12; ++i) {
+    // Cap rows high enough for a full server; ScrollContainer clips.
+    for (uint8_t i = 0; i < 48; ++i) {
         rows.push_back(new Ui::DynamicText(11, [i](){
             if (i >= Game::online_roster.size()) return std::string{};
             Game::OnlineRosterEntry const &e = Game::online_roster[i];
@@ -321,9 +322,29 @@ static Element *make_online_roster_list() {
     return new Ui::VContainer(rows, 4, 2, { .no_animation = 1 });
 }
 
+// Roster height fills from under the minimap down toward bottom debug strip.
+class RosterScroll final : public Ui::ScrollContainer {
+public:
+    RosterScroll(Element *content, float initial_h)
+        : Ui::ScrollContainer(content, initial_h) {
+        always_capture_wheel = 1;
+    }
+    void refactor() override {
+        float view_h = (float) (Ui::window_height / Ui::scale);
+        float map_w = Game::minimap_expanded ? 420.f : 280.f;
+        float map_h = map_w * (float) ARENA_HEIGHT / (float) ARENA_WIDTH;
+        // Under map → above bottom-right debug strip (~120).
+        float avail = view_h - 10.f - map_h - 28.f - 8.f - 130.f;
+        if (avail < 180.f) avail = 180.f;
+        if (avail > view_h * 0.55f) avail = view_h * 0.55f;
+        height = avail;
+        Ui::ScrollContainer::refactor();
+    }
+};
+
 Element *Ui::make_minimap() {
     Element *map = new Ui::Minimap(280);
-    Element *roster = new Ui::ScrollContainer(make_online_roster_list(), 140);
+    Element *roster = new RosterScroll(make_online_roster_list(), 280.f);
     Element *elt = new Ui::VContainer({
         map,
         new Ui::DynamicText(11, [](){
@@ -334,7 +355,10 @@ Element *Ui::make_minimap() {
         roster
     }, 6, 4, {
         .fill = 0x00000000,
-        .should_render = [](){ return Game::should_render_game_ui() && Game::alive(); },
+        .should_render = [](){
+            return Game::should_render_game_ui()
+                && (Game::alive() || Game::on_game_screen);
+        },
         .h_justify = Style::Right,
         .v_justify = Style::Top
     });

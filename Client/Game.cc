@@ -614,7 +614,7 @@ void Game::toggle_game_panel(uint8_t panel) {
     uint8_t const death_panel = panel == kPanelInventory
         || panel == kPanelPresets || panel == kPanelTalents
         || panel == kPanelCraft || panel == kPanelSpecial
-        || panel == kPanelShop;
+        || panel == kPanelShop || panel == kPanelBoost;
     if ((!alive() && !(on_game_screen && death_panel))
         || leave_confirm_open) return;
     if (chat_open) close_chat();
@@ -1001,7 +1001,7 @@ void Game::invite_dismiss() {
 }
 
 void Game::toggle_guild_panel() {
-    if (!alive()) return;
+    if (!alive() && !on_game_screen) return;
     guild_panel_open = !guild_panel_open;
     if (guild_panel_open) {
         pause_menu_open = 0;
@@ -1058,7 +1058,8 @@ void Game::guild_set_announcement() {
 }
 
 void Game::toggle_pause() {
-    if (!alive()) return;
+    // Death screen still exposes the gear / settings topbar button.
+    if (!alive() && !on_game_screen) return;
     if (leave_confirm_open) {
         leave_confirm_open = 0;
         return;
@@ -1484,13 +1485,15 @@ void Game::tick(double time) {
         close_chat_menu();
     // Click outside chat / popups / drawers → close them (Esc still works)
     Ui::try_close_popups_outside_click();
-    if (Input::keys_held_this_tick.contains(27) && Game::alive()) {
+    if (Input::keys_held_this_tick.contains(27)
+        && (Game::alive() || Game::on_game_screen)) {
         if (Game::update_poster_try_close()) {}
         else if (shop_announce_prompt_open) close_shop_announce_prompt();
         else if (chat_menu_open) close_chat_menu();
         else if (leave_confirm_open) leave_confirm_open = 0;
         else if (chat_open) close_chat();
         else if (game_panel != kPanelNone) close_game_panel();
+        else if (Ui::panel_open != Ui::Panel::kNone) Ui::panel_open = Ui::Panel::kNone;
         else toggle_pause();
     }
     // X opens bag on death screen too (camera inventory edit before respawn)

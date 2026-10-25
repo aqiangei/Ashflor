@@ -175,7 +175,8 @@ Element *Ui::make_pause_menu() {
     }, pad, gap, {
         .fill = Chrome::kPanelDeep, .line_width = 0, .round_radius = Chrome::kRadius,
         .should_render = [](){
-            return Game::pause_menu_open && Game::alive() && Game::should_render_game_ui();
+            return Game::pause_menu_open && Game::should_render_game_ui()
+                && (Game::alive() || Game::on_game_screen);
         },
         .h_justify = Style::Left,
         .v_justify = Style::Top
@@ -265,7 +266,9 @@ Element *Ui::make_game_topbar() {
         gear, guild_btn, mob_btn, petal_btn, trophy_btn, boost_btn, exit_btn
     }, 8, 12, {
         .should_render = [](){
-            return Game::alive() && Game::should_render_game_ui();
+            // Death screen: keep settings / galleries / leave usable.
+            return Game::should_render_game_ui()
+                && (Game::alive() || Game::on_game_screen);
         },
         .h_justify = Style::Left,
         .v_justify = Style::Top
@@ -302,7 +305,8 @@ Element *Ui::make_leave_confirm() {
     }, 18, 12, {
         .fill = Chrome::kPanelDeep, .line_width = 0, .round_radius = Chrome::kRadius,
         .should_render = [](){
-            return Game::leave_confirm_open && Game::alive() && Game::should_render_game_ui();
+            return Game::leave_confirm_open && Game::should_render_game_ui()
+                && (Game::alive() || Game::on_game_screen);
         }
     });
     Ui::leave_confirm_root = elt;

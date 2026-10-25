@@ -782,6 +782,16 @@ void tick_player_behavior(Simulation *sim, Entity &player) {
                         spawned.armor *= lv_mult;
                         hp_mult *= lv_mult;
                     }
+                    // Lightning body damage is 0 in StaticData — bake flash into
+                    // petal.damage so contact + Unique Lv / amp actually land.
+                    if (petal_data.damage <= 0.f
+                        && petal_data.attributes.lightning_damage > 0.f
+                        && petal_data.attributes.battery_charges == 0) {
+                        float flash = petal_data.attributes.lightning_damage
+                            * buffs.damage_factor;
+                        if (lv_mult != 1.f) flash *= lv_mult;
+                        spawned.damage = flash;
+                    }
                     if (hp_mult != 1.f) {
                         spawned.max_health *= hp_mult;
                         spawned.health = spawned.max_health;

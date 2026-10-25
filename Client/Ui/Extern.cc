@@ -47,15 +47,15 @@ namespace Ui {
         switch (panel) {
             case Panel::kSettings: pg = Panel::settings; break;
             case Panel::kPetals:
-                pg = (Game::alive() && Panel::petal_gallery_alt)
+                pg = ((Game::alive() || Game::on_game_screen) && Panel::petal_gallery_alt)
                     ? Panel::petal_gallery_alt : Panel::petal_gallery;
                 break;
             case Panel::kMobs:
-                pg = (Game::alive() && Panel::mob_gallery_alt)
+                pg = ((Game::alive() || Game::on_game_screen) && Panel::mob_gallery_alt)
                     ? Panel::mob_gallery_alt : Panel::mob_gallery;
                 break;
             case Panel::kLeaderboard:
-                pg = (Game::alive() && Panel::leaderboard_alt)
+                pg = ((Game::alive() || Game::on_game_screen) && Panel::leaderboard_alt)
                     ? Panel::leaderboard_alt : Panel::leaderboard;
                 break;
             case Panel::kChangelog: pg = Panel::changelog; break;
@@ -63,8 +63,8 @@ namespace Ui {
         }
         if (pg == nullptr) return;
         pg->x = 12;
-        // Below status bar in-game; under title icons on home
-        pg->y = Game::alive() ? 170.f : 84.f;
+        // Below status bar in-game / death; under title icons on home
+        pg->y = (Game::alive() || Game::on_game_screen) ? 170.f : 84.f;
     }
 
     static bool hit_element(Element *elt, float x, float y) {

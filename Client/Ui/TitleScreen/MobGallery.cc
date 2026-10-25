@@ -299,7 +299,8 @@ Element *Ui::make_mob_gallery() {
         .should_render = [](){
             if (Ui::panel_open != Panel::kMobs) return false;
             return Game::should_render_title_ui()
-                || (Game::should_render_game_ui() && Game::alive());
+                || (Game::should_render_game_ui()
+                    && (Game::alive() || Game::on_game_screen));
         },
         .h_justify = Style::Left,
         .v_justify = Style::Top

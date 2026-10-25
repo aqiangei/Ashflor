@@ -31,7 +31,19 @@ static bool _yggdrasil_revival_clause(Simulation *sim, Entity &player) {
 }
 
 void inflict_damage(Simulation *sim, EntityID const atk_id, EntityID const def_id, float amt, uint8_t type) {
-    if (!is_finite(amt) || amt <= 0) return;
+    if (!is_finite(amt) || amt < 0) return;
+    // Lightning petals ship with body damage 0; flash is applied in contact
+    // modifiers from PETAL_DATA / live petal.damage. Do not early-out on 0.
+    if (amt <= 0) {
+        if (type != DamageType::kContact || !sim->ent_alive(atk_id)) return;
+        Entity const &atk0 = sim->get_ent(atk_id);
+        if (!atk0.has_component(kPetal)) return;
+        PetalID::T pid0 = atk0.get_petal_id();
+        if (pid0 == PetalID::kNone || pid0 >= PetalID::kNumPetals) return;
+        PetalAttributes const &A0 = PETAL_DATA[pid0].attributes;
+        if (!(A0.lightning_damage > 0.f && A0.battery_charges == 0)) return;
+        amt = 0.f;
+    }
     if (!sim->ent_alive(def_id)) return;
     Entity &defender = sim->get_ent(def_id);
     if (!defender.has_component(kHealth)) return;
@@ -227,9 +239,12 @@ void inflict_damage(Simulation *sim, EntityID const atk_id, EntityID const def_i
                 armor_mit *= (1.f - pen);
             }
             amt -= armor_mit;
-            // Lightning contact burst (Lightning / Laser / Blueberries)
+            // Lightning contact burst (Lightning / Laser / Blueberries).
+            // Prefer live petal.damage — Flower.cc bakes Unique Lv + amp into it
+            // when base body damage is 0 (Lightning ladder).
             if (A.lightning_damage > 0.f && !A.battery_charges) {
                 float flash = A.lightning_damage;
+                if (atk.damage > flash) flash = atk.damage;
                 if (flash > amt) amt = flash;
             }
         } else {
@@ -523,28 +538,47 @@ void inflict_damage(Simulation *sim, EntityID const atk_id, EntityID const def_i
             if (training_stats) training_stats->slow_ticks = std::max(training_stats->slow_ticks, sn);
             else if (defender.snare_ticks < sn) defender.snare_ticks = sn;
         }
-        // Lightning chain to nearby enemies
+        // Lightning chain: jump nearest→nearest (not flat AoE in one query).
         if (A.lightning_damage > 0.f && A.lightning_chains > 1) {
-            float const R = 180.f;
-            float const px = defender.get_x();
-            float const py = defender.get_y();
-            float const chain_dmg = A.lightning_damage * 0.65f;
+            float const R = 220.f;
+            float const R2 = R * R;
+            float chain_dmg = (attacker.damage > A.lightning_damage
+                ? attacker.damage : A.lightning_damage) * 0.65f;
             uint8_t left = A.lightning_chains - 1;
             EntityID atk_team = attacker.get_team();
-            EntityID skip = def_id;
             EntityID src = atk_id;
-            sim->spatial_hash.query(px, py, R, R, [&](Simulation *s, Entity &ent) {
-                if (left == 0) return;
-                if (ent.id == skip) return;
-                if (!ent.has_component(kHealth)) return;
-                if (ent.get_team() == atk_team) return;
-                if (ent.has_component(kPetal) || ent.has_component(kDrop)) return;
-                float dx = ent.get_x() - px;
-                float dy = ent.get_y() - py;
-                if (dx * dx + dy * dy > R * R) return;
+            EntityID hit[16];
+            uint8_t nhit = 1;
+            hit[0] = def_id;
+            float cx = defender.get_x();
+            float cy = defender.get_y();
+            while (left > 0 && nhit < 16) {
+                EntityID best = NULL_ENTITY;
+                float best_d2 = R2;
+                float const qx = cx, qy = cy;
+                sim->spatial_hash.query(qx, qy, R, R, [&](Simulation *, Entity &ent) {
+                    if (!ent.has_component(kHealth)) return;
+                    if (ent.get_team() == atk_team) return;
+                    if (ent.has_component(kPetal) || ent.has_component(kDrop)) return;
+                    for (uint8_t i = 0; i < nhit; ++i)
+                        if (ent.id == hit[i]) return;
+                    float dx = ent.get_x() - qx;
+                    float dy = ent.get_y() - qy;
+                    float d2 = dx * dx + dy * dy;
+                    if (d2 > R2 || d2 >= best_d2) return;
+                    best_d2 = d2;
+                    best = ent.id;
+                });
+                if (best == NULL_ENTITY) break;
+                hit[nhit++] = best;
                 --left;
-                inflict_damage(s, src, ent.id, chain_dmg, DamageType::kSplash);
-            });
+                inflict_damage(sim, src, best, chain_dmg, DamageType::kSplash);
+                if (!sim->ent_alive(best)) break;
+                Entity &nxt = sim->get_ent(best);
+                cx = nxt.get_x();
+                cy = nxt.get_y();
+                chain_dmg *= 0.65f;
+            }
         }
         if (A.taunt_radius > 0.f && sim->ent_alive(attacker.base_entity)) {
             float const R = A.taunt_radius;
