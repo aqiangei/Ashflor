@@ -1,11 +1,19 @@
 {
   "ok": true,
-  "updated_at": 1792927796486,
+  "updated_at": 1792928731454,
   "days": [
     {
       "date": "2026-10-25",
       "label": "10/25",
       "done": [
+        {
+          "text": "DBH: 10-25 合成金叶升 Lv.1 后背包没了、合成栏还有",
+          "note": "唯一升级成功未返还产品；现与稀有度合成一样 try_give_petal 回 1 片"
+        },
+        {
+          "text": "黄金叶冷却计算出现实际冷却和面板冷却不符",
+          "note": "G键 get_reload_factor 漏 Unique Lv；与服首槽 level_scale_factor 对齐"
+        },
         {
           "text": "控制台刷怪堆积卡服",
           "note": "kAdminSpawned+45s TTL；同图并发头数≤24 超则清最老；高负载优先回收"
@@ -370,9 +378,6 @@
       "open": [
         {
           "text": "闪电无效果不会连锁"
-        },
-        {
-          "text": "黄金叶冷却计算出现实际冷却和面板冷却不符"
         },
         {
           "text": "建议在死亡时可以直接使用左上角功能"
