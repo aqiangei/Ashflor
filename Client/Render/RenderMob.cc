@@ -33,6 +33,13 @@ void render_mob(Renderer &ctx, Entity const &ent) {
     uint32_t flags = 0;
     if (ent.get_team() == Game::simulation.get_ent(Game::camera_id).get_team()) BitMath::set(flags, 0);
     if (ent.has_component(kSegmented)) BitMath::set(flags, 1);
+    uint8_t const map_id = Game::simulation.arena_info.map_id;
+    std::string_view const nm = (ent.has_component(kName) && !ent.get_name().empty())
+        ? std::string_view(ent.get_name()) : std::string_view{};
+    // Pharaoh's Crown pets (server renames; flags are server-only).
+    if ((ent.get_mob_id() == MobID::kBeetle || ent.get_mob_id() == MobID::kMassiveBeetle)
+        && (nm == "Undead Beetle" || nm == "亡灵甲虫"))
+        BitMath::set(flags, 2);
     MobRenderAttributes attrs = {ent.animation, ent.get_radius(), ent.id.id, flags, ent.get_color()};
     if (ent.has_component(kFlower)) {
         attrs.flower_attrs = {
@@ -46,9 +53,6 @@ void render_mob(Renderer &ctx, Entity const &ent) {
             .color = ent.get_color()
         };
     }
-    uint8_t const map_id = Game::simulation.arena_info.map_id;
-    std::string_view const nm = (ent.has_component(kName) && !ent.get_name().empty())
-        ? std::string_view(ent.get_name()) : std::string_view{};
     ThemeArt::Visual const theme = ThemeArt::resolve(ent.get_mob_id(), nm, map_id);
     if (theme != ThemeArt::Visual::None) {
         ThemeArt::draw(ctx, theme, map_id, attrs.radius, attrs.animation, attrs.seed, nm);

@@ -1,6 +1,6 @@
 from pathlib import Path
 import re
-ROOT = Path(r"d:\ashflor\ashflor")
+ROOT = Path(__file__).resolve().parents[1]
 hh = (ROOT/"Shared"/"StaticDefinitions.hh").read_text(encoding="utf-8")
 m = re.search(r"namespace PetalID.*?enum\s*:\s*T\s*\{(.*?)\bkNumPetals", hh, re.S)
 ids = [l.split("//")[0].strip().rstrip(",") for l in m.group(1).splitlines() if l.split("//")[0].strip().startswith("k")]

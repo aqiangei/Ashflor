@@ -1,4 +1,5 @@
 #include <Server/Process.hh>
+#include <Server/EntityFunctions.hh>
 #include <Server/TrainingDummy.hh>
 
 #include <Shared/Entity.hh>
@@ -16,6 +17,23 @@
 constexpr float BASE_TPS = 20;
 
 void tick_entity_motion(Simulation *sim, Entity &ent) {
+    // Keep hostile wildlife out of respawn, including old/admin-spawned packs.
+    // Player summons and the training bay are unaffected.
+    if (ent.has_component(kMob) && ent.damage > 0.f
+        && !is_player_faction(sim, ent)
+        && Map::in_spawn_plaza(ent.get_x(), ent.get_y())) {
+        if (!Map::in_spawn_plaza(ent.home_x, ent.home_y)
+            && ent.home_x > 0.f && ent.home_y > 0.f) {
+            ent.set_x(ent.home_x); ent.set_y(ent.home_y);
+            ent.target = NULL_ENTITY;
+            ent.velocity.set(0, 0); ent.acceleration.set(0, 0);
+            ent.collision_velocity.set(0, 0);
+        } else {
+            BitMath::set(ent.flags, EntityFlags::kNoDrops);
+            sim->request_delete(ent.id);
+        }
+        return;
+    }
     if (ent.pending_delete) return;
     if (TrainingDummy::is_dummy(ent)) {
         ent.set_x(ent.home_x);
@@ -75,7 +93,7 @@ void tick_entity_motion(Simulation *sim, Entity &ent) {
     ent.velocity += ent.collision_velocity * 0.5;
     // Soft cap flower velocity so bubble / knockback stacks can't yeet across the map.
     if (ent.has_component(kFlower)) {
-        float const kFlowerVelCap = PLAYER_ACCELERATION * 36.f;
+        float const kFlowerVelCap = PLAYER_ACCELERATION * 26.f;
         float vm = ent.velocity.magnitude();
         if (vm > kFlowerVelCap && is_finite(vm))
             ent.velocity.set_magnitude(kFlowerVelCap);
@@ -83,8 +101,16 @@ void tick_entity_motion(Simulation *sim, Entity &ent) {
     uint8_t const is_pea_shot = ent.has_component(kPetal)
         && BitMath::at(ent.flags, EntityFlags::kIsDespawning)
         && (petal_name_is(ent.get_petal_id(), "Peas")
-            || petal_name_is(ent.get_petal_id(), "Glass Storm"));
-    if ((!ent.has_component(kPetal) && !ent.has_component(kWeb)) || is_pea_shot) {
+            || petal_name_is(ent.get_petal_id(), "Glass Storm")
+            || petal_name_is(ent.get_petal_id(), "Grapes")
+            || petal_name_is(ent.get_petal_id(), "Blueberries")
+            || petal_name_is(ent.get_petal_id(), "Carrot"));
+    // Planted Meteor crater must stay out of berms (orbit petals skip terrain).
+    uint8_t const is_planted_meteor = ent.has_component(kPetal)
+        && petal_is_meteor(ent.get_petal_id())
+        && ent.get_split_projectile();
+    if ((!ent.has_component(kPetal) && !ent.has_component(kWeb))
+        || is_pea_shot || is_planted_meteor) {
         float x = ent.get_x();
         float y = ent.get_y();
         float r = ent.get_radius();

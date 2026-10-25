@@ -449,10 +449,34 @@
       vision_factor: "视野倍率", extra_body_damage: "额外体伤", extra_rotation_speed: "额外转速",
       extra_range: "额外射程", extra_health: "额外生命", damage_reflection: "反伤",
       extra_damage_factor: "伤害倍率", extra_reload_factor: "冷却倍率",
-      move_speed_factor: "移速倍率", magnet_radius: "磁铁半径",
-      aura_heal: "光环治疗/s", aura_radius: "光环半径", aura_duration: "光环持续",
-      poison_dps: "毒伤/s", poison_time: "毒时长", burn_dps: "灼伤/s", burn_time: "灼伤时长",
-      armor_penetration: "护甲穿透", bonus_vs_poisoned: "对中毒加成", bonus_vs_slowed: "对减速加成",
+      move_speed_factor: "移速倍率", magnet_radius: "磁铁半径", attraction_radius: "吸引半径",
+      fixed_orbit_range: "固定轨道", aura_heal: "光环治疗/s", aura_radius: "光环半径",
+      aura_duration: "光环持续", poison_dps: "毒伤/s", poison_time: "毒时长",
+      burn_dps: "灼伤/s", burn_time: "灼伤时长", armor_penetration: "护甲穿透",
+      bonus_vs_poisoned: "对中毒加成", bonus_vs_slowed: "对减速加成",
+      stack_damage: "同稀有叠伤", crit_chance: "暴击率", crit_factor: "暴击倍率",
+      luck: "幸运", armor_shred: "削甲", armor_shred_seconds: "削甲持续",
+      body_radius_bonus: "体型增大", heal_amp: "治疗放大", damage_absorb: "伤害吸收",
+      knockback_taken: "受击击退倍率", solo_damage_factor: "独处伤害",
+      petal_evasion: "花瓣闪避", flower_evasion: "花朵闪避",
+      nazar_mitigation: "减伤比例", nazar_charges: "减伤次数",
+      petal_hp_factor: "花瓣耐久倍率", petal_repair: "花瓣耐久回复/s",
+      clay_max_damage: "黏土蓄力上限", tomato_max_damage: "番茄蓄力上限",
+      domino_max_damage: "骨牌蓄力上限", vs_projectile_factor: "对弹射物",
+      lightning_damage: "闪电伤害", lightning_chains: "闪电链数",
+      battery_charges: "反击次数", damage_delay_seconds: "伤害延迟",
+      on_hit_heal_ratio: "命中吸血", hit_interval_seconds: "命中间隔",
+      phase_through: "穿透", aggro_shrink: "索敌缩小", ankh_mark: "安卡标记",
+      shovel_burrow: "遁地", death_delay_seconds: "致死缓冲",
+      totem_heal: "击杀后治疗/s", totem_seconds: "图腾持续",
+      root_armor: "每层护甲", root_interval: "叠甲间隔", root_max_stacks: "叠甲上限",
+      wax_block: "飞弹格挡", mana_gen: "法力回复/s", mana_cap: "法力上限",
+      mana_absorb_per: "每点法力抵伤", mana_lightning_per: "每点法力雷伤",
+      mana_spawn_cost: "法力消耗", card_random_stats: "纸牌随机", mimic_left: "拟态左侧",
+      compass: "罗盘", blood_sacrifice: "死亡召唤", champion_crown: "王者之冠",
+      soul_splitter: "灵魂分裂", paranormal: "超自然", corruption: "腐化",
+      dark_mark: "暗黑标记", overheal_to_shield: "溢出转护盾",
+      privet_extra_poison: "女贞毒加成", powder_max_rarity: "粉末压制稀有度",
       hit_cycle: "击中周期", hit_cycle_factor: "周期伤害倍率", snare_seconds: "禁锢秒",
       splash_damage: "溅射伤害", splash_radius: "溅射半径",
       execute_threshold: "斩杀阈值", execute_factor: "斩杀倍率",
@@ -464,19 +488,25 @@
     };
     const skipDefault = {
       mass: 0.1, vision_factor: 1, extra_damage_factor: 1, extra_reload_factor: 1,
-      move_speed_factor: 1, hit_cycle_factor: 2, execute_factor: 1.5,
+      move_speed_factor: 1, hit_cycle_factor: 2, execute_factor: 1.5, crit_factor: 1,
+      solo_damage_factor: 1, petal_hp_factor: 1, vs_projectile_factor: 1,
       rotation_style: "passive", equipment: "none", spawns: 106
     };
     // spawns default is kNumMobs which varies — treat MobID::kNumMobs-ish high as empty later
     const rows = [];
-    for (const [k, label] of Object.entries(labels)) {
-      if (!(k in attrs)) continue;
+    const seen = new Set();
+    const pushAttr = (k, label) => {
+      if (!(k in attrs) || seen.has(k)) return;
       const v = attrs[k];
-      if (v === 0 || v === "none" || v === "passive") continue;
-      if (skipDefault[k] !== undefined && v === skipDefault[k]) continue;
-      if (k === "spawns" && (v == null || v >= 90)) continue;
-      rows.push([label + " / " + k, escHtml(fmt(v))]);
-    }
+      if (v === 0 || v === "none" || v === "passive") return;
+      if (skipDefault[k] !== undefined && v === skipDefault[k]) return;
+      if (k === "spawns" && (v == null || v >= 90)) return;
+      seen.add(k);
+      rows.push([(label || k) + " / " + k, escHtml(fmt(v))]);
+    };
+    for (const [k, label] of Object.entries(labels)) pushAttr(k, label);
+    // Any attrs the API added but labels missed — still show with key
+    for (const k of Object.keys(attrs).sort()) pushAttr(k, labels[k] || k);
     return rows;
   }
   function dropsTable(entries) {

@@ -33,6 +33,9 @@ LoadoutSlot::LoadoutSlot() {
 
 void LoadoutSlot::reset() {
     id = PetalID::kNone;
+    behavior_id = PetalID::kNone;
+    effect_charges = 0;
+    effect_reload = 0;
     already_spawned = 0;
     for (uint32_t i = 0; i < MAX_PETALS_IN_CLUMP; ++i) {
         petals[i].reload = 0;
@@ -62,7 +65,8 @@ void LoadoutSlot::force_reload() {
 }
 
 uint32_t LoadoutSlot::size() const {
-    if (PETAL_DATA[id].attributes.split_projectile)
+    auto effective = behavior_id == PetalID::kNone ? id : behavior_id;
+    if (PETAL_DATA[effective].attributes.split_projectile)
         return 1;
-    return std::min(static_cast<uint32_t>(PETAL_DATA[id].count), MAX_PETALS_IN_CLUMP);
+    return std::min(static_cast<uint32_t>(PETAL_DATA[effective].count), MAX_PETALS_IN_CLUMP);
 }

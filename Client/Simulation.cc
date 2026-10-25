@@ -82,13 +82,13 @@ void Entity::tick_lerp(float amt) {
         } else {
             float const delta = target - prev_health_ratio;
             // Mob damage pops (petal / contact / poison — any HP drop with damaged flag).
-            if (damaged && delta < -0.0004f
+            if (damaged && get_state_hit_damage() && hit_damage.anchor() > 0.f
                 && has_component(kMob) && !has_component(kPetal)
                 // Practice targets show exact server readouts, including lethal
                 // hits; an HP-ratio estimate would undercount their resets.
                 && get_mob_id() != MobID::kTrainingDummy
                 && !pending_delete) {
-                float amt = -delta * estimate_max_hp(*this);
+                float amt = hit_damage.anchor();
                 // Cap Y offset so huge Unique+ radii do not bury floats inside the sprite
                 // or push them off-screen above the mob.
                 float rad = (float) get_radius();
@@ -121,7 +121,8 @@ void Entity::tick_lerp(float amt) {
         if (damaged)
             last_damaged_time = Game::timestamp;
         damaged.clear();
-        if ((float) health_ratio > 0.999)
+        if ((float) health_ratio > 0.999
+            && (last_damaged_time <= 0 || Game::timestamp - last_damaged_time > 1500))
             healthbar_opacity = lerp(healthbar_opacity, 0, amt);
         else
             healthbar_opacity = 1;
@@ -131,6 +132,8 @@ void Entity::tick_lerp(float amt) {
             healthbar_lag = lerp(healthbar_lag, health_ratio, amt / 3);
     }
     if (has_component(kFlower)) {
+        mana_ratio.step(amt);
+        shield_ratio.step(amt);
         float eye_angle = angle.anchor();
         eye_x = lerp(eye_x, cosf(eye_angle) * 2, amt);
         eye_y = lerp(eye_y, sinf(eye_angle) * 4, amt);
@@ -161,12 +164,8 @@ void Simulation::on_tick() {
 
 void Simulation::post_tick() {
     for_each_entity([](Simulation *sim, Entity &ent) {
-        // Death fade finished: reap locally even if the next delete list is
-        // delayed (backpressure park). Next create bit re-force_allocs safely.
-        if (ent.pending_delete && ent.deletion_animation >= 1.f) {
-            sim->_delete_ent(ent.id);
-            return;
-        }
+        // Keep the slot until the server deletes it. The 150ms visual fade can
+        // finish before the server's 200ms retirement; deltas still target it.
         ent.reset_protocol();
     });
 }

@@ -43,6 +43,15 @@ static Element *make_entries(std::initializer_list<std::pair<char const *, char 
 
 static Element *make_changelog_contents() {
     Element *elt = new Ui::VContainer({
+        make_date("2026年10月25日", "October 25th 2026"),
+        make_entries({
+            {"Unique 等级：重连保留账号 Lv 缓存；登录后写入本地；修复发包缓冲过小导致进度包踩内存",
+             "Unique Lv: keep account levels across WS reset; persist on login; enlarge client outbound buffer"},
+            {"Unique 等级：存档 capture 不再用空快照覆盖；从 10/24 备份高水位恢复 aqa 等 26 人被抹的 Lv",
+             "Unique Lv: capture never overwrites with empty snapshot; restored wiped levels for 26 accounts from 10/24 backup"},
+            {"局内左上角图标改回单行，避免挡住名字",
+             "In-game top-left icons back to one row so they do not cover the name"},
+        }),
         make_date("2026年10月24日", "October 24th 2026"),
         make_entries({
             {"Unique 等级：登录包/进图同步下发；游客本地存档，避免重连/发版后装备栏 Lv 消失",

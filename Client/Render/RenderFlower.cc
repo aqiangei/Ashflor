@@ -82,6 +82,85 @@ void render_flower(Renderer &ctx, Entity const &ent) {
         return;
     }
 
+    RenderContext effects(&ctx);
+    if (ent.get_effect_flags() & FlowerEffects::kBurrow) {
+        ctx.set_fill(0xff73513a);
+        ctx.set_stroke(0xffc9a36a);
+        ctx.set_line_width(3.f);
+        ctx.begin_path();
+        ctx.ellipse(0, ent.get_radius() * .5f, ent.get_radius() * 1.2f, ent.get_radius() * .45f);
+        ctx.fill(); ctx.stroke();
+        ctx.set_global_alpha(.35f);
+        ctx.scale(.7f);
+    } else if (ent.get_shield_ratio() > .001f) {
+        ctx.set_stroke(0xff78c9ff);
+        ctx.set_line_width(3.f);
+        ctx.begin_path(); ctx.arc(0, 0, ent.get_radius() + 6.f); ctx.stroke();
+    }
+    // Lethal grace (Bandage firing): amber aura + thick layered gauze.
+    if (ent.get_effect_flags() & FlowerEffects::kDeathGrace) {
+        float pulse = 0.55f + 0.45f * sinf((float)Game::timestamp * 0.012f);
+        float r = ent.get_radius();
+        ctx.round_line_cap();
+        ctx.round_line_join();
+        // Outer amber glow ring
+        ctx.set_global_alpha(0.28f + 0.32f * pulse);
+        ctx.set_stroke(0xffffc878);
+        ctx.set_line_width(5.5f);
+        ctx.begin_path();
+        ctx.arc(0, 0, r + 5.f + 4.f * pulse);
+        ctx.stroke();
+        // Inner warm rim
+        ctx.set_global_alpha(0.45f + 0.25f * pulse);
+        ctx.set_stroke(0xffffe0a0);
+        ctx.set_line_width(2.4f);
+        ctx.begin_path();
+        ctx.arc(0, 0, r + 2.5f + 1.5f * pulse);
+        ctx.stroke();
+        ctx.set_global_alpha(1.f);
+        // Layered bandage wraps (shadow → fill → seam)
+        ctx.set_stroke(0x44000000);
+        ctx.set_line_width(8.5f);
+        ctx.begin_path();
+        ctx.move_to(-r * 0.9f, -r * 0.12f);
+        ctx.qcurve_to(0, -r * 1.12f, r * 0.9f, -r * 0.08f);
+        ctx.move_to(-r * 0.85f, r * 0.22f);
+        ctx.qcurve_to(0, r * 1.05f, r * 0.85f, r * 0.18f);
+        ctx.move_to(-r * 0.55f, -r * 0.7f);
+        ctx.qcurve_to(r * 0.35f, 0, r * 0.65f, r * 0.7f);
+        ctx.stroke();
+        ctx.set_stroke(0xfff7efe4);
+        ctx.set_line_width(7.2f);
+        ctx.begin_path();
+        ctx.move_to(-r * 0.9f, -r * 0.12f);
+        ctx.qcurve_to(0, -r * 1.12f, r * 0.9f, -r * 0.08f);
+        ctx.move_to(-r * 0.85f, r * 0.22f);
+        ctx.qcurve_to(0, r * 1.05f, r * 0.85f, r * 0.18f);
+        ctx.move_to(-r * 0.55f, -r * 0.7f);
+        ctx.qcurve_to(r * 0.35f, 0, r * 0.65f, r * 0.7f);
+        ctx.stroke();
+        ctx.set_stroke(0xffc8a878);
+        ctx.set_line_width(1.8f);
+        ctx.begin_path();
+        ctx.move_to(-r * 0.9f, -r * 0.12f);
+        ctx.qcurve_to(0, -r * 1.12f, r * 0.9f, -r * 0.08f);
+        ctx.move_to(-r * 0.85f, r * 0.22f);
+        ctx.qcurve_to(0, r * 1.05f, r * 0.85f, r * 0.18f);
+        ctx.move_to(-r * 0.55f, -r * 0.7f);
+        ctx.qcurve_to(r * 0.35f, 0, r * 0.65f, r * 0.7f);
+        ctx.stroke();
+        // Fray tips
+        ctx.set_stroke(0xffd4c4a8);
+        ctx.set_line_width(1.4f);
+        ctx.begin_path();
+        ctx.move_to(r * 0.9f, -r * 0.08f);
+        ctx.line_to(r * 1.08f, -r * 0.18f);
+        ctx.move_to(r * 0.92f, 0);
+        ctx.line_to(r * 1.1f, 0.02f * r);
+        ctx.move_to(r * 0.85f, r * 0.18f);
+        ctx.line_to(r * 1.05f, r * 0.28f);
+        ctx.stroke();
+    }
     draw_static_flower(ctx, {
         .radius = ent.get_radius(),
         .eye_x = ent.eye_x,

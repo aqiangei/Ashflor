@@ -212,10 +212,12 @@ void Game::render_game() {
     });
     simulation.for_each<kDrop>([&](Simulation *sim, Entity const &ent){
         if (!visible(ent)) return;
-        // Settings: hide Common/Unusual piles unless "show low rarity drops" is on.
+        // Settings: hide Common/Unusual petal piles unless "show low rarity drops"
+        // is on. Always show coins — hiding them looked like "打怪没掉落".
         if (!Game::show_low_rarity_drops) {
             PetalID::T did = ent.get_drop_id();
-            if (did != PetalID::kNone && did < PetalID::kNumPetals) {
+            if (did != PetalID::kNone && did < PetalID::kNumPetals
+                && did != PetalID::kCoin) {
                 uint8_t r = PETAL_DATA[did].rarity;
                 if (r <= RarityID::kUnusual) return;
             }
@@ -302,6 +304,7 @@ void Game::render_game() {
             if (!Game::show_low_rarity_drops) {
                 PetalID::T did = ent.get_drop_id();
                 if (did != PetalID::kNone && did < PetalID::kNumPetals
+                    && did != PetalID::kCoin
                     && PETAL_DATA[did].rarity <= RarityID::kUnusual)
                     return;
             }

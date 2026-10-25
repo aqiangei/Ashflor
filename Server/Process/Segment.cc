@@ -13,5 +13,10 @@ void tick_segment_behavior(Simulation *sim, Entity &ent) {
         ent.set_angle(diff.angle() + M_PI);
         if (sim->ent_alive(par.target))
             ent.target = par.target;
+    } else {
+        // Parent gone → promote to free head (name/rarity + AI like a normal mob).
+        if (ent.has_component(kSegmented))
+            ent.remove_component(kSegmented);
+        ent.seg_head = NULL_ENTITY;
     }
 }

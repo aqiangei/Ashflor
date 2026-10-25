@@ -159,6 +159,7 @@ public:
     X(8, Game::guest_level) \
     X(9, Game::guest_petals) \
     X(10, Game::guest_craft_bank) \
+    X(25, Game::guest_petal_levels) \
     X(11, Game::guest_coins) \
     X(12, Input::invert_attack) \
     X(13, Input::invert_defend) \
@@ -446,9 +447,15 @@ void Storage::retrieve() {
                         uint16_t id = reader.read<uint16_t>();
                         uint32_t lv = reader.read<uint32_t>();
                         if (id > 0 && id < PetalID::kNumPetals
-                            && lv > 0 && lv <= Craft::kMaxPetalLevel)
-                            Game::guest_petal_levels[id] = lv;
+                            && lv > 0 && lv <= Craft::kMaxPetalLevel) {
+                            PetalID::T dst = Craft::canonical_unique_id((PetalID::T) id);
+                            if (dst == PetalID::kNone || dst >= PetalID::kNumPetals)
+                                dst = (PetalID::T) id;
+                            if (lv > Game::guest_petal_levels[dst])
+                                Game::guest_petal_levels[dst] = lv;
+                        }
                     }
+                    Craft::petal_levels_canonicalize(Game::guest_petal_levels);
                 }
                 if (Game::guest_coins > 0) {
                     uint64_t sum = (uint64_t) Game::guest_craft_bank[PetalID::kCoin] + Game::guest_coins;

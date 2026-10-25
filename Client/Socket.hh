@@ -4,7 +4,8 @@
 #include <string>
 
 extern uint8_t INCOMING_PACKET[64 * 1024];
-extern uint8_t OUTGOING_PACKET[1 * 1024];
+// Must fit kGuestProgress (full craft_bank ≈ kNumPetals varints) + levels.
+extern uint8_t OUTGOING_PACKET[64 * 1024];
 
 class Socket {
 public:

@@ -1035,8 +1035,8 @@ void gen_ant_nest(MapTerrain &t, ThemePalette const &p, uint32_t &rng, float W, 
         hill_box(t, p, (uint8_t)(20 + (i % 200)),
                  W * r[0], H * r[1], W * r[2], H * r[3]);
     }
-    // Queen in a large mid-right chamber of the player layout (not a carved basin).
-    g_boss[MapID::kAntNest] = { W * 0.72f, H * 0.42f, (uint8_t)MobID::kQueenAnt };
+    // Queen in east termite-side open chamber (cell 26,18). Old W*0.72/H*0.42 sat on a wall.
+    g_boss[MapID::kAntNest] = { W * 0.828125f, H * 0.578125f, (uint8_t)MobID::kQueenAnt };
     (void)cx; (void)cy;
 }
 

@@ -294,7 +294,7 @@
 
   <div class="panel">
     <h2>管理操作</h2>
-    <p class="hint" id="authHint">鉴权当前关闭，可直接操作。公告发送者 aqa，会触发游戏内顶栏横幅。</p>
+    <p class="hint" id="authHint">鉴权当前关闭，可直接操作。控制台公告显示为「广播」，会触发游戏内顶栏横幅。</p>
     <div id="authBox" hidden>
       <div class="row2" style="margin-bottom:10px; max-width:520px">
         <div>
@@ -362,6 +362,7 @@
           <option value="5">蚁穴</option>
           <option value="6">火山</option>
           <option value="7">王城</option>
+          <option value="8">蚁巢</option>
         </select>
         <label>筛选怪物（中英文）</label>
         <input id="mobFilter" autocomplete="off" placeholder="如：蜜蜂 / Bee / boss">
@@ -402,11 +403,12 @@
           <th>等级</th>
           <th>地图</th>
           <th>公会</th>
+          <th>在线时长</th>
           <th>状态</th>
         </tr>
       </thead>
       <tbody id="rows">
-        <tr><td colspan="6" class="empty-msg">加载中…</td></tr>
+        <tr><td colspan="7" class="empty-msg">加载中…</td></tr>
       </tbody>
     </table>
   </div>
@@ -447,6 +449,7 @@
           <option value="5">蚁穴</option>
           <option value="6">火山</option>
           <option value="7">王城</option>
+          <option value="8">蚁巢</option>
           <option value="255">全服/未知</option>
         </select>
       </label>
@@ -462,7 +465,7 @@
       </label>
       <button type="button" id="bcApply">筛选</button>
     </div>
-    <p class="hint" style="margin-top:6px">控制台/Live 发的公告发送者为 aqa（旧数据可能显示「公告」）；商店购买的是玩家名。筛「控制台公告」或搜 aqa 可查。</p>
+    <p class="hint" style="margin-top:6px">控制台/Live 公告发送者为「公告」（旧数据可能仍是 aqa）；商店购买的是玩家名。筛「控制台公告」可查。</p>
     <div class="feed" id="feed"><div class="empty-msg">暂无播报</div></div>
   </div>
 
@@ -487,6 +490,7 @@
           <option value="5">蚁穴</option>
           <option value="6">火山</option>
           <option value="7">王城</option>
+          <option value="8">蚁巢</option>
           <option value="255">未知</option>
         </select>
       </label>
@@ -573,8 +577,8 @@ function applyAuthMode(required) {
   $("authState").textContent = authRequired ? "开" : "关";
   $("authBox").hidden = !authRequired;
   $("authHint").textContent = authRequired
-    ? "鉴权已启用：先登录再改游戏。公告发送者 aqa。"
-    : "鉴权当前关闭，可直接操作。公告发送者 aqa，会触发游戏内顶栏横幅。";
+    ? "鉴权已启用：先登录再改游戏。控制台公告显示为「广播」。"
+    : "鉴权当前关闭，可直接操作。控制台公告显示为「广播」，会触发游戏内顶栏横幅。";
   setAdminUnlocked(!authRequired);
 }
 
@@ -625,7 +629,7 @@ if ($("btnLogout")) $("btnLogout").onclick = () => {
   flashOk("已退出管理");
 };
 
-const MAP_NAMES = ["花园","沙漠","海洋","雪原","丛林","蚁穴","火山","王城"];
+const MAP_NAMES = ["花园","沙漠","海洋","雪原","丛林","蚁穴","火山","王城","蚁巢"];
 // Matches RarityID / Server::live_rarity_zh: Common…Mythic, Ultra, Super, Unique
 const RARITY_ZH = ["普通","罕见","稀有","史诗","传奇","神话","究极","超凡","唯一"]; // Unique
 const openCombos = new Set();
@@ -909,11 +913,22 @@ function refreshOpenPlayerCombos() {
 }
 
 async function loadCatalog() {
-  const r = await fetch("/api/catalog", { cache: "force-cache" });
-  if (!r.ok) throw new Error("catalog " + r.status);
-  catalog = await r.json();
-  refreshPetalSelect();
-  refreshMobSelect();
+  // no-store: force-cache sticky-cached nginx 502s across server restarts.
+  let lastErr = null;
+  for (let i = 0; i < 3; i++) {
+    try {
+      const r = await fetch("/api/catalog", { cache: "no-store" });
+      if (!r.ok) throw new Error("catalog " + r.status);
+      catalog = await r.json();
+      refreshPetalSelect();
+      refreshMobSelect();
+      return;
+    } catch (e) {
+      lastErr = e;
+      await new Promise((res) => setTimeout(res, 400 * (i + 1)));
+    }
+  }
+  throw lastErr || new Error("catalog failed");
 }
 
 async function loadCodexGate() {
@@ -921,7 +936,8 @@ async function loadCodexGate() {
   const mechs = $("codexMechs");
   if (!worlds || !mechs) return;
   try {
-    const r = await fetch("/api/codex", { cache: "force-cache" });
+    // Lite payload (maps+mechanics). Avoid force-cache — it sticky-cached prior 502s.
+    const r = await fetch("/api/codex-gate", { cache: "no-store" });
     if (!r.ok) throw new Error("codex " + r.status);
     const data = await r.json();
     worlds.innerHTML = "";
@@ -1192,11 +1208,13 @@ function startMinimapLoop() {
 
 async function loadMapLayout() {
   try {
-    const r = await fetch("/api/map-layout", { cache: "force-cache" });
+    // no-store: force-cache previously stuck an 8-map layout from before 蚁巢.
+    const r = await fetch("/api/map-layout", { cache: "no-store" });
     if (!r.ok) throw new Error("HTTP " + r.status);
     mapLayout = await r.json();
     ensureMinimapUi();
-    $("mmStatus").textContent = "地形已就绪 · 5Hz 平滑刷新";
+    const n = (mapLayout.maps && mapLayout.maps.length) || 0;
+    $("mmStatus").textContent = "地形已就绪 · " + n + " 图 · 5Hz 平滑刷新";
     startMinimapLoop();
   } catch (e) {
     $("mmStatus").textContent = "地形加载失败：" + e.message;
@@ -1396,7 +1414,7 @@ function renderPlayersTable() {
   const tbody = $("rows");
   if (!tbody) return;
   if (!players.length) {
-    tbody.innerHTML = `<tr><td colspan="6" class="empty-msg">当前无人在线</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="7" class="empty-msg">当前无人在线</td></tr>`;
     lastDetailSig.clear();
     return;
   }
@@ -1423,12 +1441,13 @@ function renderPlayersTable() {
         <td>${title ? "—" : p.level}</td>
         <td>${title ? "—" : esc(p.map)}</td>
         <td>${esc(p.guild || "—")}</td>
+        <td>${fmtPlaytime(p.playtime)}</td>
         <td>${status}</td>
       </tr>`;
     if (open) {
       const sig = detailSig(p);
       lastDetailSig.set(k, sig);
-      html += `<tr class="detail" data-for="${esc(k)}"><td colspan="6">${detailHtml(p, k)}</td></tr>`;
+      html += `<tr class="detail" data-for="${esc(k)}"><td colspan="7">${detailHtml(p, k)}</td></tr>`;
     }
   }
   tbody.innerHTML = html;
@@ -1440,11 +1459,13 @@ function renderPlayersTable() {
 }
 
 function fmtPlaytime(sec) {
-  sec = Number(sec) || 0;
+  sec = Math.max(0, Math.floor(Number(sec) || 0));
   const h = Math.floor(sec / 3600);
   const m = Math.floor((sec % 3600) / 60);
+  const s = sec % 60;
   if (h > 0) return `${h}时${m}分`;
-  return `${m}分`;
+  if (m > 0) return `${m}分${s}秒`;
+  return `${s}秒`;
 }
 
 function fmtStat(catId, v) {
@@ -1554,12 +1575,13 @@ async function tick() {
           const title = !p.in_game;
           const status = title ? "标题页 / 未进局" : (p.alive ? "存活" : "等待复活");
           const cells = tr.children;
-          if (cells.length >= 6) {
+          if (cells.length >= 7) {
             cells[1].textContent = p.account || "游客";
             cells[2].textContent = title ? "—" : String(p.level);
             cells[3].textContent = title ? "—" : (p.map || "");
             cells[4].textContent = p.guild || "—";
-            cells[5].textContent = status;
+            cells[5].textContent = fmtPlaytime(p.playtime);
+            cells[6].textContent = status;
           }
           tr.className = "player " + (title ? "title" : (p.alive ? "" : "dead"));
         });
@@ -1670,7 +1692,7 @@ function renderBcFeed(stickBottom) {
         (who === "aqa" && !(String(b.text || "").startsWith("aqa：")));
       if (ops) {
         tag = "控制台";
-        who = "aqa";
+        who = "公告";
       } else {
         tag = "商店";
       }

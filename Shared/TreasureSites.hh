@@ -237,6 +237,40 @@ namespace TreasureSites {
           "神秘宝箱", "Mystery Chest", "", "", PetalID::kNone, 0, 0 },
     };
 
+    // ---- Ant Nest (from player color PNG — do NOT reuse Ant Hell open offsets) ----
+    // Coords from walkable chambers after NEAREST 32x32 + spawn plaza/gates.
+    // Compact pad/crate spreads fit cave rooms (~cell 875×625).
+    inline SiteDef const kAntNest[] = {
+        { kRitual, -3938.f, -938.f,
+          {{0.f, 0.f}, {110.f, 0.f}}, {{-140.f, 90.f}, {-40.f, 150.f}},
+          "蚁国向导", "Ant Guide",
+          "吱吱！甲壳箱推到巢印。白线隧道连通各洞——别卡在死胡同。",
+          "Skree! Push crates onto nest marks. White tunnels link caves — don't trap in a dead end.",
+          PetalID::kMatAntShell, 12, 400 },
+        { kRitual, 3938.f, 3438.f,
+          {{0.f, 0.f}, {0.f, 110.f}}, {{120.f, -70.f}, {50.f, 140.f}},
+          "蚁国向导", "Ant Guide",
+          "外环巢印收触角。白蚁洞在东侧，深处有蚁后。",
+          "Outer nest marks take antenna scrap. Termite caves east; Queen waits deeper.",
+          PetalID::kMatAntenna, 8, 440 },
+        { kGuide, 3938.f, 312.f, {{}, {}}, {{}, {}},
+          "穴道哨蚁", "Tunnel Scout",
+          "西洞推箱拿蚁壳；东南洞推箱拿触角。V 组装蚁牙（蚁壳×4+触角×3）。",
+          "West cave: shell rite. SE cave: antenna rite. V-assemble Ant Fang (Shell×4 + Antenna×3).",
+          PetalID::kNone, 0, 0 },
+        { kGuide, -9188.f, -2188.f, {{}, {}}, {{}, {}},
+          "穴道哨蚁", "Tunnel Scout",
+          "蚁巢三族：左火蚁、中黑蚁、右白蚁（掉三角形）。君王是蚁后。",
+          "Three nests: left Fire, center Black, right Termite (Triangle). Sovereign: Queen Ant.",
+          PetalID::kNone, 0, 0 },
+        { kChestOnly, 1312.f, -7812.f, {{}, {}}, {{}, {}},
+          "神秘宝箱", "Mystery Chest", "", "", PetalID::kNone, 0, 0 },
+        { kChestOnly, -10938.f, 7188.f, {{}, {}}, {{}, {}},
+          "神秘宝箱", "Mystery Chest", "", "", PetalID::kNone, 0, 0 },
+        { kChestOnly, -5688.f, -7812.f, {{}, {}}, {{}, {}},
+          "神秘宝箱", "Mystery Chest", "", "", PetalID::kNone, 0, 0 },
+    };
+
     // ---- Volcano ----
     inline SiteDef const kVolcano[] = {
         { kRitual, 2700.f, 1200.f,
@@ -407,7 +441,7 @@ namespace TreasureSites {
             { kAntHell, (uint8_t)(sizeof(kAntHell) / sizeof(kAntHell[0])), PetalID::kMatAntShell },
             { kVolcano, (uint8_t)(sizeof(kVolcano) / sizeof(kVolcano[0])), PetalID::kMatSulfur },
             { kRoyal, (uint8_t)(sizeof(kRoyal) / sizeof(kRoyal[0])), PetalID::kMatSteel },
-            { kAntHell, (uint8_t)(sizeof(kAntHell) / sizeof(kAntHell[0])), PetalID::kMatAntShell }, // Ant Nest
+            { kAntNest, (uint8_t)(sizeof(kAntNest) / sizeof(kAntNest[0])), PetalID::kMatAntShell },
         };
         if (map_id >= MapID::kNumMaps) map_id = 0;
         return kPacks[map_id];

@@ -1,4 +1,5 @@
 #include <Server/EntityFunctions.hh>
+#include <Server/PetalMechanics.hh>
 #include <Server/AccountStore.hh>
 #include <Server/Client.hh>
 #include <Server/Game.hh>
@@ -19,10 +20,55 @@
 #include <cmath>
 #include <iostream>
 
-static bool _should_interact(Entity const &ent1, Entity const &ent2) {
+static uint8_t _is_hatch_summon(Entity const &ent) {
+    return ent.has_component(kMob)
+        && BitMath::at(ent.flags, EntityFlags::kDieOnParentDeath)
+        && BitMath::at(ent.flags, EntityFlags::kNoDrops);
+}
+
+static bool _should_interact(Simulation *sim, Entity const &ent1, Entity const &ent2) {
     //if (ent1.has_component(kFlower) || ent2.has_component(kFlower)) return false;
     //if (ent1.has_component(kPetal) || ent2.has_component(kPetal)) return false;
     if (ent1.pending_delete || ent2.pending_delete) return false;
+    // Training dummies: practice targets for players only. Wild mobs / their
+    // missiles / hatch packs pass through — otherwise they wedge on the ring
+    // and hornet shots look like "怪物一直在攻击假人".
+    if (TrainingDummy::is_dummy(ent1) || TrainingDummy::is_dummy(ent2)) {
+        Entity const &other = TrainingDummy::is_dummy(ent1) ? ent2 : ent1;
+        if (other.has_component(kFlower) && !other.has_component(kMob))
+            return true;
+        if (other.has_component(kPetal) && sim != nullptr
+            && is_player_faction(sim, other))
+            return true;
+        return false;
+    }
+    // Off-party: other players' hatch summons must not body-block flowers.
+    if (sim != nullptr) {
+        auto flower_vs_foreign_summon = [&](Entity const &flower, Entity const &sum) -> uint8_t {
+            if (!flower.has_component(kFlower) || flower.has_component(kMob)) return 0;
+            if (!_is_hatch_summon(sum) || !is_player_faction(sim, sum)) return 0;
+            if (flower.get_team() == sum.get_team()) return 0;
+            return 1;
+        };
+        if (flower_vs_foreign_summon(ent1, ent2) || flower_vs_foreign_summon(ent2, ent1))
+            return false;
+        // Different players' hatch packs: no body-block (petals still damage them).
+        if (_is_hatch_summon(ent1) && _is_hatch_summon(ent2)
+            && is_player_faction(sim, ent1) && is_player_faction(sim, ent2)
+            && !(ent1.get_team() == ent2.get_team()))
+            return false;
+    }
+    // Orbiting petals vs orbiting petals: no gameplay value, huge pair count
+    // under multiplayer FOVs. Detached/despawning projectiles still collide.
+    if (ent1.has_component(kPetal) && ent2.has_component(kPetal)) {
+        uint8_t d1 = BitMath::at(ent1.flags, EntityFlags::kIsDetached)
+            || BitMath::at(ent1.flags, EntityFlags::kIsDespawning);
+        uint8_t d2 = BitMath::at(ent2.flags, EntityFlags::kIsDetached)
+            || BitMath::at(ent2.flags, EntityFlags::kIsDespawning);
+        if (!d1 && !d2) return false;
+    }
+    // Webs do not push each other.
+    if (ent1.has_component(kWeb) && ent2.has_component(kWeb)) return false;
     // Drops must collide with living flowers so pickup can run (not revive corpses).
     if ((ent1.has_component(kDrop) && ent2.has_component(kFlower))
         || (ent2.has_component(kDrop) && ent1.has_component(kFlower))) {
@@ -51,6 +97,26 @@ static bool _should_interact(Entity const &ent1, Entity const &ent2) {
     if (ent1.has_component(kMob) && ent2.has_component(kMob)) return true;
     // Same-team flowers still soft-collide (party / auto-party shared team).
     if (ent1.has_component(kFlower) && ent2.has_component(kFlower)) return true;
+    // Corruption PvP: same-team petals / summons must still contact enemy
+    // player flowers. Without this, only body-vs-body hits land (花瓣无伤害).
+    if (sim != nullptr && player_faction_pvp(sim, ent1, ent2)) {
+        auto owner_flower = [&](Entity const &e) -> EntityID {
+            if (e.has_component(kFlower) && !e.has_component(kMob)) return e.id;
+            if (e.has_component(kPetal) && sim->ent_alive(e.get_parent())) {
+                Entity const &p = sim->get_ent(e.get_parent());
+                if (p.has_component(kFlower) && !p.has_component(kMob)) return p.id;
+            }
+            if (!(e.base_entity == e.id) && sim->ent_alive(e.base_entity)) {
+                Entity const &b = sim->get_ent(e.base_entity);
+                if (b.has_component(kFlower) && !b.has_component(kMob)) return b.id;
+            }
+            return NULL_ENTITY;
+        };
+        EntityID a = owner_flower(ent1);
+        EntityID b = owner_flower(ent2);
+        if (!(a == NULL_ENTITY) && a == b) return false; // own gear vs self
+        return true;
+    }
     return false;
 }
 
@@ -104,10 +170,22 @@ static void _deal_knockback(Entity &ent, Vector knockback, float mass_ratio) {
     if (fabsf(mass_ratio) < 0.01) return;
     if (!is_finite(knockback.x) || !is_finite(knockback.y)) return;
     if (!is_finite(mass_ratio)) return;
-    float scale = PLAYER_ACCELERATION * 2;
+    // Was *2 impulse + *2 velocity — flowers got yeeted across zones ("击飞过长").
+    float scale = PLAYER_ACCELERATION * 1.15f;
+    // Rubber: take extra knockback while equipped.
+    if (ent.has_component(kFlower) && !ent.has_component(kMob)) {
+        float kb = 0.f;
+        for (uint32_t si = 0; si < ent.get_loadout_count(); ++si) {
+            PetalID::T pid = effective_petal_id(ent, si);
+            if (pid == PetalID::kNone || pid >= PetalID::kNumPetals) continue;
+            float k = PETAL_DATA[pid].attributes.knockback_taken;
+            if (k > kb) kb = k;
+        }
+        if (kb > 0.f) scale *= (1.f + kb);
+    }
     knockback *= scale * mass_ratio;
     ent.collision_velocity += knockback;
-    ent.velocity += knockback * 2;
+    ent.velocity += knockback * 1.15f;
 }
 
 static void _cancel_movement(Entity &ent, Vector dir, Vector add) {
@@ -123,7 +201,7 @@ void on_collide(Simulation *sim, Entity &ent1, Entity &ent2) {
     float min_dist = ent1.get_radius() + ent2.get_radius();
     if (fabs(ent1.get_x() - ent2.get_x()) > min_dist || fabs(ent1.get_y() - ent2.get_y()) > min_dist) return;
     //check if collide (distance independent)
-    if (!_should_interact(ent1, ent2)) return;
+    if (!_should_interact(sim, ent1, ent2)) return;
     //finer distance check
     Vector separation(ent1.get_x() - ent2.get_x(), ent1.get_y() - ent2.get_y());
     float distance_squared = separation.x * separation.x + separation.y * separation.y;
@@ -166,21 +244,49 @@ void on_collide(Simulation *sim, Entity &ent1, Entity &ent2) {
         _deal_push(ent2, separation*-1, 1 - ratio, push_dist);
     }
 
-    if (BOTH(kHealth) && !(ent1.get_team() == ent2.get_team())) {
+    if (BOTH(kHealth) && (!(ent1.get_team() == ent2.get_team())
+            || player_faction_pvp(sim, ent1, ent2))) {
         // No PvP between players / CPU bots / their petals & summons
-        if (is_player_faction(sim, ent1) && is_player_faction(sim, ent2))
+        // unless Corruption enables it.
+        if (is_player_faction(sim, ent1) && is_player_faction(sim, ent2)
+            && !player_faction_pvp(sim, ent1, ent2))
             return;
+        // Own hatch / petal vs owner flower: never mutual contact damage
+        // even when Corruption opens same-team PvP.
+        {
+            auto owner_flower = [&](Entity const &e) -> EntityID {
+                if (e.has_component(kFlower) && !e.has_component(kMob)) return e.id;
+                if (e.has_component(kPetal) && sim->ent_alive(e.get_parent())) {
+                    Entity const &p = sim->get_ent(e.get_parent());
+                    if (p.has_component(kFlower) && !p.has_component(kMob)) return p.id;
+                }
+                if (!(e.base_entity == e.id) && sim->ent_alive(e.base_entity)) {
+                    Entity const &b = sim->get_ent(e.base_entity);
+                    if (b.has_component(kFlower) && !b.has_component(kMob)) return b.id;
+                }
+                if (sim->ent_alive(e.get_parent())) {
+                    Entity const &p = sim->get_ent(e.get_parent());
+                    if (p.has_component(kFlower) && !p.has_component(kMob)) return p.id;
+                }
+                return NULL_ENTITY;
+            };
+            EntityID o1 = owner_flower(ent1);
+            EntityID o2 = owner_flower(ent2);
+            if (!(o1 == NULL_ENTITY) && o1 == o2) return;
+        }
         // Iron Guard intercepts enemy detached / despawning projectiles
         auto try_iron_guard = [&](Entity &guard, Entity &proj) {
             if (!guard.has_component(kPetal) || !proj.has_component(kPetal)) return false;
-            if (guard.get_petal_id() != PetalID::kIronGuard) return false;
+            if (!petal_name_is(guard.get_petal_id(), "Iron Guard")) return false;
             if (!(BitMath::at(proj.flags, EntityFlags::kIsDetached)
                   || BitMath::at(proj.flags, EntityFlags::kIsDespawning)))
                 return false;
             PetalID::T pp = proj.get_petal_id();
-            if (pp != PetalID::kMissile
+            if (!petal_name_is(pp, "Missile")
                 && !petal_name_is(pp, "Peas")
-                && !petal_name_is(pp, "Glass Storm"))
+                && !petal_name_is(pp, "Glass Storm")
+                && !petal_name_is(pp, "Grapes")
+                && !petal_name_is(pp, "Blueberries"))
                 return false;
             inflict_damage(sim, proj.id, guard.id, proj.damage * 0.35f, DamageType::kContact);
             sim->request_delete(proj.id);

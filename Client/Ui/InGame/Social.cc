@@ -27,6 +27,12 @@
 
 using namespace Ui;
 
+static TextInput *g_guild_anno_input = nullptr;
+
+TextInput *Ui::guild_anno_text_input() {
+    return g_guild_anno_input;
+}
+
 Element *Ui::make_invite_toast() {
     // One card only (new invite replaces). Mobile: tappable but not huge —
     // close stays <56px wide so Button won't inflate it to a 64² blob.
@@ -239,7 +245,7 @@ Element *Ui::make_guild_panel() {
         }
     });
 
-    Element *anno_input = new Ui::TextInput(Game::guild_anno_draft, mobile ? 220.f : 260.f, 30, 80, {
+    g_guild_anno_input = new Ui::TextInput(Game::guild_anno_draft, mobile ? 220.f : 260.f, 30, 80, {
         .line_width = 0,
         .round_radius = Chrome::kRadius,
         .should_render = [](){
@@ -248,6 +254,7 @@ Element *Ui::make_guild_panel() {
                 && Game::guild_self_is_leader();
         }
     });
+    Element *anno_input = g_guild_anno_input;
 
     Element *elt = new Ui::VContainer({
         new Ui::HFlexContainer(

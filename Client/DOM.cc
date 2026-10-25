@@ -206,7 +206,13 @@ void DOM::open_feedback_board() {
         // (e.g. feedback "返回游戏" fell back to location=/ without clearing name),
         // window.open would navigate *this* page — clear first.
         if (window.name === "ashflor-feedback") window.name = "";
-        Module.feedbackWindow = window.open("/feedback.html", "ashflor-feedback");
+        // Bust bfcache / stale named-tab document so UI updates (e.g. copy btn) show up.
+        var fbUrl = "/feedback.html?v=prog3";
+        if (Module.feedbackWindow && !Module.feedbackWindow.closed) {
+            try { Module.feedbackWindow.location.replace(fbUrl); } catch (e) {}
+        } else {
+            Module.feedbackWindow = window.open(fbUrl, "ashflor-feedback");
+        }
         if (Module.feedbackWindow) {
             Module.feedbackWindow.postMessage(Module.feedbackSession, location.origin);
             Module.feedbackWindow.focus();

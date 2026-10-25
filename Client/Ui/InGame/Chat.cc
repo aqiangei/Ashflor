@@ -116,6 +116,9 @@ static ChatLineParts chat_line_parts(Game::ChatLine const &line) {
         uint8_t is_craft = line.whisper_to.size() >= 6
             && line.whisper_to.compare(0, 6, "craft:") == 0;
         uint8_t is_banner = line.whisper_to == "banner";
+        // Console/ops banner: show "[广播] 正文" — no fake player name.
+        uint8_t hide_ops_name = is_banner
+            && (line.sender == "公告" || line.sender == "aqa");
         return {
             is_craft
                 ? (I18n::use_chinese ? "[合成] " : "[Craft] ")
@@ -123,8 +126,8 @@ static ChatLineParts chat_line_parts(Game::ChatLine const &line) {
                     ? (I18n::use_chinese ? "[广播] " : "[Announce] ")
                     : (I18n::use_chinese ? "[全服] " : "[Server] ")),
             {},
-            line.sender,
-            I18n::use_chinese ? "：" : ": ",
+            hide_ops_name ? std::string{} : line.sender,
+            hide_ops_name ? std::string{} : (I18n::use_chinese ? "：" : ": "),
             line.text
         };
     }
@@ -509,10 +512,11 @@ Element *Ui::make_chat_panel() {
         .h_justify = Style::Left,
         .v_justify = Style::Bottom
     });
-    // Desktop: beside left HUD. Mobile: clear side plaques + sit above the
-    // huge left-bottom joystick pad so the input is actually tappable.
-    elt->x = mobile ? 12.f : 72.f;
-    elt->y = mobile ? -220.f : -16.f;
+    // Desktop: beside left HUD bottom. Mobile: top-left — bottom-left sat
+    // inside the joystick / loadout hitboxes ("stuck in the buttons").
+    if (mobile) elt->style.v_justify = Style::Top;
+    elt->x = mobile ? 10.f : 72.f;
+    elt->y = mobile ? 72.f : -16.f;
     Ui::chat_panel_root = elt;
     return elt;
 }

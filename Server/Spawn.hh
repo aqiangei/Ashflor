@@ -16,6 +16,8 @@ Entity &alloc_mob(
     Simulation *, MobID::T, float, float, 
     EntityID const, std::function<void(Entity &)> = nullptr
 );
+// After alloc_mob (baked base stats): set live rarity + HP/dmg/radius vs MobData.rarity.
+void apply_mob_live_rarity(Entity &mob, uint8_t spawn_rarity);
 Entity &alloc_player(Simulation *, EntityID const);
 Entity &alloc_petal(Simulation *, PetalID::T, Entity const &);
 Entity &alloc_web(Simulation *, float, Entity const &);

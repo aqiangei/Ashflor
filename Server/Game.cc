@@ -48,7 +48,15 @@ static void _update_client(Simulation *sim, Client *client) {
     uint8_t silent = client->last_rx_ms > 0 && (now_ms - client->last_rx_ms) > 4000;
     if (silent || !client->can_accept_update()) {
         _park_player_still(sim, client);
+        // Delta flags are cleared each tick, including ticks we cannot send.
+        // Recreate the view on resume so a missed camera/player change recovers.
+        client->needs_full_update = 1;
         return;
+    }
+    if (client->needs_full_update) {
+        client->in_view.clear();
+        client->seen_arena = 0;
+        client->needs_full_update = 0;
     }
     // A temporary tree allocated one node per visible entity on every tick.
     // Collect contiguously, then keep the same sorted, unique wire order.
@@ -127,10 +135,10 @@ void GameInstance::init(uint8_t id) {
     map_id = id;
     simulation.map_id = id;
     simulation.arena_info.set_map_id(id);
-    // Density-capped fill (was ENTITY_CAP/2 = 4096 attempts × 8 maps → boot+CPU hog).
+    // Density-capped fill (was ENTITY_CAP/2 = 4096 attempts × 8 maps → boot hog).
     // Zone caps inside spawn_zone_mob still apply; this only limits attempts.
-    // Keep init lean: occupied-map tick must stay well under 50ms for input feel.
-    constexpr uint32_t kInitSpawnAttempts = 900;
+    // HK 8c: fuller boot so first join is not an empty biome (was 900 on 4c).
+    constexpr uint32_t kInitSpawnAttempts = 1400;
     for (uint32_t i = 0; i < kInitSpawnAttempts; ++i)
         Map::spawn_zone_mob(&simulation);
     // Startup diagnostics: which mob species actually spawned in this biome.

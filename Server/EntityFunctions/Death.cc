@@ -1,4 +1,5 @@
 #include <Server/EntityFunctions.hh>
+#include <Server/PetalMechanics.hh>
 
 #include <Server/AccountStore.hh>
 #include <Server/Chat.hh>
@@ -41,13 +42,26 @@ static std::string announce_player_name(Client *client) {
     return "无名";
 }
 
-static std::string announce_party_names(GameInstance *game, Client *mvp) {
+// Party kill line: only names that actually dealt claim damage (avoids AFK
+// mates — and aqa — showing up on "击败了 Boss" with 0 contribution).
+static std::string announce_party_names(
+    GameInstance *game, Client *mvp,
+    EntityID const *claim_cams, float const *claim_dmg, uint8_t claim_n
+) {
     if (mvp == nullptr) return "无名";
     if (game == nullptr || mvp->party_id == 0)
         return announce_player_name(mvp);
+    auto dealt = [&](Client *c) -> uint8_t {
+        if (c == nullptr || claim_cams == nullptr || claim_dmg == nullptr) return 0;
+        for (uint8_t i = 0; i < claim_n; ++i) {
+            if (claim_cams[i] == c->camera && claim_dmg[i] > 0.f) return 1;
+        }
+        return 0;
+    };
     std::string out;
     for (Client *c : game->clients) {
         if (c == nullptr || c->party_id != mvp->party_id) continue;
+        if (!dealt(c) && c != mvp) continue;
         if (!out.empty()) out += "、";
         out += announce_player_name(c);
     }
@@ -55,14 +69,26 @@ static std::string announce_party_names(GameInstance *game, Client *mvp) {
     return out;
 }
 
-static void credit_boss_kill_stats(GameInstance *game, Client *mvp) {
+static void credit_boss_kill_stats(
+    GameInstance *game, Client *mvp,
+    EntityID const *claim_cams, float const *claim_dmg, uint8_t claim_n
+) {
     if (mvp == nullptr) return;
+    auto dealt = [&](Client *c) -> uint8_t {
+        if (c == nullptr) return 0;
+        if (claim_cams == nullptr || claim_dmg == nullptr) return c == mvp;
+        for (uint8_t i = 0; i < claim_n; ++i) {
+            if (claim_cams[i] == c->camera && claim_dmg[i] > 0.f) return 1;
+        }
+        return c == mvp;
+    };
     if (game == nullptr || mvp->party_id == 0) {
         if (mvp->stat_kills < 4000000000u) ++mvp->stat_kills;
         return;
     }
     for (Client *c : game->clients) {
         if (c == nullptr || c->party_id != mvp->party_id) continue;
+        if (!dealt(c)) continue;
         if (c->stat_kills < 4000000000u) ++c->stat_kills;
     }
 }
@@ -94,6 +120,15 @@ void flush_flower_loadout_to_camera(Simulation *sim, Entity &camera, Entity cons
     }
 }
 
+// Block only true world-singleton Uniques already in circulation. Ladder
+// Uniques (Peas/Grapes/…) must still drop when someone already holds one —
+// old global PetalTracker gate made Unique mobs look like they "rolled Super".
+static uint8_t unique_drop_blocked(Simulation *sim, PetalID::T id) {
+    if (id == PetalID::kNone || id >= PetalID::kNumPetals) return 0;
+    if (!Craft::unique_is_world_singleton(id)) return 0;
+    return PetalTracker::get_count(sim, id) > 0 ? 1 : 0;
+}
+
 static void _alloc_drops(Simulation *sim, std::vector<PetalID::T> &success_drops, float x, float y, EntityID team) {
     #ifdef DEBUG
     for (PetalID::T id : success_drops)
@@ -102,7 +137,7 @@ static void _alloc_drops(Simulation *sim, std::vector<PetalID::T> &success_drops
     size_t count = success_drops.size();
     for (size_t i = count; i > 0; --i) {
         PetalID::T drop_id = success_drops[i - 1];
-        if (PETAL_DATA[drop_id].rarity == RarityID::kUnique && PetalTracker::get_count(sim, drop_id) > 0) {
+        if (unique_drop_blocked(sim, drop_id)) {
             success_drops[i - 1] = success_drops[count - 1];
             --count;
             success_drops.pop_back();
@@ -138,13 +173,15 @@ static void _alloc_drops(Simulation *sim, std::vector<PetalID::T> &success_drops
     }
 }
 
-// Drop rarity band: mob's own tier (20%), one below (60%), two below (20%).
-// Floor at Common. Boss flag does not inflate rarity past the mob's tier.
+// Drop rarity band: mob's own tier / −1 / −2. Floor at Common.
+// Unique mobs: 50% same-tier (ladder Uniques no longer PetalTracker-blocked).
 static uint8_t _roll_drop_rarity(uint8_t mob_rarity, uint8_t /*boss*/) {
     if (mob_rarity >= RarityID::kNumRarities) mob_rarity = RarityID::kCommon;
     float r = frand();
-    if (r < 0.20f) return mob_rarity;
-    if (r < 0.80f) {
+    float same = mob_rarity >= RarityID::kUnique ? 0.50f : 0.20f;
+    float down_end = same + (mob_rarity >= RarityID::kUnique ? 0.35f : 0.60f);
+    if (r < same) return mob_rarity;
+    if (r < down_end) {
         if (mob_rarity > RarityID::kCommon) return (uint8_t)(mob_rarity - 1);
         return mob_rarity;
     }
@@ -163,8 +200,7 @@ static PetalID::T _roll_mob_drop(Simulation *sim, MobID::T mob_id, uint8_t mob_r
         for (uint32_t attempt = 0; attempt < 8; ++attempt) {
             PetalID::T got = Craft::random_petal_of_rarity(drop_r);
             if (got == PetalID::kNone || got >= PetalID::kNumPetals) continue;
-            if (PETAL_DATA[got].rarity != RarityID::kUnique
-                || PetalTracker::get_count(sim, got) == 0)
+            if (!unique_drop_blocked(sim, got))
                 return got;
             drop_r = drop_r > RarityID::kCommon
                 ? (uint8_t)(drop_r - 1) : RarityID::kCommon;
@@ -195,20 +231,18 @@ static PetalID::T _roll_mob_drop(Simulation *sim, MobID::T mob_id, uint8_t mob_r
             PetalID::T resolved = Craft::petal_at_rarity(chosen, drop_r);
             if (resolved != PetalID::kNone) out = resolved;
         }
-        if (PETAL_DATA[out].rarity != RarityID::kUnique
-            || PetalTracker::get_count(sim, out) == 0)
+        if (!unique_drop_blocked(sim, out))
             return out;
     }
     for (PetalID::T id : mob_data.drops) {
         if (is_chase_loot_petal(id)) {
-            if (PETAL_DATA[id].rarity != RarityID::kUnique
-                || PetalTracker::get_count(sim, id) == 0)
+            if (!unique_drop_blocked(sim, id))
                 return id;
             continue;
         }
         PetalID::T resolved = Craft::petal_at_rarity(id, drop_r);
         PetalID::T out = resolved != PetalID::kNone ? resolved : id;
-        if (PETAL_DATA[out].rarity != RarityID::kUnique)
+        if (!unique_drop_blocked(sim, out))
             return out;
     }
     return mob_data.drops[0];
@@ -264,6 +298,18 @@ static void _add_mob_xp(Simulation *sim, EntityID const killer_id, Entity const 
 }
 
 void entity_on_death(Simulation *sim, Entity const &ent) {
+    // Ankh recalls to the planted petal when destroyed or unequipped.
+    if (ent.has_component(kPetal) && PETAL_DATA[ent.get_petal_id()].attributes.ankh_mark
+        && BitMath::at(ent.flags, EntityFlags::kIsDetached) && sim->ent_alive(ent.get_parent())) {
+        auto &owner = sim->get_ent(ent.get_parent());
+        if (owner.has_component(kFlower) && owner.health > 0.f) {
+            float x = ent.get_x(), y = ent.get_y();
+            Map::eject_from_impassable(sim->map_id, x, y, owner.get_radius());
+            owner.set_x(x); owner.set_y(y);
+            owner.velocity.set(0, 0); owner.acceleration.set(0, 0);
+        }
+    }
+
     // Administrative cleanup must not count practice targets as mob kills.
     if (TrainingDummy::is_dummy(ent)) return;
     //don't do on_death for any despawned entity
@@ -273,6 +319,22 @@ void entity_on_death(Simulation *sim, Entity const &ent) {
         && sim->ent_exists(ent.last_damaged_by) && !natural_despawn) {
         EntityID killer_id = sim->get_ent(ent.last_damaged_by).base_entity;
         _add_mob_xp(sim, killer_id, ent);
+        // Totem: on-kill heal buff for the killing flower
+        if (sim->ent_alive(killer_id)) {
+            Entity &killer = sim->get_ent(killer_id);
+            if (killer.has_component(kFlower) && !killer.has_component(kMob)
+                && killer.totem_heal_rate > 0.f) {
+                float seconds = 10.f;
+                for (uint32_t si = 0; si < killer.get_loadout_count(); ++si) {
+                    PetalID::T pid = effective_petal_id(killer, si);
+                    if (pid == PetalID::kNone || pid >= PetalID::kNumPetals) continue;
+                    float s = PETAL_DATA[pid].attributes.totem_seconds;
+                    if (s > seconds) seconds = s;
+                }
+                game_tick_t ticks = (game_tick_t)(seconds * TPS);
+                if (killer.totem_ticks < ticks) killer.totem_ticks = ticks;
+            }
+        }
     }
     if (ent.has_component(kFlower) && sim->ent_alive(ent.get_parent())) {
         Entity &camera = sim->get_ent(ent.get_parent());
@@ -396,9 +458,14 @@ void entity_on_death(Simulation *sim, Entity const &ent) {
                 }
             }
 
+            // Map-anchor Boss only (zone==0xFF). Nest trash Queens share
+            // SpawnClass::kBoss but must not spam server kill announces.
+            uint8_t const is_map_boss =
+                spawn_class(ent.get_mob_id()) == SpawnClass::kBoss
+                && ent.zone == 0xFF
+                && !ent.has_component(kSegmented);
             // Boss announce: highest personal camera damage among claimers.
-            if (spawn_class(ent.get_mob_id()) == SpawnClass::kBoss
-                && !ent.has_component(kSegmented)) {
+            if (is_map_boss) {
                 Client *mvp = nullptr;
                 if (claim_n > 0) {
                     uint8_t bi = 0;
@@ -416,12 +483,25 @@ void entity_on_death(Simulation *sim, Entity const &ent) {
                     }
                 }
                 if (mvp != nullptr) {
-                    credit_boss_kill_stats(game, mvp);
+                    credit_boss_kill_stats(game, mvp, claim_cams, claim_dmg, claim_n);
                     char const *mob_nm = MOB_DATA[ent.get_mob_id()].name;
                     if (mob_nm == nullptr || mob_nm[0] == 0) mob_nm = "Boss";
-                    std::string who = announce_party_names(game, mvp);
-                    uint8_t is_party = mvp->party_id != 0;
-                    std::string text = is_party
+                    std::string who = announce_party_names(
+                        game, mvp, claim_cams, claim_dmg, claim_n);
+                    // Solo line if only the MVP contributed (party of 1 on the tape).
+                    uint8_t multi = 0;
+                    if (mvp->party_id != 0) {
+                        for (uint8_t i = 0; i < claim_n; ++i) {
+                            Client *bc = client_for_cam(claim_cams[i]);
+                            if (bc != nullptr && bc != mvp
+                                && bc->party_id == mvp->party_id
+                                && claim_dmg[i] > 0.f) {
+                                multi = 1;
+                                break;
+                            }
+                        }
+                    }
+                    std::string text = multi
                         ? ("小队「" + who + "」合力击败了 " + mob_nm + "！")
                         : (who + " 击败了 " + mob_nm + "！");
                     uint8_t mid = (game != nullptr) ? game->map_id : sim->map_id;
@@ -437,8 +517,7 @@ void entity_on_death(Simulation *sim, Entity const &ent) {
                     && (c->daily_bonus_seconds || c->offline_bonus_seconds) ? 1 : 0;
             };
 
-            uint8_t const is_boss_kill =
-                spawn_class(ent.get_mob_id()) == SpawnClass::kBoss;
+            uint8_t const is_boss_kill = is_map_boss;
 
             auto roll_for_owner = [&](EntityID owner_cam, float angle_off) {
                 std::vector<PetalID::T> success_drops = {};
@@ -550,6 +629,41 @@ void entity_on_death(Simulation *sim, Entity const &ent) {
             }
             return;
         }
+        // Blood Sacrifice: leave a temporary fighter at the death site.
+        {
+            uint8_t sacrifice_r = 0;
+            uint8_t found = 0;
+            for (uint32_t i = 0; i < ent.get_loadout_count(); ++i) {
+                PetalID::T id = ent.get_loadout_ids(i);
+                if (id == PetalID::kNone || id >= PetalID::kNumPetals) continue;
+                if (!PETAL_DATA[id].attributes.blood_sacrifice) continue;
+                found = 1;
+                if (PETAL_DATA[id].rarity > sacrifice_r)
+                    sacrifice_r = PETAL_DATA[id].rarity;
+            }
+            if (found) {
+                EntityID team = ent.get_team();
+                float dx = ent.get_x(), dy = ent.get_y();
+                Entity &mob = alloc_mob(sim, MobID::kBeetle, dx, dy, team, [&](Entity &m) {
+                    m.set_rarity(sacrifice_r);
+                    m.set_color(ent.get_color());
+                    BitMath::set(m.flags, EntityFlags::kNoDrops);
+                    BitMath::set(m.flags, EntityFlags::kIsDetached);
+                    if (m.score_reward == 0) m.score_reward = 1;
+                    float th = mob_spawn_threat_mult(MOB_DATA[MobID::kBeetle].rarity, sacrifice_r);
+                    m.max_health *= th;
+                    m.health = m.max_health;
+                    m.damage *= mob_spawn_damage_mult(MOB_DATA[MobID::kBeetle].rarity, sacrifice_r);
+                    float rs = mob_spawn_radius_mult(MOB_DATA[MobID::kBeetle].rarity, sacrifice_r);
+                    if (rs != 1.f) {
+                        float nr = m.get_radius() * rs;
+                        m.set_radius(nr);
+                        m.mass = (1 + nr / BASE_FLOWER_RADIUS);
+                    }
+                });
+                entity_set_despawn_tick(mob, (game_tick_t)(20 * TPS));
+            }
+        }
         // No ground drops on player death — keep full loadout + bag.
         // Slot layout preserved for respawn (camera[0..loadout)=primary, rest=bag).
         uint32_t const total_slots = ent.get_loadout_count() + MAX_SLOT_COUNT;
@@ -558,6 +672,11 @@ void entity_on_death(Simulation *sim, Entity const &ent) {
             DEBUG_ONLY(assert(ent.get_loadout_ids(i) < PetalID::kNumPetals));
             PetalID::T id = ent.get_loadout_ids(i);
             PetalTracker::remove_petal(sim, id);
+            // Ultra- Corruption is lost on death (Super+ kept).
+            if (id < PetalID::kNumPetals
+                && PETAL_DATA[id].attributes.corruption
+                && PETAL_DATA[id].rarity <= RarityID::kUltra)
+                id = PetalID::kNone;
             slot_petals[i] = id;
         }
         std::vector<PetalID::T> deleted_keep = {};

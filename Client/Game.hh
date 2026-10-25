@@ -232,6 +232,9 @@ namespace Game {
     extern uint8_t craft_selected_rarity; // shop / specials
     extern PetalID::T craft_tray_id;
     extern uint32_t craft_tray_count;
+    // Attempts for the current tray petal since last tray change / success.
+    extern uint32_t craft_attempt_n;
+    extern PetalID::T craft_attempt_id;
     // Pending craft product shown in tray center until clicked (session-only).
     extern PetalID::T craft_result_id;
     extern uint32_t craft_result_count;

@@ -6,6 +6,7 @@
 #include <Server/Server.hh>
 
 #include <Shared/Map.hh>
+#include <Shared/RarityScale.hh>
 #include <Shared/Simulation.hh>
 #include <Shared/StaticData.hh>
 #include <Shared/StaticDefinitions.hh>
@@ -19,8 +20,10 @@
 Entity &alloc_drop(Simulation *sim, PetalID::T drop_id, EntityID const team, uint16_t count) {
     DEBUG_ONLY(assert(drop_id < PetalID::kNumPetals);)
     if (count < 1) count = 1;
-    PetalTracker::add_petal(sim, drop_id);
+    // Alloc first — add_petal before alloc leaked tracker counts when the pool
+    // was full and reclaim recycled a different drop.
     Entity &drop = sim->alloc_ent();
+    PetalTracker::add_petal(sim, drop_id);
     drop.add_component(kPhysics);
     // Bigger pile for stacked drops (coins etc.)
     float rad = 25.f;
@@ -123,6 +126,27 @@ static Entity &__alloc_mob(
     return mob;
 }
 
+void apply_mob_live_rarity(Entity &mob, uint8_t spawn_rarity) {
+    MobID::T mid = mob.get_mob_id();
+    if (mid >= MobID::kNumMobs) return;
+    uint8_t base_r = MOB_DATA[mid].rarity;
+    uint8_t spawn_r = spawn_rarity;
+    if (spawn_r >= RarityID::kNumRarities) spawn_r = base_r;
+    if (spawn_r < base_r) spawn_r = base_r;
+    mob.set_rarity(spawn_r);
+    float th = mob_spawn_threat_mult(base_r, spawn_r);
+    mob.max_health *= th;
+    mob.health = mob.max_health;
+    mob.damage *= mob_spawn_damage_mult(base_r, spawn_r);
+    float rs = mob_spawn_radius_mult(base_r, spawn_r);
+    if (rs != 1.f) {
+        float nr = mob.get_radius() * rs;
+        mob.set_radius(nr);
+        mob.mass = (1 + nr / BASE_FLOWER_RADIUS)
+            * (MOB_DATA[mid].attributes.stationary ? 10000.f : 1.f);
+    }
+}
+
 Entity &alloc_mob(
     Simulation *sim, MobID::T mob_id, float x, float y, 
     EntityID const team, std::function<void(Entity &)> on_spawn
@@ -145,11 +169,14 @@ Entity &alloc_mob(
     }
     else {
         Entity &head = __alloc_mob(sim, mob_id, x, y, team, on_spawn);
-        //head.add_component(kSegmented);
+        // Segmented packs share NULL team with wildlife — without this, spawn
+        // overlap + Unique radius shove the whole FOV ("多节怪一刷新挤压乱飞").
+        BitMath::set(head.flags, EntityFlags::kNoFriendlyCollision);
         Entity *curr = &head;
         for (uint32_t i = 1; i < data.attributes.segments; ++i) {
             Entity &seg = __alloc_mob(sim, mob_id, x, y, team, on_spawn);
             seg.add_component(kSegmented);
+            BitMath::set(seg.flags, EntityFlags::kNoFriendlyCollision);
             seg.seg_head = curr->id;
             seg.set_angle(curr->get_angle() + frand() * 0.1 - 0.05);
             seg.set_x(curr->get_x() - (curr->get_radius() + seg.get_radius()) * cosf(seg.get_angle()));
@@ -218,7 +245,9 @@ Entity &alloc_petal(Simulation *sim, PetalID::T petal_id, Entity const &parent) 
     petal.set_health_ratio(1);
     petal.poison_damage = petal_data.attributes.poison_damage;
     petal.burn_damage = petal_data.attributes.burn_damage;
-    petal.armor = petal_data.attributes.armor;
+    // Ultra+ wiki armor used √3 while combat stayed ×3 — catch up like heals.
+    petal.armor = petal_data.attributes.armor
+        * armor_tier_catchup(petal_data.rarity);
     petal.slow_inflict = TPS * petal_data.attributes.slow_inflict_seconds;
 
     if (parent.id == NULL_ENTITY) petal.base_entity = petal.id;

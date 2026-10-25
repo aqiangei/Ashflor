@@ -14,8 +14,12 @@ class StaticArray {
 public:
     constexpr StaticArray() : length(0) {};
     constexpr StaticArray(std::initializer_list<T> elts) : length(0) {
+        // Release builds strip assert(); still must not write past values[].
         assert(elts.size() <= capacity);
-        for (T x : elts) values[length++] = x;
+        for (T x : elts) {
+            if (length >= capacity) break;
+            values[length++] = x;
+        }
     };
     constexpr T &operator[](uint32_t at) { return values[at]; };
     constexpr T const &operator[](uint32_t at) const { return values[at]; };

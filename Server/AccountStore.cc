@@ -28,6 +28,21 @@
 
 static char const *ACCOUNT_FILE = "accounts.dat";
 static std::unordered_map<std::string, Account> ACCOUNTS;
+
+// Fold Unique Lv onto the family's current Unique PetalID (by English name).
+static void canonicalize_petal_levels(Account &acc) {
+    Craft::petal_levels_canonicalize(acc.petal_levels);
+}
+
+// accounts.dat lines are space-split. Name keys in l: must never contain spaces
+// ("Golden Leaf=57" used to truncate the rest of l: and wipe Grapes/Peas/…).
+static std::string petal_level_name_key(char const *nm) {
+    std::string s;
+    if (nm == nullptr) return s;
+    for (char const *p = nm; *p; ++p)
+        s += (*p == ' ' || *p == '\t') ? '_' : *p;
+    return s;
+}
 static std::unordered_set<std::string> ACTIVE_SESSIONS;
 static std::unordered_map<std::string, uint64_t> SESSION_TOKENS;
 static std::chrono::steady_clock::time_point LAST_SNAPSHOT =
@@ -116,19 +131,7 @@ static uint8_t bind_session(Client *client, std::string const &username, Account
     client->craft_bank = acc->craft_bank;
     client->coins = acc->coins;
     client->craft_attempts = acc->craft_attempts;
-    // Remap Unique levels that sat on shifted non-Unique IDs (same as load path).
-    {
-        for (uint32_t id = 1; id < (uint32_t) PetalID::kNumPetals; ++id) {
-            uint32_t lv = acc->petal_levels[id];
-            if (lv == 0) continue;
-            if (PETAL_DATA[id].rarity == RarityID::kUnique) continue;
-            PetalID::T uniq = Craft::petal_at_rarity((PetalID::T) id, RarityID::kUnique);
-            if (uniq == PetalID::kNone || uniq >= PetalID::kNumPetals) continue;
-            if (acc->petal_levels[uniq] < lv)
-                acc->petal_levels[uniq] = lv;
-            acc->petal_levels[id] = 0;
-        }
-    }
+    canonicalize_petal_levels(*acc);
     client->petal_levels = acc->petal_levels;
     for (uint8_t i = 0; i < TalentID::kNum; ++i)
         client->talent_ranks[i] = acc->talent_ranks[i];
@@ -173,17 +176,23 @@ static void write_file_atomic(char const *path, std::string const &data) {
     int ok = node_fs_write_atomic(path, data.data(), (int) data.size());
     if (!ok) std::cerr << "[accounts] write failed: " << path << std::endl;
 #else
+    // Full .bak copy every save doubled disk I/O on the game tick thread and
+    // could nudge a tight frame over 50ms → WS 1006. Refresh bak every 5 min.
+    static auto last_bak = std::chrono::steady_clock::now()
+        - std::chrono::minutes(10);
     std::string tmp = std::string(path) + ".tmp";
     std::string bak = std::string(path) + ".bak";
     {
         std::ofstream out(tmp, std::ios::binary | std::ios::trunc);
         out.write(data.data(), (std::streamsize) data.size());
     }
-    {
+    auto now = std::chrono::steady_clock::now();
+    if (now - last_bak >= std::chrono::minutes(5)) {
         std::ifstream in(path, std::ios::binary);
         if (in) {
             std::ofstream out(bak, std::ios::binary | std::ios::trunc);
             out << in.rdbuf();
+            last_bak = now;
         }
     }
     std::remove(path);
@@ -515,37 +524,37 @@ void AccountStore::load() {
                         has_secondary_presets = true;
                     }
                 } else if (tok.size() >= 2 && tok[0] == 'l' && tok[1] == ':') {
-                    // l:id=lv,id=lv  (or l:- when empty)
+                    // l:id=lv,Name=lv  — numeric ids and/or English family names
                     std::istringstream ts(tok.substr(2));
                     std::string pair;
                     while (std::getline(ts, pair, ',')) {
                         size_t eq = pair.find('=');
                         if (eq == std::string::npos) continue;
+                        std::string key = pair.substr(0, eq);
+                        std::string val = pair.substr(eq + 1);
                         try {
-                            unsigned long id = std::stoul(pair.substr(0, eq));
-                            unsigned long lv = std::stoul(pair.substr(eq + 1));
-                            if (id == 0 || id >= PetalID::kNumPetals) continue;
+                            unsigned long lv = std::stoul(val);
                             if (lv > Craft::kMaxPetalLevel) lv = Craft::kMaxPetalLevel;
-                            acc.petal_levels[id] = (uint32_t) lv;
+                            if (lv == 0) continue;
+                            if (!key.empty() && std::isdigit((unsigned char) key[0])) {
+                                unsigned long id = std::stoul(key);
+                                if (id == 0 || id >= PetalID::kNumPetals) continue;
+                                if (acc.petal_levels[id] < (uint32_t) lv)
+                                    acc.petal_levels[id] = (uint32_t) lv;
+                            } else {
+                                // Name-keyed (survives PetalID reshuffles).
+                                PetalID::T uniq = Craft::unique_id_for_name(key.c_str());
+                                if (uniq == PetalID::kNone || uniq >= PetalID::kNumPetals)
+                                    continue;
+                                if (acc.petal_levels[uniq] < (uint32_t) lv)
+                                    acc.petal_levels[uniq] = (uint32_t) lv;
+                            }
                         } catch (...) {}
                     }
                 }
             }
         }
-        // Enum/ID shifts: if a saved level sits on a non-Unique id, move it onto
-        // the same-name Unique rung so display + craft leveling stay wired.
-        {
-            for (uint32_t id = 1; id < (uint32_t) PetalID::kNumPetals; ++id) {
-                uint32_t lv = acc.petal_levels[id];
-                if (lv == 0) continue;
-                if (PETAL_DATA[id].rarity == RarityID::kUnique) continue;
-                PetalID::T uniq = Craft::petal_at_rarity((PetalID::T) id, RarityID::kUnique);
-                if (uniq == PetalID::kNone || uniq >= PetalID::kNumPetals) continue;
-                if (acc.petal_levels[uniq] < lv)
-                    acc.petal_levels[uniq] = lv;
-                acc.petal_levels[id] = 0;
-            }
-        }
+        canonicalize_petal_levels(acc);
         // Score is cumulative & authoritative. Recompute level from score under
         // the current curve (curve changes never wipe XP — only remap level).
         {
@@ -579,8 +588,9 @@ void AccountStore::save() {
     if (!ACCOUNTS_DIRTY) return;
     std::ostringstream out;
     out << "# ashflor accounts  fields: user hash level petals[20] craft_bank[N] coins craft_attempts talent_ranks[7] session_hash presets[20][slots+10 petals] bonus_day daily_bonus offline_bonus last_seen active_preset g:guild leader s:score p2:secondary[20][10]\n";
-    for (auto const &kv : ACCOUNTS) {
-        Account const &acc = kv.second;
+    for (auto &kv : ACCOUNTS) {
+        Account &acc = kv.second;
+        canonicalize_petal_levels(acc);
         out << acc.username << ' ' << acc.pass_hash << ' ' << (uint32_t) acc.level;
         for (uint32_t i = 0; i < 2 * MAX_SLOT_COUNT; ++i)
             out << ' ' << (uint32_t) acc.petals[i];
@@ -613,11 +623,24 @@ void AccountStore::save() {
                 first_secondary = false;
             }
         {
+            // Write id=lv AND Name=lv so reshuffles can recover by English name
+            // (Grapes Unique Lv was id-only and vanished when the enum slid).
             std::string lv;
             for (uint32_t i = 1; i < PetalID::kNumPetals; ++i) {
                 if (acc.petal_levels[i] == 0) continue;
                 if (!lv.empty()) lv += ',';
                 lv += std::to_string(i) + '=' + std::to_string(acc.petal_levels[i]);
+                char const *nm = PETAL_DATA[i].name;
+                if (nm != nullptr && nm[0] != 0
+                    && PETAL_DATA[i].rarity == RarityID::kUnique) {
+                    std::string key = petal_level_name_key(nm);
+                    if (!key.empty()) {
+                        lv += ',';
+                        lv += key;
+                        lv += '=';
+                        lv += std::to_string(acc.petal_levels[i]);
+                    }
+                }
             }
             if (!lv.empty()) out << " l:" << lv;
         }
@@ -746,7 +769,19 @@ static uint8_t copy_progress(Account &acc, Client *client) {
     acc.craft_bank = client->craft_bank;
     acc.coins = client->coins;
     acc.craft_attempts = client->craft_attempts;
-    acc.petal_levels = client->petal_levels;
+    // Unique Lv is high-water only. Never replace the account map with an
+    // empty client snapshot (WS reconnect / deploy desync used to wipe l:…
+    // from accounts.dat — aqa Spore Cloud Lv and ~25 other rows on 10/24).
+    for (uint32_t id = 1; id < (uint32_t) PetalID::kNumPetals; ++id) {
+        uint32_t lv = client->petal_levels[id];
+        if (lv == 0) continue;
+        PetalID::T canon = Craft::canonical_unique_id((PetalID::T) id);
+        uint32_t dst = (canon != PetalID::kNone && canon < PetalID::kNumPetals)
+            ? (uint32_t) canon : id;
+        if (lv > acc.petal_levels[dst])
+            acc.petal_levels[dst] = lv;
+    }
+    canonicalize_petal_levels(acc);
     for (uint8_t i = 0; i < TalentID::kNum; ++i)
         acc.talent_ranks[i] = client->talent_ranks[i];
     Talent::clamp_ranks(acc.talent_ranks, acc.level);

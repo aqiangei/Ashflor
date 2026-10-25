@@ -257,8 +257,9 @@ void organic(Renderer &r, uint8_t mid, float left, float top, float right, float
             sweep(r,x+12.f,y+22.f,116.f,13.f,0xffD5AD72,2.5f);
             if(v>.55f) sweep(r,x-30.f,y+42.f,65.f,6.f,0xffD5AD72,2.f);
         } else if (mid == MapID::kPolar) {
+            // Soft blue frost only — pure white streaks strobe on pale snow.
             sweep(r,x,y+20.f,150.f,13.f,0xffC1DBE7,3.f);
-            sweep(r,x-18.f,y+33.f,86.f,7.f,0xffFFFFFF,2.f);
+            sweep(r,x-18.f,y+33.f,86.f,7.f,0xffD4E5ED,2.f);
         } else if (mid == MapID::kJungle) {
             leaf(r,x-30.f,y+13.f,29.f,11.f,0xff659A5D,0xffB2CE85);
             leaf(r,x-8.f,y+5.f,22.f,9.f,0xff5D9D64,0xffB2CE85);
@@ -423,7 +424,7 @@ void map_fine_litter(Renderer &r, uint8_t mid,
             r.begin_path(); r.arc(x, y, 2.4f + kind); r.fill();
             break;
         case MapID::kPolar:
-            r.set_fill(0xffFFFFFF);
+            r.set_fill(0xffD4E5ED);
             r.begin_path(); r.ellipse(x, y, 3.f, 2.f); r.fill();
             break;
         case MapID::kJungle:

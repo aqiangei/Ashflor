@@ -33,7 +33,9 @@ extern std::array<struct MobData, MobID::kNumMobs> const MOB_DATA;
 // World mob size / population. Radius×2 + dense multi-segment packs (centipede/
 // leech) blew spatial-hash collide to ~100�?00ms/tick �?keep mild scale only.
 inline constexpr float MOB_RADIUS_MULTIPLIER = 1.25f;
-inline constexpr float MOB_DENSITY_MULTIPLIER = 1.0f;
+// Zone dens × FOV target. 1.38/1.25 still overrun at ~10 online (tick gap =
+// motion+client sync). Stay near clone ~16/screen with multiplayer headroom.
+inline constexpr float MOB_DENSITY_MULTIPLIER = 1.12f;
 
 inline uint8_t petal_name_is(PetalID::T id, char const *name) {
     return id != PetalID::kNone && id < PetalID::kNumPetals
@@ -58,6 +60,20 @@ inline uint8_t petal_is_moon(PetalID::T id) {
 
 inline uint8_t petal_is_bone(PetalID::T id) {
     return petal_name_is(id, "Bone");
+}
+
+// Wiki petal heals used √3 after Mythic while combat stayed ×3 — Ultra+ heals
+// felt broken vs cactus HP / zone damage. Catch up to full ×3 from Mythic.
+inline float heal_tier_catchup(uint8_t rarity) {
+    if (rarity >= RarityID::kUnique) return 5.1961524f; // 6561 / (729*√3)
+    if (rarity >= RarityID::kSuper) return 3.f;         // 2187 / 729
+    if (rarity >= RarityID::kUltra) return 1.7320508f;  // 729 / (243*√3)
+    return 1.f;
+}
+
+// Same √3→×3 catchup for petal armor (Bone / shells) so Ultra+ isn't paper.
+inline float armor_tier_catchup(uint8_t rarity) {
+    return heal_tier_catchup(rarity);
 }
 
 using MapZones = StaticArray<struct ZoneDefinition, MAX_ZONES_PER_MAP>;

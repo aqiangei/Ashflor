@@ -5,6 +5,7 @@
 #include <Server/Chat.hh>
 #include <Server/Client.hh>
 #include <Server/DevCheats.hh>
+#include <Server/EntityFunctions.hh>
 #include <Server/Game.hh>
 #include <Server/FeedbackStore.hh>
 #include <Server/Guild.hh>
@@ -13,6 +14,7 @@
 #include <Server/Spawn.hh>
 #include <Server/XpMigration.hh>
 
+#include <Helpers/Bits.hh>
 #include <Helpers/Math.hh>
 
 #include <Shared/Binary.hh>
@@ -484,6 +486,14 @@ std::string Server::live_status_json() {
         for (uint8_t oi = 0; oi < OPEN_MAP_COUNT; ++oi) {
             uint8_t mi = OPEN_MAPS[oi];
             map_counts[mi] = (uint32_t) Server::games[mi].clients.size();
+            Simulation &msim = Server::games[mi].simulation;
+            uint32_t ents = msim.entity_count();
+            uint32_t wild = 0;
+            {
+                MapZones const &zs = map_zones(mi);
+                for (uint32_t z = 0; z < zs.size() && z < MAX_ZONES_PER_MAP; ++z)
+                    wild += msim.zone_mob_counts[z];
+            }
             if (oi) out += ',';
             out += "{\"id\":";
             out += std::to_string(mi);
@@ -491,6 +501,10 @@ std::string Server::live_status_json() {
             out += MAP_ZH[mi];
             out += "\",\"players\":";
             out += std::to_string(map_counts[mi]);
+            out += ",\"entities\":";
+            out += std::to_string(ents);
+            out += ",\"wildlife\":";
+            out += std::to_string(wild);
             out += '}';
 
             for (Client *c : Server::games[mi].clients) {
@@ -560,6 +574,17 @@ std::string Server::live_status_json() {
                 players_json += alive ? "true" : "false";
                 players_json += ",\"in_game\":";
                 players_json += in_game ? "true" : "false";
+                // Same counter as leaderboard「在线时长」(+ unflushed session buffer).
+                {
+                    uint64_t lb_sec = 0;
+                    std::string const &lb_key = !c->play_name.empty() ? c->play_name : c->account_name;
+                    if (!lb_key.empty())
+                        LeaderboardStore::stat_rank(lb_key, kLbPlayTime, lb_sec);
+                    uint64_t play_sec = lb_sec + (uint64_t) c->stat_playtime;
+                    if (play_sec > 4000000000ull) play_sec = 4000000000ull;
+                    players_json += ",\"playtime\":";
+                    players_json += std::to_string(play_sec);
+                }
                 // Coins live as PetalID::kCoin in bag/craft_bank (legacy c->coins is always 0).
                 uint32_t coin_count = c->craft_bank[PetalID::kCoin];
                 for (uint32_t i = 0; i < bag_n; ++i) {
@@ -923,9 +948,9 @@ std::string Server::live_admin_announce(std::string const &text) {
         t.pop_back();
     if (t.empty()) return live_admin_err("公告内容为空");
     if (t.size() > 200) return live_admin_err("公告过长（最多200字）");
-    // Sender "aqa" matches Live board copy; in-game top banner is keyed by
-    // whisper_to "banner" (not by spoofing nearby chat).
-    Chat::broadcast_server_banner("aqa", t, "aqa");
+    // Ops/console announce: sender "公告" (not a player nick). Top banner is
+    // keyed by whisper_to "banner", not by spoofing nearby chat.
+    Chat::broadcast_server_banner("公告", t, "");
     return live_admin_ok("已全服公告");
 }
 
@@ -997,6 +1022,65 @@ std::string Server::live_admin_give(std::string const &who, uint32_t petal_id, u
     return live_admin_ok(msg);
 }
 
+// Console /live spawns are for testing — they must not permanently inflate the
+// entity pool (zone thin / unseenDespawn ignore non-kSpawnedFromZone).
+static constexpr uint32_t kAdminSpawnCap = 24; // concurrent heads
+// hard TTL even in FOV (TPS is runtime const, not constexpr)
+static game_tick_t admin_spawn_ttl() { return (game_tick_t)(45 * TPS); }
+
+static uint32_t count_admin_spawn_heads(Simulation *sim) {
+    uint32_t n = 0;
+    sim->for_each<kMob>([&](Simulation *, Entity &ent) {
+        if (ent.pending_delete) return;
+        if (!BitMath::at(ent.flags, EntityFlags::kAdminSpawned)) return;
+        // Count heads only (segments share the flag via on_spawn).
+        if (ent.has_component(kSegmented)) return;
+        ++n;
+    });
+    return n;
+}
+
+static uint32_t cull_admin_spawns(Simulation *sim, uint32_t budget) {
+    if (budget == 0) return 0;
+    // Collect admin heads, oldest first, then delete up to budget.
+    struct Cand { EntityID id; game_tick_t life; };
+    Cand buf[64];
+    uint32_t n = 0;
+    sim->for_each<kMob>([&](Simulation *, Entity &ent) {
+        if (ent.pending_delete) return;
+        if (!BitMath::at(ent.flags, EntityFlags::kAdminSpawned)) return;
+        if (ent.has_component(kSegmented)) return;
+        if (n < 64) {
+            buf[n++] = { ent.id, ent.lifetime };
+        } else {
+            // Replace youngest in buffer if this is older.
+            uint32_t yi = 0;
+            for (uint32_t i = 1; i < 64; ++i)
+                if (buf[i].life < buf[yi].life) yi = i;
+            if (ent.lifetime > buf[yi].life)
+                buf[yi] = { ent.id, ent.lifetime };
+        }
+    });
+    // Sort descending by lifetime (oldest first).
+    for (uint32_t i = 0; i + 1 < n; ++i) {
+        for (uint32_t j = i + 1; j < n; ++j) {
+            if (buf[j].life > buf[i].life) {
+                Cand t = buf[i]; buf[i] = buf[j]; buf[j] = t;
+            }
+        }
+    }
+    uint32_t killed = 0;
+    for (uint32_t i = 0; i < n && killed < budget; ++i) {
+        if (!sim->ent_exists(buf[i].id)) continue;
+        Entity &victim = sim->get_ent(buf[i].id);
+        if (victim.pending_delete) continue;
+        BitMath::set(victim.flags, EntityFlags::kNoDrops);
+        sim->request_delete(buf[i].id);
+        ++killed;
+    }
+    return killed;
+}
+
 std::string Server::live_admin_spawn(uint8_t map_id, uint32_t mob_id, float x, float y,
                                     std::string const &near_who, uint32_t count) {
     if (Server::games == nullptr) return live_admin_err("服务器未就绪");
@@ -1029,6 +1113,19 @@ std::string Server::live_admin_spawn(uint8_t map_id, uint32_t mob_id, float x, f
     if (map_id >= MapID::kNumMaps) return live_admin_err("无效地图");
     Simulation *sim = &Server::games[map_id].simulation;
 
+    // Make room: keep a soft concurrent cap so spam cannot paint 1.6k ents.
+    {
+        uint32_t live = count_admin_spawn_heads(sim);
+        uint32_t need = count;
+        uint32_t room = (live < kAdminSpawnCap) ? (kAdminSpawnCap - live) : 0;
+        if (need > room) {
+            cull_admin_spawns(sim, need - room + (live > kAdminSpawnCap ? live - kAdminSpawnCap : 0));
+        }
+        // Absolute panic: entity pool already unhealthy.
+        if (sim->entity_count() >= 2500u)
+            cull_admin_spawns(sim, kAdminSpawnCap);
+    }
+
     float last_x = base_x, last_y = base_y;
     uint32_t spawned = 0;
     for (uint32_t i = 0; i < count; ++i) {
@@ -1052,8 +1149,13 @@ std::string Server::live_admin_spawn(uint8_t map_id, uint32_t mob_id, float x, f
             Map::resolve_circle_terrain(map_id, sx, sy, 80.f);
             if (Map::in_spawn_plaza(sx, sy)) continue;
         }
-        Entity &mob = alloc_mob(sim, (MobID::T) mob_id, sx, sy, NULL_ENTITY);
-        BitMath::set(mob.flags, EntityFlags::kHasCulling);
+        // on_spawn runs for every segment — mark + TTL the whole worm.
+        game_tick_t const ttl = admin_spawn_ttl();
+        alloc_mob(sim, (MobID::T) mob_id, sx, sy, NULL_ENTITY, [ttl](Entity &mob) {
+            BitMath::set(mob.flags, EntityFlags::kHasCulling);
+            BitMath::set(mob.flags, EntityFlags::kAdminSpawned);
+            entity_set_despawn_tick(mob, ttl);
+        });
         last_x = sx;
         last_y = sy;
         ++spawned;
@@ -1074,7 +1176,7 @@ std::string Server::live_admin_spawn(uint8_t map_id, uint32_t mob_id, float x, f
     msg += std::to_string((int) last_x);
     msg += ",";
     msg += std::to_string((int) last_y);
-    msg += ")";
+    msg += ") · 45s后自动消失";
     return live_admin_ok(msg);
 }
 

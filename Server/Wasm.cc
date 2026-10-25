@@ -61,6 +61,10 @@ extern "C" {
         return heap_strdup_std(Server::live_codex_json());
     }
 
+    EMSCRIPTEN_KEEPALIVE char *live_codex_gate_json() {
+        return heap_strdup_std(Server::live_codex_gate_json());
+    }
+
     EMSCRIPTEN_KEEPALIVE char *live_map_layout_json() {
         return heap_strdup_std(Server::live_map_layout_json());
     }
@@ -110,6 +114,8 @@ extern "C" {
         WebSocket *ws = new WebSocket(ws_id);
         Client *client = ws->getUserData();
         client->remote_ip = ClientAddress::resolve(ip ? ip : "", forwarded ? forwarded : "");
+        client->open_ms = (uint64_t) std::chrono::duration_cast<std::chrono::milliseconds>(
+            std::chrono::steady_clock::now().time_since_epoch()).count();
         WS_MAP.insert({ws_id, ws});
         if (!RateLimit::allow_connect(client->remote_ip)) {
             // Leave WS_MAP entry; on_disconnect deletes it after close.
@@ -317,6 +323,12 @@ WebSocketServer::WebSocketServer() {
                 sendJson(200, fromWasm(_live_catalog_json()));
                 return;
             }
+            if (path === "/api/codex-gate"
+                || (path === "/api/codex"
+                    && new URL(req.url || "/", "http://localhost").searchParams.get("gate") === "1")) {
+                sendJson(200, fromWasm(_live_codex_gate_json()));
+                return;
+            }
             if (path === "/api/codex") {
                 sendJson(200, fromWasm(_live_codex_json()));
                 return;
@@ -501,7 +513,13 @@ WebSocketServer::WebSocketServer() {
                     file = "codex.html";
                     break;
                 case "/feedback.html":
+                case "/feedback":
                     file = "feedback.html";
+                    break;
+                case "/progress.json":
+                case "/api/progress":
+                    encodeType = "application/json; charset=utf-8";
+                    file = "progress.json";
                     break;
                 case "/deploy-info.json":
                     encodeType = "application/json; charset=utf-8";
@@ -594,8 +612,8 @@ WebSocketServer::WebSocketServer() {
             }
             if (file && fs.existsSync(file)) {
                 // HTML/SW: revalidate. Icons + JS/WASM: long-cache
-                const cacheCtl = (file === "index.html" || file === "sw.js" || file === "feedback.html" || file === "live.html" || file === "deploy-info.json")
-                    ? "no-cache"
+                const cacheCtl = (file === "index.html" || file === "sw.js" || file === "feedback.html" || file === "live.html" || file === "deploy-info.json" || file === "progress.json")
+                    ? "no-store"
                     : "public, max-age=31536000, immutable";
                 const headers = {
                     "Content-Type": encodeType,

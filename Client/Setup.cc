@@ -72,8 +72,9 @@ extern "C" {
             Input::ended_touches.erase(id);
             Input::began_touches[id] = { .id = id, .x = x, .y = y };
             Input::touches.insert({id, { .id = id, .x = x, .y = y, .dx = 0, .dy = 0, .saturated = 0 }});
-        } else if (type == 2) {
+        } else if (type == 2 || type == 3) {
             Input::ended_touches[id] = { .id = id, .x = x, .y = y };
+            if (type == 3) Input::ended_touches.erase(id);
             Input::touches.erase(id);
         } else {
             auto iter = Input::touches.find(id);
@@ -171,7 +172,7 @@ int setup_inputs() {
         window.addEventListener("touchcancel", (e) => {
             const r = dpr();
             for (const t of e.changedTouches)
-                _touch_event(t.clientX * r, t.clientY * r, 2, t.identifier);
+                _touch_event(t.clientX * r, t.clientY * r, 3, t.identifier);
         }, { passive: false });
         window.addEventListener("paste", (e) => {
             try {

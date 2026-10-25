@@ -16,6 +16,7 @@
 
 #include <Shared/Binary.hh>
 #include <Shared/Config.hh>
+#include <Shared/Craft.hh>
 #include <Shared/StaticData.hh>
 #include <Shared/Talent.hh>
 
@@ -23,6 +24,7 @@
 #include <Helpers/Math.hh>
 
 #include <algorithm>
+#include <array>
 #include <cmath>
 #include <cstdlib>
 #include <cstring>
@@ -92,7 +94,9 @@ namespace Game {
     uint8_t leaving_to_title = 0;
     uint8_t show_debug = 0;
     uint8_t show_hitboxes = 0;
-    uint8_t show_low_rarity_drops = 0;
+    // Default on so Common/Unusual piles (and coins) are not invisible to new
+    // players — the "hide clutter" toggle remains in settings/pause.
+    uint8_t show_low_rarity_drops = 1;
     uint8_t selected_map = MapID::kGarden;
     uint8_t minimap_expanded = 0;
     std::vector<OnlineRosterEntry> online_roster;
@@ -162,6 +166,8 @@ namespace Game {
     uint8_t craft_selected_rarity = 0;
     PetalID::T craft_tray_id = PetalID::kNone;
     uint32_t craft_tray_count = 0;
+    uint32_t craft_attempt_n = 0;
+    PetalID::T craft_attempt_id = PetalID::kNone;
     PetalID::T craft_result_id = PetalID::kNone;
     uint32_t craft_result_count = 0;
     std::string craft_status;
@@ -471,6 +477,11 @@ void Game::reset() {
     camera_id = player_id = NULL_ENTITY;
     for (uint32_t i = 0; i < 2 * MAX_SLOT_COUNT; ++i)
         cached_loadout[i] = PetalID::kNone;
+    // Unique Lv: keep across WS reset when a session will auto-resume.
+    // Account users never sync into guest_* while logged in, so without this
+    // badges flash empty (or stay empty if AccountResult/craft sync is late).
+    std::array<uint32_t, PetalID::kNumPetals> keep_levels = petal_levels;
+    uint8_t const keep_account_levels = (session_token != 0) ? 1 : 0;
     if (guest_save_valid) {
         craft_bank = guest_craft_bank;
         petal_levels = guest_petal_levels;
@@ -484,6 +495,14 @@ void Game::reset() {
         for (uint8_t i = 0; i < TalentID::kNum; ++i)
             talent_ranks[i] = 0;
     }
+    if (keep_account_levels) {
+        petal_levels = keep_levels;
+        Craft::petal_levels_canonicalize(petal_levels);
+        // Also warm guest cache so a later guest-path reset still has Lv.
+        guest_petal_levels = petal_levels;
+    } else {
+        Craft::petal_levels_canonicalize(petal_levels);
+    }
     talent_pending = 0;
     talent_status.clear();
     loadout_presets = {};
@@ -494,8 +513,13 @@ void Game::reset() {
     preset_ghost_bank = 0;
     craft_tray_id = PetalID::kNone;
     craft_tray_count = 0;
+    craft_attempt_n = 0;
+    craft_attempt_id = PetalID::kNone;
     craft_result_id = PetalID::kNone;
     craft_result_count = 0;
+    // Abort any in-flight respawn wait so reconnect cannot leave Continue stuck.
+    spawn_request_at = 0;
+    spawn_retries = 0;
     simulation.reset();
 }
 
@@ -697,8 +721,10 @@ void Game::push_chat_line(uint8_t channel, std::string const &sender, std::strin
     // Top banner: paid shop / ops announce (whisper_to == "banner").
     // Legacy: sender "aqa" still lights the banner once for old packets.
     if (channel == ChatChannel::kChatServer && !text.empty()
-        && (whisper_to == "banner" || sender == "aqa")) {
-        screen_announce.sender = (sender == "aqa") ? std::string{"公告"} : sender;
+        && (whisper_to == "banner" || sender == "aqa" || sender == "公告")) {
+        // Ops/console: no player nick on the banner (shop keeps payer name).
+        screen_announce.sender = (sender == "aqa" || sender == "公告")
+            ? std::string{} : sender;
         screen_announce.text = text;
         screen_announce.expires_at = timestamp + SCREEN_ANNOUNCE_MS;
     }
@@ -728,13 +754,13 @@ static char const *const kChatSlashCmds[] = {
     "/w", "/whisper", "/密语", "/私聊",
     "/r", "/reply", "/回复",
     "/local", "/附近",
-    "/squad-leave", "/party-leave",
-    "/squad-invite", "/party-invite",
+    "/sl", "/squad-leave", "/party-leave",
+    "/si", "/squad-invite", "/party-invite",
     "/squad", "/party", "/组队聊",
-    "/guild-create", "/创建公会",
-    "/guild-invite", "/公会邀请",
-    "/guild-leave", "/退会",
-    "/guild-motd", "/公告",
+    "/gc", "/guild-create", "/创建公会",
+    "/gi", "/guild-invite", "/公会邀请",
+    "/gl", "/guild-leave", "/退会",
+    "/gm", "/guild-motd", "/公告",
     "/guild", "/公会",
     "/server", "/全服",
     "/invite", "/组队",
@@ -742,11 +768,26 @@ static char const *const kChatSlashCmds[] = {
     "/help", "/帮助",
 };
 
+// "/gi" ↔ "/guild-invite": first letter of each hyphen segment after '/'.
+static uint8_t chat_cmd_initialism_match(char const *cmd, std::string const &head) {
+    if (cmd == nullptr || head.size() < 2 || head[0] != '/' || cmd[0] != '/')
+        return 0;
+    std::string initials = "/";
+    size_t i = 1;
+    while (cmd[i] != '\0') {
+        initials.push_back(cmd[i]);
+        while (cmd[i] != '\0' && cmd[i] != '-') ++i;
+        if (cmd[i] == '-') ++i;
+    }
+    return initials.size() >= head.size()
+        && initials.compare(0, head.size(), head) == 0;
+}
+
 static uint8_t chat_cmd_needs_name(std::string const &cmd) {
     return cmd == "/w" || cmd == "/whisper" || cmd == "/密语" || cmd == "/私聊"
         || cmd == "/invite" || cmd == "/组队"
-        || cmd == "/squad-invite" || cmd == "/party-invite"
-        || cmd == "/guild-invite" || cmd == "/公会邀请";
+        || cmd == "/si" || cmd == "/squad-invite" || cmd == "/party-invite"
+        || cmd == "/gi" || cmd == "/guild-invite" || cmd == "/公会邀请";
 }
 
 static void collect_chat_name_candidates(std::vector<std::string> &out) {
@@ -773,11 +814,17 @@ static std::vector<std::string> chat_completion_matches(std::string const &draft
         rest.erase(rest.begin());
 
     if (sp == std::string::npos) {
-        // Completing the command itself — longer cmds first so Tab on /guild
-        // fills /guild-invite before the bare /guild channel switch.
+        // Prefix match + hyphen initialisms (/gi → /guild-invite, /sl → /squad-leave).
+        // Prefer expanding to the full English command when head is an initialism.
         for (char const *cmd : kChatSlashCmds) {
-            if (std::strncmp(cmd, head.c_str(), head.size()) == 0)
-                matches.push_back(cmd);
+            uint8_t prefix = std::strncmp(cmd, head.c_str(), head.size()) == 0;
+            uint8_t initials = chat_cmd_initialism_match(cmd, head);
+            if (!prefix && !initials) continue;
+            // Skip short aliases when expanding an initialism to the long form.
+            if (initials && !prefix && std::strchr(cmd, '-') == nullptr
+                && std::strlen(cmd) <= head.size() + 1)
+                continue;
+            matches.push_back(cmd);
         }
         std::stable_sort(matches.begin(), matches.end(),
             [](std::string const &a, std::string const &b) {
@@ -1001,6 +1048,9 @@ uint8_t Game::guild_self_is_leader() {
 void Game::guild_set_announcement() {
     if (!socket.ready || !alive()) return;
     if (!guild_self_is_leader()) return;
+    // Flush IME/DOM before send — otherwise Chinese composition never reaches the draft.
+    if (Ui::TextInput *input = Ui::guild_anno_text_input())
+        input->sync_from_dom();
     Writer writer(static_cast<uint8_t *>(OUTGOING_PACKET));
     writer.write<uint8_t>(Serverbound::kGuildSetAnno);
     writer.write<std::string>(guild_anno_draft);
@@ -1588,12 +1638,27 @@ void Game::tick(double time) {
             spawn_request_at = 0;
             spawn_retries = 0;
             if (account_status.find("重试") != std::string::npos
-                || account_status.find("Retrying") != std::string::npos)
+                || account_status.find("Retrying") != std::string::npos
+                || account_status.find("失败") != std::string::npos
+                || account_status.find("failed") != std::string::npos)
                 account_status.clear();
         } else if (leaving_to_title) {
             // Soft-leave in progress — do not keep requesting spawn.
             spawn_request_at = 0;
             spawn_retries = 0;
+        } else if (!socket.ready) {
+            // Disconnect mid-wait: drop the latch so Continue can show again
+            // after reconnect instead of a blank stuck death screen.
+            spawn_request_at = 0;
+            spawn_retries = 0;
+        } else if (spawn_retries >= 5) {
+            // Give up and restore the death Continue button (long death /
+            // server ignore used to hide UI forever behind spawn_request_at).
+            spawn_request_at = 0;
+            spawn_retries = 0;
+            account_status = I18n::use_chinese
+                ? "进入失败，请再点继续"
+                : "Spawn failed — tap Continue again";
         } else {
             // Back off: 1.2s → 2.5s → 4s (cap) so we don't flood the server
             double wait_ms = 1200.0 + (double) std::min<uint8_t>(spawn_retries, 8) * 350.0;

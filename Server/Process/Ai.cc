@@ -6,14 +6,22 @@
 #include <Shared/Map.hh>
 #include <Shared/Simulation.hh>
 #include <Shared/StaticData.hh>
+#include <Shared/RarityScale.hh>
 
 #include <Helpers/Math.hh>
 
 #include <array>
 #include <cmath>
 
-static void _focus_lose_clause(Entity &ent, Vector const &v) {
-    if (v.magnitude() > 1.35f * ent.detection_radius) ent.target = NULL_ENTITY;
+static void _focus_lose_clause(Simulation *sim, Entity &ent, Vector const &v) {
+    float lim = 1.35f * ent.detection_radius;
+    // Poo on the target flower: drop aggro sooner (same shrink as acquisition).
+    if (sim != nullptr && sim->ent_alive(ent.target)) {
+        Entity &t = sim->get_ent(ent.target);
+        if (t.has_component(kFlower) && !t.has_component(kMob))
+            lim *= flower_aggro_range_mult(t);
+    }
+    if (v.magnitude() > lim) ent.target = NULL_ENTITY;
 }
 
 static void default_tick_idle(Simulation *sim, Entity &ent) {
@@ -130,7 +138,7 @@ static void tick_default_aggro(Simulation *sim, Entity &ent, float speed) {
     if (sim->ent_alive(ent.target)) {
         Entity &target = sim->get_ent(ent.target);
         Vector v(target.get_x() - ent.get_x(), target.get_y() - ent.get_y());
-        _focus_lose_clause(ent, v);
+        _focus_lose_clause(sim, ent, v);
         if (!sim->ent_alive(ent.target)) {
             _maybe_start_wild_leash(sim, ent);
             tick_default_passive(sim, ent);
@@ -161,7 +169,7 @@ static void tick_flee(Simulation *sim, Entity &ent, float speed) {
     if (sim->ent_alive(ent.target)) {
         Entity &target = sim->get_ent(ent.target);
         Vector v(ent.get_x() - target.get_x(), ent.get_y() - target.get_y());
-        _focus_lose_clause(ent, v);
+        _focus_lose_clause(sim, ent, v);
         v.set_magnitude(PLAYER_ACCELERATION * speed);
         ent.acceleration = v;
         ent.set_angle(v.angle());
@@ -244,14 +252,32 @@ static void _fire_missile_fan(Simulation *sim, Entity &ent, float base_ang,
 
 // Built once per tick in tick_ai_prepare — bosses used to scan all mobs per summon check.
 static std::array<uint32_t, ENTITY_CAP> s_child_counts{};
+// Flower positions for far-LOD (pairs x,y); avoids per-mob for_each<kFlower>.
+static StaticArray<float, 128> s_flower_xy{};
 
 static uint32_t _count_children(Simulation *, EntityID parent) {
     if (parent == NULL_ENTITY || parent.id >= ENTITY_CAP) return 0;
     return s_child_counts[parent.id];
 }
 
+static uint8_t _near_any_flower(float mx, float my, float r2) {
+    uint32_t n = s_flower_xy.size();
+    for (uint32_t i = 0; i + 1 < n; i += 2) {
+        float dx = s_flower_xy[i] - mx, dy = s_flower_xy[i + 1] - my;
+        if (dx * dx + dy * dy <= r2) return 1;
+    }
+    return 0;
+}
+
 void tick_ai_prepare(Simulation *sim) {
     s_child_counts.fill(0);
+    s_flower_xy.clear();
+    sim->for_each<kFlower>([](Simulation *, Entity &f) {
+        if (f.has_component(kMob)) return;
+        if (s_flower_xy.size() + 2 > 128u) return;
+        s_flower_xy.push(f.get_x());
+        s_flower_xy.push(f.get_y());
+    });
     sim->for_each<kMob>([](Simulation *s, Entity &m) {
         if (!s->ent_alive(m.id)) return;
         EntityID parent = m.get_parent();
@@ -286,7 +312,7 @@ static void tick_charge_mob(Simulation *sim, Entity &ent, float chase_spd,
     }
     Entity &target = sim->get_ent(ent.target);
     Vector v(target.get_x() - ent.get_x(), target.get_y() - ent.get_y());
-    _focus_lose_clause(ent, v);
+    _focus_lose_clause(sim, ent, v);
     if (!sim->ent_alive(ent.target)) return;
     float dist = v.magnitude();
     ent.set_angle(v.angle());
@@ -325,7 +351,7 @@ static void tick_thorn_bug(Simulation *sim, Entity &ent) {
     if (sim->ent_alive(ent.target)) {
         Entity &target = sim->get_ent(ent.target);
         Vector v(target.get_x() - ent.get_x(), target.get_y() - ent.get_y());
-        _focus_lose_clause(ent, v);
+        _focus_lose_clause(sim, ent, v);
         float dist = v.magnitude();
         if (dist > 280.f) {
             v.set_magnitude(PLAYER_ACCELERATION * 0.7f);
@@ -353,7 +379,7 @@ static void tick_phantom_orb(Simulation *sim, Entity &ent) {
     if (sim->ent_alive(ent.target)) {
         Entity &target = sim->get_ent(ent.target);
         Vector v(target.get_x() - ent.get_x(), target.get_y() - ent.get_y());
-        _focus_lose_clause(ent, v);
+        _focus_lose_clause(sim, ent, v);
         float dist = v.magnitude();
         // Blink every ~2.8s to a nearby clear point toward/around the target
         if (ent.ai_tick >= (game_tick_t)(2.8f * TPS)) {
@@ -415,7 +441,7 @@ static void tick_ancient_treant(Simulation *sim, Entity &ent) {
     }
     Entity &target = sim->get_ent(ent.target);
     Vector v(target.get_x() - ent.get_x(), target.get_y() - ent.get_y());
-    _focus_lose_clause(ent, v);
+    _focus_lose_clause(sim, ent, v);
     if (!sim->ent_alive(ent.target)) return;
     float dist = v.magnitude();
     ent.set_angle(v.angle());
@@ -457,11 +483,13 @@ static void tick_ancient_treant(Simulation *sim, Entity &ent) {
                 MobID::T sid = phase >= 3 ? MobID::kVineBug : MobID::kLeafBeetle;
                 float ox = ent.get_x() + (frand() - 0.5f) * 240.f;
                 float oy = ent.get_y() + (frand() - 0.5f) * 240.f;
-                Entity &spawned = alloc_mob(sim, sid, ox, oy, ent.get_team(), [](Entity &m) {
+                uint8_t parent_r = ent.get_rarity();
+                Entity &spawned = alloc_mob(sim, sid, ox, oy, ent.get_team(), [parent_r](Entity &m) {
                     m.score_reward = MOB_DATA[m.get_mob_id()].xp / 2;
                     BitMath::set(m.flags, EntityFlags::kHasCulling);
                     BitMath::set(m.flags, EntityFlags::kDieOnParentDeath);
                     BitMath::set(m.flags, EntityFlags::kNoDrops);
+                    apply_mob_live_rarity(m, parent_r);
                 });
                 spawned.set_parent(ent.id);
                 spawned.target = ent.target;
@@ -500,7 +528,7 @@ static void tick_fallen_king(Simulation *sim, Entity &ent) {
     }
     Entity &target = sim->get_ent(ent.target);
     Vector v(target.get_x() - ent.get_x(), target.get_y() - ent.get_y());
-    _focus_lose_clause(ent, v);
+    _focus_lose_clause(sim, ent, v);
     if (!sim->ent_alive(ent.target)) return;
     float dist = v.magnitude();
     ent.set_angle(v.angle());
@@ -555,11 +583,13 @@ static void tick_fallen_king(Simulation *sim, Entity &ent) {
                 MobID::T sid = phase >= 3 ? MobID::kSpearSentinel : MobID::kShieldSentinel;
                 float ox = ent.get_x() + (frand() - 0.5f) * 200.f;
                 float oy = ent.get_y() + (frand() - 0.5f) * 200.f;
-                Entity &spawned = alloc_mob(sim, sid, ox, oy, ent.get_team(), [](Entity &m) {
+                uint8_t parent_r = ent.get_rarity();
+                Entity &spawned = alloc_mob(sim, sid, ox, oy, ent.get_team(), [parent_r](Entity &m) {
                     m.score_reward = MOB_DATA[m.get_mob_id()].xp / 2;
                     BitMath::set(m.flags, EntityFlags::kHasCulling);
                     BitMath::set(m.flags, EntityFlags::kDieOnParentDeath);
                     BitMath::set(m.flags, EntityFlags::kNoDrops);
+                    apply_mob_live_rarity(m, parent_r);
                 });
                 spawned.set_parent(ent.id);
                 spawned.target = ent.target;
@@ -611,7 +641,7 @@ static void tick_hornet_aggro(Simulation *sim, Entity &ent) {
     if (sim->ent_alive(ent.target)) {
         Entity &target = sim->get_ent(ent.target);
         Vector v(target.get_x() - ent.get_x(), target.get_y() - ent.get_y());
-        _focus_lose_clause(ent, v);
+        _focus_lose_clause(sim, ent, v);
         if (!sim->ent_alive(ent.target)) {
             ent.ai_state = AIState::kIdle;
             ent.ai_tick = 0;
@@ -742,7 +772,7 @@ static void tick_centipede_aggro(Simulation *sim, Entity &ent) {
     if (sim->ent_alive(ent.target)) {
         Entity &target = sim->get_ent(ent.target);
         Vector v(target.get_x() - ent.get_x(), target.get_y() - ent.get_y());
-        _focus_lose_clause(ent, v);
+        _focus_lose_clause(sim, ent, v);
         v.set_magnitude(PLAYER_ACCELERATION * 0.95);
         ent.acceleration = v;
         ent.set_angle(v.angle());
@@ -899,7 +929,7 @@ static void tick_abyss_maw(Simulation *sim, Entity &ent) {
     }
     Entity &target = sim->get_ent(ent.target);
     Vector v(target.get_x() - ent.get_x(), target.get_y() - ent.get_y());
-    _focus_lose_clause(ent, v);
+    _focus_lose_clause(sim, ent, v);
     if (!sim->ent_alive(ent.target)) return;
     float dist = v.magnitude();
     ent.set_angle(v.angle());
@@ -941,13 +971,15 @@ static void tick_abyss_maw(Simulation *sim, Entity &ent) {
             Vector behind;
             behind.unit_normal(ent.get_angle() + M_PI);
             behind *= ent.get_radius();
+            uint8_t parent_r = ent.get_rarity();
             Entity &spawned = alloc_mob(sim, MobID::kSeaFry,
                 ent.get_x() + behind.x, ent.get_y() + behind.y, ent.get_team(),
-                [](Entity &m) {
+                [parent_r](Entity &m) {
                     m.score_reward = MOB_DATA[m.get_mob_id()].xp;
                     BitMath::set(m.flags, EntityFlags::kHasCulling);
                     BitMath::set(m.flags, EntityFlags::kDieOnParentDeath);
                     BitMath::set(m.flags, EntityFlags::kNoDrops);
+                    apply_mob_live_rarity(m, parent_r);
                 });
             spawned.set_parent(ent.id);
             entity_set_despawn_tick(spawned, 10 * TPS);
@@ -982,7 +1014,7 @@ static void tick_winter_sovereign(Simulation *sim, Entity &ent) {
     }
     Entity &target = sim->get_ent(ent.target);
     Vector v(target.get_x() - ent.get_x(), target.get_y() - ent.get_y());
-    _focus_lose_clause(ent, v);
+    _focus_lose_clause(sim, ent, v);
     if (!sim->ent_alive(ent.target)) return;
     float dist = v.magnitude();
     ent.set_angle(v.angle());
@@ -1024,13 +1056,15 @@ static void tick_winter_sovereign(Simulation *sim, Entity &ent) {
             Vector behind;
             behind.unit_normal(ent.get_angle() + M_PI);
             behind *= ent.get_radius();
+            uint8_t parent_r = ent.get_rarity();
             Entity &spawned = alloc_mob(sim, MobID::kSnowMite,
                 ent.get_x() + behind.x, ent.get_y() + behind.y, ent.get_team(),
-                [](Entity &m) {
+                [parent_r](Entity &m) {
                     m.score_reward = MOB_DATA[m.get_mob_id()].xp;
                     BitMath::set(m.flags, EntityFlags::kHasCulling);
                     BitMath::set(m.flags, EntityFlags::kDieOnParentDeath);
                     BitMath::set(m.flags, EntityFlags::kNoDrops);
+                    apply_mob_live_rarity(m, parent_r);
                 });
             spawned.set_parent(ent.id);
             entity_set_despawn_tick(spawned, 10 * TPS);
@@ -1065,7 +1099,7 @@ static void tick_molten_overlord(Simulation *sim, Entity &ent) {
     }
     Entity &target = sim->get_ent(ent.target);
     Vector v(target.get_x() - ent.get_x(), target.get_y() - ent.get_y());
-    _focus_lose_clause(ent, v);
+    _focus_lose_clause(sim, ent, v);
     if (!sim->ent_alive(ent.target)) return;
     float dist = v.magnitude();
     ent.set_angle(v.angle());
@@ -1107,13 +1141,15 @@ static void tick_molten_overlord(Simulation *sim, Entity &ent) {
             Vector behind;
             behind.unit_normal(ent.get_angle() + M_PI);
             behind *= ent.get_radius();
+            uint8_t parent_r = ent.get_rarity();
             Entity &spawned = alloc_mob(sim, MobID::kAshMite,
                 ent.get_x() + behind.x, ent.get_y() + behind.y, ent.get_team(),
-                [](Entity &m) {
+                [parent_r](Entity &m) {
                     m.score_reward = MOB_DATA[m.get_mob_id()].xp;
                     BitMath::set(m.flags, EntityFlags::kHasCulling);
                     BitMath::set(m.flags, EntityFlags::kDieOnParentDeath);
                     BitMath::set(m.flags, EntityFlags::kNoDrops);
+                    apply_mob_live_rarity(m, parent_r);
                 });
             spawned.set_parent(ent.id);
             entity_set_despawn_tick(spawned, 10 * TPS);
@@ -1149,7 +1185,7 @@ static void tick_sandworm_monarch(Simulation *sim, Entity &ent) {
     }
     Entity &target = sim->get_ent(ent.target);
     Vector v(target.get_x() - ent.get_x(), target.get_y() - ent.get_y());
-    _focus_lose_clause(ent, v);
+    _focus_lose_clause(sim, ent, v);
     if (!sim->ent_alive(ent.target)) return;
     float dist = v.magnitude();
     ent.set_angle(v.angle());
@@ -1191,13 +1227,15 @@ static void tick_sandworm_monarch(Simulation *sim, Entity &ent) {
             Vector behind;
             behind.unit_normal(ent.get_angle() + M_PI);
             behind *= ent.get_radius();
+            uint8_t parent_r = ent.get_rarity();
             Entity &spawned = alloc_mob(sim, MobID::kSandMite,
                 ent.get_x() + behind.x, ent.get_y() + behind.y, ent.get_team(),
-                [](Entity &m) {
+                [parent_r](Entity &m) {
                     m.score_reward = MOB_DATA[m.get_mob_id()].xp;
                     BitMath::set(m.flags, EntityFlags::kHasCulling);
                     BitMath::set(m.flags, EntityFlags::kDieOnParentDeath);
                     BitMath::set(m.flags, EntityFlags::kNoDrops);
+                    apply_mob_live_rarity(m, parent_r);
                 });
             spawned.set_parent(ent.id);
             entity_set_despawn_tick(spawned, 10 * TPS);
@@ -1217,7 +1255,7 @@ static void tick_digger(Simulation *sim, Entity &ent) {
     if (sim->ent_alive(ent.target)) {
         Entity &target = sim->get_ent(ent.target);
         Vector v(target.get_x() - ent.get_x(), target.get_y() - ent.get_y());
-        _focus_lose_clause(ent, v);
+        _focus_lose_clause(sim, ent, v);
         v.set_magnitude(PLAYER_ACCELERATION * 0.95);
         if (ent.health / ent.max_health > 0.1) {
             BitMath::set(ent.input, InputFlags::kAttacking);
@@ -1264,6 +1302,13 @@ void tick_ai_behavior(Simulation *sim, Entity &ent) {
         ent.ai_tick = 0;
         return;
     }
+    // Never chase / retaliate on practice dummies.
+    if (sim->ent_alive(ent.target)
+        && TrainingDummy::is_dummy(sim->get_ent(ent.target)))
+        ent.target = NULL_ENTITY;
+    if (sim->ent_alive(ent.last_damaged_by)
+        && TrainingDummy::is_dummy(sim->get_ent(ent.last_damaged_by)))
+        ent.last_damaged_by = NULL_ENTITY;
     if (sim->ent_alive(ent.seg_head)) return;
     ent.acceleration.set(0,0);
     // Zone wilds that get kited into the hub pad: drop chase and walk home so
@@ -1279,10 +1324,22 @@ void tick_ai_behavior(Simulation *sim, Entity &ent) {
             ent.ai_tick = 0;
         }
     }
+    if (sim->ent_alive(ent.target) && !is_player_faction(sim, ent)) {
+        auto const &t = sim->get_ent(ent.target);
+        if (t.has_component(kFlower) && !t.has_component(kMob)) {
+            float range = 1.35f * ent.detection_radius * flower_aggro_range_mult(t);
+            Vector delta(t.get_x() - ent.get_x(), t.get_y() - ent.get_y());
+            if (delta.magnitude() > range) ent.target = NULL_ENTITY;
+        }
+    }
     if (!sim->ent_alive(ent.target) && sim->ent_alive(ent.last_damaged_by)) {
         // Hub sanctuary only: hits from a player inside the respawn pad do not start a chase.
         Entity &attacker = sim->get_ent(ent.last_damaged_by);
-        if (!(is_player_faction(sim, attacker)
+        float range = 1.35f * ent.detection_radius;
+        if (attacker.has_component(kFlower)) range *= flower_aggro_range_mult(attacker);
+        Vector delta(attacker.get_x() - ent.get_x(), attacker.get_y() - ent.get_y());
+        if (delta.magnitude() <= range
+            && !(is_player_faction(sim, attacker)
               && Map::in_spawn_sanctuary(attacker.get_x(), attacker.get_y()))) {
             ent.target = ent.last_damaged_by;
             // Break leash-return so hits in the deep ring actually start a chase.
@@ -1331,6 +1388,17 @@ void tick_ai_behavior(Simulation *sim, Entity &ent) {
         ent.target = NULL_ENTITY;
         ent.ai_tick = 0;
         return;
+    }
+    // Far zone wildlife LOD: beyond 5500 of every flower run heavy AI 1/N ticks.
+    // HK 8c: N=4 light, N=6 near pool ceiling (was 5/8 @5800 on 4c BJ).
+    if (BitMath::at(ent.flags, EntityFlags::kSpawnedFromZone) && ent.zone != 0xFF) {
+        uint32_t const far_stride = sim->entity_count() >= 7200u ? 6u : 4u;
+        if (((sim->tick_index + ent.id.id) % far_stride) != 0u
+            && !_near_any_flower(ent.get_x(), ent.get_y(), 5500.f * 5500.f)) {
+            ent.target = NULL_ENTITY;
+            ent.ai_tick = 0;
+            return;
+        }
     }
     // WorldExplore escorts: named, no damage, scripted path — do not wander/aggro.
     // Never freeze player hatch summons (they share kNoDrops with escorts).
@@ -1402,11 +1470,13 @@ void tick_ai_behavior(Simulation *sim, Entity &ent) {
                 Vector behind;
                 behind.unit_normal(ent.get_angle() + M_PI);
                 behind *= ent.get_radius();
+                uint8_t parent_r = ent.get_rarity();
                 Entity &spawned = alloc_mob(
                     sim, MobID::kSoldierAnt, ent.get_x() + behind.x, ent.get_y() + behind.y, 
-                    ent.get_team(), [](Entity &mob) {
+                    ent.get_team(), [parent_r](Entity &mob) {
                     mob.score_reward = MOB_DATA[mob.get_mob_id()].xp;
                     BitMath::set(mob.flags, EntityFlags::kHasCulling);
+                    apply_mob_live_rarity(mob, parent_r);
                 });
                 entity_set_despawn_tick(spawned, 10 * TPS);
                 spawned.set_parent(ent.get_parent());
@@ -1416,10 +1486,15 @@ void tick_ai_behavior(Simulation *sim, Entity &ent) {
         case MobID::kHornet:
             tick_hornet_aggro(sim, ent);
             break;
+        case MobID::kSquare:
+            // Hatch pets (NoDrops / die-with-owner) chase; wild Unique Square stays a rock.
+            if (BitMath::at(ent.flags, EntityFlags::kNoDrops)
+                || BitMath::at(ent.flags, EntityFlags::kDieOnParentDeath))
+                tick_default_aggro(sim, ent, 1.2f);
+            break;
         case MobID::kBoulder:
         case MobID::kRock:
         case MobID::kCactus:
-        case MobID::kSquare:
         case MobID::kPushCrate:
         case MobID::kYahahaPad:
         case MobID::kTreasureNpc:
@@ -1665,9 +1740,10 @@ void tick_ai_behavior(Simulation *sim, Entity &ent) {
                 behind *= ent.get_radius();
                 Entity &spawned = alloc_mob(
                     sim, MobID::kBabyAnt, ent.get_x() + behind.x, ent.get_y() + behind.y,
-                    ent.get_team(), [](Entity &mob) {
+                    ent.get_team(), [&](Entity &mob) {
                     mob.score_reward = MOB_DATA[mob.get_mob_id()].xp;
                     BitMath::set(mob.flags, EntityFlags::kHasCulling);
+                    apply_mob_live_rarity(mob, ent.get_rarity());
                 });
                 entity_set_despawn_tick(spawned, 8 * TPS);
                 spawned.set_parent(ent.id);

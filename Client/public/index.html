@@ -58,17 +58,21 @@
                 caret-color: #d89aff !important;
                 -webkit-text-fill-color: #f6f1ff !important;
             }
-            /* Match title-screen void — no green splash; hand off to in-game「连接中」 */
+            /* Match title-screen void — soft garden dusk; hand off to in-game「连接中」 */
             #loading-bar {
                 position: absolute;
                 inset: 0;
-                background: #2a2624;
+                background:
+                    radial-gradient(ellipse 80% 55% at 50% 35%, #3a4a32 0%, transparent 62%),
+                    radial-gradient(ellipse 70% 50% at 70% 80%, #2c241c 0%, transparent 55%),
+                    #1e1c1a;
                 z-index: 10;
                 display: flex;
                 flex-direction: column;
                 align-items: center;
                 justify-content: center;
-                gap: 14px;
+                gap: 16px;
+                pointer-events: none; /* never block landscape / other overlays */
             }
             #loading-bar.hide {
                 display: none;
@@ -76,16 +80,17 @@
             }
             #loading-brand {
                 font-family: Ubuntu, "Noto Sans SC", sans-serif;
-                font-size: clamp(40px, 7vw, 68px);
+                font-size: clamp(44px, 8vw, 72px);
                 font-weight: 700;
-                color: #f4f4f4;
-                letter-spacing: 0.02em;
+                color: #f2efe6;
+                letter-spacing: 0.04em;
+                text-shadow: 0 2px 18px rgba(0, 0, 0, 0.35);
             }
             #loading {
-                font-size: clamp(22px, 4vw, 36px);
+                font-size: clamp(16px, 3.2vw, 22px);
                 font-family: "Noto Sans SC", "Microsoft YaHei", sans-serif;
-                color: #c8bfb0;
-                font-weight: 700;
+                color: #b7c4a8;
+                font-weight: 650;
                 white-space: nowrap;
                 min-height: 1.4em;
                 max-width: min(92vw, 420px);
@@ -120,7 +125,23 @@
                 40% { opacity: 1; }
             }
             #loading-track {
+                display: block;
+                width: min(72vw, 280px);
+                height: 8px;
+                border-radius: 999px;
+                background: rgba(255, 255, 255, 0.12);
+                overflow: hidden;
+                box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.35);
+            }
+            #loading-track.is-error {
                 display: none;
+            }
+            #loading-fill {
+                height: 100%;
+                width: 0%;
+                border-radius: inherit;
+                background: linear-gradient(90deg, #6a8f4e, #a3c46a);
+                transition: width 0.12s linear;
             }
             /* Outside #loading-bar so fast loads do not cut display time short */
             #landscape-btn {
@@ -128,19 +149,23 @@
                 position: fixed;
                 right: max(16px, env(safe-area-inset-right));
                 bottom: max(16px, env(safe-area-inset-bottom));
-                z-index: 100;
+                z-index: 200;
                 border: 3px solid #ffffff;
                 border-radius: 14px;
                 background: #1dd129;
                 color: #ffffff;
                 font-family: "Noto Sans SC", "Microsoft YaHei", sans-serif;
-                font-size: 15px;
+                font-size: 16px;
                 font-weight: 700;
-                padding: 12px 16px;
+                padding: 16px 22px;
+                min-width: 120px;
+                min-height: 52px;
                 box-shadow: 0 4px 16px rgba(0,0,0,0.35);
                 -webkit-tap-highlight-color: transparent;
-                animation: landscape-blink 0.7s ease-in-out infinite;
-                transition: opacity 0.45s ease;
+                touch-action: manipulation;
+                pointer-events: auto;
+                cursor: pointer;
+                transition: opacity 0.45s ease, transform 0.15s ease;
                 opacity: 1;
             }
             #landscape-btn.hide {
@@ -343,8 +368,8 @@
     <body>
     <div id="loading-bar">
         <div id="loading-brand">ashflor.io</div>
-        <div id="loading"><span class="label">连接中</span><span class="dots" aria-hidden="true"><span>.</span><span>.</span><span>.</span></span></div>
-        <div id="loading-track" aria-hidden="true"></div>
+        <div id="loading"><span class="label">加载中</span><span class="dots" aria-hidden="true"><span>.</span><span>.</span><span>.</span></span></div>
+        <div id="loading-track" aria-hidden="true"><div id="loading-fill"></div></div>
     </div>
     <button id="landscape-btn" type="button">横屏游戏</button>
     <div id="reconnect-overlay" aria-hidden="true">
@@ -358,15 +383,15 @@
     <canvas id="canvas" width="0" height="0"></canvas>
     <script>
         (function () {
-            // Fixed show time — not tied to loading overlay (fast cache must not shorten it)
-            var LANDSCAPE_BTN_MS = 10000;
+            // Stay until user taps or orientation is landscape (loading overlay must not steal taps).
+            var LANDSCAPE_BTN_MS = 20000;
             var isMobile = /iPhone|iPad|iPod|Android|BlackBerry/i.test(navigator.userAgent)
                 || (navigator.maxTouchPoints > 1 && window.matchMedia("(pointer: coarse)").matches);
             var btn = document.getElementById("landscape-btn");
             if (!isMobile || !btn) return;
 
             var hidden = false;
-            var shownAt = Date.now();
+            var armed = false;
             btn.style.display = "block";
 
             function hideBtn() {
@@ -375,7 +400,6 @@
                 btn.classList.add("hide");
                 setTimeout(function () {
                     btn.style.display = "none";
-                    btn.style.animation = "none";
                 }, 500);
             }
 
@@ -387,48 +411,89 @@
                 return window.innerWidth > window.innerHeight;
             }
 
-            async function goLandscape() {
+            async function goLandscape(e) {
+                if (e) {
+                    try { e.preventDefault(); } catch (err) {}
+                    try { e.stopPropagation(); } catch (err) {}
+                }
+                if (armed) return;
+                armed = true;
                 try {
                     var el = document.documentElement;
                     if (el.requestFullscreen) await el.requestFullscreen();
                     else if (el.webkitRequestFullscreen) await el.webkitRequestFullscreen();
-                } catch (e) {}
+                } catch (err) {}
                 try {
                     if (screen.orientation && screen.orientation.lock)
                         await screen.orientation.lock("landscape");
-                } catch (e) {}
+                } catch (err) {}
                 hideBtn();
             }
 
-            btn.addEventListener("click", goLandscape, { passive: true });
-            btn.addEventListener("touchend", function (e) {
-                e.preventDefault();
-                goLandscape();
-            }, { passive: false });
+            // pointerup covers mouse + touch; touchend as backup for older WebViews
+            btn.addEventListener("pointerup", goLandscape, { passive: false });
+            btn.addEventListener("click", goLandscape, { passive: false });
+            btn.addEventListener("touchend", goLandscape, { passive: false });
 
-            // Always keep full LANDSCAPE_BTN_MS from first show, even if wasm loads in <1s
-            setTimeout(hideBtn, LANDSCAPE_BTN_MS);
-            // If already landscape after the fixed window, nothing else to do;
-            // if user rotates early, still wait out the fixed timer unless they tapped.
+            setTimeout(function () {
+                if (isLandscape()) hideBtn();
+                else setTimeout(hideBtn, LANDSCAPE_BTN_MS);
+            }, 0);
             if (screen.orientation && screen.orientation.addEventListener) {
                 screen.orientation.addEventListener("change", function () {
-                    if (isLandscape() && Date.now() - shownAt >= LANDSCAPE_BTN_MS)
-                        hideBtn();
+                    if (isLandscape()) hideBtn();
                 });
             }
+            window.addEventListener("resize", function () {
+                if (isLandscape()) hideBtn();
+            });
         })();
 
         document.addEventListener("DOMContentLoaded", () => {
             // deploy-update.ps1 bumps this digits-only string each release
-            var cacheV = '21743';
+            var cacheV = '21786';
             var hidden = false;
             var loadingEl = document.getElementById("loading");
             var trackEl = document.getElementById("loading-track");
+            var fillEl = document.getElementById("loading-fill");
             var brandEl = document.getElementById("loading-brand");
+            var loadProgress = 0;
+            var softTimer = 0;
+            var softFrom = 0;
+            var softCap = 0;
+            var softT0 = 0;
+            var softMs = 0;
+
+            function setLoadProgress(p) {
+                loadProgress = Math.max(loadProgress, Math.min(1, p));
+                if (fillEl) fillEl.style.width = (loadProgress * 100).toFixed(1) + "%";
+            }
+
+            function hardResetClient() {
+                var done = function () {
+                    try { location.href = location.pathname + "?v=" + cacheV + "&r=" + Date.now(); }
+                    catch (e) { location.reload(); }
+                };
+                var tasks = [];
+                if ("serviceWorker" in navigator) {
+                    tasks.push(navigator.serviceWorker.getRegistrations().then(function (regs) {
+                        return Promise.all(regs.map(function (r) { return r.unregister(); }));
+                    }).catch(function () {}));
+                }
+                if (window.caches && caches.keys) {
+                    tasks.push(caches.keys().then(function (keys) {
+                        return Promise.all(keys.map(function (k) { return caches.delete(k); }));
+                    }).catch(function () {}));
+                }
+                Promise.all(tasks).then(done, done);
+            }
 
             function setLoadingMessage(msg, withDots) {
                 if (!loadingEl) return;
                 loadingEl.classList.remove("is-error");
+                loadingEl.style.cursor = "";
+                loadingEl.onclick = null;
+                if (trackEl) trackEl.classList.remove("is-error");
                 if (withDots) {
                     loadingEl.innerHTML =
                         '<span class="label"></span>' +
@@ -436,7 +501,12 @@
                     loadingEl.querySelector(".label").textContent = msg;
                 } else {
                     loadingEl.classList.add("is-error");
+                    if (trackEl) trackEl.classList.add("is-error");
                     loadingEl.textContent = msg;
+                    // Tap / click clears SW + Cache Storage then reloads — fixes
+                    // post-deploy "stuck on 编译中" from half-cached wasm/js.
+                    loadingEl.style.cursor = "pointer";
+                    loadingEl.onclick = function () { hardResetClient(); };
                 }
             }
 
@@ -444,6 +514,8 @@
                 if (hidden) return;
                 if (!window.Module || !window.Module.canvas) return;
                 hidden = true;
+                if (softTimer) { clearInterval(softTimer); softTimer = 0; }
+                setLoadProgress(1);
                 var bar = document.getElementById("loading-bar");
                 if (bar) bar.classList.add("hide");
             }
@@ -456,6 +528,75 @@
             if (new URLSearchParams(location.search).has('perf')) Module['profileFrames'] = [];
             Module.locateFile = function (path) {
                 return path + '?v=' + cacheV;
+            };
+            // Own the wasm fetch: real download progress, magic-byte check, timeout,
+            // and a clear recovery path. Avoids silent hang on 编译中 after deploys
+            // (SW/CDN half-cache, mid-restart 404, broken gzip streaming).
+            Module.instantiateWasm = function (imports, successCallback) {
+                var url = Module.locateFile("gardn-client.wasm", "");
+                var aborted = false;
+                var ctrl = (typeof AbortController !== "undefined") ? new AbortController() : null;
+                var timer = setTimeout(function () {
+                    aborted = true;
+                    try { ctrl && ctrl.abort(); } catch (e) {}
+                    setLoadingMessage("编译超时：网络不稳或缓存损坏，点这里清除缓存重试", false);
+                }, 45000);
+                setLoadingMessage("下载引擎", true);
+                startSoftProgress(0.72, 4500);
+                fetch(url, {
+                    credentials: "same-origin",
+                    cache: "no-cache",
+                    signal: ctrl ? ctrl.signal : undefined
+                }).then(function (res) {
+                    if (!res.ok) throw new Error("引擎下载失败 HTTP " + res.status);
+                    if (!res.body || !res.body.getReader) return res.arrayBuffer();
+                    var reader = res.body.getReader();
+                    var chunks = [];
+                    var received = 0;
+                    var total = parseInt(res.headers.get("Content-Length") || "0", 10) || 0;
+                    function pump() {
+                        return reader.read().then(function (r) {
+                            if (r.done) {
+                                var out = new Uint8Array(received);
+                                var off = 0;
+                                for (var i = 0; i < chunks.length; i++) {
+                                    out.set(chunks[i], off);
+                                    off += chunks[i].length;
+                                }
+                                return out.buffer;
+                            }
+                            chunks.push(r.value);
+                            received += r.value.length;
+                            if (!hidden && total > 0)
+                                setLoadProgress(0.5 + 0.22 * Math.min(1, received / total));
+                            else if (!hidden)
+                                setLoadProgress(Math.min(0.7, 0.5 + received / 4000000));
+                            return pump();
+                        });
+                    }
+                    return pump();
+                }).then(function (buf) {
+                    if (aborted) return;
+                    var u8 = new Uint8Array(buf);
+                    if (u8.length < 8 || u8[0] !== 0 || u8[1] !== 0x61 || u8[2] !== 0x73 || u8[3] !== 0x6d)
+                        throw new Error("引擎文件损坏");
+                    setLoadProgress(Math.max(loadProgress, 0.74));
+                    setLoadingMessage("编译中", true);
+                    // Long even slide — wasm compile often 3–15s with no real % callbacks.
+                    startSoftProgress(0.94, 11000);
+                    return WebAssembly.instantiate(buf, imports);
+                }).then(function (pair) {
+                    if (aborted || !pair) return;
+                    clearTimeout(timer);
+                    successCallback(pair.instance, pair.module);
+                }).catch(function (err) {
+                    clearTimeout(timer);
+                    if (hidden) return;
+                    var reason = String((err && err.message) || err || "未知错误").replace(/\s+/g, " ").trim();
+                    if (/abort/i.test(reason)) reason = "下载超时";
+                    setLoadingMessage("加载失败：" + reason.slice(0, 80) + "（点这里清除缓存重试）", false);
+                });
+                return {};
             };
 
             /* ---- reconnect overlay + petal catch mini-game ---- */
@@ -700,8 +841,9 @@
                 console.info('Ashflor first frame: ' + Math.round(performance.now()) + ' ms after navigation');
             };
             Module.onRuntimeInitialized = function () {
-                // Stay on「连接中」until first frame → title screen takes over.
+                setLoadProgress(Math.max(loadProgress, 0.88));
                 setLoadingMessage("连接中", true);
+                startSoftProgress(0.98, 2800);
             };
             Module.onAbort = function (what) {
                 var reason = String(what == null ? "" : what).replace(/\s+/g, " ").trim();
@@ -718,11 +860,17 @@
                         var detail = (m && m[1] && m[1] !== "undefined") ? m[1] : "内存不足或客户端异常";
                         setLoadingMessage("加载失败：" + detail.slice(0, 120), false);
                     }
-                    // Keep「连接中」copy during wasm download — no green splash / 「加载中」phase.
                 } catch (e) {}
             };
+            // Emscripten may call setStatus during wasm compile / file fetch.
+            Module.setStatus = function (text) {
+                if (hidden || !text) return;
+                var m = String(text).match(/([0-9]+)\s*%/);
+                if (m) setLoadProgress(0.45 + 0.4 * (parseInt(m[1], 10) / 100));
+            };
 
-            setLoadingMessage("连接中", true);
+            setLoadingMessage("加载中", true);
+            setLoadProgress(0.02);
 
             setTimeout(function () {
                 if (!hidden) {
@@ -730,17 +878,69 @@
                 }
             }, 120000);
 
+            // Stage-timed fake bar: even slide for expectedMs, then slow forever-creep
+            // so long "编译中" never looks frozen (old asymptotic crawl stalled near cap).
+            function startSoftProgress(cap, expectedMs) {
+                softCap = cap == null ? 0.97 : cap;
+                softMs = expectedMs == null ? 5000 : expectedMs;
+                softFrom = loadProgress;
+                softT0 = performance.now();
+                if (softFrom >= softCap - 0.001) return;
+                if (softTimer) clearInterval(softTimer);
+                softTimer = setInterval(function () {
+                    if (hidden) { clearInterval(softTimer); softTimer = 0; return; }
+                    var span = Math.max(0.001, softCap - softFrom);
+                    var elapsed = performance.now() - softT0;
+                    var target;
+                    if (elapsed <= softMs) {
+                        target = softFrom + span * 0.78 * (elapsed / softMs);
+                    } else {
+                        var overSec = (elapsed - softMs) / 1000;
+                        // ~12s half-life on the remaining 22% — keeps ticking for 20–40s compiles
+                        var reached = 0.78 + 0.219 * (1 - Math.exp(-overSec / 12));
+                        target = softFrom + span * reached;
+                    }
+                    // If real download jumped ahead, rebase so soft keeps moving from new floor
+                    if (loadProgress > target + 0.01) {
+                        softFrom = loadProgress;
+                        softT0 = performance.now();
+                        softMs = Math.max(1800, softMs * 0.55);
+                        return;
+                    }
+                    setLoadProgress(Math.min(softCap - 0.002, target));
+                }, 50);
+            }
+
             function loadClientScript(attempt) {
+                var url = "gardn-client.js?v=" + cacheV + (attempt ? "&r=" + attempt : "");
+                setLoadingMessage(attempt ? ("下载失败，正在重试 (" + (attempt + 1) + "/3)") : "下载客户端", true);
+                startSoftProgress(0.45, 3200);
+                // Classic <script src> — keeps Emscripten scriptDirectory / wasm paths correct.
+                // Parallel XHR only estimates download progress (response discarded).
+                try {
+                    var probe = new XMLHttpRequest();
+                    probe.open("GET", url, true);
+                    probe.onprogress = function (e) {
+                        if (hidden) return;
+                        if (e.lengthComputable && e.total > 0)
+                            setLoadProgress(0.04 + 0.4 * (e.loaded / e.total));
+                    };
+                    probe.send();
+                } catch (e) {}
                 var script = document.createElement("script");
-                script.src = "gardn-client.js?v=" + cacheV + (attempt ? "&r=" + attempt : "");
+                script.src = url;
                 script.async = true;
                 script.onerror = function () {
                     if (attempt < 2) {
-                        setLoadingMessage("下载失败，正在重试 (" + (attempt + 1) + "/3)", true);
                         setTimeout(function () { loadClientScript(attempt + 1); }, 900);
                     } else {
                         setLoadingMessage("加载失败：无法下载客户端脚本，请刷新重试", false);
                     }
+                };
+                script.onload = function () {
+                    setLoadProgress(Math.max(loadProgress, 0.5));
+                    setLoadingMessage("准备引擎", true);
+                    startSoftProgress(0.58, 1600);
                 };
                 document.body.appendChild(script);
             }

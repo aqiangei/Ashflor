@@ -83,6 +83,46 @@ inline bool arrange_loadout_preset(
     for (uint8_t i = 0; i < end; ++i) arranged[i] = PetalID::kNone;
     uint8_t const count = preset.slot_count != 0 && preset.slot_count < active_slots
         ? preset.slot_count : active_slots;
+    // Legacy / never-saved secondary is all-None on a real scheme (slot_count>0).
+    // Treating that as "clear secondary" ate cutters/magnets on every K/L switch.
+    // Blank secondary → keep the live secondary; only primary swaps.
+    // slot_count==0 (empty scheme) still clears both rows into the bank.
+    bool secondary_blank = false;
+    if (preset.slot_count != 0) {
+        secondary_blank = true;
+        for (uint8_t i = 0; i < count; ++i) {
+            if (preset.secondary[i] != PetalID::kNone
+                && preset.secondary[i] < PetalID::kNumPetals) {
+                secondary_blank = false;
+                break;
+            }
+        }
+    }
+    auto preserve = [&](uint8_t i) {
+        if (arranged[i] != PetalID::kNone) return;
+        PetalID::T id = inventory[i];
+        if (id != PetalID::kNone && id < PetalID::kNumPetals && available[id]) {
+            arranged[i] = id;
+            --available[id];
+        }
+    };
+    // Pin live secondary BEFORE primary claims those copies. Otherwise a primary
+    // that wants a cutter currently parked on secondary steals it and the pin
+    // fails → "副槽丢失/位移" while primary looks fine.
+    if (secondary_blank) {
+        for (uint8_t i = 0; i < active_slots; ++i) {
+            if (!Recipe::is_bag_only(inventory[active_slots + i]))
+                preserve(active_slots + i);
+        }
+    }
+    // An older K/L scheme has no authority over newly unlocked pairs. Reserve
+    // those positions BEFORE matching either saved row, otherwise an early
+    // primary target consumes their only copy and shifts/empties the spare row.
+    for (uint8_t i = count; i < active_slots; ++i) {
+        if (!Recipe::is_bag_only(inventory[i])) preserve(i);
+        if (!Recipe::is_bag_only(inventory[active_slots + i])) preserve(active_slots + i);
+    }
+    uint8_t const row_targets = secondary_blank ? count : (uint8_t) (2 * count);
     auto desired_at = [&](uint8_t i) {
         return i < count ? preset.petals[i] : preset.secondary[i - count];
     };
@@ -90,14 +130,14 @@ inline bool arrange_loadout_preset(
         return i < count ? i : (uint8_t) (active_slots + i - count);
     };
     // Reserve exact matches across both rows before any rarity fallback.
-    for (uint8_t i = 0; i < 2 * count; ++i) {
+    for (uint8_t i = 0; i < row_targets; ++i) {
         PetalID::T desired = desired_at(i);
         if (desired == PetalID::kNone || desired >= PetalID::kNumPetals
             || Recipe::is_bag_only(desired) || !available[desired]) continue;
         arranged[slot_at(i)] = desired;
         --available[desired];
     }
-    for (uint8_t i = 0; i < 2 * count; ++i) {
+    for (uint8_t i = 0; i < row_targets; ++i) {
         PetalID::T desired = desired_at(i);
         if (desired == PetalID::kNone || desired >= PetalID::kNumPetals || Recipe::is_bag_only(desired)) continue;
         if (arranged[slot_at(i)] != PetalID::kNone) continue;
@@ -122,13 +162,6 @@ inline bool arrange_loadout_preset(
         arranged[slot_at(i)] = chosen;
         if (chosen != PetalID::kNone) --available[chosen];
     }
-    auto preserve = [&](uint8_t i) {
-        PetalID::T id = inventory[i];
-        if (id != PetalID::kNone && id < PetalID::kNumPetals && available[id]) {
-            arranged[i] = id;
-            --available[id];
-        }
-    };
     // An older preset has no targets for newly unlocked pairs.
     for (uint8_t i = count; i < active_slots; ++i) {
         if (!Recipe::is_bag_only(inventory[i])) preserve(i);

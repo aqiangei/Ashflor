@@ -95,4 +95,5 @@ namespace Ui {
     class TextInput;
     TextInput *chat_text_input();
     TextInput *shop_announce_text_input();
+    TextInput *guild_anno_text_input();
 }

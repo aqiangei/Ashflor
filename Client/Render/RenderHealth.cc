@@ -34,8 +34,10 @@ void render_health(Renderer &ctx, Entity const &ent) {
     // Other mobs: name+rarity always; bar after damage.
     uint8_t is_loot_chest = is_mob && ent.get_mob_id() == MobID::kLootChest;
     bool const is_training = is_mob && ent.get_mob_id() == MobID::kTrainingDummy;
-    uint8_t show_mob_label = is_mob && !is_segment;
     uint8_t show_bar = is_loot_chest || is_training || ent.healthbar_opacity >= 0.01f;
+    // Head always; body links once damaged (orphan remnants promote off
+    // kSegmented server-side — until then, name rides the HP bar).
+    uint8_t show_mob_label = is_mob && (!is_segment || show_bar);
     if (!show_bar && !show_identity && !show_mob_label) return;
 
     // Skip non-combat props (pads / crates / guide + explore escort NPCs).

@@ -207,10 +207,10 @@ def carrot_attr(i, tier):
 
 
 def grapes_attr(i, tier):
-    # poison applied in Damage via attrs.poison_damage fields set below as flat proxies
+    # poison_damage.damage is DPS; time is duration (see Damage.cc / Health.cc).
     return {
         "split_projectile": "1",
-        "privet_extra_poison": fmt(scale3(25.0, tier)),  # reused as poison payload for grapes
+        "poison_damage": "{.damage=%s,.time=1.0}" % fmt(scale3(25.0, tier)),
     }
 
 

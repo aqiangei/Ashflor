@@ -272,60 +272,93 @@ void draw_static_petal_single(PetalID::T id, Renderer &ctx) {
             break;
         }
         case PetalID::kAccelerator: {
+            // Teal thruster pod + amber chevron exhaust (scales with radius).
+            float const s = fmaxf(8.f, r);
             ctx.round_line_cap();
             ctx.round_line_join();
-            // Twin boost fins + flame trail
-            ctx.set_fill(0xff3ecf8e);
-            ctx.set_stroke(0xff2a8f62);
-            ctx.set_line_width(2.5f);
+            ctx.set_fill(0xff2eb88a);
+            ctx.set_stroke(0xff176848);
+            ctx.set_line_width(2.2f);
             ctx.begin_path();
-            ctx.move_to(-10, -2);
-            ctx.line_to(-2, -10);
-            ctx.line_to(4, -2);
-            ctx.line_to(-2, 2);
-            ctx.close_path();
+            ctx.round_rect(-s * 0.52f, -s * 0.78f, s * 1.04f, s * 1.15f, s * 0.32f);
             ctx.fill();
             ctx.stroke();
+            // Side fins
+            ctx.set_fill(0xff48d4a4);
             ctx.begin_path();
-            ctx.move_to(10, -2);
-            ctx.line_to(2, -10);
-            ctx.line_to(-4, -2);
-            ctx.line_to(2, 2);
+            ctx.move_to(-s * 0.52f, -s * 0.15f);
+            ctx.line_to(-s * 0.95f, s * 0.1f);
+            ctx.line_to(-s * 0.52f, s * 0.28f);
             ctx.close_path();
             ctx.fill();
-            ctx.stroke();
-            ctx.set_fill(0xffffb347);
-            ctx.set_stroke(0xffcc7a20);
             ctx.begin_path();
-            ctx.move_to(-3, 2);
-            ctx.line_to(0, 12);
-            ctx.line_to(3, 2);
+            ctx.move_to(s * 0.52f, -s * 0.15f);
+            ctx.line_to(s * 0.95f, s * 0.1f);
+            ctx.line_to(s * 0.52f, s * 0.28f);
             ctx.close_path();
             ctx.fill();
-            ctx.stroke();
+            // Intake highlight
+            ctx.set_fill(0xffb8ffe0);
+            ctx.begin_path();
+            ctx.ellipse(0, -s * 0.55f, s * 0.3f, s * 0.16f);
+            ctx.fill();
+            // Exhaust chevrons
+            ctx.set_fill(0xffffc14a);
+            ctx.set_stroke(0xffd48820);
+            ctx.set_line_width(1.5f);
+            for (int i = 0; i < 3; ++i) {
+                float y0 = s * (0.22f + i * 0.26f);
+                float w = s * (0.48f - i * 0.09f);
+                ctx.begin_path();
+                ctx.move_to(0, y0 + s * 0.24f);
+                ctx.line_to(-w, y0);
+                ctx.line_to(w, y0);
+                ctx.close_path();
+                ctx.fill();
+                ctx.stroke();
+            }
             break;
         }
         case PetalID::kMagnet: {
+            // Classic horseshoe: red / blue arms + silver pole tips.
+            float const s = fmaxf(8.f, r);
+            float const thick = s * 0.4f;
             ctx.round_line_cap();
             ctx.round_line_join();
-            ctx.set_line_width(4.5f);
-            ctx.set_stroke(0xffd94a4a);
+            ctx.set_line_width(thick);
+            ctx.set_stroke(0xffc62828);
             ctx.begin_path();
-            ctx.move_to(-10, 8);
-            ctx.line_to(-10, -2);
-            ctx.qcurve_to(-10, -12, 0, -12);
+            ctx.move_to(-s * 0.58f, s * 0.78f);
+            ctx.line_to(-s * 0.58f, s * 0.02f);
+            ctx.qcurve_to(-s * 0.58f, -s * 0.72f, 0, -s * 0.72f);
             ctx.stroke();
-            ctx.set_stroke(0xff4a7fd9);
+            ctx.set_stroke(0xff1565c0);
             ctx.begin_path();
-            ctx.move_to(10, 8);
-            ctx.line_to(10, -2);
-            ctx.qcurve_to(10, -12, 0, -12);
+            ctx.move_to(s * 0.58f, s * 0.78f);
+            ctx.line_to(s * 0.58f, s * 0.02f);
+            ctx.qcurve_to(s * 0.58f, -s * 0.72f, 0, -s * 0.72f);
             ctx.stroke();
-            ctx.set_fill(0xffeeeeee);
+            // Soft inner highlight on the arch
+            ctx.set_line_width(thick * 0.35f);
+            ctx.set_stroke(0x66ffffff);
             ctx.begin_path();
-            ctx.rect(-13, 6, 6, 8);
-            ctx.rect(7, 6, 6, 8);
+            ctx.move_to(-s * 0.35f, -s * 0.15f);
+            ctx.qcurve_to(0, -s * 0.48f, s * 0.35f, -s * 0.15f);
+            ctx.stroke();
+            // Pole tips
+            ctx.set_fill(0xfff2f2f2);
+            ctx.set_stroke(0xff9a9a9a);
+            ctx.set_line_width(1.6f);
+            float tip_w = thick * 1.15f;
+            float tip_h = s * 0.38f;
+            ctx.begin_path();
+            ctx.round_rect(-s * 0.58f - tip_w * 0.5f, s * 0.52f, tip_w, tip_h, 2.f);
             ctx.fill();
+            ctx.stroke();
+            ctx.begin_path();
+            ctx.round_rect(s * 0.58f - tip_w * 0.5f, s * 0.52f, tip_w, tip_h, 2.f);
+            ctx.fill();
+            ctx.stroke();
             break;
         }
         case PetalID::kObserver: {
@@ -5800,8 +5833,910 @@ void draw_static_petal_single(PetalID::T id, Renderer &ctx) {
             ctx.stroke();
             break;
         }
+        case PetalID::kCorruption: {
+            // Faded gray skull — Corruption
+            float s = fmaxf(8.f, r);
+            ctx.set_fill(0x99b0b0b0);
+            ctx.set_stroke(0xff6a6a6a);
+            ctx.set_line_width(2.2f);
+            ctx.begin_path();
+            ctx.ellipse(0, -1.f, s * 0.85f, s * 0.95f);
+            ctx.fill();
+            ctx.stroke();
+            ctx.set_fill(0xff2a2a2a);
+            ctx.begin_path();
+            ctx.ellipse(-s * 0.28f, -s * 0.15f, s * 0.18f, s * 0.22f);
+            ctx.ellipse(s * 0.28f, -s * 0.15f, s * 0.18f, s * 0.22f);
+            ctx.fill();
+            ctx.set_stroke(0xff2a2a2a);
+            ctx.set_line_width(1.6f);
+            ctx.begin_path();
+            ctx.move_to(-s * 0.35f, s * 0.35f);
+            ctx.line_to(-s * 0.12f, s * 0.55f);
+            ctx.line_to(0, s * 0.35f);
+            ctx.line_to(s * 0.12f, s * 0.55f);
+            ctx.line_to(s * 0.35f, s * 0.35f);
+            ctx.stroke();
+            break;
+        }
+        case PetalID::kBloodSacrifice: {
+            // Blood ritual drop
+            float s = fmaxf(8.f, r);
+            ctx.set_fill(0xffb02030);
+            ctx.set_stroke(0xff701018);
+            ctx.set_line_width(2.4f);
+            ctx.begin_path();
+            ctx.move_to(0, -s * 1.05f);
+            ctx.qcurve_to(s * 0.95f, -s * 0.15f, 0, s * 0.95f);
+            ctx.qcurve_to(-s * 0.95f, -s * 0.15f, 0, -s * 1.05f);
+            ctx.fill();
+            ctx.stroke();
+            ctx.set_fill(0x66ff8890);
+            ctx.begin_path();
+            ctx.ellipse(-s * 0.18f, -s * 0.25f, s * 0.22f, s * 0.3f);
+            ctx.fill();
+            break;
+        }
+        case PetalID::kPharaohCrown: {
+            // Cartoon nemes: gold plate + deep blue stripes + uraeus on the brow.
+            float s = fmaxf(8.f, r);
+            ctx.set_fill(0xffe8c04a);
+            ctx.set_stroke(0xff8a6a20);
+            ctx.set_line_width(2.2f);
+            ctx.round_line_join();
+            ctx.begin_path();
+            ctx.move_to(-s * 0.95f, -s * 0.15f);
+            ctx.line_to(-s * 0.75f, -s * 1.05f);
+            ctx.line_to(s * 0.75f, -s * 1.05f);
+            ctx.line_to(s * 0.95f, -s * 0.15f);
+            ctx.line_to(s * 0.55f, s * 0.95f);
+            ctx.line_to(s * 0.2f, s * 0.35f);
+            ctx.line_to(-s * 0.2f, s * 0.35f);
+            ctx.line_to(-s * 0.55f, s * 0.95f);
+            ctx.close_path();
+            ctx.fill();
+            ctx.stroke();
+            ctx.set_stroke(0xff1e3a8a);
+            ctx.set_line_width(s * 0.18f);
+            ctx.round_line_cap();
+            for (int i = 0; i < 4; ++i) {
+                float t = -0.55f + i * 0.35f;
+                ctx.begin_path();
+                ctx.move_to(s * t, -s * 0.95f);
+                ctx.line_to(s * t * 1.05f, s * 0.2f);
+                ctx.stroke();
+            }
+            ctx.set_fill(0xff2a8a3a);
+            ctx.set_stroke(0xff145020);
+            ctx.set_line_width(1.6f);
+            ctx.begin_path();
+            ctx.move_to(0, -s * 1.05f);
+            ctx.line_to(s * 0.12f, -s * 0.7f);
+            ctx.line_to(0, -s * 0.55f);
+            ctx.line_to(-s * 0.12f, -s * 0.7f);
+            ctx.close_path();
+            ctx.fill();
+            ctx.stroke();
+            ctx.set_fill(0xfff0d878);
+            ctx.begin_path();
+            ctx.arc(0, -s * 0.35f, s * 0.16f);
+            ctx.fill();
+            break;
+        }
+        case PetalID::kUranium: {
+            float s = fmaxf(8.f, r);
+            ctx.set_fill(0xff7ecf4a);
+            ctx.set_stroke(0xff4a8a28);
+            ctx.set_line_width(2.4f);
+            ctx.begin_path();
+            ctx.arc(0, 0, s);
+            ctx.fill();
+            ctx.stroke();
+            ctx.set_fill(0xffc8ff70);
+            ctx.begin_path();
+            ctx.arc(0, 0, s * 0.45f);
+            ctx.fill();
+            break;
+        }
+        case PetalID::kBattery: {
+            float s = fmaxf(8.f, r);
+            ctx.set_fill(0xff3a3a3a);
+            ctx.set_stroke(0xff1a1a1a);
+            ctx.set_line_width(2.2f);
+            ctx.begin_path();
+            ctx.round_rect(-s * 0.7f, -s * 0.9f, s * 1.4f, s * 1.7f, 2.5f);
+            ctx.fill();
+            ctx.stroke();
+            ctx.set_fill(0xffffcc33);
+            ctx.begin_path();
+            ctx.rect(-s * 0.25f, -s * 1.15f, s * 0.5f, s * 0.3f);
+            ctx.fill();
+            ctx.set_stroke(0xffffee66);
+            ctx.set_line_width(1.8f);
+            ctx.begin_path();
+            ctx.move_to(-s * 0.15f, s * 0.15f);
+            ctx.line_to(s * 0.05f, -s * 0.25f);
+            ctx.line_to(-s * 0.05f, -s * 0.05f);
+            ctx.line_to(s * 0.2f, -s * 0.55f);
+            ctx.stroke();
+            break;
+        }
+        case PetalID::kCarrot: {
+            float s = fmaxf(8.f, r);
+            ctx.set_fill(0xffff8c2a);
+            ctx.set_stroke(0xffcc6010);
+            ctx.set_line_width(2.2f);
+            ctx.begin_path();
+            ctx.move_to(0, -s * 1.1f);
+            ctx.line_to(s * 0.55f, s * 0.7f);
+            ctx.line_to(0, s * 1.05f);
+            ctx.line_to(-s * 0.55f, s * 0.7f);
+            ctx.close_path();
+            ctx.fill();
+            ctx.stroke();
+            ctx.set_fill(0xff3a9a30);
+            ctx.begin_path();
+            ctx.move_to(-s * 0.15f, -s * 0.95f);
+            ctx.line_to(0, -s * 1.45f);
+            ctx.line_to(s * 0.15f, -s * 0.95f);
+            ctx.fill();
+            break;
+        }
+        case PetalID::kPrivetBerry: {
+            float s = fmaxf(7.f, r);
+            ctx.set_fill(0xff5a2060);
+            ctx.set_stroke(0xff3a1040);
+            ctx.set_line_width(2.f);
+            ctx.begin_path();
+            ctx.arc(0, 0, s * 0.9f);
+            ctx.fill();
+            ctx.stroke();
+            ctx.set_fill(0xff8a40a0);
+            ctx.begin_path();
+            ctx.arc(-s * 0.2f, -s * 0.25f, s * 0.28f);
+            ctx.fill();
+            break;
+        }
 
+        case PetalID::kDomino: {
+            float s = fmaxf(8.f, r);
+            ctx.set_fill(0xfff5f0e6);
+            ctx.set_stroke(0xffc4b8a0);
+            ctx.set_line_width(2.2f);
+            ctx.begin_path();
+            ctx.round_rect(-s*0.7f, -s*1.0f, s*1.4f, s*2.0f, 2.f);
+            ctx.fill(); ctx.stroke();
+            break;
+        }
+        case PetalID::kCard: {
+            float s = fmaxf(8.f, r);
+            ctx.set_fill(0xfff8f8ff);
+            ctx.set_stroke(0xff334466);
+            ctx.set_line_width(2.2f);
+            ctx.begin_path();
+            ctx.round_rect(-s*0.75f, -s*1.05f, s*1.5f, s*2.1f, 2.f);
+            ctx.fill(); ctx.stroke();
+            ctx.set_fill(0xffcc2030);
+            ctx.begin_path(); ctx.arc(0,0,s*0.22f); ctx.fill();
+            break;
+        }
+        case PetalID::kPokerChip: {
+            float s = fmaxf(8.f, r);
+            ctx.set_fill(0xffcc2222);
+            ctx.set_stroke(0xff881111);
+            ctx.set_line_width(2.2f);
+            ctx.begin_path(); ctx.arc(0,0,s); ctx.fill(); ctx.stroke();
+            ctx.set_fill(0xffffffff);
+            ctx.begin_path(); ctx.arc(0,0,s*0.45f); ctx.fill();
+            break;
+        }
+        case PetalID::kBean: {
+            float s = fmaxf(8.f, r);
+            ctx.set_fill(0xffc8a050);
+            ctx.set_stroke(0xff8a6830);
+            ctx.set_line_width(2.2f);
+            ctx.begin_path();
+            ctx.ellipse(0, 0, s * 1.05f, s * 0.85f);
+            ctx.fill(); ctx.stroke();
+            break;
+        }
+        case PetalID::kClay: {
+            float s = fmaxf(8.f, r);
+            ctx.set_fill(0xffc47a4a);
+            ctx.set_stroke(0xff8a4a28);
+            ctx.set_line_width(2.2f);
+            ctx.begin_path();
+            ctx.ellipse(0, 0, s * 1.05f, s * 0.85f);
+            ctx.fill(); ctx.stroke();
+            break;
+        }
+        case PetalID::kTomato: {
+            float s = fmaxf(8.f, r);
+            ctx.set_fill(0xffe03030);
+            ctx.set_stroke(0xffa01818);
+            ctx.set_line_width(2.2f);
+            ctx.begin_path();
+            ctx.arc(0, 0, s * 0.95f);
+            ctx.fill(); ctx.stroke();
+            ctx.set_fill(0x66ffffff);
+            ctx.begin_path();
+            ctx.arc(-s * 0.25f, -s * 0.25f, s * 0.28f);
+            ctx.fill();
+            break;
+        }
+        case PetalID::kDust: {
+            float s = fmaxf(8.f, r);
+            ctx.set_fill(0xffd8d0b8);
+            ctx.set_stroke(0xffa09878);
+            ctx.set_line_width(2.2f);
+            ctx.begin_path();
+            ctx.ellipse(0, 0, s * 1.05f, s * 0.85f);
+            ctx.fill(); ctx.stroke();
+            ctx.begin_path(); ctx.arc(-s*0.35f, 0, s*0.45f); ctx.fill();
+            ctx.begin_path(); ctx.arc(s*0.35f, 0, s*0.4f); ctx.fill();
+            break;
+        }
+        case PetalID::kBroccoli: {
+            float s = fmaxf(8.f, r);
+            ctx.set_fill(0xff3a9a40);
+            ctx.set_stroke(0xff206028);
+            ctx.set_line_width(2.2f);
+            ctx.begin_path(); ctx.round_rect(-s*0.2f,0,s*0.4f,s,1.5f); ctx.fill();
+            ctx.begin_path(); ctx.arc(0,-s*0.2f,s*0.7f); ctx.fill(); ctx.stroke();
+            break;
+        }
+        case PetalID::kOrange: {
+            float s = fmaxf(8.f, r);
+            ctx.set_fill(0xffff8c20);
+            ctx.set_stroke(0xffcc6010);
+            ctx.set_line_width(2.2f);
+            ctx.begin_path();
+            ctx.arc(0, 0, s * 0.95f);
+            ctx.fill(); ctx.stroke();
+            ctx.set_fill(0x66ffffff);
+            ctx.begin_path();
+            ctx.arc(-s * 0.25f, -s * 0.25f, s * 0.28f);
+            ctx.fill();
+            break;
+        }
+        case PetalID::kPlank: {
+            float s = fmaxf(8.f, r);
+            ctx.set_fill(0xffc49a5a);
+            ctx.set_stroke(0xff8a6a38);
+            ctx.set_line_width(2.2f);
+            ctx.begin_path();
+            ctx.round_rect(-s*1.1f, -s*0.45f, s*2.2f, s*0.9f, 2.f);
+            ctx.fill(); ctx.stroke();
+            break;
+        }
+        case PetalID::kBur: {
+            float s = fmaxf(8.f, r);
+            ctx.set_fill(0xff8a6a40);
+            ctx.set_stroke(0xff5a4028);
+            ctx.set_line_width(2.2f);
+            ctx.begin_path(); ctx.arc(0,0,s*0.55f); ctx.fill(); ctx.stroke();
+            for (int i = 0; i < 8; ++i) {
+                float a = i * 0.7854f;
+                ctx.begin_path();
+                ctx.move_to(cosf(a)*s*0.45f,sinf(a)*s*0.45f);
+                ctx.line_to(cosf(a)*s,sinf(a)*s); ctx.stroke();
+            }
+            break;
+        }
+        case PetalID::kSoil: {
+            float s = fmaxf(8.f, r);
+            ctx.set_fill(0xff6a4a28);
+            ctx.set_stroke(0xff403018);
+            ctx.set_line_width(2.2f);
+            ctx.begin_path();
+            ctx.ellipse(0, 0, s * 1.05f, s * 0.85f);
+            ctx.fill(); ctx.stroke();
+            break;
+        }
+        case PetalID::kAir: {
+            float s = fmaxf(8.f, r);
+            ctx.set_fill(0x66c8e8ff);
+            ctx.set_stroke(0xff88b0d0);
+            ctx.set_line_width(2.2f);
+            ctx.begin_path(); ctx.arc(0,0,s); ctx.fill(); ctx.stroke();
+            ctx.set_fill(0xffffffff);
+            ctx.begin_path(); ctx.arc(0,0,s*0.45f); ctx.fill();
+            break;
+        }
+        case PetalID::kBasil: {
+            float s = fmaxf(8.f, r);
+            ctx.set_fill(0xff4aaa38);
+            ctx.set_stroke(0xff287820);
+            ctx.set_line_width(2.2f);
+            ctx.begin_path();
+            ctx.move_to(0,-s); ctx.qcurve_to(s*0.9f,0,0,s); ctx.qcurve_to(-s*0.9f,0,0,-s);
+            ctx.fill(); ctx.stroke();
+            ctx.begin_path(); ctx.move_to(0,-s*0.7f); ctx.line_to(0,s*0.7f); ctx.stroke();
+            break;
+        }
+        case PetalID::kCotton: {
+            float s = fmaxf(8.f, r);
+            ctx.set_fill(0xfff0f0f8);
+            ctx.set_stroke(0xffc0c0d0);
+            ctx.set_line_width(2.2f);
+            ctx.begin_path();
+            ctx.ellipse(0, 0, s * 1.05f, s * 0.85f);
+            ctx.fill(); ctx.stroke();
+            ctx.begin_path(); ctx.arc(-s*0.35f, 0, s*0.45f); ctx.fill();
+            ctx.begin_path(); ctx.arc(s*0.35f, 0, s*0.4f); ctx.fill();
+            break;
+        }
+        case PetalID::kRubber: {
+            float s = fmaxf(8.f, r);
+            ctx.set_fill(0xff404050);
+            ctx.set_stroke(0xff202028);
+            ctx.set_line_width(2.2f);
+            ctx.begin_path(); ctx.arc(0,0,s); ctx.fill(); ctx.stroke();
+            ctx.set_fill(0xffffffff);
+            ctx.begin_path(); ctx.arc(0,0,s*0.45f); ctx.fill();
+            break;
+        }
+        case PetalID::kGrapes: {
+            float s = fmaxf(8.f, r);
+            ctx.set_fill(0xff7040a0);
+            ctx.set_stroke(0xff482070);
+            ctx.set_line_width(2.2f);
+            for (int i = 0; i < 3; ++i) {
+                float a = i * 2.094395f;
+                ctx.begin_path();
+                ctx.arc(cosf(a)*s*0.35f, sinf(a)*s*0.35f, s*0.42f);
+                ctx.fill(); ctx.stroke();
+            }
+            break;
+        }
+        case PetalID::kDeadLeaf: {
+            float s = fmaxf(8.f, r);
+            ctx.set_fill(0xffb07030);
+            ctx.set_stroke(0xff804818);
+            ctx.set_line_width(2.2f);
+            ctx.begin_path();
+            ctx.move_to(0,-s); ctx.qcurve_to(s*0.9f,0,0,s); ctx.qcurve_to(-s*0.9f,0,0,-s);
+            ctx.fill(); ctx.stroke();
+            ctx.begin_path(); ctx.move_to(0,-s*0.7f); ctx.line_to(0,s*0.7f); ctx.stroke();
+            break;
+        }
+        case PetalID::kClover: {
+            float s = fmaxf(8.f, r);
+            ctx.set_fill(0xff30a048);
+            ctx.set_stroke(0xff187830);
+            ctx.set_line_width(2.2f);
+            for (int i = 0; i < 3; ++i) {
+                float a = -1.5708f + i * 2.094395f;
+                ctx.begin_path();
+                ctx.ellipse(cosf(a)*s*0.35f, sinf(a)*s*0.35f, s*0.38f, s*0.5f);
+                ctx.fill();
+            }
+            ctx.begin_path(); ctx.move_to(0,0); ctx.line_to(0,s); ctx.stroke();
+            break;
+        }
+        case PetalID::kTotem: {
+            float s = fmaxf(8.f, r);
+            ctx.set_fill(0xffc8a060);
+            ctx.set_stroke(0xff8a6838);
+            ctx.set_line_width(2.2f);
+            ctx.begin_path(); ctx.round_rect(-s*0.45f,-s,s*0.9f,s*2.f,2.f); ctx.fill(); ctx.stroke();
+            ctx.set_fill(0x66ffffff);
+            ctx.begin_path(); ctx.arc(0,-s*0.35f,s*0.22f); ctx.fill();
+            break;
+        }
+        case PetalID::kRoot: {
+            float s = fmaxf(8.f, r);
+            ctx.set_fill(0xff8a6038);
+            ctx.set_stroke(0xff5a3820);
+            ctx.set_line_width(2.2f);
+            ctx.begin_path(); ctx.move_to(0,-s); ctx.line_to(s*0.35f,s); ctx.line_to(0,s*0.6f); ctx.line_to(-s*0.35f,s);
+            ctx.close_path(); ctx.fill(); ctx.stroke();
+            break;
+        }
+        case PetalID::kLaser: {
+            float s = fmaxf(8.f, r);
+            ctx.set_fill(0xffff4040);
+            ctx.set_stroke(0xffaa2020);
+            ctx.set_line_width(2.2f);
+            ctx.begin_path(); ctx.round_rect(-s*0.25f,-s,s*0.5f,s*2.f,1.5f); ctx.fill(); ctx.stroke();
+            ctx.set_fill(0xffffffff); ctx.begin_path(); ctx.arc(0,-s*0.7f,s*0.18f); ctx.fill();
+            break;
+        }
+        case PetalID::kElectricWeb: {
+            float s = fmaxf(8.f, r);
+            ctx.set_fill(0xff60d0ff);
+            ctx.set_stroke(0xff2080c0);
+            ctx.set_line_width(2.2f);
+            ctx.begin_path(); ctx.arc(0,0,s); ctx.stroke();
+            for (int i = 0; i < 6; ++i) {
+                float a = i * 1.0472f;
+                ctx.begin_path(); ctx.move_to(0,0); ctx.line_to(cosf(a)*s,sinf(a)*s); ctx.stroke();
+            }
+            break;
+        }
+        case PetalID::kSponge: {
+            float s = fmaxf(8.f, r);
+            ctx.set_fill(0xffffd060);
+            ctx.set_stroke(0xffcc9830);
+            ctx.set_line_width(2.2f);
+            ctx.begin_path();
+            ctx.ellipse(0, 0, s * 1.05f, s * 0.85f);
+            ctx.fill(); ctx.stroke();
+            break;
+        }
+        case PetalID::kFang: {
+            float s = fmaxf(8.f, r);
+            ctx.set_fill(0xffe8e8e8);
+            ctx.set_stroke(0xff909090);
+            ctx.set_line_width(2.2f);
+            ctx.round_line_join(); ctx.begin_path();
+            ctx.move_to(s,0); ctx.line_to(-s*0.55f,s*0.75f); ctx.line_to(-s*0.55f,-s*0.75f);
+            ctx.close_path(); ctx.fill(); ctx.stroke();
+            break;
+        }
+        case PetalID::kClaw: {
+            float s = fmaxf(8.f, r);
+            ctx.set_fill(0xffd0a070);
+            ctx.set_stroke(0xff8a6038);
+            ctx.set_line_width(2.2f);
+            ctx.round_line_join(); ctx.begin_path();
+            ctx.move_to(s,0); ctx.line_to(-s*0.55f,s*0.75f); ctx.line_to(-s*0.55f,-s*0.75f);
+            ctx.close_path(); ctx.fill(); ctx.stroke();
+            break;
+        }
+        case PetalID::kLightBulb: {
+            float s = fmaxf(8.f, r);
+            ctx.set_fill(0xfffff0a0);
+            ctx.set_stroke(0xffd0b040);
+            ctx.set_line_width(2.2f);
+            ctx.begin_path();
+            ctx.arc(0, 0, s * 0.95f);
+            ctx.fill(); ctx.stroke();
+            ctx.set_fill(0x66ffffff);
+            ctx.begin_path();
+            ctx.arc(-s * 0.25f, -s * 0.25f, s * 0.28f);
+            ctx.fill();
+            break;
+        }
+        case PetalID::kPoo: {
+            // Classic swirly drop — stacked blobs, not a flat rarity oval.
+            float s = fmaxf(8.f, r);
+            ctx.set_line_width(2.0f);
+            ctx.round_line_cap();
+            ctx.round_line_join();
+            // Base puddle
+            ctx.set_fill(0xff6b4420);
+            ctx.set_stroke(0xff3d2810);
+            ctx.begin_path();
+            ctx.ellipse(0, s * 0.35f, s * 1.05f, s * 0.42f);
+            ctx.fill(); ctx.stroke();
+            // Mid scoop
+            ctx.set_fill(0xff8a5a28);
+            ctx.begin_path();
+            ctx.ellipse(-s * 0.12f, s * 0.05f, s * 0.78f, s * 0.55f);
+            ctx.fill(); ctx.stroke();
+            // Top swirl
+            ctx.set_fill(0xffa87030);
+            ctx.begin_path();
+            ctx.ellipse(s * 0.08f, -s * 0.35f, s * 0.55f, s * 0.48f);
+            ctx.fill(); ctx.stroke();
+            // Tip curl
+            ctx.set_fill(0xffc09048);
+            ctx.begin_path();
+            ctx.arc(s * 0.18f, -s * 0.72f, s * 0.22f);
+            ctx.fill();
+            // Soft highlight
+            ctx.set_fill(0x66ffe0a0);
+            ctx.begin_path();
+            ctx.ellipse(-s * 0.28f, -s * 0.15f, s * 0.22f, s * 0.14f);
+            ctx.fill();
+            break;
+        }
+        case PetalID::kAnkh: {
+            float s = fmaxf(8.f, r);
+            ctx.set_fill(0xffe8c040);
+            ctx.set_stroke(0xffa08020);
+            ctx.set_line_width(2.2f);
+            ctx.begin_path(); ctx.arc(0,-s*0.45f,s*0.35f); ctx.stroke();
+            ctx.begin_path(); ctx.move_to(0,-s*0.1f); ctx.line_to(0,s);
+            ctx.move_to(-s*0.45f,s*0.15f); ctx.line_to(s*0.45f,s*0.15f); ctx.stroke();
+            break;
+        }
+        case PetalID::kShovel: {
+            float s = fmaxf(8.f, r);
+            ctx.set_fill(0xff909098);
+            ctx.set_stroke(0xff505058);
+            ctx.set_line_width(2.2f);
+            ctx.begin_path(); ctx.round_rect(-s*0.12f,-s*0.2f,s*0.24f,s*1.3f,1.f); ctx.fill(); ctx.stroke();
+            ctx.begin_path(); ctx.move_to(-s*0.45f,-s*0.2f); ctx.line_to(0,-s); ctx.line_to(s*0.45f,-s*0.2f);
+            ctx.close_path(); ctx.fill(); ctx.stroke();
+            break;
+        }
+        case PetalID::kBandage: {
+            // Classic adhesive bandage — reads clearly at inventory size.
+            float const s = fmaxf(8.f, r);
+            float const hw = s * 1.05f;  // half-width of strip
+            float const hh = s * 0.52f;  // half-height
+            float const pad_w = s * 0.42f;
+            float const pad_h = s * 0.38f;
+            ctx.round_line_cap();
+            ctx.round_line_join();
+            // Soft drop shadow
+            ctx.set_fill(0x28000000);
+            ctx.begin_path();
+            ctx.round_rect(-hw + s * 0.04f, -hh + s * 0.1f, hw * 2.f, hh * 2.f, hh);
+            ctx.fill();
+            // Adhesive wings (warm tan)
+            ctx.set_fill(0xfff0c878);
+            ctx.set_stroke(0xffc89840);
+            ctx.set_line_width(2.2f);
+            ctx.begin_path();
+            ctx.round_rect(-hw, -hh, hw * 2.f, hh * 2.f, hh);
+            ctx.fill();
+            ctx.stroke();
+            // Top highlight on wings
+            ctx.set_stroke(0x66ffffff);
+            ctx.set_line_width(2.0f);
+            ctx.begin_path();
+            ctx.move_to(-hw + s * 0.12f, -hh * 0.55f);
+            ctx.line_to(-pad_w - s * 0.05f, -hh * 0.55f);
+            ctx.move_to(pad_w + s * 0.05f, -hh * 0.55f);
+            ctx.line_to(hw - s * 0.12f, -hh * 0.55f);
+            ctx.stroke();
+            // Perforation dots on left / right adhesive
+            ctx.set_fill(0xffd4a858);
+            for (int side = -1; side <= 1; side += 2) {
+                float bx = side * (hw * 0.62f);
+                for (int row = -1; row <= 1; ++row) {
+                    for (int col = -1; col <= 1; ++col) {
+                        ctx.begin_path();
+                        ctx.arc(bx + col * s * 0.14f, row * s * 0.18f, s * 0.055f);
+                        ctx.fill();
+                    }
+                }
+            }
+            // Center gauze pad (ivory)
+            ctx.set_fill(0xfffff8ee);
+            ctx.set_stroke(0xffd0b888);
+            ctx.set_line_width(1.8f);
+            ctx.begin_path();
+            ctx.round_rect(-pad_w, -pad_h, pad_w * 2.f, pad_h * 2.f, s * 0.1f);
+            ctx.fill();
+            ctx.stroke();
+            // Weave grid on pad
+            ctx.set_stroke(0xffe8dcc0);
+            ctx.set_line_width(1.1f);
+            ctx.begin_path();
+            ctx.move_to(-pad_w * 0.55f, -pad_h * 0.7f);
+            ctx.line_to(-pad_w * 0.55f, pad_h * 0.7f);
+            ctx.move_to(0, -pad_h * 0.7f);
+            ctx.line_to(0, pad_h * 0.7f);
+            ctx.move_to(pad_w * 0.55f, -pad_h * 0.7f);
+            ctx.line_to(pad_w * 0.55f, pad_h * 0.7f);
+            ctx.move_to(-pad_w * 0.7f, -pad_h * 0.35f);
+            ctx.line_to(pad_w * 0.7f, -pad_h * 0.35f);
+            ctx.move_to(-pad_w * 0.7f, pad_h * 0.35f);
+            ctx.line_to(pad_w * 0.7f, pad_h * 0.35f);
+            ctx.stroke();
+            // Red medical cross on pad
+            float cr = s * 0.2f;
+            ctx.set_fill(0xffe04848);
+            ctx.set_stroke(0xffa02828);
+            ctx.set_line_width(1.2f);
+            ctx.begin_path();
+            ctx.round_rect(-cr * 0.35f, -cr, cr * 0.7f, cr * 2.f, cr * 0.2f);
+            ctx.fill();
+            ctx.stroke();
+            ctx.begin_path();
+            ctx.round_rect(-cr, -cr * 0.35f, cr * 2.f, cr * 0.7f, cr * 0.2f);
+            ctx.fill();
+            ctx.stroke();
+            break;
+        }
+        case PetalID::kWax: {
+            float s = fmaxf(8.f, r);
+            ctx.set_fill(0xffffe080);
+            ctx.set_stroke(0xffccb040);
+            ctx.set_line_width(2.2f);
+            ctx.begin_path();
+            for (int i = 0; i < 6; ++i) {
+                float a = i * 1.0472f; float x = cosf(a)*s, y = sinf(a)*s;
+                if (i == 0) ctx.move_to(x,y); else ctx.line_to(x,y);
+            }
+            ctx.close_path(); ctx.fill(); ctx.stroke();
+            ctx.set_fill(0xffffffff); ctx.begin_path(); ctx.arc(0,0,s*0.28f); ctx.fill();
+            break;
+        }
+        case PetalID::kAmulet: {
+            float s = fmaxf(8.f, r);
+            ctx.set_fill(0xffe8c040);
+            ctx.set_stroke(0xff887020);
+            ctx.set_line_width(2.2f);
+            ctx.begin_path(); ctx.arc(0,-s*0.15f,s*0.7f); ctx.fill(); ctx.stroke();
+            ctx.begin_path(); ctx.move_to(0,s*0.4f); ctx.line_to(0,s); ctx.stroke();
+            break;
+        }
+        case PetalID::kBlueberries: {
+            float s = fmaxf(8.f, r);
+            ctx.set_fill(0xff4060c0);
+            ctx.set_stroke(0xff203888);
+            ctx.set_line_width(2.2f);
+            for (int i = 0; i < 3; ++i) {
+                float a = i * 2.094395f;
+                ctx.begin_path();
+                ctx.arc(cosf(a)*s*0.35f, sinf(a)*s*0.35f, s*0.42f);
+                ctx.fill(); ctx.stroke();
+            }
+            break;
+        }
+        case PetalID::kFragment: {
+            float s = fmaxf(8.f, r);
+            ctx.set_fill(0xffa0a8b0);
+            ctx.set_stroke(0xff606870);
+            ctx.set_line_width(2.2f);
+            ctx.round_line_join(); ctx.begin_path();
+            ctx.move_to(s,0); ctx.line_to(-s*0.55f,s*0.75f); ctx.line_to(-s*0.55f,-s*0.75f);
+            ctx.close_path(); ctx.fill(); ctx.stroke();
+            break;
+        }
+        case PetalID::kCogwheel: {
+            float s = fmaxf(8.f, r);
+            ctx.set_fill(0xff909098);
+            ctx.set_stroke(0xff505058);
+            ctx.set_line_width(2.2f);
+            ctx.begin_path();
+            for (int i = 0; i < 6; ++i) {
+                float a = i * 1.0472f; float x = cosf(a)*s, y = sinf(a)*s;
+                if (i == 0) ctx.move_to(x,y); else ctx.line_to(x,y);
+            }
+            ctx.close_path(); ctx.fill(); ctx.stroke();
+            ctx.set_fill(0xffffffff); ctx.begin_path(); ctx.arc(0,0,s*0.28f); ctx.fill();
+            break;
+        }
+        case PetalID::kManaOrb: {
+            float s = fmaxf(8.f, r);
+            ctx.set_fill(0xff60c0ff);
+            ctx.set_stroke(0xff2080c0);
+            ctx.set_line_width(2.2f);
+            ctx.begin_path();
+            ctx.arc(0, 0, s * 0.95f);
+            ctx.fill(); ctx.stroke();
+            ctx.set_fill(0x66ffffff);
+            ctx.begin_path();
+            ctx.arc(-s * 0.25f, -s * 0.25f, s * 0.28f);
+            ctx.fill();
+            break;
+        }
+        case PetalID::kMagicLeaf: {
+            float s = fmaxf(8.f, r);
+            ctx.set_fill(0xff50d080);
+            ctx.set_stroke(0xff208050);
+            ctx.set_line_width(2.2f);
+            ctx.begin_path();
+            ctx.move_to(0,-s); ctx.qcurve_to(s*0.9f,0,0,s); ctx.qcurve_to(-s*0.9f,0,0,-s);
+            ctx.fill(); ctx.stroke();
+            ctx.begin_path(); ctx.move_to(0,-s*0.7f); ctx.line_to(0,s*0.7f); ctx.stroke();
+            break;
+        }
+        case PetalID::kMagicCactus: {
+            float s = fmaxf(8.f, r);
+            ctx.set_fill(0xff40c060);
+            ctx.set_stroke(0xff208038);
+            ctx.set_line_width(2.2f);
+            ctx.begin_path(); ctx.round_rect(-s*0.2f,0,s*0.4f,s,1.5f); ctx.fill();
+            ctx.begin_path(); ctx.arc(0,-s*0.2f,s*0.7f); ctx.fill(); ctx.stroke();
+            break;
+        }
+        case PetalID::kMagicCotton: {
+            float s = fmaxf(8.f, r);
+            ctx.set_fill(0xffe0e8ff);
+            ctx.set_stroke(0xff90a0d0);
+            ctx.set_line_width(2.2f);
+            ctx.begin_path();
+            ctx.ellipse(0, 0, s * 1.05f, s * 0.85f);
+            ctx.fill(); ctx.stroke();
+            ctx.begin_path(); ctx.arc(-s*0.35f, 0, s*0.45f); ctx.fill();
+            ctx.begin_path(); ctx.arc(s*0.35f, 0, s*0.4f); ctx.fill();
+            break;
+        }
+        case PetalID::kMagicEye: {
+            float s = fmaxf(8.f, r);
+            ctx.set_fill(0xffe0f0ff);
+            ctx.set_stroke(0xff6080c0);
+            ctx.set_line_width(2.2f);
+            ctx.begin_path(); ctx.ellipse(0,0,s,s*0.55f); ctx.fill(); ctx.stroke();
+            ctx.set_fill(0xff101018); ctx.begin_path(); ctx.arc(0,0,s*0.28f); ctx.fill();
+            break;
+        }
+        case PetalID::kMagicStinger: {
+            float s = fmaxf(8.f, r);
+            ctx.set_fill(0xff8060c0);
+            ctx.set_stroke(0xff503888);
+            ctx.set_line_width(2.2f);
+            ctx.round_line_join(); ctx.begin_path();
+            ctx.move_to(s,0); ctx.line_to(-s*0.55f,s*0.75f); ctx.line_to(-s*0.55f,-s*0.75f);
+            ctx.close_path(); ctx.fill(); ctx.stroke();
+            break;
+        }
+        case PetalID::kMagicMissile: {
+            float s = fmaxf(8.f, r);
+            ctx.set_fill(0xff80a0ff);
+            ctx.set_stroke(0xff4060c0);
+            ctx.set_line_width(2.2f);
+            ctx.round_line_join(); ctx.begin_path();
+            ctx.move_to(s,0); ctx.line_to(-s*0.55f,s*0.75f); ctx.line_to(-s*0.55f,-s*0.75f);
+            ctx.close_path(); ctx.fill(); ctx.stroke();
+            break;
+        }
+        case PetalID::kMagicStick: {
+            float s = fmaxf(8.f, r);
+            ctx.set_fill(0xffc8a060);
+            ctx.set_stroke(0xff806038);
+            ctx.set_line_width(2.2f);
+            ctx.begin_path(); ctx.round_rect(-s*0.15f,-s,s*0.3f,s*2.f,1.5f); ctx.fill(); ctx.stroke();
+            ctx.begin_path(); ctx.arc(0,-s*0.7f,s*0.35f); ctx.fill();
+            break;
+        }
+        case PetalID::kMagicBubble: {
+            float s = fmaxf(8.f, r);
+            ctx.set_fill(0x88a0e0ff);
+            ctx.set_stroke(0xff5080c0);
+            ctx.set_line_width(2.2f);
+            ctx.begin_path(); ctx.arc(0,0,s); ctx.fill(); ctx.stroke();
+            ctx.set_fill(0xffffffff);
+            ctx.begin_path(); ctx.arc(0,0,s*0.45f); ctx.fill();
+            break;
+        }
+        case PetalID::kTalisman: {
+            float s = fmaxf(8.f, r);
+            ctx.set_fill(0xffd0b060);
+            ctx.set_stroke(0xff887038);
+            ctx.set_line_width(2.2f);
+            ctx.begin_path(); ctx.arc(0,-s*0.15f,s*0.7f); ctx.fill(); ctx.stroke();
+            ctx.begin_path(); ctx.move_to(0,s*0.4f); ctx.line_to(0,s); ctx.stroke();
+            break;
+        }
+        case PetalID::kNazar: {
+            float s = fmaxf(8.f, r);
+            ctx.set_fill(0xff2060c0);
+            ctx.set_stroke(0xff103080);
+            ctx.set_line_width(2.2f);
+            ctx.begin_path(); ctx.ellipse(0,0,s,s*0.55f); ctx.fill(); ctx.stroke();
+            ctx.set_fill(0xff101018); ctx.begin_path(); ctx.arc(0,0,s*0.28f); ctx.fill();
+            break;
+        }
+        case PetalID::kCompass: {
+            float s = fmaxf(8.f, r);
+            ctx.set_fill(0xffe8e0d0);
+            ctx.set_stroke(0xff808070);
+            ctx.set_line_width(2.2f);
+            ctx.begin_path(); ctx.arc(0,0,s); ctx.fill(); ctx.stroke();
+            ctx.set_fill(0xffcc2030); ctx.begin_path();
+            ctx.move_to(0,-s*0.7f); ctx.line_to(s*0.18f,0); ctx.line_to(-s*0.18f,0); ctx.fill();
+            break;
+        }
+        case PetalID::kMimic: {
+            float s = fmaxf(8.f, r);
+            ctx.set_fill(0xff90b090);
+            ctx.set_stroke(0xff507050);
+            ctx.set_line_width(2.2f);
+            ctx.begin_path(); ctx.round_rect(-s*0.8f,-s*0.55f,s*1.6f,s*1.1f,3.f); ctx.fill(); ctx.stroke();
+            ctx.begin_path(); ctx.move_to(-s*0.8f,0); ctx.line_to(s*0.8f,0); ctx.stroke();
+            break;
+        }
+        case PetalID::kPowder: {
+            float s = fmaxf(8.f, r);
+            ctx.set_fill(0xffe0d0a0);
+            ctx.set_stroke(0xffa09060);
+            ctx.set_line_width(2.2f);
+            ctx.begin_path();
+            ctx.ellipse(0, 0, s * 1.05f, s * 0.85f);
+            ctx.fill(); ctx.stroke();
+            ctx.begin_path(); ctx.arc(-s*0.35f, 0, s*0.45f); ctx.fill();
+            ctx.begin_path(); ctx.arc(s*0.35f, 0, s*0.4f); ctx.fill();
+            break;
+        }
+        case PetalID::kRelic: {
+            float s = fmaxf(8.f, r);
+            ctx.set_fill(0xffc0a860);
+            ctx.set_stroke(0xff806838);
+            ctx.set_line_width(2.2f);
+            ctx.begin_path(); ctx.round_rect(-s*0.45f,-s,s*0.9f,s*2.f,2.f); ctx.fill(); ctx.stroke();
+            ctx.set_fill(0x66ffffff);
+            ctx.begin_path(); ctx.arc(0,-s*0.35f,s*0.22f); ctx.fill();
+            break;
+        }
+        case PetalID::kDarkMark: {
+            float s = fmaxf(8.f, r);
+            ctx.set_fill(0xff403050);
+            ctx.set_stroke(0xff201828);
+            ctx.set_line_width(2.2f);
+            ctx.begin_path(); ctx.arc(0,-s*0.15f,s*0.7f); ctx.fill(); ctx.stroke();
+            ctx.begin_path(); ctx.move_to(0,s*0.4f); ctx.line_to(0,s); ctx.stroke();
+            break;
+        }
+        case PetalID::kChampionCrown: {
+            float s = fmaxf(8.f, r);
+            ctx.set_fill(0xffffd040);
+            ctx.set_stroke(0xffc09020);
+            ctx.set_line_width(2.2f);
+            ctx.begin_path(); ctx.move_to(-s,s*0.3f); ctx.line_to(-s*0.6f,-s*0.6f); ctx.line_to(-s*0.2f,0);
+            ctx.line_to(0,-s); ctx.line_to(s*0.2f,0); ctx.line_to(s*0.6f,-s*0.6f); ctx.line_to(s,s*0.3f);
+            ctx.close_path(); ctx.fill(); ctx.stroke();
+            break;
+        }
+        case PetalID::kSoulSplitter: {
+            float s = fmaxf(8.f, r);
+            ctx.set_fill(0xffc0a0ff);
+            ctx.set_stroke(0xff6840b0);
+            ctx.set_line_width(2.2f);
+            ctx.begin_path(); ctx.round_rect(-s*0.8f,-s*0.55f,s*1.6f,s*1.1f,3.f); ctx.fill(); ctx.stroke();
+            ctx.begin_path(); ctx.move_to(-s*0.8f,0); ctx.line_to(s*0.8f,0); ctx.stroke();
+            break;
+        }
+        case PetalID::kGoggles: {
+            float s = fmaxf(8.f, r);
+            ctx.set_fill(0xff404050);
+            ctx.set_stroke(0xff202028);
+            ctx.set_line_width(2.2f);
+            ctx.begin_path(); ctx.ellipse(0,0,s,s*0.55f); ctx.fill(); ctx.stroke();
+            ctx.set_fill(0xff101018); ctx.begin_path(); ctx.arc(0,0,s*0.28f); ctx.fill();
+            break;
+        }
+        case PetalID::kSalve: {
+            // Soft green ointment jar with a white dab on top.
+            float s = fmaxf(8.f, r);
+            ctx.set_fill(0xff6ecf7a);
+            ctx.set_stroke(0xff3a8f48);
+            ctx.set_line_width(2.4f);
+            ctx.begin_path();
+            ctx.round_rect(-s * 0.72f, -s * 0.35f, s * 1.44f, s * 1.05f, s * 0.28f);
+            ctx.fill();
+            ctx.stroke();
+            ctx.set_fill(0xfff5fff6);
+            ctx.set_stroke(0xffc8e8cc);
+            ctx.set_line_width(1.8f);
+            ctx.begin_path();
+            ctx.ellipse(0, -s * 0.55f, s * 0.55f, s * 0.32f);
+            ctx.fill();
+            ctx.stroke();
+            ctx.set_fill(0x66ffffff);
+            ctx.begin_path();
+            ctx.ellipse(-s * 0.22f, -s * 0.05f, s * 0.2f, s * 0.35f);
+            ctx.fill();
+            break;
+        }
 
+        case PetalID::kShell: {
+            float s = fmaxf(8.f, r);
+            ctx.set_fill(0xffe8d0a8);
+            ctx.set_stroke(0xffb09060);
+            ctx.set_line_width(2.2f);
+            ctx.begin_path();
+            ctx.arc(0, 0, s);
+            ctx.fill();
+            ctx.stroke();
+            ctx.set_fill(0xffffffff);
+            ctx.begin_path();
+            ctx.arc(0, 0, s * 0.45f);
+            ctx.fill();
+            break;
+        }
+        case PetalID::kGlass: {
+            float s = fmaxf(8.f, r);
+            ctx.set_fill(0x88c0e8ff);
+            ctx.set_stroke(0xff60a0c8);
+            ctx.set_line_width(2.2f);
+            ctx.begin_path();
+            ctx.move_to(0, -s);
+            ctx.line_to(s * 0.7f, s * 0.2f);
+            ctx.line_to(0, s);
+            ctx.line_to(-s * 0.7f, s * 0.2f);
+            ctx.close_path();
+            ctx.fill();
+            ctx.stroke();
+            break;
+        }
         default: {
             // Normal petal shape tinted by rarity (materials / new craft results).
             assert(id < PetalID::kNumPetals);
@@ -5858,14 +6793,12 @@ void draw_loadout_background(Renderer &ctx, PetalID::T id, float reload, uint8_t
     ctx.rect(-25, -25, 50, 50);
     ctx.fill();
     ctx.clip();
-    // Live durability: missing bottom uses a deepened rarity tint (same hue as
-    // the slot), not a generic white/grey wash — Unusual stays green, etc.
+    // Live durability: missing HP washes from the top (remaining fills upward).
     if (health < 0.995f) {
         float missing = 1.f - health;
         if (missing < 0.f) missing = 0.f;
         if (missing > 1.f) missing = 1.f;
         float h = 50.f * missing;
-        float y = 25.f - h;
         uint8_t const rar = PETAL_DATA[id].rarity % RarityID::kNumRarities;
         uint32_t const base = RARITY_COLORS[rar];
         // Darken toward black while keeping hue, then opaque enough to read.
@@ -5874,7 +6807,7 @@ void draw_loadout_background(Renderer &ctx, PetalID::T id, float reload, uint8_t
         RenderContext wash(&ctx);
         ctx.set_fill(wash_col);
         ctx.begin_path();
-        ctx.rect(-25, y, 50, h);
+        ctx.rect(-25, -25, 50, h);
         ctx.fill();
     }
     if (reload < 1) {

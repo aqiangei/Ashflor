@@ -41,7 +41,13 @@ public:
         // Cap so a tall monitor does not leave a huge empty scroll well.
         float const cap = view_h * 0.72f;
         if (avail > cap) avail = cap;
-        height = avail;
+        // Measure content first; shrink-wrap when it fits so the panel
+        // does not paint a tall empty well under the last controls.
+        Element *body = children[0];
+        body->refactor();
+        float const need = body->height;
+        height = need > 0.f && need < avail ? need : avail;
+        if (height < 1.f) height = 1.f;
         Ui::ScrollContainer::refactor();
     }
 };
@@ -255,14 +261,9 @@ Element *Ui::make_game_topbar() {
         { .fill = 0xffd5ad24, .line_width = 0, .round_radius = Chrome::kRadius }
     );
 
-    // Two rows so seven icons do not crush into one dense strip.
-    Element *row1 = new Ui::HContainer({
-        gear, guild_btn, mob_btn, petal_btn
-    }, 0, 12, { .h_justify = Style::Left, .no_animation = 1 });
-    Element *row2 = new Ui::HContainer({
-        trophy_btn, boost_btn, exit_btn
-    }, 0, 12, { .h_justify = Style::Left, .no_animation = 1 });
-    Element *elt = new Ui::VContainer({ row1, row2 }, 8, 10, {
+    Element *elt = new Ui::HContainer({
+        gear, guild_btn, mob_btn, petal_btn, trophy_btn, boost_btn, exit_btn
+    }, 8, 12, {
         .should_render = [](){
             return Game::alive() && Game::should_render_game_ui();
         },

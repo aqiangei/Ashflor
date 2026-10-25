@@ -21,7 +21,7 @@ using namespace Ui;
 static uint8_t loadout_slot_is_leveled(uint8_t static_pos, PetalID::T id) {
     if (id == PetalID::kNone || id >= PetalID::kNumPetals) return 0;
     if (static_pos >= Game::loadout_count) return 0;
-    if (!Craft::can_level_petal(id) || Game::petal_levels[id] == 0) return 0;
+    if (!Craft::can_level_petal(id) || Craft::petal_level_get(Game::petal_levels, id) == 0) return 0;
     for (uint8_t i = 0; i < static_pos; ++i)
         if (Game::cached_loadout[i] == id) return 0;
     return 1;
@@ -99,6 +99,18 @@ void Ui::ui_swap_petals(uint8_t static_pos1, uint8_t static_pos2) {
     if ((static_pos1 < primary && Recipe::is_bag_only(id2))
         || (static_pos2 < primary && Recipe::is_bag_only(id1)))
         return;
+    // Match server: Corruption cannot leave the primary loadout while alive.
+    // Optimistic R-swap used to move it into secondary, then snap back and
+    // leave the paired secondary gear looking lost/displaced.
+    if (Game::alive()) {
+        auto is_corr = [](PetalID::T id) -> uint8_t {
+            return id != PetalID::kNone && id < PetalID::kNumPetals
+                && PETAL_DATA[id].attributes.corruption;
+        };
+        if ((static_pos1 < primary && static_pos2 >= primary && is_corr(id1))
+            || (static_pos2 < primary && static_pos1 >= primary && is_corr(id2)))
+            return;
+    }
     // Widgets stay glued to their slot index. Remapping static_pos made the
     // next drag operate on a bag index and silently no-op.
     Game::cached_loadout[static_pos1] = id2;
@@ -274,9 +286,12 @@ void Ui::ui_compact_backpack() {
     if (!loadout_editable()) return;
     uint8_t n = Game::loadout_count;
     if (n == 0) return;
-    uint8_t write = n;
+    // Pure bag only [2n, n+MAX). Starting at n used to slide secondary gear
+    // left into holes and look like "副槽位移".
+    uint8_t write = (uint8_t) (2 * n);
     uint8_t end = (uint8_t) (n + MAX_SLOT_COUNT);
     if (end > 2 * MAX_SLOT_COUNT) end = 2 * MAX_SLOT_COUNT;
+    if (write >= end) return;
     for (uint8_t read = write; read < end; ++read) {
         if (Game::cached_loadout[read] == PetalID::kNone) continue;
         if (write != read)
@@ -876,10 +891,11 @@ void UiLoadoutPetal::on_render(Renderer &ctx) {
     else
         draw_loadout_background(ctx, last_id);
     // Unique level badge — top-right of the plate (name sits at the bottom).
-    if (Craft::can_level_petal(last_id) && Game::petal_levels[last_id] > 0
+    if (Craft::can_level_petal(last_id) && Craft::petal_level_get(Game::petal_levels, last_id) > 0
         && loadout_slot_is_leveled(static_pos, last_id)) {
         RenderContext c(&ctx);
-        std::string lv = std::format("Lv.{}", Game::petal_levels[last_id]);
+        std::string lv = std::format("Lv.{}",
+            Craft::petal_level_get(Game::petal_levels, last_id));
         ctx.set_fill(Chrome::kGold);
         ctx.set_stroke(0xff111111);
         ctx.set_text_size(11);

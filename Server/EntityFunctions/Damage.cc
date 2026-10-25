@@ -1,4 +1,5 @@
 #include <Server/EntityFunctions.hh>
+#include <Server/PetalMechanics.hh>
 
 #include <Server/Client.hh>
 #include <Server/DevCheats.hh>
@@ -36,7 +37,7 @@ void inflict_damage(Simulation *sim, EntityID const atk_id, EntityID const def_i
     if (!defender.has_component(kHealth)) return;
     DEBUG_ONLY(assert(!defender.pending_delete);)
     DEBUG_ONLY(assert(defender.has_component(kHealth));)
-    if (defender.immunity_ticks > 0) return;
+    if (defender.immunity_ticks > 0 && type != DamageType::kDeferred) return;
     bool const training = TrainingDummy::is_dummy(defender);
     auto *training_stats = training ? TrainingDummy::personal_stats(sim, defender, atk_id) : nullptr;
     // Local QA: "dev" account godmode (does not use immunity_ticks — portals still work).
@@ -54,51 +55,93 @@ void inflict_damage(Simulation *sim, EntityID const atk_id, EntityID const def_i
         && BitMath::at(defender.flags, EntityFlags::kNoDrops)
         && defender.get_nametag_visible())
         return;
-    // No PvP: players, CPU bots, petals, and flower summons cannot hurt each other
+    // No PvP unless Corruption is active on either side.
     if (sim->ent_alive(atk_id)) {
         Entity &attacker = sim->get_ent(atk_id);
-        if (is_player_faction(sim, attacker) && is_player_faction(sim, defender))
+        if (is_player_faction(sim, attacker) && is_player_faction(sim, defender)
+            && !player_faction_pvp(sim, attacker, defender))
             return;
     }
-    // Flower defensive wiki attrs (Cotton absorb / Talisman evasion / Nazar)
+    // Flower defensive wiki attrs (Cotton absorb / Talisman evasion / Nazar / Wax / Shell / Sponge / Mana)
     if (defender.has_component(kFlower) && !defender.has_component(kMob)
-        && type != DamageType::kReflect) {
+        && type != DamageType::kReflect && type != DamageType::kDeferred) {
         float evade = 0.f;
         float absorb = 0.f;
         float nazar = 0.f;
+        float mana_abs = 0.f;
         for (uint32_t si = 0; si < defender.get_loadout_count(); ++si) {
-            PetalID::T pid = defender.get_loadout_ids(si);
+            PetalID::T pid = effective_petal_id(defender, si);
             if (pid == PetalID::kNone || pid >= PetalID::kNumPetals) continue;
             PetalAttributes const &B = PETAL_DATA[pid].attributes;
             if (B.flower_evasion > evade) evade = B.flower_evasion;
             if (B.damage_absorb > 0.f) absorb += B.damage_absorb;
-            if (B.nazar_charges > 0 && B.nazar_mitigation > nazar)
+            auto &slot = defender.loadout[si];
+            if (B.nazar_charges && slot.effect_charges && B.nazar_mitigation > nazar)
                 nazar = B.nazar_mitigation;
+            if (B.mana_absorb_per > mana_abs) mana_abs = B.mana_absorb_per;
         }
         if (evade > 0.f && frand() < evade)
             return;
+        // Wax consumes a slot charge and destroys the intercepted projectile.
+        if (type == DamageType::kContact && sim->ent_alive(atk_id)
+            && petal_projectile(sim->get_ent(atk_id))) {
+            for (uint32_t si = 0; si < defender.get_loadout_count(); ++si) {
+                auto pid = effective_petal_id(defender, si);
+                auto &slot = defender.loadout[si];
+                if (pid != PetalID::kNone && PETAL_DATA[pid].attributes.wax_block
+                    && slot.effect_charges) {
+                    --slot.effect_charges;
+                    sim->request_delete(atk_id);
+                    return;
+                }
+            }
+        }
+        // Shell / Amulet shield pool
+        if (defender.flower_shield > 0.f && amt > 0.f) {
+            float take = fminf(defender.flower_shield, amt);
+            defender.flower_shield -= take;
+            amt -= take;
+            if (amt <= 0.f) return;
+        }
+        // Magic Cotton: spend mana to cancel damage (mana_absorb_per = dmg per mana)
+        if (mana_abs > 0.f && defender.mana > 0.f && amt > 0.f) {
+            float can = defender.mana * mana_abs;
+            float take = fminf(can, amt);
+            defender.mana -= take / mana_abs;
+            if (defender.mana < 0.f) defender.mana = 0.f;
+            amt -= take;
+            if (amt <= 0.f) return;
+        }
         if (absorb > 0.f) amt = fmaxf(0.f, amt - absorb);
-        if (nazar > 0.f) amt *= fmaxf(0.05f, 1.f - nazar);
+        if (nazar > 0.f) {
+            amt *= fmaxf(0.02f, 1.f - nazar);
+            for (uint32_t si = 0; si < defender.get_loadout_count(); ++si) {
+                auto pid = effective_petal_id(defender, si);
+                auto &slot = defender.loadout[si];
+                if (pid != PetalID::kNone && slot.effect_charges
+                    && PETAL_DATA[pid].attributes.nazar_mitigation == nazar) {
+                    --slot.effect_charges;
+                    break;
+                }
+            }
+        }
+    }
+    if (type == DamageType::kContact && defender.has_component(kPetal)) {
+        // Planted Meteor crater: solid obstacle, not a disposable hit sponge.
+        // Orbit HP ×40 still melts vs Unique-zone body damage on first touch.
+        if (petal_is_meteor(defender.get_petal_id())
+            && defender.get_split_projectile())
+            return;
+        auto const &a = PETAL_DATA[defender.get_petal_id()].attributes;
+        if (a.phase_through || (a.petal_evasion > 0.f && frand() < a.petal_evasion)) return;
     }
     // Petal contact modifiers (read live from PETAL_DATA).
     if (type == DamageType::kContact && sim->ent_alive(atk_id)) {
         Entity &atk = sim->get_ent(atk_id);
         if (atk.has_component(kPetal)) {
-            // Glass: phase through — petal takes no contact durability loss as defender
-            if (defender.has_component(kPetal)) {
-                PetalAttributes const &Pd = PETAL_DATA[defender.get_petal_id()].attributes;
-                if (Pd.phase_through)
-                    return;
-            }
             PetalAttributes const &A = PETAL_DATA[atk.get_petal_id()].attributes;
-            // Wiki: petal evasion (Poker Chip) — chance to take no durability hit as defender petal
-            if (defender.has_component(kPetal)) {
-                PetalAttributes const &D = PETAL_DATA[defender.get_petal_id()].attributes;
-                if (D.petal_evasion > 0.f && frand() < D.petal_evasion)
-                    return;
-                if (A.vs_projectile_factor > 1.f)
-                    amt *= A.vs_projectile_factor;
-            }
+            if (A.vs_projectile_factor > 1.f && petal_projectile(defender))
+                amt *= A.vs_projectile_factor;
             // Wiki: Glass hit interval — skip if recently hit by this petal instance
             if (A.hit_interval_seconds > 0.f) {
                 game_tick_t need = (game_tick_t)(A.hit_interval_seconds * TPS);
@@ -116,7 +159,7 @@ void inflict_damage(Simulation *sim, EntityID const atk_id, EntityID const def_i
                 Entity &flower = sim->get_ent(atk.get_parent());
                 if (flower.has_component(kFlower)) {
                     for (uint32_t si = 0; si < flower.get_loadout_count(); ++si) {
-                        PetalID::T pid = flower.get_loadout_ids(si);
+                        PetalID::T pid = effective_petal_id(flower, si);
                         if (pid == PetalID::kNone || pid >= PetalID::kNumPetals) continue;
                         crit_p += PETAL_DATA[pid].attributes.luck * 0.04f;
                     }
@@ -124,6 +167,13 @@ void inflict_damage(Simulation *sim, EntityID const atk_id, EntityID const def_i
             }
             if (crit_p > 0.f && frand() < crit_p)
                 amt *= (A.crit_factor > 1.f ? A.crit_factor : 35.f);
+            // Domino: roll damage between current and domino_max
+            if (A.domino_max_damage > 0.f) {
+                float lo = atk.damage;
+                float hi = A.domino_max_damage;
+                if (hi < lo) { float t = lo; lo = hi; hi = t; }
+                amt = lo + frand() * (hi - lo);
+            }
             // Wiki: Bean solo bonus
             if (A.solo_damage_factor > 1.f && sim->ent_alive(atk.get_parent())) {
                 Entity &flower = sim->get_ent(atk.get_parent());
@@ -154,9 +204,23 @@ void inflict_damage(Simulation *sim, EntityID const atk_id, EntityID const def_i
                 && defender.max_health > 0.f
                 && defender.health / defender.max_health <= A.execute_threshold)
                 amt *= (A.execute_factor > 0.f ? A.execute_factor : 1.5f);
+            // Dark Mark: petal applies a brief vulnerability mark
+            if (A.dark_mark) {
+                game_tick_t mark = (game_tick_t)(4 * TPS);
+                if (defender.dark_marked_ticks < mark)
+                    defender.dark_marked_ticks = mark;
+            }
             float armor_mit = defender.armor;
-            if (A.armor_shred > 0.f)
+            if (A.armor_shred > 0.f) {
                 armor_mit = fmaxf(0.f, armor_mit - A.armor_shred);
+                // Track only actual removed armor and restore it on expiry.
+                if (A.armor_shred_seconds > 0.f) {
+                    float removed = defender.armor - armor_mit;
+                    defender.armor_shredded += removed;
+                    defender.armor = armor_mit;
+                    defender.armor_shred_ticks = (game_tick_t)(A.armor_shred_seconds * TPS);
+                }
+            }
             if (A.armor_penetration > 0.f) {
                 float pen = A.armor_penetration;
                 if (pen > 1.f) pen = 1.f;
@@ -176,6 +240,7 @@ void inflict_damage(Simulation *sim, EntityID const atk_id, EntityID const def_i
     } else if (type == DamageType::kPoison) {
         amt -= defender.poison_armor;
     }
+    if (defender.dark_marked_ticks && type != DamageType::kDeferred) amt *= 1.25f;
     // Shield Sentinel: frontal damage reduction (~60% when hit from facing arc)
     if (type == DamageType::kContact
         && defender.has_component(kMob)
@@ -193,6 +258,12 @@ void inflict_damage(Simulation *sim, EntityID const atk_id, EntityID const def_i
                 amt *= 0.4f;
         }
     }
+    // Wiki Bone: each hit halves armor — including fully blocked hits (amt≤0).
+    if (type == DamageType::kContact
+        && defender.has_component(kPetal)
+        && defender.armor > 0.f
+        && petal_is_bone(defender.get_petal_id()))
+        defender.armor *= 0.5f;
     if (!is_finite(amt) || amt <= 0) return;
     // Petal vs mob contact: hits = ceil(petal_hp / hit_damage).
     if (type == DamageType::kContact
@@ -203,8 +274,24 @@ void inflict_damage(Simulation *sim, EntityID const atk_id, EntityID const def_i
         if (hits < 1.f) hits = 1.f;
         amt = defender.max_health / hits;
     }
+    if (defender.has_component(kFlower) && !defender.has_component(kMob)
+        && (type == DamageType::kContact || type == DamageType::kSplash)) {
+        float delay = 0.f;
+        for (uint32_t si = 0; si < defender.get_loadout_count(); ++si) {
+            auto pid = effective_petal_id(defender, si);
+            if (pid != PetalID::kNone) delay = fmaxf(delay, PETAL_DATA[pid].attributes.damage_delay_seconds);
+        }
+        if (delay > 0.f) {
+            if (!defender.pending_damage_ticks)
+                defender.pending_damage_ticks = (game_tick_t)fmaxf(1.f, delay * TPS);
+            defender.pending_damage += amt;
+            defender.pending_damage_dealer = atk_id;
+            defender.powder_suppressed_ticks = 3 * TPS;
+            return;
+        }
+    }
     //if (amt <= defender.armor) return;
-    float old_health = defender.health;
+    double old_health = defender.health;
     defender.set_damaged(1);
     float damage_dealt;
     if (training) {
@@ -213,19 +300,67 @@ void inflict_damage(Simulation *sim, EntityID const atk_id, EntityID const def_i
         defender.health = defender.max_health;
         damage_dealt = amt;
     } else {
-        defender.health = fclamp(defender.health - amt, 0, defender.health);
+        // High-tier mobs exceed float's unit precision (Unique Hornet ~1.6B
+        // HP). Keep subtraction in double so low-damage hits still accumulate.
+        defender.health = std::fmax(0.0, defender.health - (double)amt);
         damage_dealt = old_health - defender.health;
     }
-    // Wiki Bone: each hit halves remaining petal armor (after mitigation).
-    if (type == DamageType::kContact
-        && damage_dealt > 0.f
-        && defender.has_component(kPetal)
-        && defender.armor > 0.f) {
-        PetalID::T const pid = defender.get_petal_id();
-        if (pid < PetalID::kNumPetals
-            && PETAL_DATA[pid].name
-            && std::strcmp(PETAL_DATA[pid].name, "Bone") == 0)
-            defender.armor *= 0.5f;
+    // Bandage / Ankh: intercept lethal hits on flowers
+    if (!training && defender.health <= 0.f
+        && defender.has_component(kFlower) && !defender.has_component(kMob)) {
+        float death_delay_s = 0.f;
+        for (uint32_t si = 0; si < defender.get_loadout_count(); ++si) {
+            PetalID::T pid = effective_petal_id(defender, si);
+            if (pid == PetalID::kNone || pid >= PetalID::kNumPetals) continue;
+            PetalAttributes const &B = PETAL_DATA[pid].attributes;
+            if (B.death_delay_seconds > death_delay_s)
+                death_delay_s = B.death_delay_seconds;
+        }
+        if (death_delay_s > 0.f && !defender.death_delay_used && defender.death_delay_ticks == 0) {
+            defender.death_delay_used = 1;
+            defender.health = 1.f;
+            defender.death_delay_ticks = (game_tick_t)(death_delay_s * TPS);
+            if (defender.death_delay_ticks < 1) defender.death_delay_ticks = 1;
+            defender.immunity_ticks = defender.death_delay_ticks;
+            damage_dealt = old_health - 1.f;
+            if (damage_dealt < 0.f) damage_dealt = 0.f;
+        }
+    }
+    if (damage_dealt > 0.f && defender.has_component(kFlower))
+        defender.powder_suppressed_ticks = 3 * TPS;
+    defender.set_hit_damage(defender.get_hit_damage() + damage_dealt);
+    // Battery: discharge lightning when the flower is hit.
+    if (damage_dealt > 0.f
+        && type != DamageType::kReflect
+        && defender.has_component(kFlower) && !defender.has_component(kMob)) {
+        for (uint32_t si = 0; si < defender.get_loadout_count(); ++si) {
+            PetalID::T pid = effective_petal_id(defender, si);
+            if (pid == PetalID::kNone || pid >= PetalID::kNumPetals) continue;
+            PetalAttributes const &B = PETAL_DATA[pid].attributes;
+            auto &slot = defender.loadout[si];
+            if (B.battery_charges == 0 || B.lightning_damage <= 0.f || !slot.effect_charges) continue;
+            --slot.effect_charges;
+            float const R = 200.f;
+            float const px = defender.get_x();
+            float const py = defender.get_y();
+            float flash = B.lightning_damage;
+            uint8_t left = B.lightning_chains > 0 ? B.lightning_chains : 1;
+            EntityID team = defender.get_team();
+            EntityID src = defender.id;
+            sim->spatial_hash.query(px, py, R, R, [&](Simulation *s, Entity &ent) {
+                if (left == 0) return;
+                if (!ent.has_component(kHealth)) return;
+                if (ent.get_team() == team) return;
+                if (ent.has_component(kPetal) || ent.has_component(kDrop)) return;
+                float dx = ent.get_x() - px;
+                float dy = ent.get_y() - py;
+                if (dx * dx + dy * dy > R * R) return;
+                --left;
+                inflict_damage(s, src, ent.id, flash, DamageType::kSplash);
+                flash *= 0.65f;
+            });
+            break; // one battery discharge per hit
+        }
     }
     // Record before reflection can kill the source. All player-owned damage,
     // including reflection and summons, contributes to the personal claim.
@@ -252,10 +387,11 @@ void inflict_damage(Simulation *sim, EntityID const atk_id, EntityID const def_i
             && type != DamageType::kReflect
             && type != DamageType::kPoison
             && type != DamageType::kBurn) {
-            float const R = 380.f;
+            // Termite psionic link — keep tight so packs don't feel map-wide shared HP.
+            float const R = 180.f;
             float const px = defender.get_x();
             float const py = defender.get_y();
-            float const share = damage_dealt * 0.35f;
+            float const share = damage_dealt * 0.22f;
             EntityID skip = def_id;
             EntityID src = atk_id;
             ++share_depth;
@@ -279,14 +415,16 @@ void inflict_damage(Simulation *sim, EntityID const atk_id, EntityID const def_i
         uint32_t start = ceilf((defender.max_health - old_health) / defender.max_health * num_waves);
         uint32_t end = ceilf((defender.max_health - defender.health) / defender.max_health * num_waves);
         if (defender.health <= 0) end = num_waves + 1;
+        uint8_t hole_r = defender.get_rarity();
         for (uint32_t i = start; i < end; ++i) {
             for (MobID::T mob_id : ANTHOLE_SPAWNS[i]) {
                 Entity &child = alloc_mob(
                     sim, mob_id, 
                     defender.get_x(), defender.get_y(), 
-                    defender.get_team(), [](Entity &mob) {
+                    defender.get_team(), [hole_r](Entity &mob) {
                     mob.score_reward = MOB_DATA[mob.get_mob_id()].xp;
                     BitMath::set(mob.flags, EntityFlags::kHasCulling);
+                    apply_mob_live_rarity(mob, hole_r);
                 });
                 child.set_parent(defender.id);
                 child.target = defender.target;
@@ -303,6 +441,20 @@ void inflict_damage(Simulation *sim, EntityID const atk_id, EntityID const def_i
     */
     if (!sim->ent_exists(atk_id)) return;
     Entity &attacker = sim->get_ent(atk_id);
+
+    // Resolve the committed contact hit before reflection or source teardown.
+    // Fang has only one durability at low tiers: breaking on this contact must
+    // not cancel the heal earned by the very same hit.
+    if (type == DamageType::kContact && attacker.has_component(kPetal) && damage_dealt > 0.f
+        && sim->ent_alive(attacker.get_parent())) {
+        auto const &a = PETAL_DATA[attacker.get_petal_id()].attributes;
+        auto &owner = sim->get_ent(attacker.get_parent());
+        if (owner.has_component(kFlower) && owner.has_component(kHealth)) {
+            if (a.on_hit_heal > 0.f) inflict_heal(sim, owner, a.on_hit_heal);
+            if (a.on_hit_heal_ratio > 0.f)
+                inflict_heal(sim, owner, damage_dealt * a.on_hit_heal_ratio);
+        }
+    }
 
     if (type != DamageType::kReflect && defender.damage_reflection > 0)
         inflict_damage(sim, def_id, attacker.base_entity, damage_dealt * defender.damage_reflection, DamageType::kReflect);
@@ -337,7 +489,22 @@ void inflict_damage(Simulation *sim, EntityID const atk_id, EntityID const def_i
 
         if (type == DamageType::kContact && defender.poison_ticks < attacker.poison_damage.time * TPS) {
             defender.poison_ticks = attacker.poison_damage.time * TPS;
-            defender.poison_inflicted = attacker.poison_damage.damage / TPS;
+            float pdot = attacker.poison_damage.damage / TPS;
+            // Privet Berry: amp poison DPS while the attacker flower equips it.
+            if (sim->ent_alive(attacker.base_entity)) {
+                Entity &own = sim->get_ent(attacker.base_entity);
+                if (own.has_component(kFlower) && !own.has_component(kMob)) {
+                    float amp = 0.f;
+                    for (uint32_t si = 0; si < own.get_loadout_count(); ++si) {
+                        PetalID::T pid = effective_petal_id(own, si);
+                        if (pid == PetalID::kNone || pid >= PetalID::kNumPetals) continue;
+                        float a = PETAL_DATA[pid].attributes.privet_extra_poison;
+                        if (a > amp) amp = a;
+                    }
+                    if (amp > 0.f) pdot *= (1.f + amp);
+                }
+            }
+            defender.poison_inflicted = pdot;
             defender.poison_dealer = defender.last_damaged_by;
         }
         if (type == DamageType::kContact && defender.burn_ticks < attacker.burn_damage.time * TPS) {
@@ -355,16 +522,6 @@ void inflict_damage(Simulation *sim, EntityID const atk_id, EntityID const def_i
             game_tick_t sn = (game_tick_t)(A.snare_seconds * TPS);
             if (training_stats) training_stats->slow_ticks = std::max(training_stats->slow_ticks, sn);
             else if (defender.snare_ticks < sn) defender.snare_ticks = sn;
-        }
-        if (A.on_hit_heal > 0.f && sim->ent_alive(attacker.get_parent())) {
-            Entity &flower = sim->get_ent(attacker.get_parent());
-            if (flower.has_component(kFlower) && flower.has_component(kHealth))
-                inflict_heal(sim, flower, A.on_hit_heal);
-        }
-        if (A.on_hit_heal_ratio > 0.f && sim->ent_alive(attacker.get_parent())) {
-            Entity &flower = sim->get_ent(attacker.get_parent());
-            if (flower.has_component(kFlower) && flower.has_component(kHealth))
-                inflict_heal(sim, flower, damage_dealt * A.on_hit_heal_ratio);
         }
         // Lightning chain to nearby enemies
         if (A.lightning_damage > 0.f && A.lightning_chains > 1) {
@@ -428,18 +585,29 @@ void inflict_damage(Simulation *sim, EntityID const atk_id, EntityID const def_i
 
 void inflict_heal(Simulation *sim, Entity &ent, float amt) {
     DEBUG_ONLY(assert(ent.has_component(kHealth));)
-    if (ent.pending_delete || ent.health <= 0) return;
+    if (!is_finite(amt) || amt <= 0.f || ent.pending_delete || ent.health <= 0) return;
     if (ent.dandy_ticks > 0) return;
     // Basil: amplify healing received
     if (ent.has_component(kFlower) && !ent.has_component(kMob) && amt > 0.f) {
         float amp = 0.f;
         for (uint32_t si = 0; si < ent.get_loadout_count(); ++si) {
-            PetalID::T pid = ent.get_loadout_ids(si);
+            PetalID::T pid = effective_petal_id(ent, si);
             if (pid == PetalID::kNone || pid >= PetalID::kNumPetals) continue;
             float a = PETAL_DATA[pid].attributes.heal_amp;
             if (a > amp) amp = a;
         }
         if (amp > 0.f) amt *= (1.f + amp);
     }
-    ent.health = fclamp(ent.health + amt, 0, ent.max_health);
+    float room = ent.max_health - ent.health;
+    if (room < 0.f) room = 0.f;
+    float applied = fminf(amt, room);
+    ent.health = std::fmin(ent.max_health, std::fmax(0.0, ent.health + applied));
+    // Amulet: overheal → flower_shield
+    float over = amt - applied;
+    if (over > 0.f && ent.has_component(kFlower) && !ent.has_component(kMob)
+        && ent.overheal_shield_ratio > 0.f) {
+        ent.flower_shield += over * ent.overheal_shield_ratio;
+        float cap = ent.max_health;
+        if (ent.flower_shield > cap) ent.flower_shield = cap;
+    }
 }

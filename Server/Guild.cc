@@ -349,11 +349,11 @@ void Guild::save() {
             << (g.leader_account.empty() ? "-" : g.leader_account) << ' '
             << (g.leader_play.empty() ? "-" : g.leader_play) << '\n';
         std::string anno = g.announcement;
+        // All whitespace → '_' so UTF-8 Chinese + spaces survive `>>` load.
         for (char &c : anno) {
-            if (c == ' ' || c == '\t') c = '_';
-            if (c == '\n' || c == '\r') c = ' ';
+            if (c == ' ' || c == '\t' || c == '\n' || c == '\r') c = '_';
         }
-        while (!anno.empty() && anno.back() == ' ') anno.pop_back();
+        while (!anno.empty() && anno.back() == '_') anno.pop_back();
         out << "A " << (anno.empty() ? "-" : anno) << '\n';
         out << "M " << g.members.size() << '\n';
         for (GuildMemberRec const &m : g.members) {
@@ -392,9 +392,15 @@ void Guild::load() {
             cur = &GUILDS[info.name];
             members_left = 0;
         } else if (tag == "A" && cur != nullptr) {
+            // Rest of line (not a single >> token) so UTF-8 is intact.
             std::string anno;
-            if (!(ls >> anno)) continue;
-            if (anno != "-") {
+            std::getline(ls, anno);
+            while (!anno.empty() && (anno.front() == ' ' || anno.front() == '\t'))
+                anno.erase(anno.begin());
+            while (!anno.empty()
+                && (anno.back() == ' ' || anno.back() == '\t' || anno.back() == '\r'))
+                anno.pop_back();
+            if (!anno.empty() && anno != "-") {
                 for (char &c : anno) if (c == '_') c = ' ';
                 cur->announcement = anno;
             }

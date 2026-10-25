@@ -4,18 +4,63 @@
 #include <Helpers/Math.hh>
 
 #include <array>
+#include <cmath>
 #include <cstdint>
 
-// Reference ×3-per-tier table (community florr feel). Petal ladders in PETAL_DATA are
-// already baked with this curve — do NOT multiply again at spawn. Use for tools /
-// new petals authored at Common base, or zone/UI display helpers.
-// Common→1 … Mythic→243; Ultra≈500; Super≈1000; Unique≈2000.
+// Wiki florr rarity ladders (Eternal folded into Unique). One source of truth:
+// petals bake PETAL_COMBAT / PETAL_HEAL into PETAL_DATA; live mobs scale with
+// MOB_HP / MOB_DMG relative to baked MobData.rarity.
+
+// Petal combat + mob contact damage: ×3 per tier → Unique = 6561× Common.
 inline float rarity_combat_mult(uint8_t rarity) {
     static float const kMult[RarityID::kNumRarities] = {
-        1.f, 3.f, 9.f, 27.f, 81.f, 243.f, 500.f, 1000.f, 2000.f
+        1.f, 3.f, 9.f, 27.f, 81.f, 243.f, 729.f, 2187.f, 6561.f
     };
     if (rarity >= RarityID::kNumRarities) return 1.f;
     return kMult[rarity];
+}
+
+// Heal / armor-style petal attrs: ×3 to Mythic, then ×√3 per tier.
+inline float rarity_heal_mult(uint8_t rarity) {
+    static float const kSqrt3 = 1.73205080757f;
+    static float const kMult[RarityID::kNumRarities] = {
+        1.f,
+        3.f,
+        9.f,
+        27.f,
+        81.f,
+        243.f,
+        243.f * kSqrt3,             // Ultra ≈ 420.889
+        729.f,                      // Super
+        729.f * kSqrt3              // Unique ≈ 1262.665
+    };
+    if (rarity >= RarityID::kNumRarities) return 1.f;
+    return kMult[rarity];
+}
+
+// Mob HP vs petal combat (×3/tier → Unique 6561×). Through Mythic stays
+// wiki-steep; Ultra+ used to jump to 145800/4e6/2.6e7 so Unique petals could
+// not meaningfully chip Ultra trash. Retuned so Unique≈4× Ultra HP pad,
+// Super≈21×, Unique-mob≈100× (bosses add a separate pad in Simulation).
+inline float rarity_mob_hp_mult(uint8_t rarity) {
+    static float const kMult[RarityID::kNumRarities] = {
+        1.f,
+        3.75f,
+        13.5f,
+        54.f,
+        324.f,
+        3159.f,
+        28000.f,   // Ultra (was 145800)
+        140000.f,  // Super (was 4374000)
+        700000.f   // Unique (was 26244000)
+    };
+    if (rarity >= RarityID::kNumRarities) return 1.f;
+    return kMult[rarity];
+}
+
+// Mob damage tracks petal combat so same-rarity contact is matched.
+inline float rarity_mob_damage_mult(uint8_t rarity) {
+    return rarity_combat_mult(rarity);
 }
 
 // Petal / zone rarity paint (ARGB). Shared so MapGen rings match G-key minimap.
@@ -29,19 +74,14 @@ inline std::array<uint32_t, RarityID::kNumRarities> const RARITY_COLORS = {{
     0xfff70fb6, // Ultra (究极)
     // Mint / aqua-green — green-family like florr Super (#2bffa4), not Common lime.
     0xff2bffa4, // Super (超凡)
-    // Bright platinum — Unique（唯一）top tier. Was mid-gunmetal (#5a616c) which
-    // vanished on dark chat / UI; keep a light cool metal so stroke + fill read.
+    // Bright platinum — Unique（唯一）top tier.
     0xffc8d0dc  // Unique (唯一)
 }};
 
-// Zone difficulty 0..MAX_DIFFICULTY == RarityID. Combat follows petal ×3 curve;
-// damage stays milder than HP so contact does not instantly delete flowers.
+// Zone difficulty 0..MAX_DIFFICULTY == RarityID. Combat display uses petal ×3.
 inline float zone_threat_mult(uint32_t difficulty) {
-    static float const k[] = {
-        1.f, 3.f, 9.f, 27.f, 81.f, 243.f, 500.f, 1000.f, 2000.f
-    };
     if (difficulty > MAX_DIFFICULTY) difficulty = MAX_DIFFICULTY;
-    return k[difficulty];
+    return rarity_combat_mult((uint8_t)difficulty);
 }
 
 inline float zone_damage_mult(uint32_t difficulty) {
@@ -52,8 +92,7 @@ inline float zone_damage_mult(uint32_t difficulty) {
     return k[difficulty];
 }
 
-// Zone XP — mild curve across 9 rarity rings. MUST stay far below combat ×3.
-// 2026-10 balance: soft top so outer rings are not ~5.5× soft-zone XP.
+// Zone XP — mild curve; MUST stay far below combat ×3.
 inline float zone_xp_mult(uint32_t difficulty) {
     static float const k[] = {
         1.00f, 1.20f, 1.40f, 1.65f, 2.00f, 2.40f, 2.90f, 3.40f, 4.00f
@@ -62,8 +101,7 @@ inline float zone_xp_mult(uint32_t difficulty) {
     return k[difficulty];
 }
 
-// Coin yield by zone — milder than XP; hard zones fund shop without printing money.
-// 2026-10 economy Seg4: cap ~2.7 after high-rarity spawn/drop visibility bump.
+// Coin yield by zone — milder than XP.
 inline float zone_coin_mult(uint32_t difficulty) {
     static float const k[] = {
         1.00f, 1.10f, 1.25f, 1.45f, 1.70f, 1.95f, 2.20f, 2.45f, 2.70f
@@ -72,8 +110,7 @@ inline float zone_coin_mult(uint32_t difficulty) {
     return k[difficulty];
 }
 
-// Drop rarity tilt defaults per zone tier (ZoneDefinition::drop_multiplier).
-// 2026-10 economy Seg2: outer rings slightly more Epic+ tilt (with spawn visibility).
+// Drop rarity tilt defaults per zone tier.
 inline float zone_drop_tilt(uint32_t difficulty) {
     static float const k[] = {
         0.02f, 0.05f, 0.09f, 0.15f, 0.22f, 0.32f, 0.42f, 0.55f, 0.65f
@@ -86,15 +123,7 @@ inline float zone_drop_tilt(uint32_t difficulty) {
 // spawn-rarity relative scaling in Map::_spawn_mob_at instead.
 inline float mob_rarity_threat_mult(uint8_t rarity) {
     static float const k[RarityID::kNumRarities] = {
-        1.00f, // Common
-        1.25f, // Unusual
-        1.60f, // Rare
-        2.10f, // Epic
-        2.70f, // Legendary
-        3.40f, // Mythic
-        1.00f, // Ultra (boss bases are huge)
-        1.00f, // Super
-        1.00f, // Unique
+        1.00f, 1.25f, 1.60f, 2.10f, 2.70f, 3.40f, 1.00f, 1.00f, 1.00f
     };
     if (rarity >= RarityID::kNumRarities) return 1.f;
     return k[rarity];
@@ -108,30 +137,17 @@ inline float mob_rarity_damage_mult(uint8_t rarity) {
     return k[rarity];
 }
 
-// Extra HP pad so Legendary+ packs survive Unique petal DPS (petal curve is
-// already baked into Unique petals; bare relative ×3 was still too soft).
-inline float mob_high_tier_hp_pad(uint8_t spawn_rarity) {
-    static float const k[RarityID::kNumRarities] = {
-        1.00f, 1.00f, 1.00f, 1.15f, 1.45f, 1.90f, 2.60f, 3.40f, 4.50f
-    };
-    if (spawn_rarity >= RarityID::kNumRarities) return 1.f;
-    return k[spawn_rarity];
-}
-
-// HP scale from baked MobData rarity → live spawn rarity (petal ×3 curve).
+// HP scale from baked MobData rarity → live spawn rarity (wiki mob HP table).
 inline float mob_spawn_threat_mult(uint8_t base_rarity, uint8_t spawn_rarity) {
-    float base = rarity_combat_mult(base_rarity);
+    float base = rarity_mob_hp_mult(base_rarity);
     if (base < 1e-3f) base = 1.f;
-    return (rarity_combat_mult(spawn_rarity) / base) * mob_high_tier_hp_pad(spawn_rarity);
+    return rarity_mob_hp_mult(spawn_rarity) / base;
 }
 
-// Applied at kill grant (Death::_add_mob_xp). 2026-10 economy Seg3: 15→12 after
-// Seg1 raised Mythic+ visibility (outer Unique~xp8 kill was ~1344 score).
+// Applied at kill grant (Death::_add_mob_xp). Keep mild — combat HP is huge.
 inline float kill_xp_grant_mult() { return 12.f; }
 
-// Soft XP/loot scale base→spawn. Do NOT reuse mob_spawn_threat_mult (combat ×3):
-// zone_xp_mult × combat threat made Ultra commons drop ~2e6 score each.
-// Seg3: soft-cap Super/Unique spawn XP slightly.
+// Soft XP/loot scale base→spawn. Do NOT reuse mob_spawn_threat_mult.
 inline float mob_spawn_xp_mult(uint8_t base_rarity, uint8_t spawn_rarity) {
     static float const k[RarityID::kNumRarities] = {
         1.00f, 1.12f, 1.28f, 1.48f, 1.72f, 2.00f, 2.30f, 2.40f, 2.55f
@@ -143,34 +159,47 @@ inline float mob_spawn_xp_mult(uint8_t base_rarity, uint8_t spawn_rarity) {
     return k[s] / base;
 }
 
-// Milder damage scale so higher zones chip petals without one-shots.
+// Damage scale tracks petal combat (same-rarity flower vs mob matched).
 inline float mob_spawn_damage_mult(uint8_t base_rarity, uint8_t spawn_rarity) {
-    float th = mob_spawn_threat_mult(base_rarity, spawn_rarity);
-    // compress toward 1: sqrt-ish
-    return th > 0.f ? (1.f + (th - 1.f) * 0.35f) : 1.f;
+    float base = rarity_mob_damage_mult(base_rarity);
+    if (base < 1e-3f) base = 1.f;
+    return rarity_mob_damage_mult(spawn_rarity) / base;
 }
 
-// Physics + draw radius by spawn rarity (Common 1.00 → Unique 2.00).
-// Kept shallow: base radii already include "Massive"/boss bulk, and
-// MOB_RADIUS_MULTIPLIER (1.25) stacks on top — Legendary×2 on a r=75 mob
-// was filling the screen. Combat HP/damage stay on their own tables.
+// Physics + draw radius ladder (Common 1× → Unique ~7×). Aligns SpatialHash /
+// changelog; combat HP/damage stay on their own tables.
 inline float mob_rarity_radius_mult(uint8_t rarity) {
     static float const k[RarityID::kNumRarities] = {
         1.00f, // Common
-        1.12f, // Unusual
-        1.25f, // Rare
-        1.38f, // Epic
-        1.50f, // Legendary
-        1.62f, // Mythic
-        1.75f, // Ultra
-        1.88f, // Super
-        2.00f  // Unique
+        1.20f, // Unusual
+        1.50f, // Rare
+        1.90f, // Epic
+        2.50f, // Legendary
+        3.30f, // Mythic
+        4.40f, // Ultra
+        5.60f, // Super
+        7.00f  // Unique
     };
     if (rarity >= RarityID::kNumRarities) return 1.f;
     return k[rarity];
 }
 
+// Live spawn vs baked MobData.rarity (Unique-anchored mobs stay 1× when
+// spawn_r == base_r; Common templates grow to Unique ~7×).
+inline float mob_spawn_radius_mult(uint8_t base_rarity, uint8_t spawn_rarity) {
+    float base = mob_rarity_radius_mult(base_rarity);
+    if (base < 1e-3f) base = 1.f;
+    return mob_rarity_radius_mult(spawn_rarity) / base;
+}
+
 // Soft (Common/Unusual): more mix of low tiers so hub packs feel varied.
+inline uint8_t zone_spawn_rarity_cap(uint32_t difficulty) {
+    if (difficulty >= RarityID::kUnique) return RarityID::kUnique;
+    // Starter belts contain only their own tier and below.
+    if (difficulty <= RarityID::kUnusual) return (uint8_t)difficulty;
+    return (uint8_t)std::min<uint32_t>(RarityID::kSuper, difficulty + 1);
+}
+
 // Mid: primary ~70%, −1 ~20%, +1 ~10%.
 // Legendary+: primary ~60%, −1 ~20%, +1 ~20%.
 inline uint8_t pick_zone_spawn_rarity(uint32_t zone_difficulty) {
@@ -179,16 +208,13 @@ inline uint8_t pick_zone_spawn_rarity(uint32_t zone_difficulty) {
     float r = frand();
     float primary = 0.70f;
     float down_end = 0.90f; // primary + down
-    // Hub / soft belt: mix Common · Unusual · Rare so packs look varied (still low-tier).
+    // Common hub stays Common. Unusual belt mixes only Common and Unusual.
     if (d == 0) {
-        if (r < 0.42f) return (uint8_t)RarityID::kCommon;
-        if (r < 0.78f) return (uint8_t)RarityID::kUnusual;
-        return (uint8_t)RarityID::kRare;
+        return (uint8_t)RarityID::kCommon;
     }
     if (d == RarityID::kUnusual) {
         if (r < 0.35f) return (uint8_t)RarityID::kCommon;
-        if (r < 0.70f) return (uint8_t)RarityID::kUnusual;
-        return (uint8_t)RarityID::kRare;
+        return (uint8_t)RarityID::kUnusual;
     }
     if (d >= RarityID::kLegendary) {
         primary = 0.60f;

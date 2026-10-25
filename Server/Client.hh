@@ -30,6 +30,7 @@ public:
     WebSocket *ws;
     uint8_t verified = 0;
     uint8_t seen_arena = 0;
+    uint8_t needs_full_update = 0;
     uint16_t view_half_w = 0;
     uint16_t view_half_h = 0;
     std::string account_name;

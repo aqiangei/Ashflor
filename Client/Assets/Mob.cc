@@ -161,6 +161,8 @@ void draw_static_mob(MobID::T mob_id, Renderer &ctx, MobRenderAttributes attr) {
             break;
         }
         case MobID::kBee:
+            // Authored ~ellipse 30; live radius = data×MOB_RADIUS×rarity.
+            ctx.scale(radius / (20.f * MOB_RADIUS_MULTIPLIER));
             SET_BASE_COLOR(0xffffe763)
             ctx.set_fill(0xff333333);
             ctx.set_stroke(0xff292929);
@@ -283,6 +285,49 @@ void draw_static_mob(MobID::T mob_id, Renderer &ctx, MobRenderAttributes attr) {
         case MobID::kBeetle:
         case MobID::kMassiveBeetle:
             ctx.scale(radius / 35);
+            // Flag bit 2: Pharaoh's Crown undead — sand wraps + gold plates.
+            if (BitMath::at(attr.flags, 2)) {
+                float anim = attr.animation;
+                ctx.set_fill(0xffc4a574);
+                ctx.set_stroke(0xff6a5428);
+                ctx.set_line_width(5.f);
+                ctx.begin_path();
+                ctx.move_to(0, -30);
+                ctx.qcurve_to(40, -30, 40, 0);
+                ctx.qcurve_to(40, 30, 0, 30);
+                ctx.qcurve_to(-40, 30, -40, 0);
+                ctx.qcurve_to(-40, -30, 0, -30);
+                ctx.fill();
+                ctx.stroke();
+                ctx.set_fill(0xffe8c04a);
+                ctx.set_stroke(0xff8a6a20);
+                ctx.set_line_width(3.f);
+                ctx.begin_path();
+                ctx.move_to(-22, -8);
+                ctx.qcurve_to(0, -28, 22, -8);
+                ctx.qcurve_to(0, -18, -22, -8);
+                ctx.fill();
+                ctx.stroke();
+                ctx.set_stroke(0xfff0e6d0);
+                ctx.set_line_width(4.5f);
+                ctx.round_line_cap();
+                ctx.begin_path();
+                ctx.move_to(-28, 5);
+                ctx.qcurve_to(0, 22, 28, 5);
+                ctx.move_to(-24, -12);
+                ctx.qcurve_to(0, 2 + 2.f * sinf(anim), 24, -10);
+                ctx.stroke();
+                ctx.set_fill(0xff222222);
+                ctx.begin_path();
+                ctx.arc(-14, -6, 4.5f);
+                ctx.arc(14, -6, 4.5f);
+                ctx.fill();
+                ctx.set_fill(0xffe8c04a);
+                ctx.begin_path();
+                ctx.arc(0, 8, 5.f);
+                ctx.fill();
+                break;
+            }
             SET_BASE_COLOR(0xff905db0)
             ctx.begin_path();
             ctx.set_fill(0xff333333);
@@ -487,6 +532,7 @@ void draw_static_mob(MobID::T mob_id, Renderer &ctx, MobRenderAttributes attr) {
             break;
         }
         case MobID::kHornet:
+            ctx.scale(radius / (40.f * MOB_RADIUS_MULTIPLIER));
             SET_BASE_COLOR(0xffffe763)
             ctx.set_fill(0xff333333);
             ctx.set_stroke(0xff292929);
@@ -808,6 +854,8 @@ void draw_static_mob(MobID::T mob_id, Renderer &ctx, MobRenderAttributes attr) {
             ctx.fill();
             break;
         case MobID::kQueenAnt:
+            // Fixed-pixel art ignored live rarity radius — Unique queens looked Common-sized.
+            ctx.scale(radius / (25.f * MOB_RADIUS_MULTIPLIER));
             ctx.begin_path();
             ctx.arc(-25,0,33.5);
             ctx.set_fill(0xff454545);
@@ -1651,7 +1699,8 @@ void draw_static_mob(MobID::T mob_id, Renderer &ctx, MobRenderAttributes attr) {
             ctx.fill();
             break;
         case MobID::kJungleWasp:
-            ctx.scale(radius / 24.f);
+            // Bake 29.3 — fill hitbox like Bee/Hornet (was /24 → look tiny at Unique).
+            ctx.scale(radius / (18.f * MOB_RADIUS_MULTIPLIER));
             ctx.set_fill(0xffE0A83A);
             ctx.set_stroke(0xff7A5A20);
             ctx.set_line_width(3);
@@ -2178,7 +2227,7 @@ void draw_static_mob(MobID::T mob_id, Renderer &ctx, MobRenderAttributes attr) {
             ctx.fill();
             break;
         case MobID::kFrostHornet:
-            ctx.scale(radius / 28.f);
+            ctx.scale(radius / (20.f * MOB_RADIUS_MULTIPLIER));
             // Wings
             ctx.set_fill(0x80cfe9f7);
             ctx.set_stroke(0xff2F648C);
@@ -2532,7 +2581,7 @@ void draw_static_mob(MobID::T mob_id, Renderer &ctx, MobRenderAttributes attr) {
             ctx.fill();
             break;
         case MobID::kEmberWasp:
-            ctx.scale(radius / 28.f);
+            ctx.scale(radius / (20.f * MOB_RADIUS_MULTIPLIER));
             // Wings
             ctx.set_fill(0x80F5C08A);
             ctx.set_stroke(0xff783F36);
@@ -2932,7 +2981,7 @@ void draw_static_mob(MobID::T mob_id, Renderer &ctx, MobRenderAttributes attr) {
             ctx.fill();
             break;
         case MobID::kDuneHornet:
-            ctx.scale(radius / 30.f);
+            ctx.scale(radius / (22.f * MOB_RADIUS_MULTIPLIER));
             // Wings
             ctx.set_fill(0x80F2DCAB);
             ctx.set_stroke(0xff8A6035);

@@ -55,7 +55,7 @@ static bool petal_equipped(PetalID::T id) {
 // Unique with account level: first primary copy is the leveled instance.
 static uint8_t petal_has_level(PetalID::T id) {
     return id != PetalID::kNone && id < PetalID::kNumPetals
-        && Craft::can_level_petal(id) && Game::petal_levels[id] > 0;
+        && Craft::can_level_petal(id) && Craft::petal_level_get(Game::petal_levels, id) > 0;
 }
 
 static uint8_t petal_leveled_equipped(PetalID::T id) {
@@ -105,17 +105,22 @@ static uint8_t bag_slot_static(PetalID::T id) {
     return (uint8_t)-1;
 }
 
+static uint8_t bag_hay_has(char const *hay_raw, std::string const &needle) {
+    if (hay_raw == nullptr || hay_raw[0] == '\0') return 0;
+    std::string hay = hay_raw;
+    for (char &c : hay) if (c >= 'A' && c <= 'Z') c = (char) (c - 'A' + 'a');
+    return hay.find(needle) != std::string::npos;
+}
+
 static uint8_t bag_name_matches(PetalID::T id) {
     if (bag_search_text.empty()) return 1;
     if (id == PetalID::kNone || id >= PetalID::kNumPetals) return 0;
-    char const *nm = I18n::petal_name(id);
-    if (nm == nullptr) nm = PETAL_DATA[id].name;
-    // Case-insensitive substring
-    std::string hay = nm;
     std::string needle = bag_search_text;
-    for (char &c : hay) if (c >= 'A' && c <= 'Z') c = (char) (c - 'A' + 'a');
     for (char &c : needle) if (c >= 'A' && c <= 'Z') c = (char) (c - 'A' + 'a');
-    return hay.find(needle) != std::string::npos;
+    // Match localized name and English PETAL_DATA name (e.g. "stick" while UI is ZH).
+    if (bag_hay_has(I18n::petal_name(id), needle)) return 1;
+    if (bag_hay_has(PETAL_DATA[id].name, needle)) return 1;
+    return 0;
 }
 
 // Backpack order: rarity blocks high→low (Unique → … → Common). Within a
@@ -330,9 +335,10 @@ public:
             }
         }
         // Gold Lv only on the leveled singleton cell (not the base stack behind it).
-        if (is_lv && Game::petal_levels[pid] > 0) {
+        if (is_lv && Craft::petal_level_get(Game::petal_levels, pid) > 0) {
             RenderContext c(&ctx);
-            std::string lv = std::format("Lv.{}", Game::petal_levels[pid]);
+            std::string lv = std::format("Lv.{}",
+                Craft::petal_level_get(Game::petal_levels, pid));
             ctx.set_fill(Chrome::kGold);
             ctx.set_stroke(0xff111111);
             ctx.set_text_size(12);
@@ -1062,7 +1068,7 @@ static void on_craft_once(Element *, uint8_t e) {
 static uint32_t craft_exchange_price(PetalID::T id) {
     if (id == PetalID::kNone || id >= PetalID::kNumPetals) return 0;
     if (Craft::can_level_petal(id))
-        return Craft::level_exchange_cost(Game::petal_levels[id]);
+        return Craft::level_exchange_cost(Craft::petal_level_get(Game::petal_levels, id));
     if (Craft::can_upgrade_petal(id))
         return Craft::exchange_cost(PETAL_DATA[id].rarity);
     return 0;
@@ -1388,7 +1394,7 @@ public:
 };
 
 // Material cell: click = +5, hold accelerates, Shift+Alt = dump all
-// Same English name + rarity can collide (Dahlia vs RoseRare, etc.).
+// Same English name + rarity: prefer the owned id (variants were split off).
 // Only return an id the player actually owns — never a catalog placeholder.
 static PetalID::T resolve_craft_family_petal(char const *name, uint8_t rarity) {
     if (name == nullptr || rarity >= RarityID::kNumRarities) return PetalID::kNone;
@@ -1443,7 +1449,7 @@ class CraftMatCell final : public Element {
             PetalID::T slot = resolve_craft_family_slot(family_name, RarityID::kUnique);
             if (slot == PetalID::kNone) return PetalID::kNone;
             // Last column: only once Unique has reached Lv.1+.
-            if (Game::petal_levels[slot] >= 1)
+            if (Craft::petal_level_get(Game::petal_levels, slot) >= 1)
                 return slot;
             return PetalID::kNone;
         }
@@ -1588,9 +1594,11 @@ public:
             ctx.fill_text(qty.c_str());
         }
         // Level lives on the last column only (≥Lv.1).
-        if (level_slot && empty_anim > 0.5f && Game::petal_levels[draw_id] >= 1) {
+        if (level_slot && empty_anim > 0.5f
+            && Craft::petal_level_get(Game::petal_levels, draw_id) >= 1) {
             RenderContext t(&ctx);
-            std::string lv = std::format("Lv.{}", Game::petal_levels[draw_id]);
+            std::string lv = std::format("Lv.{}",
+                Craft::petal_level_get(Game::petal_levels, draw_id));
             ctx.set_global_alpha(empty_anim);
             ctx.set_fill(Chrome::kGold);
             ctx.set_stroke(0xff111111);
@@ -1702,7 +1710,7 @@ static int craft_family_unique_level(char const *name) {
     if (name == nullptr) return 0;
     PetalID::T slot = resolve_craft_family_slot(name, RarityID::kUnique);
     if (slot == PetalID::kNone || slot >= PetalID::kNumPetals) return 0;
-    return (int) Game::petal_levels[slot];
+    return (int) Craft::petal_level_get(Game::petal_levels, slot);
 }
 
 class CraftFamilyRow final : public Ui::HContainer {
@@ -1756,7 +1764,7 @@ public:
 
 static Element *make_craft_material_grid() {
     // One row per petal name. Columns: Common…Unique (absorb mats) → Unique Lv (current).
-    // Cells resolve the owned id at draw time (name collisions like Dahlia/RoseRare).
+    // Cells resolve the owned id at draw time (same name + rarity).
     // Row order: Unique Lv high→low (see CraftFamilyList::refactor).
     std::vector<char const *> family_names;
     for (uint32_t raw = 1; raw < (uint32_t) PetalID::kNumPetals; ++raw) {
@@ -2838,7 +2846,7 @@ Element *Ui::make_craft_panel() {
                             ? std::format("{:.1f}%", pct) : std::format("{:.0f}%", pct);
                     };
                     if (Craft::can_level_petal(tid)) {
-                        uint32_t lv = Game::petal_levels[tid];
+                        uint32_t lv = Craft::petal_level_get(Game::petal_levels, tid);
                         float p = Craft::level_success_chance(lv);
                         return I18n::use_chinese
                             ? std::format("Lv.{}→{} {} · 属性+{:.0f}%", lv, lv + 1, pct_str(p),
@@ -2853,6 +2861,14 @@ Element *Ui::make_craft_panel() {
                     return std::format("{} {}", I18n::rarity_name((uint8_t)(r + 1)),
                         pct_str(Craft::success_chance(r)));
                 }, { .fill = Chrome::kBody, .h_justify = Style::Left }),
+                new Ui::DynamicText(13, [](){
+                    if (Game::craft_attempt_id == PetalID::kNone) return std::string{};
+                    return I18n::use_chinese
+                        ? std::format("第 {} 次尝试（已尝试 {} 次）",
+                            Game::craft_attempt_n + 1u, Game::craft_attempt_n)
+                        : std::format("Attempt #{} ({} completed)",
+                            Game::craft_attempt_n + 1u, Game::craft_attempt_n);
+                }, { .fill = Chrome::kGold, .h_justify = Style::Left }),
                 new Ui::DynamicText(13, [](){
                     PetalID::T tid = Game::craft_tray_id;
                     uint32_t cost = craft_exchange_price(tid);
@@ -3612,6 +3628,9 @@ static char const *shop_tab_hint() {
 
 class ShopItemRow final : public Element {
     uint16_t offer_index;
+    float press_x = 0, press_y = 0;
+    bool purchase_press = false;
+    bool tracking_press = false;
 public:
     explicit ShopItemRow(uint16_t idx)
         : Element(Input::is_mobile ? 420.f : 520.f, 72.f, { .no_animation = 1 }),
@@ -3693,12 +3712,44 @@ public:
         }
     }
     void on_event(uint8_t event) override {
+        if (event == kFocusLost) {
+            purchase_press = tracking_press = false;
+            return;
+        }
+        float px = Input::mouse_x, py = Input::mouse_y;
+        if (Input::is_mobile) {
+            auto active = Input::touches.find(touch_id);
+            auto ended = Input::ended_touches.find(touch_id);
+            if (active != Input::touches.end()) {
+                px = active->second.x;
+                py = active->second.y;
+            } else if (ended != Input::ended_touches.end()) {
+                px = ended->second.x;
+                py = ended->second.y;
+            } else {
+                // No release position: a cancelled touch must never buy.
+                purchase_press = tracking_press = false;
+                return;
+            }
+        }
+        float const local_x = (px - screen_x) / (float) Ui::scale;
+        if (event == kMouseDown && !tracking_press) {
+            press_x = px;
+            press_y = py;
+            tracking_press = true;
+            purchase_press = local_x >= width * 0.5f - 100.f;
+        }
+        if (std::hypot(px - press_x, py - press_y) >= Input::pointer_slop())
+            purchase_press = false;
         if (event != kClick) return;
+        bool const buy = purchase_press
+            && std::hypot(px - press_x, py - press_y) < Input::pointer_slop();
+        purchase_press = tracking_press = false;
+        if (!buy) return;
         if (offer_index >= Craft::shop_offer_count()) return;
         Craft::ShopOffer const &offer = Craft::shop_offer_at(offer_index);
         if (offer.tab != shop_filter_tab) return;
         if (!shop_offer_matches_rarity(offer)) return;
-        float local_x = (Input::mouse_x - screen_x) / (float) Ui::scale;
         if (local_x < width * 0.5f - 100.f) return;
         uint32_t cost = Craft::shop_offer_cost(offer);
         if (Game::craft_owned(PetalID::kCoin) < cost) {

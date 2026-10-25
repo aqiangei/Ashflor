@@ -2,6 +2,7 @@
 
 #include <Shared/StaticDefinitions.hh>
 
+#include <array>
 #include <cstdint>
 
 namespace Craft {
@@ -38,15 +39,18 @@ namespace Craft {
     uint32_t expected_cost(float chance);
     uint32_t exchange_cost(uint8_t from_rarity);
 
-    // Infinite petal levels: Unique petals keep merging 5 → Lv.L+1. Level is
-    // per account per PetalID; only the first primary loadout copy of that ID
-    // gets the stat bonus (other copies stay at base stats).
+    // Infinite petal levels: Unique petals merge 5 → +1 Lv and return 1 Unique
+    // (net −4 on success), same shape as rarity craft. Level is per account per
+    // family; only the first primary loadout copy of that ID gets the stat bonus.
     constexpr uint32_t kMaxPetalLevel = 65535;
     constexpr float kLevelStatPerLevel = 0.12f; // +12% combat / additive attrs per level
     // Global petal CD after Golden Leaf × talent: never faster than this fraction
     // of base reload (99% CDR cap). Flower still clamps reload to ≥2 ticks for art.
     constexpr float kReloadFactorFloor = 0.01f;
     constexpr float kReloadFactorCeil = 4.f;
+    // Unique Observer design FOV. level_scale_factor's 1% CDR floor must NOT apply to
+    // vision — Unique Lv≥2 was hitting 0.01 → FOV×100 / tooltip "10000%".
+    constexpr float kVisionFactorFloor = 0.18f;
     // Multiplicative attrs (speed, CDR, vision…): scale the deviation from 1.
     // CDR softens toward kReloadFactorFloor (99% cap); no per-leaf 40% ceiling.
     inline float level_scale_factor(float factor, float lv_mult) {
@@ -57,6 +61,12 @@ namespace Craft {
         if (depth > 1.f - kReloadFactorFloor) depth = 1.f - kReloadFactorFloor;
         float out = 1.f - depth;
         return out < kReloadFactorFloor ? kReloadFactorFloor : out;
+    }
+    // Vision FOV multiplier (lower = see more). Cap at Unique Observer design value.
+    inline float level_scale_vision(float factor, float lv_mult) {
+        float out = level_scale_factor(factor, lv_mult);
+        if (factor > 0.f && factor < kVisionFactorFloor) return factor;
+        return out < kVisionFactorFloor ? kVisionFactorFloor : out;
     }
     uint8_t can_level_petal(PetalID::T id);
     // Tray accepts it (rarity upgrade or level-up).
@@ -74,6 +84,20 @@ namespace Craft {
     PetalID::T craft_result(PetalID::T from);
     // Same English name at exact rarity; kNone if that rung is missing
     PetalID::T petal_at_rarity(PetalID::T from, uint8_t rarity);
+    // Stable Unique rung for a family (highest id with that English name).
+    // Used so Unique Lv survives PetalID reshuffles (Grapes was losing Lv alone).
+    // Names match with spaces/_ equivalent (accounts.dat l: keys use _).
+    PetalID::T unique_id_for_name(char const *name);
+    PetalID::T canonical_unique_id(PetalID::T from);
+    // Fold every non-zero entry onto the family's current Unique PetalID.
+    // Call after load / network apply so stale ids from enum reshuffles still count.
+    void petal_levels_canonicalize(std::array<uint32_t, PetalID::kNumPetals> &levels);
+    // Read Unique Lv for any family member (resolves via canonical_unique_id).
+    uint32_t petal_level_get(std::array<uint32_t, PetalID::kNumPetals> const &levels,
+                             PetalID::T id);
+    // True only for Unique petals with no Super same-name (world singleton).
+    // Ladder Uniques (Peas/Grapes/…) may drop even if one already exists.
+    uint8_t unique_is_world_singleton(PetalID::T id);
     PetalID::T random_petal_of_rarity(uint8_t rarity);
     // First petal id that uses this rarity (legacy rarity-bank migration)
     PetalID::T first_petal_of_rarity(uint8_t rarity);

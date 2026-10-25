@@ -19,7 +19,14 @@ void flush_flower_loadout_to_camera(Simulation *, Entity &camera, Entity const &
 // False for wild mobs and digger (kFlower without camera parent).
 bool is_player_faction(Simulation *, Entity const &);
 
+// Corruption petal / Unique aura: enables player-faction PvP.
+bool flower_is_corrupted(Simulation *, Entity const &);
+bool player_faction_pvp(Simulation *, Entity const &, Entity const &);
+
 EntityID find_nearest_enemy(Simulation *, Entity const &, float);
+
+// Poo: multiplier on mob aggro / deaggro range vs this flower (1 = full range).
+float flower_aggro_range_mult(Entity const &);
 
 void entity_set_despawn_tick(Entity &, game_tick_t);
 void entity_clear_references(Simulation *, Entity &);

@@ -39,7 +39,12 @@ public:
         if (avail < min_h) avail = min_h;
         float const cap = view_h * 0.78f;
         if (avail > cap) avail = cap;
-        height = avail;
+        // Shrink-wrap short content; only fill avail when scrolling is needed.
+        Element *body = children[0];
+        body->refactor();
+        float const need = body->height;
+        height = need > 0.f && need < avail ? need : avail;
+        if (height < 1.f) height = 1.f;
         Ui::ScrollContainer::refactor();
     }
 };

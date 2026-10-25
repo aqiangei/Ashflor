@@ -6,6 +6,7 @@
 #include <Server/Loot.hh>
 #include <Server/Server.hh>
 #include <Server/Spawn.hh>
+#include <Shared/Craft.hh>
 #include <Shared/Map.hh>
 #include <Shared/RarityScale.hh>
 #include <Shared/Simulation.hh>
@@ -61,7 +62,8 @@ uint64_t equipment_signature(Client *client) {
     for (uint8_t i = 0; i < 2 * MAX_SLOT_COUNT; ++i) {
         PetalID::T id = alive ? sim.get_ent(camera.get_player()).get_loadout_ids(i) : camera.get_inventory(i);
         add(id);
-        if (id < PetalID::kNumPetals) add(client->petal_levels[id]);
+        if (id < PetalID::kNumPetals)
+            add(Craft::petal_level_get(client->petal_levels, id));
     }
     for (uint8_t rank : client->talent_ranks) add(rank);
     add(client->rot_speed_setting);
@@ -106,9 +108,13 @@ void TrainingDummy::ensure(Simulation *sim) {
     for (uint8_t rarity = 0; rarity < RarityID::kNumRarities; ++rarity) {
         EntityID &id = sim->training_dummies[rarity];
         if (sim->ent_alive(id)) continue;
-        float angle = -(float)M_PI / 2 + rarity * (2.f * (float)M_PI / RarityID::kNumRarities);
-        float x = MAP_SPAWN_X + std::cos(angle) * 960.f;
-        float y = MAP_SPAWN_Y + std::sin(angle) * 720.f;
+        // Ring around hub spawn (outside plaza ellipse so !in_spawn_plaza).
+        // Was a 3×3 bay at +2100 east — players want the old circle back.
+        float const ring_r = 1850.f;
+        float const ang = (float)rarity * (float)(2.0 * 3.14159265358979323846)
+            / (float)RarityID::kNumRarities - (float)(3.14159265358979323846 * 0.5);
+        float x = MAP_SPAWN_X + ring_r * std::cos(ang);
+        float y = MAP_SPAWN_Y + ring_r * std::sin(ang);
         float radius = 44.f * mob_rarity_radius_mult(rarity);
         Map::resolve_circle_terrain(sim->map_id, x, y, radius + 8.f);
         Entity &ent = alloc_mob(sim, MobID::kTrainingDummy, x, y, NULL_ENTITY);

@@ -102,6 +102,10 @@ HealthBar::HealthBar() : Element(280, 28) {
         }
         // Room under the bar for guild name (bottom-right)
         elt->height = Game::guild_name.empty() ? 28.f : 42.f;
+        if (Game::alive()) {
+            auto const &p = Game::simulation.get_ent(Game::player_id);
+            if (p.get_effect_flags() || p.get_shield_ratio() > 0.f) elt->height += 24.f;
+        }
     };
 }
 
@@ -135,6 +139,31 @@ void HealthBar::on_render(Renderer &ctx) {
     ctx.stroke();
     std::string text = std::format("{:.0f}%", r * 100);
     ctx.draw_text(text.c_str(), { .size = bar_h * 0.55f });
+    if (Game::alive()) {
+        auto const &p = Game::simulation.get_ent(Game::player_id);
+        auto flags = p.get_effect_flags();
+        auto strip = [&](float y, float progress, uint32_t color) {
+            ctx.set_stroke(0xcc222222); ctx.set_line_width(4.f);
+            ctx.begin_path(); ctx.move_to(-width / 2, y); ctx.line_to(width / 2, y); ctx.stroke();
+            ctx.set_stroke(color);
+            ctx.begin_path(); ctx.move_to(-width / 2, y);
+            ctx.line_to(-width / 2 + width * fclamp(progress, 0.f, 1.f), y); ctx.stroke();
+        };
+        if (flags & FlowerEffects::kMana) strip(17.f, p.get_mana_ratio(), 0xff68bdff);
+        if (p.get_shield_ratio() > 0.f) strip(22.f, p.get_shield_ratio(), 0xffba9bff);
+        std::string status;
+        if (flags & FlowerEffects::kBurrow) status = I18n::use_chinese ? "遁地中" : "Burrowed";
+        else if (flags & FlowerEffects::kDeathGrace) status = I18n::use_chinese ? "致死缓冲：及时治疗" : "Lethal grace: heal now";
+        else if (flags & FlowerEffects::kShovel) status = p.get_ability_cooldown()
+            ? std::format("{} {:.1f}s", I18n::use_chinese ? "遁地冷却" : "Burrow CD", p.get_ability_cooldown() / (float)TPS)
+            : (I18n::use_chinese ? "按下防御遁地" : "Press defend to burrow");
+        else if (flags & FlowerEffects::kLowAggro) status = I18n::use_chinese ? "怪物索敌范围降低" : "Reduced mob aggro range";
+        if (!status.empty()) {
+            RenderContext label(&ctx);
+            ctx.translate(0, -24.f);
+            ctx.draw_text(status.c_str(), { .fill = 0xffbce9ff, .size = 11.f });
+        }
+    }
     ctx.translate(0, -bar_y);
 
     if (!Game::guild_name.empty()) {
@@ -250,9 +279,13 @@ Element *Ui::make_level_bar() {
         .v_justify = Style::Top
     });
     status->x = 12;
-    // Topbar: y=6, height = 40 + 2*outer_pad(10) = 60 → bottom at 66
-    status->y = 76;
+    status->y = (Ui::game_topbar_root
+        ? Ui::game_topbar_root->y + Ui::game_topbar_root->height : 66.f) + 12.f;
     status->style.animate = [](Element *elt, Renderer &ctx) {
+        // Follow the actual toolbar height, including touch-sized buttons.
+        float bottom = Ui::game_topbar_root
+            ? Ui::game_topbar_root->y + Ui::game_topbar_root->height : 66.f;
+        elt->y = bottom + 12.f;
         ctx.translate(-(1 - (float) elt->animation) * 1.5f * elt->width, 0);
     };
     return status;

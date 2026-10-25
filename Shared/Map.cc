@@ -10,6 +10,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstdint>
 #include <iostream>
 #include <unordered_map>
 #include <vector>
@@ -1027,14 +1028,18 @@ uint8_t Map::in_safe_channel(uint8_t map_id, float x, float y) {
 #include <Shared/Simulation.hh>
 void Map::remove_mob(Simulation *sim, uint32_t zone) {
     DEBUG_ONLY(assert(zone < map_zones(sim->map_id).size());)
-    --sim->zone_mob_counts[zone];
+    if (sim->zone_mob_counts[zone] > 0)
+        --sim->zone_mob_counts[zone];
 }
 
 // 广场（出生区）里的怪单独计数：整个 hub zone 计数无法区分广场内外的怪。
 void Map::remove_mob(Simulation *sim, Entity const &ent) {
     uint32_t zone = ent.zone;
     if (zone >= map_zones(sim->map_id).size()) return;
-    --sim->zone_mob_counts[zone];
+    // Guard underflow — double remove (reclaim + entity_on_death) used to wrap
+    // uint32_t and trigger spawn storms → entity-cap SEGV loops.
+    if (sim->zone_mob_counts[zone] > 0)
+        --sim->zone_mob_counts[zone];
     if (in_spawn_plaza(ent.get_x(), ent.get_y()) && sim->plaza_mob_count > 0)
         --sim->plaza_mob_count;
 }
@@ -1057,47 +1062,39 @@ static float zone_exclusive_area(uint8_t map_id, uint32_t zone_id) {
 }
 
 // Zone spawn rarity: primary/adjacent tilt, never below the mob's baked base.
+// Cap Unique to Unique-difficulty rings only — Square's baked Unique used to
+// force Unique in Common hubs ("低稀有度区全是唯一怪").
 static uint8_t resolve_zone_spawn_rarity(uint8_t base_r, uint32_t zone_difficulty) {
-    if (base_r >= RarityID::kUnique) return base_r;
     uint8_t spawn_r = pick_zone_spawn_rarity(zone_difficulty);
-    if (spawn_r < base_r) spawn_r = base_r;
+    if (base_r < RarityID::kNumRarities && spawn_r < base_r)
+        spawn_r = base_r;
+    uint8_t cap = zone_spawn_rarity_cap(zone_difficulty);
+    if (spawn_r > cap) spawn_r = cap;
     return spawn_r;
 }
 
-// Solo hub stays packed; overlapping player AOIs used to refill soft zones
-// to dens×hub_area (~650 Common heads at dens 3.9) and never despawn while
-// anyone is watching → multiplayer hub lag.
-static float soft_zone_density_mul(Simulation *sim, uint32_t difficulty) {
-    float mul = 1.15f;
-    if (difficulty > RarityID::kUnusual)
-        return mul;
-    uint32_t flowers = 0;
-    sim->for_each<kFlower>([&](Simulation *, Entity &f) {
-        if (!f.has_component(kMob)) ++flowers;
-    });
-    // 1–2 players: full mul. Each extra flower softens ~18% (compound).
-    if (flowers > 2) {
-        float scale = 1.f;
-        uint32_t extra = flowers - 2;
-        if (extra > 12) extra = 12;
-        for (uint32_t i = 0; i < extra; ++i)
-            scale *= 0.82f;
-        mul *= scale;
-    }
-    return mul;
+// Zone dens soft floor only — crowd throttle lives in Simulation spawn budget.
+// Former per-flower ×0.82 crush starved combat FOVs while abs_cap already gated.
+static float soft_zone_density_mul(Simulation *, uint32_t difficulty) {
+    // Soft hubs slightly denser only — mid/high stay flat to leave tick budget.
+    return difficulty > RarityID::kUnusual ? 1.00f : 1.08f;
 }
 
 // Hub pad must stay open for respawn / dummies. Was 16 — kite + admin spawn
 // still packed the ellipse because thinning only trusted plaza_mob_count
 // (spawned-in-plaza) and ignored mobs walked / admin-dropped into the pad.
 static constexpr uint32_t kPlazaMobCap = 4;
-// dens×area alone is not safe: Common hub ≈ 29e6 units² → hundreds of heads.
-// Rare+ used to return ~unlimited and never ran thin_soft → ring inflation.
-static constexpr uint32_t kSoftAbsCapCommon = 64;
-static constexpr uint32_t kSoftAbsCapUnusual = 80;
-static constexpr uint32_t kSoftAbsCapRare = 96;
-static constexpr uint32_t kSoftAbsCapEpic = 120;
+// Zone abs caps = safety valve only. Combat feel = local_combat_target.
+// HK 8c/8G: roomy valve vs BJ 4c (was 72–136 / 5600, then 96–160 / 8000).
+static constexpr uint32_t kSoftAbsCapCommon = 96;
+static constexpr uint32_t kSoftAbsCapUnusual = 112;
+static constexpr uint32_t kSoftAbsCapRare = 128;
+static constexpr uint32_t kSoftAbsCapEpic = 144;
 static constexpr uint32_t kSoftAbsCapLegendaryPlus = 160;
+// Stop/thin earlier than ENTITY_CAP=8192; crowd thin delayed for 8c headroom.
+static constexpr uint32_t kEntitySpawnStop = 8050;
+static constexpr uint32_t kEntityThinPanic = 9000;
+static constexpr uint32_t kEntityThinCrowd = 7600;
 
 static uint32_t soft_zone_abs_cap(uint32_t difficulty) {
     if (difficulty == 0) return kSoftAbsCapCommon;
@@ -1116,19 +1113,124 @@ static float soft_zone_spawn_target(Simulation *sim, uint32_t zone_id,
     return target;
 }
 
+// Combat FOV ≈ base screen + margin (not the oversized spawn_aoi reject box).
+static void combat_fov_half(float &hw, float &hh) {
+    hw = 960.f / BASE_FOV + 280.f;
+    hh = 540.f / BASE_FOV + 280.f;
+}
+
+// Screen wildlife target — ~14.5/viewport (clone≈16; leave room for petals/sync).
+static float local_combat_target(uint32_t difficulty, uint32_t flowers) {
+    float t = 14.5f;
+    if (difficulty > RarityID::kUnusual) t *= 0.94f;
+    if (flowers >= 4u) t *= 0.90f;
+    if (flowers >= 8u) t *= 0.82f;
+    if (flowers >= 12u) t *= 0.74f;
+    return t;
+}
+
+static uint32_t count_alive_flowers(Simulation *sim) {
+    uint32_t n = 0;
+    sim->for_each<kFlower>([&](Simulation *, Entity &f) {
+        if (f.has_component(kMob)) return;
+        if (!f.has_component(kHealth)) return;
+        ++n;
+    });
+    return n;
+}
+
+// Segments / hole children inflate the pool while zone_mob_counts stays +1.
+static uint32_t spawn_entity_cost(MobID::T mob_id) {
+    if (mob_id >= MobID::kNumMobs) return 1;
+    uint32_t segs = MOB_DATA[mob_id].attributes.segments;
+    if (segs > 1) return segs;
+    if (mob_id == MobID::kAntHole) return 7; // hole + 6 ants (Spawn.cc)
+    return 1;
+}
+
+static uint8_t is_countable_zone_wildlife(Entity &ent) {
+    if (ent.pending_delete) return 0;
+    if (!ent.has_component(kMob)) return 0;
+    if (!BitMath::at(ent.flags, EntityFlags::kSpawnedFromZone)) return 0;
+    if (ent.zone == 0xFF) return 0;
+    if (ent.get_mob_id() == MobID::kTrainingDummy) return 0;
+    return 1;
+}
+
+static uint32_t count_zone_wildlife_in_box(Simulation *sim, float cx, float cy,
+                                          float hw, float hh) {
+    uint32_t n = 0;
+    sim->for_each<kMob>([&](Simulation *, Entity &ent) {
+        if (!is_countable_zone_wildlife(ent)) return;
+        if (std::fabs(ent.get_x() - cx) > hw || std::fabs(ent.get_y() - cy) > hh)
+            return;
+        ++n;
+    });
+    return n;
+}
+
+uint8_t Map::any_combat_fov_underfilled(Simulation *sim, float ratio) {
+    if (ratio < 0.f) ratio = 0.f;
+    float hw = 0.f, hh = 0.f;
+    combat_fov_half(hw, hh);
+    uint32_t flowers = count_alive_flowers(sim);
+    uint8_t under = 0;
+    sim->for_each<kFlower>([&](Simulation *s, Entity &f) {
+        if (under || f.has_component(kMob)) return;
+        if (!f.has_component(kHealth)) return;
+        uint32_t z = Map::get_zone_from_pos(s->map_id, f.get_x(), f.get_y());
+        MapZones const &zones = map_zones(s->map_id);
+        uint32_t diff = 0;
+        if (z < zones.size()) diff = zones[z].difficulty;
+        float need = local_combat_target(diff, flowers) * ratio;
+        if ((float)count_zone_wildlife_in_box(s, f.get_x(), f.get_y(), hw, hh) < need)
+            under = 1;
+    });
+    return under;
+}
+
 void Map::thin_soft_zone_excess(Simulation *sim) {
     MapZones const &zones = map_zones(sim->map_id);
+    uint32_t const ents = sim->entity_count();
+    uint32_t const flowers = count_alive_flowers(sim);
+    uint8_t const panic = ents >= kEntityThinPanic;
+    uint8_t const crowd = panic || ents >= kEntityThinCrowd || flowers >= 10u;
+    float combat_hw = 0.f, combat_hh = 0.f;
+    combat_fov_half(combat_hw, combat_hh);
+    // Snapshot flower positions once (crowd far-from-all-FOV deletes).
+    StaticArray<float, 128> flower_xy;
+    if (crowd) {
+        sim->for_each<kFlower>([&](Simulation *, Entity &f) {
+            if (f.has_component(kMob) || !f.has_component(kHealth)) return;
+            if (flower_xy.size() + 2 > 128u) return;
+            flower_xy.push(f.get_x());
+            flower_xy.push(f.get_y());
+        });
+    }
+    auto near_any_combat_fov = [&](float mx, float my) -> uint8_t {
+        uint32_t n = flower_xy.size();
+        for (uint32_t i = 0; i + 1 < n; i += 2) {
+            if (std::fabs(flower_xy[i] - mx) <= combat_hw
+                && std::fabs(flower_xy[i + 1] - my) <= combat_hh)
+                return 1;
+        }
+        return 0;
+    };
     for (uint32_t z = 0; z < zones.size(); ++z) {
         ZoneDefinition const &zone = zones[z];
-        // All rarity rings now have abs caps; drain surplus (prefer culled).
+        // Safety-valve drain — prefer culled; under crowd also cull packs that
+        // sit outside every living flower's combat FOV (stacked AOIs).
         float target = soft_zone_spawn_target(sim, z, zone);
         float count = (float)sim->zone_mob_counts[z];
-        if (count <= target + 3.f) continue;
+        // clone adjustEnemyCount: drain excess toward FOV/zone target under load.
+        float slack = panic ? 0.5f : (crowd ? 1.0f : 2.5f);
+        if (count <= target + slack) continue;
         float over = count - target;
-        // ~18% of surplus per pass (~6Hz); was 12%/max6 — too slow vs refill.
-        uint32_t budget = (uint32_t)(over * 0.18f + 0.99f);
+        float rate = panic ? 0.40f : (crowd ? 0.28f : 0.18f);
+        uint32_t budget = (uint32_t)(over * rate + 0.99f);
         if (budget < 1) budget = 1;
-        if (budget > 10) budget = 10;
+        uint32_t budget_cap = panic ? 28u : (crowd ? 16u : 10u);
+        if (budget > budget_cap) budget = budget_cap;
         sim->for_each<kMob>([&](Simulation *s, Entity &ent) {
             if (budget == 0) return;
             if (ent.pending_delete) return;
@@ -1136,8 +1238,10 @@ void Map::thin_soft_zone_excess(Simulation *sim) {
             if (!BitMath::at(ent.flags, EntityFlags::kSpawnedFromZone)) return;
             if (BitMath::at(ent.flags, EntityFlags::kIsDespawning)) return;
             uint8_t culled = BitMath::at(ent.flags, EntityFlags::kIsCulled);
-            if (!culled && over < target * 0.35f) return;
-            if (!culled && frand() > 0.40f) return;
+            if (!culled) {
+                if (!crowd || flower_xy.size() < 2) return;
+                if (near_any_combat_fov(ent.get_x(), ent.get_y())) return;
+            }
             BitMath::set(ent.flags, EntityFlags::kNoDrops);
             s->request_delete(ent.id);
             --budget;
@@ -1195,7 +1299,7 @@ void Map::spawn_random_mob(Simulation *sim, float x, float y) {
             uint8_t base_r = MOB_DATA[s.id].rarity;
             uint8_t spawn_r = resolve_zone_spawn_rarity(base_r, zone.difficulty);
             float radius = MOB_DATA[s.id].radius.get_single(1.f) * MOB_RADIUS_MULTIPLIER
-                * mob_rarity_radius_mult(spawn_r);
+                * mob_spawn_radius_mult(base_r, spawn_r);
             if (Map::circle_hits_impassable(sim->map_id, x, y, radius + 8.f)) return;
             _spawn_mob_at(sim, zone_id, s.id, x, y, spawn_r);
             return;
@@ -1205,13 +1309,20 @@ void Map::spawn_random_mob(Simulation *sim, float x, float y) {
 
 // 生成一只怪并套用 Zone 难度倍率 / 记账。spawn_rarity 须与采样 clearance 一致。
 void Map::_spawn_mob_at(Simulation *sim, uint32_t zone_id, MobID::T mob_id, float x, float y, uint8_t spawn_rarity) {
+    if (zone_id >= map_zones(sim->map_id).size() || mob_id >= MobID::kNumMobs) return;
+    if (in_spawn_plaza(x, y)) return;
     struct ZoneDefinition const &zone = map_zones(sim->map_id)[zone_id];
     uint32_t diff = zone.difficulty;
     uint8_t base_r = MOB_DATA[mob_id].rarity;
     uint8_t spawn_r = spawn_rarity;
-    if (spawn_r >= RarityID::kNumRarities) spawn_r = base_r;
-    if (spawn_r < base_r) spawn_r = base_r;
-    float const rs = mob_rarity_radius_mult(spawn_r);
+    if (spawn_r >= RarityID::kNumRarities) spawn_r = (uint8_t)diff;
+    spawn_r = std::min(spawn_r, zone_spawn_rarity_cap(diff));
+    // The zone resolver has already applied its cap. Baked rarity is a scaling
+    // anchor, not a minimum: Square's Unique anchor must not override hub caps.
+    // Nest trash Queens must stay below the map-anchor Unique boss.
+    if (mob_id == MobID::kQueenAnt && spawn_r >= RarityID::kUnique)
+        spawn_r = RarityID::kSuper;
+    float const rs = mob_spawn_radius_mult(base_r, spawn_r);
     // Zone/plaza count once per spawn call — alloc_mob runs on_spawn for every
     // centipede segment, which would otherwise inflate density caps.
     sim->zone_mob_counts[zone_id]++;
@@ -1235,7 +1346,7 @@ void Map::_spawn_mob_at(Simulation *sim, uint32_t zone_id, MobID::T mob_id, floa
             MOB_DATA[mob_id].xp * zone_xp_mult(diff)
             * mob_spawn_xp_mult(base_r, spawn_r) + 0.5f
         );
-        // Rarity body scale (see mob_rarity_radius_mult; Unique≈2×). Every segment
+        // Rarity body scale (Common→Unique ~7× vs baked base). Every segment
         // so Segment.cc spacing (r_self+r_parent) stays consistent.
         if (rs != 1.f) {
             float nr = mob.get_radius() * rs;
@@ -1325,12 +1436,18 @@ static void spawn_aoi_half(float &hw, float &hh) {
 }
 
 static uint8_t point_near_flower_aoi(Simulation *sim, float x, float y, float hw, float hh) {
+    // No living flowers (boot / empty map): allow zone-wide seed spawn.
+    // With players: only plant near someone's AOI so far biomes stay cheap.
     uint8_t near = 0;
+    uint8_t any = 0;
     sim->for_each<kFlower>([&](Simulation *, Entity &f) {
-        if (near || f.has_component(kMob)) return;
+        if (f.has_component(kMob)) return;
+        any = 1;
+        if (near) return;
         if (std::fabs(f.get_x() - x) <= hw && std::fabs(f.get_y() - y) <= hh)
             near = 1;
     });
+    if (!any) return 1;
     return near;
 }
 
@@ -1341,8 +1458,9 @@ uint8_t Map::sample_spawn_point(Simulation *sim, uint32_t zone_id, uint8_t mob_i
     ZoneDefinition const &zone = zones[zone_id];
     SpawnRule const &rule = spawn_rules()[mob_id];
     uint8_t cls = spawn_class(mob_id);
+    uint8_t base_r = MOB_DATA[mob_id].rarity;
     float radius = MOB_DATA[mob_id].radius.get_single(frand()) * MOB_RADIUS_MULTIPLIER
-        * mob_rarity_radius_mult(spawn_rarity);
+        * mob_spawn_radius_mult(base_r, spawn_rarity);
     float clearance = radius + 8.f;
     float const margin = 60.f;
     float zw = zone.right - zone.left - 2.f * margin;
@@ -1437,13 +1555,15 @@ uint8_t Map::sample_spawn_point(Simulation *sim, uint32_t zone_id, uint8_t mob_i
         if (need_clear > 0.f
             && open_clearance(sim->map_id, x, y, clearance, need_clear) < need_clear) continue;
         if (in_safe_channel(sim->map_id, x, y)) continue;
-        // 玩家近身不刷怪：避免凭空贴脸
+        // 玩家近身不刷怪：距离含怪体型，Unique 大半径不能贴脸压死
         bool too_close = false;
+        float const pad = kMinSpawnPlayerDist + clearance + BASE_FLOWER_RADIUS;
+        float const pad2 = pad * pad;
         sim->for_each<kFlower>([&](Simulation *, Entity &ent){
             if (too_close) return;
             if (ent.has_component(kMob)) return;
             float dx = ent.get_x() - x, dy = ent.get_y() - y;
-            if (dx * dx + dy * dy < kMinSpawnPlayerDist * kMinSpawnPlayerDist) too_close = true;
+            if (dx * dx + dy * dy < pad2) too_close = true;
         });
         if (too_close) continue;
         ox = x; oy = y;
@@ -1454,8 +1574,8 @@ uint8_t Map::sample_spawn_point(Simulation *sim, uint32_t zone_id, uint8_t mob_i
 
 // 主刷怪入口：选区 → 选点 → 抽怪 → 生成。
 void Map::spawn_zone_mob(Simulation *sim) {
-    // Two tries — was 4× full placement; failed corridor probes blew the tick.
-    for (uint32_t attempt = 0; attempt < 2; ++attempt) {
+    // Three tries on 8c — two starved FOV refill when corridor probes missed.
+    for (uint32_t attempt = 0; attempt < 3; ++attempt) {
         if (_spawn_zone_mob_once(sim)) return;
     }
 }
@@ -1464,33 +1584,55 @@ uint8_t Map::_spawn_zone_mob_once(Simulation *sim) {
     MapZones const &zones = map_zones(sim->map_id);
     if (zones.size() == 0) return 0;
 
-    // AOI half-extents shared with sample_spawn_point (cheap reject first).
+    // Spawn reject uses larger AOI; combat FOV drives density (clone ≈16/screen).
     float near_hw = 0.f, near_hh = 0.f;
     spawn_aoi_half(near_hw, near_hh);
+    float combat_hw = 0.f, combat_hh = 0.f;
+    combat_fov_half(combat_hw, combat_hh);
 
-    // Prefer a zone that already contains a flower (human or bot) so random
-    // global pick_spawn_zone isn't mostly wasted on far biomes.
-    uint32_t zone_id = zones.size(); // invalid sentinel
-    {
-        StaticArray<uint32_t, MAX_ZONES_PER_MAP> near_zones;
-        sim->for_each<kFlower>([&](Simulation *, Entity &f) {
-            if (f.has_component(kMob)) return;
-            uint32_t z = Map::get_zone_from_pos(sim->map_id, f.get_x(), f.get_y());
-            if (z >= zones.size()) return;
-            for (uint32_t i = 0; i < near_zones.size(); ++i)
-                if (near_zones[i] == z) return;
-            if (near_zones.size() < MAX_ZONES_PER_MAP)
-                near_zones.push(z);
-        });
-        if (near_zones.size() > 0)
-            zone_id = near_zones[(uint32_t)(frand() * (float)near_zones.size()) % near_zones.size()];
-        else
-            zone_id = Map::pick_spawn_zone(sim->map_id);
-    }
+    // Prefer the flower whose combat FOV has the fewest zone wildlife (clone).
+    Entity *focus = nullptr;
+    uint32_t focus_count = UINT32_MAX;
+    uint32_t focus_zone = zones.size();
+    sim->for_each<kFlower>([&](Simulation *s, Entity &f) {
+        if (f.has_component(kMob)) return;
+        uint32_t z = Map::get_zone_from_pos(s->map_id, f.get_x(), f.get_y());
+        if (z >= zones.size()) return;
+        uint32_t n = count_zone_wildlife_in_box(s, f.get_x(), f.get_y(),
+                                               combat_hw, combat_hh);
+        if (n < focus_count) {
+            focus_count = n;
+            focus = &f;
+            focus_zone = z;
+        }
+    });
+
+    uint32_t zone_id = focus_zone;
+    if (zone_id >= zones.size())
+        zone_id = Map::pick_spawn_zone(sim->map_id);
     if (zone_id >= zones.size()) return 0;
     ZoneDefinition const &zone = zones[zone_id];
-    // dens×area + per-rarity abs_cap (Rare+ used to skip abs_cap → ring bloat).
-    if ((float)sim->zone_mob_counts[zone_id] >= soft_zone_spawn_target(sim, zone_id, zone))
+
+    // Pool pressure: never grow wildlife into the shared ENTITY_CAP cliff.
+    // Also reserve room for multi-body spawns (centipede segments / ant holes).
+    uint32_t const ents_now = sim->entity_count();
+    if (ents_now >= kEntitySpawnStop)
+        return 0;
+
+    uint32_t flowers = count_alive_flowers(sim);
+    // Primary gate: combat FOV already packed for the emptiest nearby flower.
+    float local_need = local_combat_target(zone.difficulty, flowers);
+    if (focus != nullptr && (float)focus_count >= local_need)
+        return 0;
+    // FOV underfilled: allow a small overshoot past dens×area soft so the screen
+    // can refill while far/culled packs linger — NOT the full abs hard-cap
+    // (that path filled 8k ents and ABRT'd under multiplayer).
+    float soft = soft_zone_spawn_target(sim, zone_id, zone);
+    float hard = (float)soft_zone_abs_cap(zone.difficulty);
+    float fov_head = soft + 24.f;
+    if (fov_head > hard) fov_head = hard;
+    uint8_t need_local = focus != nullptr && (float)focus_count < local_need;
+    if ((float)sim->zone_mob_counts[zone_id] >= (need_local ? fov_head : soft))
         return 0;
 
     float total = 0.f;
@@ -1507,6 +1649,10 @@ uint8_t Map::_spawn_zone_mob_once(Simulation *sim) {
     uint8_t cls = spawn_class(mob_id);
     if (cls == SpawnClass::kBoss) return 0;   // Boss 由 ensure_boss 驱动
 
+    // Centipede/hole: zone count +1 but many ents — refuse if cost would cross stop.
+    if (ents_now + spawn_entity_cost(mob_id) > kEntitySpawnStop)
+        return 0;
+
     uint8_t base_r = MOB_DATA[mob_id].rarity;
     uint8_t spawn_r = resolve_zone_spawn_rarity(base_r, zone.difficulty);
 
@@ -1514,6 +1660,15 @@ uint8_t Map::_spawn_zone_mob_once(Simulation *sim) {
     // sample_spawn_point already rejects outside flower AOI before heavy probes.
     if (!Map::sample_spawn_point(sim, zone_id, mob_id, x, y, spawn_r)) return 0;
     if (!point_near_flower_aoi(sim, x, y, near_hw, near_hh)) return 0;
+    // Prefer landing in the underfilled flower's combat FOV when we have one.
+    if (focus != nullptr) {
+        float dx = std::fabs(x - focus->get_x());
+        float dy = std::fabs(y - focus->get_y());
+        if (dx > combat_hw || dy > combat_hh) {
+            // Soft bias: prefer emptiest FOV without starving when samples miss.
+            if (frand() < 0.55f) return 0;
+        }
+    }
     if (cls == SpawnClass::kAnchor) {
         // 同款精英 1500 单位半径内至多 1 只（跨 Zone，总纲 R6）。
         // Must use for_each: spawn runs before spatial_hash.insert this tick.

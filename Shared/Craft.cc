@@ -5,6 +5,7 @@
 
 #include <Helpers/Math.hh>
 
+#include <algorithm>
 #include <cmath>
 #include <cstring>
 #include <vector>
@@ -240,6 +241,76 @@ namespace Craft {
         return find_same_name_at_rarity(from, rarity);
     }
 
+    // accounts.dat is space-tokenized; Name keys must not contain spaces.
+    // Treat ' ' and '_' as the same so "Golden_Leaf" matches "Golden Leaf".
+    static int unique_name_key_eq(char const *a, char const *b) {
+        if (a == nullptr || b == nullptr) return 0;
+        for (;;) {
+            char ca = *a;
+            char cb = *b;
+            if (ca == ' ') ca = '_';
+            if (cb == ' ') cb = '_';
+            if (ca != cb) return 0;
+            if (ca == 0) return 1;
+            ++a;
+            ++b;
+        }
+    }
+
+    PetalID::T unique_id_for_name(char const *name) {
+        if (name == nullptr || name[0] == 0) return PetalID::kNone;
+        PetalID::T best = PetalID::kNone;
+        for (uint32_t id = 1; id < (uint32_t) PetalID::kNumPetals; ++id) {
+            if (PETAL_DATA[id].rarity != RarityID::kUnique) continue;
+            if (PETAL_DATA[id].name == nullptr) continue;
+            if (!unique_name_key_eq(PETAL_DATA[id].name, name)) continue;
+            // Prefer highest id — matches craft UI resolve_craft_family_slot.
+            if (best == PetalID::kNone || id > (uint32_t) best)
+                best = (PetalID::T) id;
+        }
+        return best;
+    }
+
+    PetalID::T canonical_unique_id(PetalID::T from) {
+        if (from == PetalID::kNone || from >= PetalID::kNumPetals) return PetalID::kNone;
+        if (from == PetalID::kCoin) return PetalID::kNone;
+        return unique_id_for_name(PETAL_DATA[from].name);
+    }
+
+    void petal_levels_canonicalize(std::array<uint32_t, PetalID::kNumPetals> &levels) {
+        std::array<uint32_t, PetalID::kNumPetals> merged = {};
+        for (uint32_t id = 1; id < (uint32_t) PetalID::kNumPetals; ++id) {
+            uint32_t lv = levels[id];
+            if (lv == 0) continue;
+            PetalID::T canon = canonical_unique_id((PetalID::T) id);
+            if (canon == PetalID::kNone || canon >= PetalID::kNumPetals) {
+                if (PETAL_DATA[id].rarity == RarityID::kUnique)
+                    merged[id] = std::max(merged[id], lv);
+                continue;
+            }
+            merged[canon] = std::max(merged[canon], lv);
+        }
+        levels = merged;
+    }
+
+    uint32_t petal_level_get(std::array<uint32_t, PetalID::kNumPetals> const &levels,
+                             PetalID::T id) {
+        if (id == PetalID::kNone || id >= PetalID::kNumPetals) return 0;
+        PetalID::T canon = canonical_unique_id(id);
+        if (canon != PetalID::kNone && canon < PetalID::kNumPetals)
+            return levels[canon];
+        if (PETAL_DATA[id].rarity == RarityID::kUnique)
+            return levels[id];
+        return 0;
+    }
+
+    uint8_t unique_is_world_singleton(PetalID::T id) {
+        if (id == PetalID::kNone || id >= PetalID::kNumPetals) return 0;
+        if (PETAL_DATA[id].rarity != RarityID::kUnique) return 0;
+        // Ladder Unique (has Super same-name) can exist as many copies as dropped/crafted.
+        return petal_at_rarity(id, RarityID::kSuper) == PetalID::kNone ? 1 : 0;
+    }
+
     uint32_t coins_from_mob(uint8_t mob_rarity) {
         if (mob_rarity >= RarityID::kNumRarities) mob_rarity = 0;
         uint32_t base = COIN_BASE[mob_rarity];
@@ -421,11 +492,13 @@ namespace Craft {
         for (uint32_t i = 0; i < MAX_DROPS_PER_MOB; ++i) out[i] = 0.f;
         if (mob_id >= MobID::kNumMobs) return 0.f;
         auto const &drops = MOB_DATA[mob_id].drops;
-        if (drops.size() == 0) return 0.f;
+        uint32_t n = drops.size();
+        if (n > MAX_DROPS_PER_MOB) n = MAX_DROPS_PER_MOB;
+        if (n == 0) return 0.f;
         float base[MAX_DROPS_PER_MOB] = {};
         compute_mob_drop_weights(mob_id, mob_rarity, base);
         float total = 0.f;
-        for (uint32_t i = 0; i < drops.size(); ++i) {
+        for (uint32_t i = 0; i < n; ++i) {
             float w = base[i];
             PetalID::T drop_id = drops[i];
             // Chase specials already carry a flat share — do not crush them again.

@@ -123,45 +123,62 @@ uint64_t source_key(std::string const &source) {
     for (unsigned char c : ClientAddress::quota_key(source)) value = (value ^ c) * 1099511628211ull;
     return value ? value : 1;
 }
+bool parse_line(std::string const &line, Entry &e, uint32_t previous) {
+    if (line.empty() || line == "\r") return false;
+    std::istringstream in(line);
+    e = {};
+    if (!(in >> e.id >> e.timestamp >> std::quoted(e.author) >> std::quoted(e.text))
+        || e.id <= previous || e.author.empty() || e.text.empty() || e.text.size() > 960
+        || !UTF8Parser::is_valid_utf8(e.text) || !UTF8Parser::is_valid_utf8(e.author))
+        return false;
+    // Reject timestamps that become Invalid Date in JS (breaks feedback.html render).
+    if (e.timestamp > 1ull << 53) return false;
+    std::string tag;
+    while (in >> tag) {
+        if (tag.starts_with("ip:")) {
+            try {
+                size_t n;
+                e.source = std::stoull(tag.substr(3), &n);
+                if (n != tag.size() - 3) return false;
+            } catch (...) { return false; }
+        } else if (tag.starts_with("done:")) {
+            std::string v = tag.substr(5);
+            if (v != "0" && v != "1") return false;
+            e.handled = (uint8_t) (v[0] - '0');
+        } else if (tag.starts_with("fix:")) {
+            // "fix:" is 4 chars — substr(5) made every row with fix:0/1 unreadable.
+            std::string v = tag.substr(4);
+            if (v != "0" && v != "1") return false;
+            e.resolved = (uint8_t) (v[0] - '0');
+        } else {
+            return false;
+        }
+    }
+    return true;
+}
+// Best-effort: keep valid prefix/lines so one corrupt row cannot wipe the board.
 bool parse(std::string const &raw, std::deque<Entry> &out) {
-    std::istringstream in(raw);
+    out.clear();
+    if (raw.empty()) return true;
     uint32_t previous = 0;
-    while (true) {
-        in >> std::ws;
-        if (in.eof()) return true;
+    size_t bad = 0;
+    std::istringstream in(raw);
+    std::string line;
+    while (std::getline(in, line)) {
+        if (!line.empty() && line.back() == '\r') line.pop_back();
+        if (line.empty()) continue;
         Entry e{};
-        if (!(in >> e.id >> e.timestamp >> std::quoted(e.author) >> std::quoted(e.text))
-            || e.id <= previous || e.author.empty() || e.text.empty() || e.text.size() > 960
-            || !UTF8Parser::is_valid_utf8(e.text)) return false;
-        std::string tail;
-        std::getline(in, tail);
-        if (!tail.empty() && tail != "\r") {
-            std::istringstream extra(tail);
-            std::string tag;
-            while (extra >> tag) {
-                if (tag.starts_with("ip:")) {
-                    try {
-                        size_t n;
-                        e.source = std::stoull(tag.substr(3), &n);
-                        if (n != tag.size() - 3) return false;
-                    } catch (...) { return false; }
-                } else if (tag.starts_with("done:")) {
-                    std::string v = tag.substr(5);
-                    if (v != "0" && v != "1") return false;
-                    e.handled = (uint8_t) (v[0] - '0');
-                } else if (tag.starts_with("fix:")) {
-                    std::string v = tag.substr(5);
-                    if (v != "0" && v != "1") return false;
-                    e.resolved = (uint8_t) (v[0] - '0');
-                } else {
-                    return false;
-                }
-            }
+        if (!parse_line(line, e, previous)) {
+            ++bad;
+            continue;
         }
         previous = e.id;
         out.push_back(std::move(e));
         if (out.size() > max_entries) out.pop_front();
     }
+    if (bad) std::cerr << "[feedback] skipped " << bad << " corrupt line(s), kept " << out.size() << '\n';
+    // Empty file is ok; totally unreadable non-empty file is not.
+    return bad == 0 || !out.empty() || raw.find_first_not_of(" \t\r\n") == std::string::npos;
 }
 std::string serialize() {
     std::ostringstream out;
@@ -305,7 +322,7 @@ uint8_t FeedbackStore::post(std::string const &author, std::string const &text, 
 }
 
 std::string FeedbackStore::page_json(uint32_t before) {
-    if (!writable && last_saved.empty()) return "{\"ok\":false,\"entries\":[],\"next_before\":0}";
+    // Always serve the in-memory board for reads. Posts still require writable.
     std::string out = "{\"ok\":true,\"entries\":[";
     uint32_t n = 0, last = 0; bool more = false;
     for (auto i = entries.rbegin(); i != entries.rend(); ++i) {

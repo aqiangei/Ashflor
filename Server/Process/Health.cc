@@ -7,7 +7,13 @@
 #include <iostream>
 
 void tick_health_behavior(Simulation *sim, Entity &ent) {
+    if (ent.armor_shred_ticks && --ent.armor_shred_ticks == 0) {
+        ent.armor += ent.armor_shredded;
+        ent.armor_shredded = 0.f;
+    }
+    if (ent.dark_marked_ticks) --ent.dark_marked_ticks;
     ent.set_damaged(0);
+    ent.set_hit_damage(0.f);
     if (ent.poison_ticks > 0 && !ent.has_component(kPetal)) {
         ent.poison_ticks--;
         inflict_damage(sim, ent.poison_dealer, ent.id, ent.poison_inflicted, DamageType::kPoison);

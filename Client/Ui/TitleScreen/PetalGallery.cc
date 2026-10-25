@@ -54,7 +54,7 @@ void GalleryPetal::on_event(uint8_t event) {
         && (always_show || Game::seen_petals[id])) {
         rendering_tooltip = 1;
         // Gallery: show leveled stats when this Unique has an account level.
-        if (Craft::can_level_petal(id) && Game::petal_levels[id] > 0
+        if (Craft::can_level_petal(id) && Craft::petal_level_get(Game::petal_levels, id) > 0
             && Ui::UiLoadout::petal_tooltips_leveled[id] != nullptr)
             tooltip = Ui::UiLoadout::petal_tooltips_leveled[id];
         else

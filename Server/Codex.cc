@@ -289,7 +289,7 @@ static void emit_mech_payload(std::string &out, char const *id) {
         }
         step("同名英文字段 PETAL_DATA.name 为梯子键", "Same English PETAL_DATA.name keys the ladder");
         step("合成：Craft::petal_at_rarity / craft_result 优先最近同名 ID", "Craft::petal_at_rarity / craft_result prefer nearest same-name ID");
-        step("怪掉稀有度带：自身 20% / −1 60% / −2 20%（Death::_roll_drop_rarity）", "Mob drop rarity: self 20% / −1 60% / −2 20%");
+        step("怪掉稀有度带：自身 20% / −1 60% / −2 20%；Unique 怪 50%/35%/15%", "Mob drop rarity: self 20% / −1 60% / −2 20%; Unique mobs 50%/35%/15%");
         step("事件/宝箱：Ultra/Super/Unique 池（TreasureSites::roll_mat_rarity）", "Events/chests: Ultra/Super/Unique pool");
     } else if (std::strcmp(id, "craft") == 0) {
         srowf("合成批量 kCraftBatch", (float) Craft::kCraftBatch);
@@ -459,24 +459,56 @@ static void emit_petal_attrs(std::string &out, PetalAttributes const &a) {
     jkv_f(out, "crit_factor", a.crit_factor, f);
     jkv_f(out, "luck", a.luck, f);
     jkv_f(out, "armor_shred", a.armor_shred, f);
+    jkv_f(out, "armor_shred_seconds", a.armor_shred_seconds, f);
     jkv_f(out, "body_radius_bonus", a.body_radius_bonus, f);
     jkv_f(out, "heal_amp", a.heal_amp, f);
     jkv_f(out, "damage_absorb", a.damage_absorb, f);
+    jkv_f(out, "knockback_taken", a.knockback_taken, f);
     jkv_f(out, "solo_damage_factor", a.solo_damage_factor, f);
     jkv_f(out, "petal_evasion", a.petal_evasion, f);
     jkv_f(out, "flower_evasion", a.flower_evasion, f);
     jkv_f(out, "nazar_mitigation", a.nazar_mitigation, f);
     jkv_u(out, "nazar_charges", a.nazar_charges, f);
     jkv_f(out, "petal_hp_factor", a.petal_hp_factor, f);
+    jkv_f(out, "petal_repair", a.petal_repair, f);
+    jkv_f(out, "clay_max_damage", a.clay_max_damage, f);
+    jkv_f(out, "tomato_max_damage", a.tomato_max_damage, f);
+    jkv_f(out, "domino_max_damage", a.domino_max_damage, f);
     jkv_f(out, "vs_projectile_factor", a.vs_projectile_factor, f);
     jkv_f(out, "lightning_damage", a.lightning_damage, f);
     jkv_u(out, "lightning_chains", a.lightning_chains, f);
+    jkv_u(out, "battery_charges", a.battery_charges, f);
+    jkv_f(out, "damage_delay_seconds", a.damage_delay_seconds, f);
     jkv_f(out, "on_hit_heal_ratio", a.on_hit_heal_ratio, f);
     jkv_f(out, "hit_interval_seconds", a.hit_interval_seconds, f);
     jkv_u(out, "phase_through", a.phase_through, f);
     jkv_f(out, "aggro_shrink", a.aggro_shrink, f);
+    jkv_u(out, "ankh_mark", a.ankh_mark, f);
+    jkv_u(out, "shovel_burrow", a.shovel_burrow, f);
+    jkv_f(out, "death_delay_seconds", a.death_delay_seconds, f);
+    jkv_f(out, "totem_heal", a.totem_heal, f);
+    jkv_f(out, "totem_seconds", a.totem_seconds, f);
+    jkv_f(out, "root_armor", a.root_armor, f);
+    jkv_f(out, "root_interval", a.root_interval, f);
+    jkv_u(out, "root_max_stacks", a.root_max_stacks, f);
+    jkv_u(out, "wax_block", a.wax_block, f);
     jkv_f(out, "mana_gen", a.mana_gen, f);
     jkv_f(out, "mana_cap", a.mana_cap, f);
+    jkv_f(out, "mana_absorb_per", a.mana_absorb_per, f);
+    jkv_f(out, "mana_lightning_per", a.mana_lightning_per, f);
+    jkv_f(out, "mana_spawn_cost", a.mana_spawn_cost, f);
+    jkv_u(out, "card_random_stats", a.card_random_stats, f);
+    jkv_u(out, "mimic_left", a.mimic_left, f);
+    jkv_u(out, "compass", a.compass, f);
+    jkv_u(out, "blood_sacrifice", a.blood_sacrifice, f);
+    jkv_u(out, "champion_crown", a.champion_crown, f);
+    jkv_u(out, "soul_splitter", a.soul_splitter, f);
+    jkv_u(out, "paranormal", a.paranormal, f);
+    jkv_u(out, "corruption", a.corruption, f);
+    jkv_u(out, "dark_mark", a.dark_mark, f);
+    jkv_f(out, "overheal_to_shield", a.overheal_to_shield, f);
+    jkv_f(out, "privet_extra_poison", a.privet_extra_poison, f);
+    jkv_u(out, "powder_max_rarity", a.powder_max_rarity, f);
     jkv_f(out, "bonus_vs_slowed", a.bonus_vs_slowed, f);
     jkv_u(out, "hit_cycle", a.hit_cycle, f);
     jkv_f(out, "hit_cycle_factor", a.hit_cycle_factor, f);
@@ -553,30 +585,38 @@ static void emit_petal(std::string &out, uint32_t id,
 }
 
 static void emit_mob_drops(std::string &out, uint32_t mob_id, uint8_t view_rarity) {
+    if (mob_id >= MobID::kNumMobs) { out += "[]"; return; }
     auto const &drops = MOB_DATA[mob_id].drops;
+    uint32_t n = drops.size();
+    if (n > MAX_DROPS_PER_MOB) n = MAX_DROPS_PER_MOB;
     float weights[MAX_DROPS_PER_MOB] = {};
     float total = Craft::mob_loot_weights((MobID::T) mob_id, view_rarity, weights);
     out += '[';
-    for (uint32_t i = 0; i < drops.size(); ++i) {
+    for (uint32_t i = 0; i < n; ++i) {
         if (i) out += ',';
         PetalID::T seed = drops[i];
         PetalID::T shown = Craft::petal_at_rarity(seed, view_rarity);
-        if (shown == PetalID::kNone || is_chase_loot_petal(seed))
+        if (shown == PetalID::kNone || shown >= PetalID::kNumPetals
+            || is_chase_loot_petal(seed))
             shown = seed;
+        if (shown >= PetalID::kNumPetals) shown = PetalID::kNone;
         float pct = (total > 0.f) ? (weights[i] / total * 100.f) : 0.f;
+        char const *en = (shown < PetalID::kNumPetals && PETAL_DATA[shown].name)
+            ? PETAL_DATA[shown].name : "";
+        uint8_t rar = (shown < PetalID::kNumPetals) ? PETAL_DATA[shown].rarity : 0;
         out += "{\"seed\":";
         out += std::to_string((unsigned) seed);
         out += ",\"petal\":";
         out += std::to_string((unsigned) shown);
         out += ",\"name\":\"";
-        esc(out, PETAL_DATA[shown].name ? PETAL_DATA[shown].name : "");
+        esc(out, en);
         out += "\",\"name_zh\":\"";
-        esc(out, LIVE_PETAL_NAME_ZH[shown] ? LIVE_PETAL_NAME_ZH[shown]
-                : (PETAL_DATA[shown].name ? PETAL_DATA[shown].name : ""));
+        esc(out, (shown < PetalID::kNumPetals && LIVE_PETAL_NAME_ZH[shown])
+                ? LIVE_PETAL_NAME_ZH[shown] : en);
         out += "\",\"rarity\":";
-        out += std::to_string(PETAL_DATA[shown].rarity);
+        out += std::to_string(rar);
         out += ",\"rarity_zh\":\"";
-        out += rarity_zh(PETAL_DATA[shown].rarity);
+        out += rarity_zh(rar);
         out += "\",\"weight\":";
         jnum(out, weights[i]);
         out += ",\"pct\":";
@@ -903,6 +943,47 @@ std::string Server::live_codex_json() {
         }
     }
 
+    out += "]}";
+    cached = std::move(out);
+    return cached;
+}
+
+std::string Server::live_codex_gate_json() {
+    static std::string cached;
+    if (!cached.empty()) return cached;
+
+    std::string out;
+    out.reserve(16 * 1024);
+    out += "{\"maps\":[";
+    for (uint8_t i = 0; i < MapID::kNumMaps; ++i) {
+        if (i) out += ',';
+        MapIntro const &m = kCodexMaps[i];
+        char col[16];
+        std::snprintf(col, sizeof(col), "#%06x", m.color & 0xffffffu);
+        out += "{\"id\":";
+        out += std::to_string(i);
+        out += ",\"name_zh\":\"";
+        esc(out, m.zh);
+        out += "\",\"name_en\":\"";
+        esc(out, m.en);
+        out += "\",\"tagline\":\"";
+        esc(out, m.tagline_zh);
+        out += "\",\"color\":\"";
+        out += col;
+        out += "\"}";
+    }
+    out += "],\"mechanics\":[";
+    for (size_t i = 0; i < sizeof(MECHS) / sizeof(MECHS[0]); ++i) {
+        if (i) out += ',';
+        MechChapter const &c = MECHS[i];
+        out += "{\"id\":\"";
+        esc(out, c.id);
+        out += "\",\"title\":\"";
+        esc(out, c.title_zh);
+        out += "\",\"summary\":\"";
+        esc(out, c.summary_zh);
+        out += "\"}";
+    }
     out += "]}";
     cached = std::move(out);
     return cached;

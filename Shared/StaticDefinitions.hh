@@ -23,7 +23,7 @@ inline uint32_t const MINIMAP_PLAYER_CAP = 128;
 inline uint32_t const MAX_PETALS_IN_CLUMP = 4;
 // Matches RarityID::kNumRarities - 1 (Common..Unique). Zone difficulty == petal rarity.
 inline uint32_t const MAX_DIFFICULTY = 8;
-inline uint32_t const MAX_DROPS_PER_MOB = 8;
+inline uint32_t const MAX_DROPS_PER_MOB = 12;
 // Concept maps need many specialty Zone AABBs + large terrain pieces
 inline uint32_t const MAX_ZONES_PER_MAP = 48;
 // Corridor/gate/ford channel paint + pocket bridges need headroom past legacy 192.
@@ -144,7 +144,8 @@ namespace DamageType {
         kPoison,
         kBurn,
         kSplash, // AoE follow-up; does not re-trigger splash
-        kReflect
+        kReflect,
+        kDeferred // Sponge settlement: already mitigated; still runs lethal handlers
     };
 }
 
@@ -2577,6 +2578,16 @@ namespace PetalID {
         kGogglesUltra,
         kGogglesSuper,
         kGogglesUnique,
+        // Salve / 药膏 — restores other petals' durability (HP)
+        kSalve,
+        kSalveUnusual,
+        kSalveRare,
+        kSalveEpic,
+        kSalveLegendary,
+        kSalveMythic,
+        kSalveUltra,
+        kSalveSuper,
+        kSalveUnique,
         kNumPetals
     };
 };
@@ -2764,7 +2775,8 @@ namespace EntityFlags {
         kCPUControlled,
         kIsDetached,
         kTerrainBounced, // peas etc.: one wall/terrain bounce already spent
-        kMagnetPull // drop being magnet-sucked — skip terrain so walls don't block
+        kMagnetPull, // drop being magnet-sucked — skip terrain so walls don't block
+        kAdminSpawned // /live console spawn — TTL + preferential cull (not zone wildlife)
     };
 };
 
@@ -2787,6 +2799,7 @@ namespace EquipmentFlags {
         kCutter,
         kAccelerator,
         kMagnet,
+        kBandage, // wraps on the flower body (no orbiting clone)
         kNone
     };
 };
@@ -2795,6 +2808,16 @@ namespace InputFlags {
     enum {
         kAttacking,
         kDefending
+    };
+}
+
+namespace FlowerEffects {
+    enum : uint8_t {
+        kBurrow = 1,
+        kDeathGrace = 2,
+        kMana = 4,
+        kLowAggro = 8,
+        kShovel = 16
     };
 }
 
@@ -2828,7 +2851,7 @@ struct PetalAttributes {
     float extra_reload_factor = 1;
     float move_speed_factor = 1; // multiplies flower acceleration when equipped
     float magnet_radius = 0; // attracts drops within this range when equipped
-    float attraction_radius = 0; // Lentil etc.: pull nearby mobs while attacking
+    float attraction_radius = 0; // Lentil etc.: always pull petals toward nearby mobs
     uint8_t fixed_orbit_range = 0; // 1 = ignore extra_range buff on orbit radius
     // Ground "healing vine" aura: the Monstera petal, once thrown on the ground,
     // roots itself and heals every flower standing inside `aura_radius`.
@@ -2854,6 +2877,7 @@ struct PetalAttributes {
     uint8_t nazar_charges = 0; // wiki import
     float nazar_mitigation = 0; // wiki import
     float petal_hp_factor = 1; // wiki import
+    float petal_repair = 0; // Salve: HP/s restored to living loadout petals
     float luck = 0; // wiki import
     float clay_max_damage = 0; // wiki import
     float tomato_max_damage = 0; // wiki import

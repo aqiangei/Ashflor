@@ -64,6 +64,8 @@ namespace Server {
     extern std::string live_catalog_json();
     // Encyclopedia: worlds, mechanics, petals, mobs, art kinds
     extern std::string live_codex_json();
+    // Slim maps+mechanics tiles for live.html gate (avoids ~5MB full codex)
+    extern std::string live_codex_gate_json();
     // Live admin actions — return compact JSON {ok,msg,...}
     extern std::string live_admin_announce(std::string const &text);
     // rarity: 0..kNumRarities-1 resolve same-name ladder; 255 = use petal_id as-is

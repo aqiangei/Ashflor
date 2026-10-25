@@ -44,7 +44,8 @@ public:
     uint8_t ent_alive(EntityID const &) const;
     uint32_t entity_count() const;
 #ifdef SERVERSIDE
-    // Cap pressure: zone wildlife only (never petals/drops/summons/crates).
+    // Cap pressure: corpses → soft wildlife → desperate drops/webs/orphans/culled.
+    // Never aborts the process (full pool used to ABRT → mass client 1006).
     uint32_t emergency_reclaim_entities(uint32_t budget);
 #endif
     void tick();

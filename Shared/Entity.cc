@@ -40,6 +40,10 @@ void Entity::add_component(uint32_t comp) {
     BitMath::set(components, comp);
 }
 
+void Entity::remove_component(uint32_t comp) {
+    BitMath::unset(components, comp);
+}
+
 uint8_t Entity::has_component(uint32_t comp) const {
     return BitMath::at(components, comp);
 }
@@ -60,6 +64,13 @@ PERFIELD
 #undef MULTIPLE
 
 #ifdef SERVERSIDE
+template<bool precise, typename T>
+static void write_entity_scalar(Writer *writer, T const &value) {
+    if constexpr (precise)
+        writer->write<uint64_t>((uint64_t)((double)value * 65536.0));
+    else
+        writer->write<T>(value);
+}
 #define SINGLE(component, name, type) \
 void Entity::set_##name(type const &v) { \
     DEBUG_ONLY(assert(has_component(k##component));) \
@@ -85,7 +96,7 @@ template<>
 void Entity::write<true>(Writer *writer) {
     writer->write<uint32_t>(components);
     writer->write<uint32_t>(lifetime);
-    #define SINGLE(component, name, type) { writer->write<type>(name); }
+    #define SINGLE(component, name, type) { write_entity_scalar<k##name == khealth_ratio || k##name == kmana_ratio || k##name == kshield_ratio || k##name == khit_damage>(writer, name); }
     #define MULTIPLE(component, name, type, amt) { \
         for (uint32_t n = 0; n < amt; ++n) \
             writer->write<type>(name[n]); \
@@ -102,7 +113,7 @@ void Entity::write<false>(Writer *writer) {
     #define SINGLE(component, name, type) \
         if(BitMath::at_arr(state, k##name)) { \
             writer->write<uint8_t>(k##name); \
-            writer->write<type>(name); \
+            write_entity_scalar<k##name == khealth_ratio || k##name == kmana_ratio || k##name == kshield_ratio || k##name == khit_damage>(writer, name); \
     }
     #define MULTIPLE(component, name, type, amt) \
         if(BitMath::at_arr(state, k##name)) { \
@@ -129,11 +140,19 @@ void Entity::write(Writer *writer, uint8_t create) {
 }
 #else
 
+template<bool precise, typename T>
+static void read_entity_scalar(Reader *reader, T &value) {
+    if constexpr (precise)
+        value.set((float)((double)reader->read<uint64_t>() / 65536.0));
+    else
+        reader->read<T>(value);
+}
+
 template<>
 void Entity::read<true>(Reader *reader) {
     components = reader->read<uint32_t>();
     lifetime = reader->read<uint32_t>();
-    #define SINGLE(component, name, type) { reader->read<type>(name); BitMath::set_arr(state, k##name); }
+    #define SINGLE(component, name, type) { read_entity_scalar<k##name == khealth_ratio || k##name == kmana_ratio || k##name == kshield_ratio || k##name == khit_damage>(reader, name); BitMath::set_arr(state, k##name); }
     #define MULTIPLE(component, name, type, amt) { \
         BitMath::set_arr(state, k##name); \
         for (uint32_t n = 0; n < amt; ++n) { \
@@ -155,7 +174,7 @@ void Entity::read<false>(Reader *reader) {
         switch(reader->read<uint8_t>()) {
             case kFieldCount: { return; }
             #define SINGLE(component, name, type) case k##name: { \
-                reader->read<type>(name); \
+                read_entity_scalar<k##name == khealth_ratio || k##name == kmana_ratio || k##name == kshield_ratio || k##name == khit_damage>(reader, name); \
                 BitMath::set_arr(state, k##name); \
                 break; \
             }

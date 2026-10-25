@@ -10,6 +10,7 @@
 
 #include <Server/LeaderboardStore.hh>
 #include <Shared/Map.hh>
+#include <Shared/NetworkView.hh>
 
 #include <algorithm>
 #include <chrono>
@@ -142,13 +143,13 @@ static void ensure_boss(Simulation *sim) {
         mob.set_rarity(spawn_r);
         float th = mob_spawn_threat_mult(base_r, spawn_r);
         float dmg = mob_spawn_damage_mult(base_r, spawn_r);
-        float rs = mob_rarity_radius_mult(spawn_r);
+        float rs = mob_spawn_radius_mult(base_r, spawn_r);
         BitMath::set(mob.flags, EntityFlags::kHasCulling);
         mob.detection_radius = 1400.f;
         mob.zone = 0xFF;   // 不计入任何 Zone 的刷怪计数
-        // Unique petals are baked on the ×2000 curve; rarity threat alone is not
-        // enough — keep an extra boss pad so Unique loadouts still feel a fight.
-        constexpr float kBossHpMult = 8.f;
+        // Extra boss pad on top of Unique HP ladder — was ×8 when ladder was
+        // 2.6e7 and Unique petals felt helpless; ladder is flatter now so ×5.
+        constexpr float kBossHpMult = 5.f;
         constexpr float kBossDmgMult = 1.35f;
         mob.max_health *= th * kBossHpMult;
         mob.health = mob.max_health;
@@ -204,76 +205,138 @@ void Simulation::on_tick() {
         return;
     }
 
-    // Occupied: refill near players. Soft-cap batches — linear 2+flowers up to 8
-    // overfilled hub when a crowd's AOIs overlapped the Common belt.
-    // Crowd scale: 32+ flowers on one map made spawn+collide the tick hog in
-    // combat load tests — keep pockets filling for solo/small groups, throttle
-    // when a hub is already packed.
+    // Occupied: FOV-local refill (~19/viewport). HK 8c — aggressive refill,
+    // only throttle near ENTITY_CAP (not mid-pool like old 4c BJ).
     {
         auto t_spawn = std::chrono::steady_clock::now();
-        float spawn_mul = 1.f;
-        if (flowers >= 16u) spawn_mul = 0.55f;
-        if (flowers >= 28u) spawn_mul = 0.35f;
-        // Cap outer spawn calls per tick — each can still do 2 placement tries.
-        // Unbounded 4+extra+burst used to stack with corridor probes → 90ms spikes.
-        uint32_t budget = 5u;
-        if (flowers >= 16u) budget = 3u;
-        if (flowers >= 28u) budget = 2u;
-        if (frand() < (2.5f * spawn_mul) / (float) TPS) {
-            uint32_t extra = flowers;
-            if (extra > 2u) extra = 2u;
-            if (flowers >= 16u && extra > 1u) extra = 1u;
-            uint32_t batches = 2u + extra;
-            if (flowers >= 28u) batches = 2u;
-            for (uint32_t i = 0; i < batches && budget > 0; ++i) {
-                Map::spawn_zone_mob(this);
-                --budget;
+        uint32_t ents = entity_count();
+        // Align with Map kEntitySpawnStop (8050): reclaim before collide spikes.
+        if (ents >= 7600u)
+            emergency_reclaim_entities(ents >= 8050u ? 448u : 256u);
+        ents = entity_count();
+        if (ents < 8050u) {
+            uint8_t underfilled = Map::any_combat_fov_underfilled(this, 0.75f);
+            uint8_t headroom = ents < 6200u && flowers <= 4u;
+            // Crowd: overlapping FOVs — soften vs BJ; 8c can refill multiplayer FOVs.
+            float spawn_mul = 1.f;
+            if (flowers >= 4u) spawn_mul = 0.85f;
+            if (flowers >= 8u) spawn_mul = 0.70f;
+            if (!underfilled && flowers >= 16u) spawn_mul = 0.55f;
+            if (!underfilled && flowers >= 28u) spawn_mul = 0.40f;
+            if (ents >= 7200u) spawn_mul *= 0.70f;
+            if (ents >= 7800u) spawn_mul *= 0.55f;
+            // Cap refill burst — post-restart FOV fill was blowing ticks to 80–120ms → 1006.
+            uint32_t budget = underfilled ? (headroom ? 5u : 3u) : (headroom ? 3u : 2u);
+            if (underfilled && flowers >= 4u) budget = 3u;
+            if (underfilled && flowers >= 8u) budget = 2u;
+            if (!underfilled && flowers >= 8u) budget = 2u;
+            if (!underfilled && flowers >= 16u) budget = 1u;
+            float under_chance = (flowers >= 8u) ? (3.0f / (float) TPS)
+                                                 : (headroom ? 5.0f / (float) TPS
+                                                             : 4.0f / (float) TPS);
+            float chance = underfilled ? under_chance
+                                       : ((3.0f * spawn_mul) / (float) TPS);
+            if (frand() < chance) {
+                uint32_t extra = (headroom && underfilled) ? 1u
+                    : ((flowers > 2u && flowers < 8u) ? 1u : 0u);
+                uint32_t batches = underfilled ? (2u + extra) : (1u + extra);
+                if (!underfilled && flowers >= 12u) batches = 1u;
+                for (uint32_t i = 0; i < batches && budget > 0; ++i) {
+                    Map::spawn_zone_mob(this);
+                    --budget;
+                }
             }
-        }
-        // Underfilled player zones get a second burst so sparse rings/corners
-        // do not stay empty after unseen-despawn cleared the pack.
-        if (flowers < 16u && budget > 0 && frand() < 3.0f / (float) TPS) {
-            uint32_t n = budget > 2u ? 2u : budget;
-            for (uint32_t i = 0; i < n; ++i)
+            // Second pulse: light refill only — avoid stacking with first burst.
+            if (underfilled && flowers < 4u && budget > 0
+                && ents < 7200u && frand() < 3.0f / (float) TPS) {
+                uint32_t n = budget > 2u ? 2u : budget;
+                for (uint32_t i = 0; i < n; ++i)
+                    Map::spawn_zone_mob(this);
+            } else if (!underfilled && flowers < 6u && budget > 0
+                       && ents < 6800u && frand() < 1.5f / (float) TPS) {
                 Map::spawn_zone_mob(this);
+            }
         }
         Server::phase_spawn_ms += _tick_ms_since(t_spawn);
     }
 
     {
         auto t_hash = std::chrono::steady_clock::now();
-        for_each_entity([](Simulation *sim, Entity &ent) {
-            if (ent.has_component(kPhysics))
-                sim->spatial_hash.insert(ent);
+        // Only throttle wildlife outside every camera's network view. Death
+        // cameras and wide vision still need a stable hash on every tick.
+        struct View { float x, y, half_w, half_h; };
+        std::vector<View> views;
+        for_each<kCamera>([&](Simulation *, Entity &camera) {
+            Client *owner = Server::client_by_camera(this, camera.id);
+            float half_w, half_h;
+            NetworkView::half_extents(camera.get_fov(), BASE_FOV,
+                owner ? owner->view_half_w : 0, owner ? owner->view_half_h : 0,
+                half_w, half_h);
+            views.push_back({camera.get_camera_x(), camera.get_camera_y(),
+                std::max(half_w, 5000.f), std::max(half_h, 5000.f)});
+        });
+        uint32_t const tick = tick_index;
+        uint32_t const ents_now = entity_count();
+        // Far wildlife hash LOD: stride 4 idle, 6 near ENTITY_CAP (8c headroom).
+        uint32_t const hash_stride = (flowers >= 12u || ents_now >= 7200u) ? 6u : 4u;
+        for_each_entity([tick, hash_stride, &views](Simulation *sim, Entity &ent) {
+            if (ent.has_component(kPhysics)) {
+                uint8_t skip = 0;
+                if (ent.has_component(kMob)
+                    && BitMath::at(ent.flags, EntityFlags::kSpawnedFromZone)
+                    && ent.zone != 0xFF
+                    && ((tick + ent.id.id) % hash_stride) != 0u) {
+                    uint8_t in_view = 0;
+                    float const mx = ent.get_x(), my = ent.get_y();
+                    for (View const &view : views) {
+                        if (std::abs(view.x - mx) <= view.half_w + ent.get_radius()
+                            && std::abs(view.y - my) <= view.half_h + ent.get_radius()) {
+                            in_view = 1;
+                            break;
+                        }
+                    }
+                    if (!in_view) skip = 1;
+                }
+                if (!skip) sim->spatial_hash.insert(ent);
+            }
             if (BitMath::at(ent.flags, EntityFlags::kHasCulling))
                 BitMath::set(ent.flags, EntityFlags::kIsCulled);
         });
         for_each<kCamera>(tick_culling_behavior);
 
-        // florr unseenDespawn: zone mobs still culled after AOI → delete, no loot.
-        // Stride ~5 ticks (~6Hz). unseen_ticks==0 = never in any camera AOI.
-        // Plaza/soft longer than wild 30s so solo circling doesn't blink packs out;
-        // not multi-minute — crowd AOIs keep mobs "seen" forever, so long timers
-        // only delayed cleanup when people leave a pocket.
+        // florr unseenDespawn: culled zone wildlife → no-loot delete.
+        // 8c: longer windows; load gates only near pool ceiling.
         if (tick_index % 5 == 0) {
-            for_each<kMob>([](Simulation *sim, Entity &ent) {
+            uint8_t const load_hi = ents_now >= 7200u || flowers >= 16u;
+            uint8_t const load_panic = ents_now >= 7800u;
+            for_each<kMob>([load_hi, load_panic](Simulation *sim, Entity &ent) {
                 if (!BitMath::at(ent.flags, EntityFlags::kSpawnedFromZone)) return;
                 if (ent.zone == 0xFF) return; // boss / special
                 if (BitMath::at(ent.flags, EntityFlags::kIsDespawning)) return;
                 if (!BitMath::at(ent.flags, EntityFlags::kHasCulling)) return;
 
-                game_tick_t unseen_limit = (game_tick_t)(30 * TPS);
-                game_tick_t never_seen_life = (game_tick_t)(60 * TPS);
+                game_tick_t unseen_limit = (game_tick_t)(28 * TPS);
+                game_tick_t never_seen_life = (game_tick_t)(55 * TPS);
                 uint8_t in_plaza = Map::in_spawn_plaza(ent.get_x(), ent.get_y());
                 uint32_t zdiff = RarityID::kNumRarities;
                 if (ent.zone < MAX_ZONES_PER_MAP)
                     zdiff = map_zones(sim->map_id)[ent.zone].difficulty;
                 if (in_plaza) {
-                    unseen_limit = (game_tick_t)(55 * TPS);
-                    never_seen_life = (game_tick_t)(70 * TPS);
+                    unseen_limit = (game_tick_t)(45 * TPS);
+                    never_seen_life = (game_tick_t)(60 * TPS);
                 } else if (zdiff <= RarityID::kUnusual) {
-                    unseen_limit = (game_tick_t)(40 * TPS);
-                    never_seen_life = (game_tick_t)(75 * TPS);
+                    unseen_limit = (game_tick_t)(32 * TPS);
+                    never_seen_life = (game_tick_t)(60 * TPS);
+                }
+                if (load_hi && !in_plaza) {
+                    unseen_limit = (game_tick_t)(unseen_limit * 4 / 5);
+                    never_seen_life = (game_tick_t)(never_seen_life * 5 / 6);
+                }
+                if (load_panic && !in_plaza) {
+                    if (unseen_limit > (game_tick_t)(15 * TPS))
+                        unseen_limit = (game_tick_t)(15 * TPS);
+                    if (never_seen_life > (game_tick_t)(35 * TPS))
+                        never_seen_life = (game_tick_t)(35 * TPS);
                 }
 
                 if (BitMath::at(ent.flags, EntityFlags::kIsCulled)) {
@@ -290,12 +353,24 @@ void Simulation::on_tick() {
                         sim->request_delete(ent.id);
                     }
                 } else {
-                    // Mark seen: any positive value arms the despawn clock when culled again.
                     ent.unseen_ticks = 1;
                 }
             });
-            // After unseen pass: drain soft-zone surplus under crowd dens_mul.
             Map::thin_soft_zone_excess(this);
+            // Console /live dumps sit outside zone bookkeeping — under load,
+            // delete the oldest admin-spawned heads so FOV piles cannot stick.
+            if (ents_now >= 1800u || load_panic) {
+                uint32_t budget = load_panic ? 24u : (ents_now >= 3200u ? 16u : 8u);
+                for_each<kMob>([&](Simulation *sim, Entity &ent) {
+                    if (budget == 0) return;
+                    if (ent.pending_delete) return;
+                    if (!BitMath::at(ent.flags, EntityFlags::kAdminSpawned)) return;
+                    if (ent.has_component(kSegmented)) return;
+                    BitMath::set(ent.flags, EntityFlags::kNoDrops);
+                    sim->request_delete(ent.id);
+                    --budget;
+                });
+            }
         }
         Server::phase_hash_ms += _tick_ms_since(t_hash);
     }

@@ -94,7 +94,8 @@ static void write_sparse_petal_levels(Writer &writer,
 }
 
 static void send_craft_update(Client *client, uint8_t result, PetalID::T petal,
-                              uint16_t amount = 0) {
+                              uint16_t amount = 0, PetalID::T material = PetalID::kNone,
+                              uint32_t attempts = 0) {
     Writer writer(Server::OUTGOING_PACKET);
     writer.write<uint8_t>(Clientbound::kCraftUpdate);
     writer.write<uint8_t>(result);
@@ -105,6 +106,9 @@ static void send_craft_update(Client *client, uint8_t result, PetalID::T petal,
         writer.write<uint32_t>(client->craft_bank[i]);
     writer.write<uint32_t>(client->coins);
     write_sparse_petal_levels(writer, client->petal_levels);
+    // Optional tail for newer clients; count actual rolls, including All batches.
+    writer.write<PetalID::T>(material);
+    writer.write<uint32_t>(attempts);
     client->send_packet(writer.packet, writer.at - writer.packet);
 }
 
@@ -325,6 +329,18 @@ static void persist_account(Client *client) {
 
 void client_sync_craft(Client *client) {
     if (client == nullptr) return;
+    // Deploy / WS reconnect can call this before AccountResult lands, or with a
+    // fresh Client whose petal_levels are still zero. Never push an empty Unique
+    // Lv snapshot over disk high-water — that wiped badges every redeploy.
+    if (!client->account_name.empty()) {
+        if (Account *acc = AccountStore::find(client->account_name)) {
+            for (uint32_t id = 1; id < (uint32_t) PetalID::kNumPetals; ++id) {
+                if (acc->petal_levels[id] > client->petal_levels[id])
+                    client->petal_levels[id] = acc->petal_levels[id];
+            }
+        }
+    }
+    Craft::petal_levels_canonicalize(client->petal_levels);
     send_craft_update(client, CraftResultCode::kCraftBankSync, PetalID::kNone);
 }
 
@@ -609,20 +625,11 @@ void Client::on_message(WebSocket *ws, std::string_view message, uint64_t code) 
             break;
         }
         case Serverbound::kClientSpawn: {
-            // Client thinks it is dead but server still has a live flower
-            // (desync / watchdog). Flush loadout onto the camera FIRST — while
-            // alive the camera inventory is empty, so deleting without a flush
-            // respawns into all-Basics and can wipe the account on capture.
+            // A delayed snapshot may leave Continue waiting after spawn succeeded.
+            // Repeated requests resync the existing flower without replacing it.
             if (client->alive() && client->game != nullptr) {
-                Simulation *stale_sim = &client->game->simulation;
-                Entity &stale_cam = stale_sim->get_ent(client->camera);
-                Entity &stale_player = stale_sim->get_ent(stale_cam.get_player());
-                flush_flower_loadout_to_camera(stale_sim, stale_cam, stale_player);
-                AccountStore::capture_nosave(client);
-                BitMath::set(stale_player.flags, EntityFlags::kNoDrops);
-                stale_sim->request_delete(stale_player.id);
-                stale_cam.set_player(NULL_ENTITY);
-                std::cout << "[spawn] replaced stale player for " << client->play_name << std::endl;
+                client->needs_full_update = 1;
+                break;
             }
             //check string length
             std::string name;
@@ -718,6 +725,7 @@ void Client::on_message(WebSocket *ws, std::string_view message, uint64_t code) 
                 player_spawn(simulation, camera, player);
             }
             player.set_name(name);
+            client->needs_full_update = 1;
             player.set_guild(client->guild_name);
             client->play_name = name;
             client_clear_life_stats(client);
@@ -1061,7 +1069,12 @@ void Client::on_message(WebSocket *ws, std::string_view message, uint64_t code) 
             }
             if (Craft::can_level_petal(from)) {
                 // Unique: infinite level ladder instead of a rarity rung.
-                uint32_t &lv = client->petal_levels[from];
+                // Always credit the canonical Unique id for this English name
+                // so Grapes Lv cannot sit on a stale PetalID after enum slides.
+                PetalID::T level_id = Craft::canonical_unique_id(from);
+                if (level_id == PetalID::kNone || level_id >= PetalID::kNumPetals)
+                    level_id = from;
+                uint32_t &lv = client->petal_levels[level_id];
                 if (mode == CraftMode::kCraftExchange) {
                     uint32_t cost = Craft::level_exchange_cost(lv);
                     if (lv >= Craft::kMaxPetalLevel || !consume_craft_mats(client, from, cost)) {
@@ -1071,9 +1084,13 @@ void Client::on_message(WebSocket *ws, std::string_view message, uint64_t code) 
                     if (client->craft_attempts < 4000000000u)
                         ++client->craft_attempts;
                     ++lv;
-                    credit_unique_level(client, from, lv);
+                    // Same as rarity craft: absorb mats → return 1 product (leveled Unique).
+                    // Without this, spending the last copies left Lv in the craft column
+                    // but an empty bag (Golden Leaf / Grapes "没了").
+                    try_give_petal(client, level_id);
+                    credit_unique_level(client, level_id, lv);
                     persist_account(client);
-                    send_craft_update(client, CraftResultCode::kCraftLevelWin, from,
+                    send_craft_update(client, CraftResultCode::kCraftLevelWin, level_id,
                         (uint16_t) lv);
                     break;
                 }
@@ -1098,6 +1115,8 @@ void Client::on_message(WebSocket *ws, std::string_view message, uint64_t code) 
                     if (frand() < Craft::level_success_chance(lv)) {
                         ++lv;
                         ++wins;
+                        // 5→1 leveled Unique (net −4), mirroring rarity upgrade product.
+                        try_give_petal(client, level_id);
                     } else {
                         uint32_t lost = Craft::craft_fail_loss();
                         if (lost > Craft::kCraftBatch) lost = Craft::kCraftBatch;
@@ -1110,13 +1129,13 @@ void Client::on_message(WebSocket *ws, std::string_view message, uint64_t code) 
                 if (done == 0)
                     send_craft_update(client, CraftResultCode::kCraftNoMats, PetalID::kNone);
                 else if (wins > 0) {
-                    credit_unique_level(client, from, lv);
-                    send_craft_update(client, CraftResultCode::kCraftLevelWin, from,
-                        (uint16_t) (lv > 65535u ? 65535u : lv));
+                    credit_unique_level(client, level_id, lv);
+                    send_craft_update(client, CraftResultCode::kCraftLevelWin, level_id,
+                        (uint16_t) (lv > 65535u ? 65535u : lv), from, done);
                 } else {
                     uint16_t lost = (uint16_t) (last_lost > 0 ? last_lost : Craft::kCraftFailLossMin);
                     send_craft_update(client, CraftResultCode::kCraftMiss,
-                        (PetalID::T) lost, lost);
+                        (PetalID::T) lost, lost, from, done);
                 }
                 break;
             }
@@ -1170,10 +1189,14 @@ void Client::on_message(WebSocket *ws, std::string_view message, uint64_t code) 
                 if (frand() < Craft::success_chance(rarity)) {
                     last_got = Craft::craft_result(from);
                     if (last_got == PetalID::kNone) {
-                        // Should not happen for upgradeable petals; refund batch.
+                        // Ladder hole: refund and stop. `continue` would restore
+                        // the batch and spin until max_batches (65535 empty rolls).
                         for (uint32_t i = 0; i < Craft::kCraftBatch; ++i)
                             try_give_petal(client, from);
-                        continue;
+                        --done;
+                        if (client->craft_attempts > 0)
+                            --client->craft_attempts;
+                        break;
                     }
                     last_placed = try_give_petal(client, last_got);
                     ++wins;
@@ -1194,12 +1217,12 @@ void Client::on_message(WebSocket *ws, std::string_view message, uint64_t code) 
             else if (wins > 0)
                 send_craft_update(client,
                     last_placed ? CraftResultCode::kCraftWin : CraftResultCode::kCraftInvFull,
-                    last_got, (uint16_t) (wins > 65535u ? 65535u : wins));
+                    last_got, (uint16_t) (wins > 65535u ? 65535u : wins), from, done);
             else {
                 uint16_t lost = (uint16_t) (last_lost > 0 ? last_lost : Craft::kCraftFailLossMin);
                 // Petal field still encodes loss for older clients; amount is canonical.
                 send_craft_update(client, CraftResultCode::kCraftMiss,
-                    (PetalID::T) lost, lost);
+                    (PetalID::T) lost, lost, from, done);
             }
             break;
         }
@@ -1220,8 +1243,18 @@ void Client::on_message(WebSocket *ws, std::string_view message, uint64_t code) 
                 if ((pos1 < primary && Recipe::is_bag_only(player.get_loadout_ids(pos2)))
                     || (pos2 < primary && Recipe::is_bag_only(player.get_loadout_ids(pos1))))
                     break;
-                PetalID::T tmp = player.get_loadout_ids(pos1);
-                player.set_loadout_ids(pos1, player.get_loadout_ids(pos2));
+                // Corruption cannot leave the primary loadout while alive.
+                auto is_corr = [](PetalID::T id) -> uint8_t {
+                    return id != PetalID::kNone && id < PetalID::kNumPetals
+                        && PETAL_DATA[id].attributes.corruption;
+                };
+                PetalID::T a = player.get_loadout_ids(pos1);
+                PetalID::T b = player.get_loadout_ids(pos2);
+                if ((pos1 < primary && pos2 >= primary && is_corr(a))
+                    || (pos2 < primary && pos1 >= primary && is_corr(b)))
+                    break;
+                PetalID::T tmp = a;
+                player.set_loadout_ids(pos1, b);
                 player.set_loadout_ids(pos2, tmp);
                 // Do not flush craft_bank into empty secondary/bag here — that
                 // silently auto-fills other empty secondary slots on every swap.
@@ -1673,9 +1706,25 @@ void Client::on_message(WebSocket *ws, std::string_view message, uint64_t code) 
                 for (uint16_t i = 0; i < n_levels; ++i) {
                     PetalID::T lid = reader.read<PetalID::T>();
                     uint32_t lv = reader.read<uint32_t>();
-                    if (lid < PetalID::kNumPetals) client->petal_levels[lid] = lv;
+                    if (lid >= PetalID::kNumPetals || lv == 0) continue;
+                    PetalID::T dst = Craft::canonical_unique_id(lid);
+                    if (dst == PetalID::kNone || dst >= PetalID::kNumPetals)
+                        dst = lid;
+                    if (lv > client->petal_levels[dst])
+                        client->petal_levels[dst] = lv;
                 }
             }
+            // Guest/progress sync must not erase disk Unique Lv high-water
+            // ("2级q葡萄又没了" — empty client snapshot wiped badges).
+            if (!client->account_name.empty()) {
+                if (Account *acc = AccountStore::find(client->account_name)) {
+                    for (uint32_t id = 1; id < (uint32_t) PetalID::kNumPetals; ++id) {
+                        if (acc->petal_levels[id] > client->petal_levels[id])
+                            client->petal_levels[id] = acc->petal_levels[id];
+                    }
+                }
+            }
+            Craft::petal_levels_canonicalize(client->petal_levels);
             Talent::clamp_ranks(client->talent_ranks, level);
             for (uint32_t i = 0; i < 2 * MAX_SLOT_COUNT; ++i)
                 PetalTracker::remove_petal(simulation, camera.get_inventory(i));
@@ -1704,7 +1753,12 @@ void Client::on_message(WebSocket *ws, std::string_view message, uint64_t code) 
             break;
         case Serverbound::kAutoPartyOpt: {
             if (client->check_invalid(validator.validate_uint8())) return;
-            client->disable_auto_party = reader.read<uint8_t>() ? 1 : 0;
+            uint8_t const opt = reader.read<uint8_t>() ? 1 : 0;
+            client->disable_auto_party = opt;
+            // Opting out also drops the current auto-joined squad so "取消自动组队"
+            // is not stuck sharing loot/XP with strangers until /leave.
+            if (opt && client->party_id != 0)
+                Party::leave(client);
             break;
         }
     }

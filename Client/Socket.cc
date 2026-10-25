@@ -13,7 +13,7 @@
 #include <emscripten.h>
 
 uint8_t INCOMING_PACKET[64 * 1024] = {0};
-uint8_t OUTGOING_PACKET[1 * 1024] = {0};
+uint8_t OUTGOING_PACKET[64 * 1024] = {0};
 static uint8_t pending_guest_progress = 0;
 
 extern "C" {
@@ -209,7 +209,8 @@ void Socket::connect(std::string const url) {
         // App heartbeat — setInterval still fires (throttled) when rAF is frozen
         if (!Module._ashflorHbStarted) {
             Module._ashflorHbStarted = 1;
-            setInterval(sendHeartbeat, 2500);
+            // Keepalive under background timer throttling (pairs with idleTimeout=300).
+            setInterval(sendHeartbeat, 1500);
             document.addEventListener("visibilitychange", function() {
                 if (document.visibilityState === "hidden") {
                     // Last chance keepalive before the browser freezes timers

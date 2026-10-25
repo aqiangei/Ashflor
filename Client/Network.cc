@@ -30,9 +30,19 @@ using namespace Game;
 bool Game::near_training_dummies() {
     if (!alive() || simulation.arena_info.map_id != MapID::kGarden) return false;
     auto const &player = simulation.get_ent(player_id);
-    float dx = (player.get_x() - MAP_SPAWN_X) / 1200.f;
-    float dy = (player.get_y() - MAP_SPAWN_Y) / 1000.f;
-    return dx * dx + dy * dy <= 1.f;
+    float const px = player.get_x();
+    float const py = player.get_y();
+    // Dummies sit on a 960×720 ring around spawn; only show reset when near one.
+    constexpr float kNear = 380.f;
+    constexpr float kNearSq = kNear * kNear;
+    for (uint8_t rarity = 0; rarity < RarityID::kNumRarities; ++rarity) {
+        float const angle = -(float)M_PI / 2
+            + rarity * (2.f * (float)M_PI / RarityID::kNumRarities);
+        float const dx = px - (MAP_SPAWN_X + std::cos(angle) * 960.f);
+        float const dy = py - (MAP_SPAWN_Y + std::sin(angle) * 720.f);
+        if (dx * dx + dy * dy <= kNearSq) return true;
+    }
+    return false;
 }
 
 void Game::reset_training() {
@@ -95,15 +105,32 @@ void Game::on_message(uint8_t *ptr, uint32_t len) {
             coins = reader.read<uint32_t>();
             // Sparse Unique levels (same layout as kCraftUpdate trailer).
             {
-                petal_levels = {};
                 uint16_t n_levels = reader.read<uint16_t>();
+                // Logged-in: high-water merge only. Clearing then applying used
+                // to drop Grapes Unique Lv when the sparse trailer omitted it.
+                if (!account_logged_in)
+                    petal_levels = {};
                 for (uint16_t i = 0; i < n_levels; ++i) {
                     PetalID::T lid = reader.read<PetalID::T>();
                     uint32_t lv = reader.read<uint32_t>();
-                    if (lid < PetalID::kNumPetals) petal_levels[lid] = lv;
+                    if (lid >= PetalID::kNumPetals || lv == 0) continue;
+                    PetalID::T dst = Craft::canonical_unique_id(lid);
+                    if (dst == PetalID::kNone || dst >= PetalID::kNumPetals)
+                        dst = lid;
+                    if (lv > petal_levels[dst]) petal_levels[dst] = lv;
                 }
-                if (!account_logged_in)
+                Craft::petal_levels_canonicalize(petal_levels);
+                // Warm reconnect cache on successful login. Do NOT write on
+                // logout packets (account_logged_in already 0) — that would
+                // wipe guest_petal_levels before the logout restore below.
+                if (account_logged_in) {
+                    for (uint32_t i = 1; i < PetalID::kNumPetals; ++i)
+                        if (petal_levels[i] > guest_petal_levels[i])
+                            guest_petal_levels[i] = petal_levels[i];
+                    Craft::petal_levels_canonicalize(guest_petal_levels);
+                } else if (result != AccountResultCode::kAccountLoggedOut) {
                     guest_petal_levels = petal_levels;
+                }
             }
             uint64_t token = reader.read<uint64_t>();
             if (account_logged_in)
@@ -113,6 +140,9 @@ void Game::on_message(uint8_t *ptr, uint32_t len) {
                      result == AccountResultCode::kAccountNotFound ||
                      result == AccountResultCode::kAccountInvalidUser)
                 session_token = 0;
+            // Persist Unique Lv reconnect cache (and session fields) immediately.
+            if (account_logged_in)
+                Storage::set();
             // Explicit logout → back to guest local progress (account row kept on server)
             if (result == AccountResultCode::kAccountLoggedOut) {
                 account_logged_in = 0;
@@ -164,9 +194,12 @@ void Game::on_message(uint8_t *ptr, uint32_t len) {
         }
         case Clientbound::kSpawnResult: {
             uint8_t result = reader.read<uint8_t>();
-            if (result == SpawnResultCode::kSpawnNameTaken)
+            if (result == SpawnResultCode::kSpawnNameTaken) {
+                // Unlock death Continue — otherwise spawn_request_at hides UI forever.
+                spawn_request_at = 0;
+                spawn_retries = 0;
                 account_status = I18n::tr(I18n::kSpawnNameTaken);
-            else if (result == SpawnResultCode::kSpawnGuestIdAssigned) {
+            } else if (result == SpawnResultCode::kSpawnGuestIdAssigned) {
                 // Server reminted G#… after collision — keep localStorage in sync.
                 std::string id;
                 reader.read(id);
@@ -188,16 +221,65 @@ void Game::on_message(uint8_t *ptr, uint32_t len) {
                 craft_bank[i] = reader.read<uint32_t>();
             coins = reader.read<uint32_t>();
             {
-                petal_levels = {};
                 uint16_t n_levels = reader.read<uint16_t>();
+                // Logged-in: never wipe — only raise. Omitting Grapes from a
+                // partial/desynced trailer used to zero only that family's Lv.
+                if (!account_logged_in)
+                    petal_levels = {};
                 for (uint16_t i = 0; i < n_levels; ++i) {
                     PetalID::T lid = reader.read<PetalID::T>();
                     uint32_t lv = reader.read<uint32_t>();
-                    if (lid < PetalID::kNumPetals) petal_levels[lid] = lv;
+                    if (lid >= PetalID::kNumPetals || lv == 0) continue;
+                    PetalID::T dst = Craft::canonical_unique_id(lid);
+                    if (dst == PetalID::kNone || dst >= PetalID::kNumPetals)
+                        dst = lid;
+                    if (lv > petal_levels[dst]) petal_levels[dst] = lv;
                 }
-                if (!account_logged_in)
+                Craft::petal_levels_canonicalize(petal_levels);
+                if (account_logged_in) {
+                    for (uint32_t i = 1; i < PetalID::kNumPetals; ++i)
+                        if (petal_levels[i] > guest_petal_levels[i])
+                            guest_petal_levels[i] = petal_levels[i];
+                    Craft::petal_levels_canonicalize(guest_petal_levels);
+                } else {
                     guest_petal_levels = petal_levels;
+                }
             }
+            // Optional tail: material + roll count for All batches.
+            // ONLY Miss/Win/LevelWin may advance the pity counter. BankSync /
+            // shop / errors also carry a zero tail; if client↔server petal
+            // counts drift, those bytes mis-decode as huge attempts and the
+            // counter climbs on every loot pickup with an empty tray.
+            uint8_t const craft_roll = result == CraftResultCode::kCraftMiss
+                || result == CraftResultCode::kCraftWin
+                || result == CraftResultCode::kCraftLevelWin;
+            if (reader.at < ptr + len) {
+                PetalID::T material = reader.read<PetalID::T>();
+                uint32_t attempts = reader.read<uint32_t>();
+                if (craft_roll
+                    && material != PetalID::kNone && material < PetalID::kNumPetals
+                    && attempts > 0) {
+                    if (craft_attempt_id != material) {
+                        craft_attempt_id = material;
+                        craft_attempt_n = 0;
+                    }
+                    // One request caps at uint16 batches; refuse desync spikes.
+                    uint32_t add = attempts > 65535u ? 65535u : attempts;
+                    craft_attempt_n += std::min(add, 4000000000u - craft_attempt_n);
+                    // Success ends this pity streak (next place starts at #1).
+                    if (result == CraftResultCode::kCraftWin
+                        || result == CraftResultCode::kCraftLevelWin)
+                        craft_attempt_n = 0;
+                }
+            } else if (craft_roll) {
+                if (craft_attempt_n < 4000000000u) ++craft_attempt_n;
+                if (result == CraftResultCode::kCraftWin
+                    || result == CraftResultCode::kCraftLevelWin)
+                    craft_attempt_n = 0;
+            }
+            // Drop inflated pity left by older desync (loot BankSync mis-reads).
+            if (!craft_roll && craft_attempt_n > 1000000u)
+                craft_attempt_n = 0;
             // Tray is updated optimistically on craft click; only clamp to owned
             if (craft_tray_id != PetalID::kNone) {
                 uint32_t owned = craft_owned(craft_tray_id);
@@ -1135,6 +1217,13 @@ void Game::craft_tray_add(PetalID::T id, uint32_t amount) {
     if (craft_tray_id != id) {
         craft_tray_id = id;
         craft_tray_count = 0;
+    }
+    if (craft_attempt_id != id) {
+        craft_attempt_id = id;
+        craft_attempt_n = 0;
+    } else if (craft_attempt_n > 1000000u) {
+        // BankSync desync used to inflate this into the tens of millions.
+        craft_attempt_n = 0;
     }
     uint32_t owned = craft_owned(id);
     uint32_t room = owned > craft_tray_count ? owned - craft_tray_count : 0;

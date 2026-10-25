@@ -10,6 +10,7 @@ std::ostream &operator<<(std::ostream &out, EntityID const &id) {
 
 #ifdef SERVERSIDE
 #include <Shared/Map.hh>
+#include <Server/PetalTracker.hh>
 #include <iostream>
 #endif
 
@@ -47,54 +48,122 @@ uint32_t Simulation::entity_count() const {
 }
 
 #ifdef SERVERSIDE
-// Cap pressure: only reclaim disposable wildlife. Never petals (peas), drops,
-// player summons, cameras, flowers, bosses, dummies, or explore/crate props.
+// Cap pressure reclaim. Prefer finished corpses (safe hard-free). Soft-schedule
+// live wildlife for later ticks. Desperate path hard-frees drops/webs/orphans
+// and culled zone wildlife WITHOUT mid-tick entity_on_death (no loot) so
+// alloc_ent can obtain a slot without aborting the process (ABRT → client 1006).
+//
+// Never touch cameras, flowers, bosses, dummies, live-parent petals, or summons
+// still attached to an alive flower.
 uint32_t Simulation::emergency_reclaim_entities(uint32_t budget) {
     uint32_t freed = 0;
-    auto force_free = [&](Entity &ent) {
-        if (freed >= budget) return;
-        if (!ent_exists(ent.id)) return;
-        if (ent.has_component(kCamera)) return;
-        if (TrainingDummy::is_dummy(ent)) return;
+    uint32_t soft = 0;
+    auto is_zone_wildlife = [&](Entity &ent) -> bool {
+        if (!ent_exists(ent.id)) return false;
+        if (ent.has_component(kCamera)) return false;
+        if (TrainingDummy::is_dummy(ent)) return false;
         if (ent.has_component(kFlower) && ent.has_component(kHealth) && !ent.has_component(kMob))
-            return;
-        if (ent.has_component(kMob) && ent.zone == 0xFF) return;
-        // Zone wildlife only — hatch pets / crates / escorts lack kSpawnedFromZone.
-        if (!ent.has_component(kMob)) return;
-        if (!BitMath::at(ent.flags, EntityFlags::kSpawnedFromZone)) return;
-        BitMath::set(ent.flags, EntityFlags::kNoDrops);
-        Map::remove_mob(this, ent);
-        // Skip entity_on_death — avoid loot alloc recursion under cap pressure.
-        _delete_ent(ent.id);
-        ++freed;
+            return false;
+        if (!ent.has_component(kMob)) return false;
+        if (ent.zone == 0xFF) return false;
+        if (!BitMath::at(ent.flags, EntityFlags::kSpawnedFromZone)) return false;
+        return true;
     };
 
-    auto scan = [&](auto pred) {
+    auto scan = [&](auto pred, auto action) {
         for (EntityID::id_type i = 1; i < ENTITY_CAP && freed < budget; ++i) {
             if (!BitMath::at_arr(entity_tracker.data(), i)) continue;
             Entity &ent = entities[i];
             if (!pred(ent)) continue;
-            force_free(ent);
+            action(ent);
         }
     };
 
-    // Prefer already-dying, then culled, then any zone wildlife (low id ≈ older).
-    scan([&](Entity &e) {
-        return e.pending_delete
-            && e.has_component(kMob)
-            && BitMath::at(e.flags, EntityFlags::kSpawnedFromZone);
-    });
-    scan([&](Entity &e) {
-        return !e.pending_delete
-            && e.has_component(kMob)
-            && BitMath::at(e.flags, EntityFlags::kSpawnedFromZone)
-            && BitMath::at(e.flags, EntityFlags::kIsCulled);
-    });
-    scan([&](Entity &e) {
-        return !e.pending_delete
-            && e.has_component(kMob)
-            && BitMath::at(e.flags, EntityFlags::kSpawnedFromZone);
-    });
+    // 1) Finished corpses of any type — death already ran; free the slot now.
+    scan(
+        [&](Entity &e) { return e.pending_delete && e.deletion_tick > 0; },
+        [&](Entity &e) { _delete_ent(e.id); ++freed; }
+    );
+
+    // 2) Soft-mark culled, then any zone wildlife (next post_tick frees).
+    auto soft_wildlife = [&](Entity &ent) {
+        if (freed >= budget) return;
+        if (!is_zone_wildlife(ent)) return;
+        if (ent.pending_delete) return;
+        BitMath::set(ent.flags, EntityFlags::kNoDrops);
+        request_delete(ent.id);
+        ++soft;
+    };
+    scan(
+        [&](Entity &e) {
+            return !e.pending_delete && is_zone_wildlife(e)
+                && BitMath::at(e.flags, EntityFlags::kIsCulled);
+        },
+        soft_wildlife
+    );
+    scan(
+        [&](Entity &e) { return !e.pending_delete && is_zone_wildlife(e); },
+        soft_wildlife
+    );
+
+    // 3) Desperate hard-free when soft cannot open a slot for THIS alloc.
+    if (freed < budget) {
+        // Drops: fix petal tracker, skip death path.
+        scan(
+            [&](Entity &e) {
+                return e.has_component(kDrop) && !e.has_component(kCamera);
+            },
+            [&](Entity &e) {
+                if (freed >= budget) return;
+                PetalTracker::remove_petal(this, e.get_drop_id());
+                _delete_ent(e.id);
+                ++freed;
+            }
+        );
+        // Webs / transient.
+        scan(
+            [&](Entity &e) { return e.has_component(kWeb); },
+            [&](Entity &e) {
+                if (freed >= budget) return;
+                _delete_ent(e.id);
+                ++freed;
+            }
+        );
+        // Orphan petals (parent gone).
+        scan(
+            [&](Entity &e) {
+                return e.has_component(kPetal) && !ent_alive(e.get_parent());
+            },
+            [&](Entity &e) {
+                if (freed >= budget) return;
+                _delete_ent(e.id);
+                ++freed;
+            }
+        );
+        // Culled zone wildlife (incl. soft-scheduled): free slot now, no loot.
+        scan(
+            [&](Entity &e) {
+                return is_zone_wildlife(e)
+                    && BitMath::at(e.flags, EntityFlags::kIsCulled);
+            },
+            [&](Entity &e) {
+                if (freed >= budget) return;
+                if (e.pending_delete && e.deletion_tick > 0) {
+                    _delete_ent(e.id);
+                } else {
+                    BitMath::set(e.flags, EntityFlags::kNoDrops);
+                    Map::remove_mob(this, e);
+                    _delete_ent(e.id);
+                }
+                ++freed;
+            }
+        );
+    }
+
+    if (soft > 0 || freed > 0) {
+        std::cerr << "[sim] reclaim soft-scheduled wildlife=" << soft
+                  << " hard_freed=" << freed << std::endl;
+    }
     return freed;
 }
 #endif
@@ -115,24 +184,81 @@ Entity &Simulation::alloc_ent() {
     if (Entity *e = try_claim()) return *e;
 
 #ifdef SERVERSIDE
-    // Release builds strip assert(); reclaim zone wildlife instead of ABRT.
+    // Never ABRT the process on a full pool — that is mass client 1006.
     uint32_t const before = entity_count();
-    uint32_t freed = emergency_reclaim_entities(96);
+    uint32_t freed = emergency_reclaim_entities(128);
     std::cerr << "[sim] entity cap hit count=" << before
-              << " reclaimed_wildlife=" << freed << std::endl;
+              << " reclaimed=" << freed << std::endl;
     if (Entity *e = try_claim()) return *e;
 
-    freed = emergency_reclaim_entities(512);
-    std::cerr << "[sim] entity cap retry reclaimed_wildlife=" << freed
+    freed = emergency_reclaim_entities(768);
+    std::cerr << "[sim] entity cap retry reclaimed=" << freed
               << " count=" << entity_count() << std::endl;
     if (Entity *e = try_claim()) return *e;
 
-    std::cerr << "[sim] entity cap exhausted after wildlife reclaim count="
-              << entity_count() << std::endl;
+    // Last resort: hard-evict any remaining zone wildlife (even in FOV).
+    {
+        uint32_t stole = 0;
+        for (EntityID::id_type i = 1; i < ENTITY_CAP && stole < 64; ++i) {
+            if (!BitMath::at_arr(entity_tracker.data(), i)) continue;
+            Entity &ent = entities[i];
+            if (!ent.has_component(kMob)) continue;
+            if (ent.zone == 0xFF) continue;
+            if (!BitMath::at(ent.flags, EntityFlags::kSpawnedFromZone)) continue;
+            if (TrainingDummy::is_dummy(ent)) continue;
+            // Soft-scheduled (pending, deletion_tick==0): death has NOT run yet —
+            // must remove_mob here or zone counts leak. Skip only if somehow
+            // already past death (deletion_tick>0) without being freed above.
+            if (ent.pending_delete && ent.deletion_tick > 0) {
+                _delete_ent(ent.id);
+            } else {
+                BitMath::set(ent.flags, EntityFlags::kNoDrops);
+                Map::remove_mob(this, ent);
+                _delete_ent(ent.id);
+            }
+            ++stole;
+            if (Entity *e = try_claim()) {
+                std::cerr << "[sim] entity cap last-resort stole=" << stole
+                          << " count=" << entity_count() << std::endl;
+                return *e;
+            }
+        }
+    }
+
+    std::cerr << "[sim] entity cap exhausted (no abort) count="
+              << entity_count() << " — recycling slot 1" << std::endl;
+    // Absolute fallback: never abort. Clobber the lowest id that is not a
+    // camera/flower. Prefer a drop/web/mob; if somehow impossible, slot 1.
+    for (EntityID::id_type i = 1; i < ENTITY_CAP; ++i) {
+        if (!BitMath::at_arr(entity_tracker.data(), i)) continue;
+        Entity &ent = entities[i];
+        if (ent.has_component(kCamera)) continue;
+        if (ent.has_component(kFlower) && !ent.has_component(kMob)) continue;
+        if (ent.has_component(kDrop))
+            PetalTracker::remove_petal(this, ent.get_drop_id());
+        else if (ent.has_component(kMob)
+            && BitMath::at(ent.flags, EntityFlags::kSpawnedFromZone)
+            && ent.zone != 0xFF
+            && !(ent.pending_delete && ent.deletion_tick > 0)) {
+            Map::remove_mob(this, ent);
+        }
+        _delete_ent(ent.id);
+        if (Entity *e = try_claim()) return *e;
+    }
 #endif
     assert(!"Entity cap reached");
-    // assert may be compiled out; falling off a non-void fn is UB → wasm trap.
+#ifdef SERVERSIDE
+    // Still full of cameras/flowers only — extremely unlikely. Reuse slot 1.
+    EntityID::id_type i = 1;
+    if (BitMath::at_arr(entity_tracker.data(), i))
+        _delete_ent(EntityID(i, hash_tracker[i]));
+    BitMath::set_arr(entity_tracker.data(), i);
+    entities[i].init();
+    entities[i].id = EntityID(i, hash_tracker[i]);
+    return entities[i];
+#else
     abort();
+#endif
 }
 
 Entity &Simulation::get_ent(EntityID const &id) {

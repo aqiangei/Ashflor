@@ -102,7 +102,10 @@ void paint_channel_detail(Renderer &r, TerrainFeature const &f,
 
     // Opaque mixes — alpha comes only from globalAlpha (channel_speck is translucent).
     uint32_t soil_dark = (tm.channel_speck & 0x00ffffffu) | 0xff000000u;
-    uint32_t soil_light = Renderer::MIX(tm.channel, 0xffffffff, 0.22f) | 0xff000000u;
+    // Mix toward theme ground_light (not pure white) so Polar channels don't
+    // flash #fff grit against near-white snow when chunks rebake.
+    uint32_t soil_hi = (tm.ground_light & 0x00ffffffu) | 0xff000000u;
+    uint32_t soil_light = Renderer::MIX(tm.channel, soil_hi, 0.22f) | 0xff000000u;
     uint32_t soil_mid = Renderer::MIX(tm.channel, soil_dark, 0.35f) | 0xff000000u;
 
     // Soft shade / light soil patches along the road bed (G04)

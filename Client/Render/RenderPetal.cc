@@ -10,6 +10,7 @@
 #include <Client/StaticData.hh>
 #include <Client/Ui/Ui.hh>
 
+#include <Shared/Craft.hh>
 #include <Shared/Entity.hh>
 #include <Shared/StaticData.hh>
 
@@ -90,7 +91,8 @@ void render_petal(Renderer &ctx, Entity const &ent) {
     // Highest rarity is Unique — sparkle only for Unique petals (not Super/Ultra).
     // Higher account level → denser, more golden particles.
     if (data.rarity == RarityID::kUnique) {
-        uint32_t lv = (id < PetalID::kNumPetals) ? Game::petal_levels[id] : 0;
+        uint32_t lv = (id < PetalID::kNumPetals)
+            ? Craft::petal_level_get(Game::petal_levels, id) : 0;
         float rate = 0.22f + fclamp((float) lv * 0.012f, 0.f, 0.35f);
         if (frand() < fclamp(rate * Ui::dt / 16.67, 0, 1))
             Particle::add_unique_particle(ent.get_x(), ent.get_y(), lv);

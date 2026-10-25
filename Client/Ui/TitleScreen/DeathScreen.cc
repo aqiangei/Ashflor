@@ -11,10 +11,30 @@
 #include <Client/Assets/Assets.hh>
 #include <Shared/Entity.hh>
 #include <Shared/Simulation.hh>
+#include <Shared/StaticData.hh>
+#include <Shared/StaticDefinitions.hh>
 
 #include <cmath>
+#include <cstring>
+#include <string>
 
 using namespace Ui;
+
+static std::string localize_killed_by(std::string const &raw) {
+    if (raw.empty()) return raw;
+    if (raw == "Poison")
+        return I18n::use_chinese ? std::string{"毒素"} : raw;
+    if (raw == "Burn")
+        return I18n::use_chinese ? std::string{"灼烧"} : raw;
+    for (MobID::T mid = 0; mid < MobID::kNumMobs; ++mid) {
+        char const *en = MOB_DATA[mid].name;
+        if (en == nullptr || std::strcmp(en, raw.c_str()) != 0) continue;
+        char const *loc = I18n::mob_name(mid);
+        if (loc != nullptr && loc[0] != '\0') return loc;
+        return raw;
+    }
+    return raw;
+}
 
 DeadFlowerIcon::DeadFlowerIcon(float width) : Element(width, width, {}) {}
 
@@ -80,15 +100,18 @@ Element *Ui::make_death_main_screen() {
     Ui::Element *continue_button = new Ui::Button(
         145,
         40,
-        new Ui::DynamicText(28, [](){ return I18n::tr(I18n::kContinue); }),
+        new Ui::DynamicText(28, [](){
+            if (Game::spawn_request_at > 0)
+                return I18n::use_chinese ? "进入中…" : "Entering…";
+            return I18n::tr(I18n::kContinue);
+        }),
         [](Element *elt, uint8_t e){
             if (e == Ui::kClick && !Game::alive() && !Game::leaving_to_title
                 && Game::spawn_request_at <= 0)
                 Game::spawn_in();
         },
         [](){
-            return !Game::alive() && !Game::leaving_to_title
-                && Game::spawn_request_at <= 0;
+            return Game::spawn_request_at > 0;
         },
         {.fill = Chrome::kBtnMoss, .line_width = 0, .round_radius = Chrome::kRadius }
     );
@@ -97,9 +120,11 @@ Element *Ui::make_death_main_screen() {
         new Ui::DynamicText(30, [](){
             if (!Game::simulation.ent_exists(Game::camera_id))
                 return std::string{""};
-            if (Game::simulation.get_ent(Game::camera_id).get_killed_by() == "") 
+            std::string const &kb =
+                Game::simulation.get_ent(Game::camera_id).get_killed_by();
+            if (kb.empty())
                 return std::string{I18n::tr(I18n::kMysteriousEntity)};
-            return Game::simulation.get_ent(Game::camera_id).get_killed_by();
+            return localize_killed_by(kb);
         }),
         new Ui::DeadFlowerIcon(125),
         new Ui::DynamicText(14, [](){ return I18n::tr(I18n::kReviveHint); }, {
@@ -115,14 +140,16 @@ Element *Ui::make_death_main_screen() {
             }
         }),
         continue_button,
-        new Ui::DynamicText(14, [](){ return I18n::tr(I18n::kOrPressEnterContinue); })
+        new Ui::DynamicText(14, [](){ return I18n::tr(I18n::kOrPressEnterContinue); }),
+        new Ui::DynamicText(14, [](){ return Game::account_status; }, {
+            .fill = 0xffffcc88
+        })
     }, 0, 10, { .animate = [](Element *elt, Renderer &ctx) {
         ctx.translate(0, (elt->animation - 1) * ctx.height * 0.6);
     }, .should_render = [](){
-        // Soft-leave: on_game_screen=0. Respawn wait: spawn_request_at > 0
-        // (do not clear on_game_screen — that collapsed the title transition).
+        // Keep the wait/retry state visible until the new flower arrives.
         return !Game::alive() && Game::on_game_screen
-            && !Game::leaving_to_title && Game::spawn_request_at <= 0
+            && !Game::leaving_to_title
             && Game::should_render_game_ui();
     } });
     return container;

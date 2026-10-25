@@ -4,7 +4,8 @@
 
 namespace StorageProtocol {
     // Guest craft_bank is kNumPetals × u32; keep headroom past Unique/Super/Ultra ladders.
-    uint32_t const MAX_LENGTH = 8192;
+    // Full craft_bank (~kNumPetals varints) + sparse Unique levels + inventory.
+    uint32_t const MAX_LENGTH = 32 * 1024;
     extern uint8_t buffer[2 * MAX_LENGTH];
     void store(char const *, uint32_t);
     uint32_t retrieve(char const *, uint32_t);

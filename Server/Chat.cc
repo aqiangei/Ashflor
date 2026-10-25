@@ -674,15 +674,18 @@ static uint8_t handle_slash(Client *client, std::string const &text, uint64_t no
 
     // —— Party (florr: squad) ——
     if (cmd_match(text, "/leave") || cmd_match(text, "/离队")
-        || cmd_match(text, "/squad-leave") || cmd_match(text, "/party-leave")) {
+        || cmd_match(text, "/sl") || cmd_match(text, "/squad-leave")
+        || cmd_match(text, "/party-leave")) {
         Party::leave(client);
         return 1;
     }
     if (cmd_match(text, "/invite") || cmd_match(text, "/组队")
-        || cmd_match(text, "/squad-invite") || cmd_match(text, "/party-invite")) {
+        || cmd_match(text, "/si") || cmd_match(text, "/squad-invite")
+        || cmd_match(text, "/party-invite")) {
         std::string arg;
         if (text.rfind("/squad-invite", 0) == 0) arg = cmd_args(text, "/squad-invite");
         else if (text.rfind("/party-invite", 0) == 0) arg = cmd_args(text, "/party-invite");
+        else if (text.rfind("/si", 0) == 0) arg = cmd_args(text, "/si");
         else if (text.rfind("/invite", 0) == 0) arg = cmd_args(text, "/invite");
         else arg = cmd_args(text, "/组队");
         Party::invite(client, arg);
@@ -704,10 +707,12 @@ static uint8_t handle_slash(Client *client, std::string const &text, uint64_t no
     }
 
     // —— Guild ——
-    if (cmd_match(text, "/guild-create") || cmd_match(text, "/创建公会")) {
-        std::string arg = text.rfind("/guild-create", 0) == 0
-            ? cmd_args(text, "/guild-create")
-            : cmd_args(text, "/创建公会");
+    if (cmd_match(text, "/guild-create") || cmd_match(text, "/gc")
+        || cmd_match(text, "/创建公会")) {
+        std::string arg;
+        if (text.rfind("/guild-create", 0) == 0) arg = cmd_args(text, "/guild-create");
+        else if (text.rfind("/gc", 0) == 0) arg = cmd_args(text, "/gc");
+        else arg = cmd_args(text, "/创建公会");
         if (arg.empty()) {
             Chat::send_to(client, ChatChannel::kChatSystem, "",
                 "用法: /guild-create 公会名");
@@ -716,10 +721,12 @@ static uint8_t handle_slash(Client *client, std::string const &text, uint64_t no
         Guild::create(client, arg);
         return 1;
     }
-    if (cmd_match(text, "/guild-invite") || cmd_match(text, "/公会邀请")) {
-        std::string arg = text.rfind("/guild-invite", 0) == 0
-            ? cmd_args(text, "/guild-invite")
-            : cmd_args(text, "/公会邀请");
+    if (cmd_match(text, "/guild-invite") || cmd_match(text, "/gi")
+        || cmd_match(text, "/公会邀请")) {
+        std::string arg;
+        if (text.rfind("/guild-invite", 0) == 0) arg = cmd_args(text, "/guild-invite");
+        else if (text.rfind("/gi", 0) == 0) arg = cmd_args(text, "/gi");
+        else arg = cmd_args(text, "/公会邀请");
         if (arg.empty()) {
             Chat::send_to(client, ChatChannel::kChatSystem, "",
                 "用法: /guild-invite 玩家名");
@@ -728,16 +735,17 @@ static uint8_t handle_slash(Client *client, std::string const &text, uint64_t no
         Guild::invite(client, arg);
         return 1;
     }
-    if (cmd_match(text, "/guild-leave") || cmd_match(text, "/退会")
-        || cmd_match(text, "/离开公会")) {
+    if (cmd_match(text, "/guild-leave") || cmd_match(text, "/gl")
+        || cmd_match(text, "/退会") || cmd_match(text, "/离开公会")) {
         Guild::leave(client);
         return 1;
     }
-    if (cmd_match(text, "/guild-motd") || cmd_match(text, "/guild-anno")
-        || cmd_match(text, "/公告")) {
+    if (cmd_match(text, "/guild-motd") || cmd_match(text, "/gm")
+        || cmd_match(text, "/guild-anno") || cmd_match(text, "/公告")) {
         std::string arg;
         if (text.rfind("/guild-motd", 0) == 0) arg = cmd_args(text, "/guild-motd");
         else if (text.rfind("/guild-anno", 0) == 0) arg = cmd_args(text, "/guild-anno");
+        else if (text.rfind("/gm", 0) == 0) arg = cmd_args(text, "/gm");
         else arg = cmd_args(text, "/公告");
         if (arg.empty()) {
             Chat::send_to(client, ChatChannel::kChatSystem, "",

@@ -120,8 +120,9 @@ static void spare_sources_and_new_slots() {
     LoadoutPreset preset;
     preset.slot_count = 5;
     preset.petals[0] = PetalID::kLight;
+    bank[PetalID::kLight] = 1;
     assert(apply(inventory, bank, preset) == 0);
-    assert(inventory[0] == PetalID::kLight && inventory[14] == PetalID::kNone);
+    assert(inventory[0] == PetalID::kLight && inventory[14] == PetalID::kLight);
     assert(inventory[8] == PetalID::kRose);
     assert(inventory[18] == PetalID::kBasic);
 
@@ -139,6 +140,37 @@ static void spare_sources_and_new_slots() {
             std::swap(inventory[i], inventory[slots + i]);
         assert(apply(inventory, bank, saved, slots) == 0);
         assert(inventory == original);
+    }
+}
+
+static void older_schemes_cannot_steal_new_secondary_slots() {
+    for (uint8_t slots = 6; slots <= MAX_SLOT_COUNT; ++slots) {
+        for (bool saved_secondary : {false, true}) {
+            Inventory inventory = {};
+            Bank bank = {};
+            inventory[slots + slots - 1] = PetalID::kCutter;
+            inventory[slots + slots - 2] = PetalID::kMagnet;
+            auto before = inventory;
+            LoadoutPreset preset;
+            preset.slot_count = 5;
+            preset.petals[0] = PetalID::kCutter;
+            preset.petals[1] = PetalID::kMagnet;
+            if (saved_secondary) {
+                preset.secondary[0] = PetalID::kRose;
+                bank[PetalID::kRose] = 1;
+            }
+            // No spare copy: the old preset must report adjustment, never move
+            // an unaddressed secondary copy up into primary.
+            assert(apply(inventory, bank, preset, slots) >= 1);
+            assert(inventory[slots + slots - 1] == before[slots + slots - 1]);
+            if (slots > 6) assert(inventory[slots + slots - 2] == before[slots + slots - 2]);
+            // Once another copy exists, both rows can retain the intended item.
+            bank[PetalID::kCutter] += 1;
+            bank[PetalID::kMagnet] += 1;
+            apply(inventory, bank, preset, slots);
+            assert(inventory[0] == PetalID::kCutter);
+            assert(inventory[slots + slots - 1] == PetalID::kCutter);
+        }
     }
 }
 
@@ -189,6 +221,33 @@ static void autosave_keeps_target_and_outgoing_bank() {
     assert(inventory[MAX_SLOT_COUNT + 4] == PetalID::kHeavy);
 }
 
+static void blank_secondary_preserves_live_row() {
+    // Preset with primary only (legacy / never-saved secondary): switching
+    // must not bank the live secondary gear.
+    Inventory inventory = {};
+    Bank bank = {};
+    uint8_t const slots = 8;
+    for (uint8_t i = 0; i < slots; ++i) {
+        inventory[i] = PetalID::kBasic;
+        inventory[slots + i] = (i % 2) ? PetalID::kCutter : PetalID::kHeavy;
+    }
+    auto const secondary_before = inventory;
+    LoadoutPreset primary_only;
+    primary_only.slot_count = slots;
+    for (uint8_t i = 0; i < slots; ++i)
+        primary_only.petals[i] = PetalID::kRose;
+    bank[PetalID::kRose] = slots;
+    assert(apply(inventory, bank, primary_only, slots) == 0);
+    for (uint8_t i = 0; i < slots; ++i) {
+        assert(inventory[i] == PetalID::kRose);
+        assert(inventory[slots + i] == secondary_before[slots + i]);
+    }
+    // Explicit empty scheme (slot_count 0) still clears both rows.
+    apply(inventory, bank, {}, slots);
+    for (uint8_t i = 0; i < 2 * slots; ++i)
+        assert(inventory[i] == PetalID::kNone);
+}
+
 static void invalid_input_is_atomic() {
     Inventory inventory = {};
     Bank bank = {};
@@ -235,8 +294,10 @@ int main() {
     exact_before_fallback_and_missing();
     spare_sources_and_new_slots();
     autosave_keeps_target_and_outgoing_bank();
+    blank_secondary_preserves_live_row();
+    older_schemes_cannot_steal_new_secondary_slots();
     invalid_input_is_atomic();
     randomized_conservation();
     std::puts("PASS: both-row K/L round trips, paired/empty slots, stack caps, exact/fallback, "
-              "autosave/reconnect, atomic failure, 10000 random switches");
+              "blank-secondary preserve, autosave/reconnect, atomic failure, 10000 random switches");
 }

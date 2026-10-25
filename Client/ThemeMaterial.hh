@@ -56,10 +56,12 @@ namespace TerrainArt {
               0xff021F45, 0xff023E8A, 0xff4CC9F0, 0xff012A55, 0xff011428,
               0xff00B4D8, 0x66A0E8FF, 0xffFF85A1, 0x99FFE0EA,
               Style::kReef, 6.5f, 16.f, 28.f, 76.f },
-            // Snow — white walkable vs blue-grey ice walls
-            { 0xffEAF3F7, 0x40D4E5ED, 0x66FFFFFF,
+            // Snow — cool walkable vs blue-grey ice walls.
+            // Avoid near-#FFFFFF sparkle/speck: on pale ground + chunk rebake
+            // it reads as screen flicker (other biomes already fixed; Polar lagged).
+            { 0xffEAF3F7, 0x40D4E5ED, 0x40C1DBE7,
               0xff294D69, 0xff4B829F, 0xffA5DDEA, 0xff3A6A82, 0xff1C3548,
-              0xff7FB9D1, 0x66B9D8E8, 0xffCAf0F8, 0x99FFFFFF,
+              0xff7FB9D1, 0x66B9D8E8, 0xffB8D4E0, 0x66A8C8D8,
               Style::kIce, 7.f, 20.f, 34.f, 78.f },
             // Jungle — dense canopy
             { 0xff52B788, 0x402D6A4F, 0x4495D5B2,

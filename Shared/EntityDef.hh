@@ -57,6 +57,10 @@ SINGLE(Relations, color, uint8_t)
 SINGLE(Flower, loadout_count, uint8_t) \
 SINGLE(Flower, face_flags, uint8_t) \
 SINGLE(Flower, equip_flags, uint8_t) \
+SINGLE(Flower, effect_flags, uint8_t) \
+SINGLE(Flower, mana_ratio, Float) \
+SINGLE(Flower, shield_ratio, Float) \
+SINGLE(Flower, ability_cooldown, uint16_t) \
 MULTIPLE(Flower, loadout_ids, PetalID::T, 2 * MAX_SLOT_COUNT) \
 MULTIPLE(Flower, loadout_reloads, uint8_t, MAX_SLOT_COUNT) \
 MULTIPLE(Flower, loadout_healths, uint8_t, MAX_SLOT_COUNT)
@@ -67,6 +71,7 @@ SINGLE(Petal, split_projectile, uint8_t)
 
 #define FIELDS_Health \
 SINGLE(Health, health_ratio, Float) \
+SINGLE(Health, hit_damage, Float) \
 SINGLE(Health, damaged, StickyFlag)
 
 #define FIELDS_Mob \
@@ -111,10 +116,40 @@ SINGLE(Name, guild, std::string)
     SINGLE(poison_ticks, game_tick_t, =0) \
     SINGLE(burn_ticks, game_tick_t, =0) \
     SINGLE(snare_ticks, game_tick_t, =0) \
+    SINGLE(corruption_ticks, game_tick_t, =0) \
     SINGLE(despawn_tick, game_tick_t, =0) \
     SINGLE(secondary_reload, game_tick_t, =0) \
     SINGLE(ai_tick, game_tick_t, =0) \
     SINGLE(contact_hit_count, uint8_t, =0) \
+    /* Wiki-import flower state (server-only; not networked). */ \
+    SINGLE(mana, float, =0) \
+    SINGLE(flower_shield, float, =0) \
+    SINGLE(totem_heal_rate, float, =0) \
+    SINGLE(totem_ticks, game_tick_t, =0) \
+    SINGLE(root_stacks, uint8_t, =0) \
+    SINGLE(root_tick, game_tick_t, =0) \
+    SINGLE(ankh_x, float, =0) \
+    SINGLE(ankh_y, float, =0) \
+    SINGLE(ankh_set, uint8_t, =0) \
+    SINGLE(burrow_ticks, game_tick_t, =0) \
+    SINGLE(wax_charges, uint8_t, =0) \
+    SINGLE(death_delay_ticks, game_tick_t, =0) \
+    SINGLE(death_delay_used, uint8_t, =0) \
+    SINGLE(previous_input, uint8_t, =0) \
+    SINGLE(burrow_cooldown, game_tick_t, =0) \
+    SINGLE(root_armor_applied, float, =0) \
+    SINGLE(armor_shredded, float, =0) \
+    SINGLE(armor_shred_ticks, game_tick_t, =0) \
+    SINGLE(powder_suppressed_ticks, game_tick_t, =0) \
+    SINGLE(pending_damage, float, =0) \
+    SINGLE(pending_damage_dealer, EntityID, =NULL_ENTITY) \
+    SINGLE(pending_damage_ticks, game_tick_t, =0) \
+    SINGLE(dark_marked_ticks, game_tick_t, =0) \
+    SINGLE(champion_aura, float, =0) \
+    SINGLE(compass_reveal, uint8_t, =0) \
+    SINGLE(soul_split_cd, game_tick_t, =0) \
+    SINGLE(paranormal_vision, uint8_t, =0) \
+    SINGLE(overheal_shield_ratio, float, =0) \
     \
     SINGLE(poison_inflicted, float, =0) \
     SINGLE(poison_dealer, EntityID, =NULL_ENTITY) \
@@ -122,8 +157,8 @@ SINGLE(Name, guild, std::string)
     SINGLE(burn_inflicted, float, =0) \
     SINGLE(burn_dealer, EntityID, =NULL_ENTITY) \
     SINGLE(burn_damage, PoisonDamage, ={}) \
-    SINGLE(health, float, =0) \
-    SINGLE(max_health, float, =0) \
+    SINGLE(health, double, =0) \
+    SINGLE(max_health, double, =0) \
     SINGLE(damage, float, =0) \
     SINGLE(armor, float, =0) \
     SINGLE(poison_armor, float, =0) \
@@ -204,6 +239,9 @@ struct LoadoutPetal {
 class LoadoutSlot {
     PetalID::T id;
 public:
+    PetalID::T behavior_id = PetalID::kNone;
+    uint8_t effect_charges = 0;
+    game_tick_t effect_reload = 0;
     uint8_t already_spawned;
     LoadoutPetal petals[MAX_PETALS_IN_CLUMP];    
     LoadoutSlot();

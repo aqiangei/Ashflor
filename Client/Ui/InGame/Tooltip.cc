@@ -133,18 +133,44 @@ Element *Ui::UiLoadout::petal_tooltips[PetalID::kNumPetals] = {nullptr};
 Element *Ui::UiLoadout::petal_tooltips_leveled[PetalID::kNumPetals] = {nullptr};
 
 static float get_reload_factor() {
-    // Matches server: product of loadout extra_reload_factor (Golden Leaf etc.)
-    // then talent cooldown mult — both stack multiplicatively.
+    // Matches server Flower.cc: product of loadout extra_reload_factor (Golden Leaf
+    // etc.) with Unique Lv on the first primary copy only, then talent CDR.
     float factor = 1.f;
     if (Game::alive()) {
         Entity &player = Game::simulation.get_ent(Game::player_id);
-        for (uint32_t i = 0; i < player.get_loadout_count(); ++i)
-            factor *= PETAL_DATA[player.get_loadout_ids(i)].attributes.extra_reload_factor;
+        uint32_t n = player.get_loadout_count();
+        for (uint32_t i = 0; i < n; ++i) {
+            PetalID::T id = player.get_loadout_ids(i);
+            if (id == PetalID::kNone || id >= PetalID::kNumPetals) continue;
+            float lv_mult = 1.f;
+            if (Craft::can_level_petal(id)) {
+                uint8_t first = 1;
+                for (uint32_t j = 0; j < i; ++j) {
+                    if (player.get_loadout_ids(j) == id) { first = 0; break; }
+                }
+                if (first)
+                    lv_mult = Craft::level_stat_mult(
+                        Craft::petal_level_get(Game::petal_levels, id));
+            }
+            factor *= Craft::level_scale_factor(
+                PETAL_DATA[id].attributes.extra_reload_factor, lv_mult);
+        }
     } else {
         for (uint32_t i = 0; i < Game::loadout_count; ++i) {
             PetalID::T id = Game::cached_loadout[i];
-            if (id != PetalID::kNone && id < PetalID::kNumPetals)
-                factor *= PETAL_DATA[id].attributes.extra_reload_factor;
+            if (id == PetalID::kNone || id >= PetalID::kNumPetals) continue;
+            float lv_mult = 1.f;
+            if (Craft::can_level_petal(id)) {
+                uint8_t first = 1;
+                for (uint32_t j = 0; j < i; ++j) {
+                    if (Game::cached_loadout[j] == id) { first = 0; break; }
+                }
+                if (first)
+                    lv_mult = Craft::level_stat_mult(
+                        Craft::petal_level_get(Game::petal_levels, id));
+            }
+            factor *= Craft::level_scale_factor(
+                PETAL_DATA[id].attributes.extra_reload_factor, lv_mult);
         }
     }
     factor *= Talent::reload_mult(Game::talent_ranks[TalentID::kCooldown]);
@@ -157,10 +183,44 @@ static float get_reload_factor() {
 static float get_damage_factor() {
     if (!Game::alive()) return 1;
     float factor = 1;
+    // Per English-name max amp (match server Flower.cc — no Skyblade^n).
+    static constexpr uint32_t kAmpCap = 12;
+    uint32_t amp_hash[kAmpCap] = {};
+    float amp_best[kAmpCap] = {};
+    uint32_t amp_n = 0;
     Entity &player = Game::simulation.get_ent(Game::player_id);
     for (uint32_t i = 0; i < player.get_loadout_count(); ++i) {
-        factor *= PETAL_DATA[player.get_loadout_ids(i)].attributes.extra_damage_factor;
+        PetalID::T pid = player.get_loadout_ids(i);
+        if (pid == PetalID::kNone || pid >= PetalID::kNumPetals) continue;
+        auto const &pd = PETAL_DATA[pid];
+        float lv = Craft::level_stat_mult(Craft::petal_level_get(Game::petal_levels, pid));
+        float f = Craft::level_scale_factor(pd.attributes.extra_damage_factor, lv);
+        if (f > 1.f) {
+            char const *nm = pd.name;
+            uint32_t h = 2166136261u;
+            for (char const *p = nm; p && *p; ++p) {
+                h ^= (uint8_t)*p;
+                h *= 16777619u;
+            }
+            uint32_t found = amp_n;
+            for (uint32_t ai = 0; ai < amp_n; ++ai) {
+                if (amp_hash[ai] == h) { found = ai; break; }
+            }
+            if (found < amp_n) {
+                if (f > amp_best[found]) amp_best[found] = f;
+            } else if (amp_n < kAmpCap) {
+                amp_hash[amp_n] = h;
+                amp_best[amp_n] = f;
+                ++amp_n;
+            }
+        } else if (f > 0.f && f < 1.f) {
+            factor *= f;
+        }
     }
+    float prod = 1.f;
+    for (uint32_t ai = 0; ai < amp_n; ++ai) prod *= amp_best[ai];
+    if (prod > 8.f) prod = 8.f;
+    if (prod > 1.f) factor *= prod;
     return factor;
 }
 
@@ -184,13 +244,95 @@ static float tooltip_petal_hp_mult() {
 
 static float tooltip_level_mult(PetalID::T id, uint8_t apply_level) {
     if (!apply_level || id == PetalID::kNone || id >= PetalID::kNumPetals) return 1.f;
-    return Craft::level_stat_mult(Game::petal_levels[id]);
+    return Craft::level_stat_mult(Craft::petal_level_get(Game::petal_levels, id));
 }
 
 static Ui::Element *make_petal_stat_container(PetalID::T id, uint8_t apply_level) {
     std::vector<Ui::Element *> stats = {new Ui::Element(0,10)};
     struct PetalData const &petal_data = PETAL_DATA[id];
     struct PetalAttributes const &attrs = petal_data.attributes;
+    auto effect = [&](char const *zh, char const *en, std::string value) {
+        stats.push_back(new Ui::HContainer({
+            new Ui::DynamicText(12, [zh, en](){ return I18n::use_chinese ? zh : en; }, { .fill = 0xff9bdfcf }),
+            new Ui::StaticText(12, value)
+        }, 0, 5, { .h_justify = Style::Left }));
+    };
+    if (attrs.on_hit_heal_ratio > 0.f)
+        effect("命中吸血：", "Lifesteal: ", format_pct(attrs.on_hit_heal_ratio * 100.f));
+    if (attrs.aggro_shrink > 0.f)
+        effect("怪物索敌范围：", "Mob aggro range: ", "-" + format_pct(std::fmin(.95f, attrs.aggro_shrink) * 100.f));
+    if (attrs.attraction_radius > 0.f)
+        effect("花瓣吸引（常驻，攻击环外额外）：", "Petal attraction (always on, extra past attack ring): ", format_number(attrs.attraction_radius));
+    if (attrs.petal_repair > 0.f)
+        effect("花瓣耐久回复：", "Petal durability restore: ", format_number(attrs.petal_repair) + "/s");
+    if (attrs.body_radius_bonus > 0.f)
+        effect("体型增大：", "Body size: ", "+" + format_number(attrs.body_radius_bonus));
+    if (attrs.heal_amp > 0.f)
+        effect("治疗放大：", "Heal amp: ", "+" + format_pct(attrs.heal_amp * 100.f));
+    if (attrs.damage_absorb > 0.f)
+        effect("伤害吸收：", "Damage absorb: ", format_number(attrs.damage_absorb));
+    if (attrs.knockback_taken > 0.f)
+        effect("受击击退：", "Knockback taken: ", "×" + format_number(attrs.knockback_taken));
+    if (attrs.solo_damage_factor > 1.0001f)
+        effect("独处伤害：", "Solo damage: ", "×" + format_number(attrs.solo_damage_factor));
+    if (attrs.petal_evasion > 0.f)
+        effect("花瓣闪避：", "Petal evasion: ", format_pct(attrs.petal_evasion * 100.f));
+    if (attrs.flower_evasion > 0.f)
+        effect("花朵闪避：", "Flower evasion: ", format_pct(attrs.flower_evasion * 100.f));
+    if (attrs.petal_hp_factor > 1.0001f)
+        effect("花瓣耐久倍率：", "Petal HP: ", "×" + format_number(attrs.petal_hp_factor));
+    if (attrs.luck > 0.f)
+        effect("幸运：", "Luck: ", "+" + format_number(attrs.luck));
+    if (attrs.crit_chance > 0.f)
+        effect("暴击：", "Crit: ", format_pct(attrs.crit_chance * 100.f) + " → ×" + format_number(attrs.crit_factor > 0.f ? attrs.crit_factor : 2.f));
+    if (attrs.clay_max_damage > 0.f)
+        effect("黏土蓄力上限：", "Clay charge cap: ", format_number(attrs.clay_max_damage));
+    if (attrs.tomato_max_damage > 0.f)
+        effect("番茄蓄力上限：", "Tomato charge cap: ", format_number(attrs.tomato_max_damage));
+    if (attrs.domino_max_damage > 0.f)
+        effect("骨牌蓄力上限：", "Domino charge cap: ", format_number(attrs.domino_max_damage));
+    if (attrs.vs_projectile_factor > 1.0001f)
+        effect("对弹射物：", "Vs projectiles: ", "×" + format_number(attrs.vs_projectile_factor));
+    if (attrs.hit_interval_seconds > 0.f)
+        effect("命中间隔：", "Hit interval: ", format_number(attrs.hit_interval_seconds) + "s");
+    if (attrs.phase_through)
+        effect("穿透：", "Phase through: ", std::to_string(attrs.phase_through));
+    if (attrs.fixed_orbit_range)
+        effect("固定轨道半径：", "Fixed orbit range: ", "是");
+    if (attrs.privet_extra_poison > 0.f)
+        effect("女贞毒伤加成：", "Privet poison amp: ", "+" + format_pct(attrs.privet_extra_poison * 100.f));
+    if (attrs.powder_max_rarity)
+        effect("粉末压制稀有度上限：", "Powder max rarity: ", I18n::rarity_name(attrs.powder_max_rarity));
+    if (attrs.mimic_left) effect("拟态左侧花瓣：", "Mimic left petal: ", "是");
+    if (attrs.card_random_stats) effect("纸牌随机数值：", "Card random stats: ", "是");
+    if (attrs.ankh_mark) effect("安卡标记：", "Ankh mark: ", "是");
+    if (attrs.compass) effect("罗盘：", "Compass: ", "是");
+    if (attrs.blood_sacrifice) effect("死亡召唤：", "Blood sacrifice: ", "是");
+    if (attrs.champion_crown) effect("王者之冠：", "Champion crown: ", "是");
+    if (attrs.soul_splitter) effect("灵魂分裂：", "Soul splitter: ", "是");
+    if (attrs.paranormal) effect("超自然视野：", "Paranormal: ", "是");
+    if (attrs.corruption) effect("腐化：", "Corruption: ", "是");
+    if (attrs.dark_mark) effect("暗黑标记：", "Dark mark: ", "是");
+    if (attrs.mana_gen > 0.f) effect("法力回复：", "Mana regen: ", format_number(attrs.mana_gen) + "/s");
+    if (attrs.mana_cap > 0.f) effect("法力上限：", "Mana capacity: ", format_number(attrs.mana_cap));
+    if (attrs.mana_spawn_cost > 0.f) effect("法力消耗：", "Mana cost: ", format_number(attrs.mana_spawn_cost));
+    if (attrs.mana_absorb_per > 0.f) effect("每点法力抵伤：", "Damage per mana: ", format_number(attrs.mana_absorb_per));
+    if (attrs.mana_lightning_per > 0.f) effect("每点法力雷伤：", "Lightning per mana: ", format_number(attrs.mana_lightning_per));
+    if (attrs.lightning_damage > 0.f) effect("闪电伤害：", "Lightning: ", format_number(attrs.lightning_damage) + " × " + std::to_string(std::max(1, (int)attrs.lightning_chains)));
+    if (attrs.armor_shred > 0.f) effect("削减护甲：", "Armor shred: ", format_number(attrs.armor_shred) + " / " + format_number(attrs.armor_shred_seconds) + "s");
+    if (attrs.totem_heal > 0.f) effect("击杀后治疗：", "On-kill regeneration: ", format_number(attrs.totem_heal) + "/s · " + format_number(attrs.totem_seconds) + "s");
+    if (attrs.damage_delay_seconds > 0.f) effect("伤害延迟结算：", "Damage deferred: ", format_number(attrs.damage_delay_seconds) + "s");
+    if (attrs.death_delay_seconds > 0.f) effect("致死缓冲：", "Lethal grace: ", format_number(attrs.death_delay_seconds) + "s");
+    if (attrs.nazar_charges) {
+        effect("减伤次数：", "Mitigation charges: ", std::to_string(attrs.nazar_charges));
+        if (attrs.nazar_mitigation > 0.f)
+            effect("减伤比例：", "Mitigation: ", format_pct(attrs.nazar_mitigation * 100.f));
+    }
+    if (attrs.battery_charges) effect("反击次数：", "Discharge charges: ", std::to_string(attrs.battery_charges));
+    if (attrs.wax_block) effect("飞弹格挡：", "Projectile blocks: ", "1");
+    if (attrs.shovel_burrow) effect("按下防御遁地：", "Press defend to burrow: ", "0.6s / " + format_number(std::fmax(2.f, petal_data.reload)) + "s");
+    if (attrs.root_armor > 0.f) effect("每层护甲：", "Armor per stack: ", format_number(attrs.root_armor) + " × " + std::to_string(attrs.root_max_stacks));
+    if (attrs.overheal_to_shield > 0.f) effect("溢出治疗转护盾：", "Overheal to shield: ", format_pct(attrs.overheal_to_shield * 100.f));
     if (petal_data.health > 0) {
         stats.push_back(new Ui::HContainer({
             new Ui::DynamicText(12, [](){ return I18n::tr(I18n::kHealth); }, { .fill = 0xff77ff77 }),
@@ -208,24 +350,17 @@ static Ui::Element *make_petal_stat_container(PetalID::T id, uint8_t apply_level
                 float const stack = PETAL_DATA[id].attributes.stack_damage;
                 // Triangle: tip damage follows equipped same-rarity copies (not max).
                 if (stack > 0.f) {
-                    PetalID::T src = id == PetalID::kTriangleUnique
-                        ? PetalID::kTriangleSuper : id;
                     uint32_t copies = 0;
                     if (Game::alive()) {
                         Entity &player = Game::simulation.get_ent(Game::player_id);
                         for (uint32_t i = 0; i < player.get_loadout_count(); ++i)
-                            if (player.get_loadout_ids(i) == src) ++copies;
+                            if (player.get_loadout_ids(i) == id) ++copies;
                     } else {
                         for (uint32_t i = 0; i < Game::loadout_count; ++i)
-                            if (Game::cached_loadout[i] == src) ++copies;
+                            if (Game::cached_loadout[i] == id) ++copies;
                     }
-                    if (id == PetalID::kTriangleUnique) {
-                        float super_stack =
-                            PETAL_DATA[PetalID::kTriangleSuper].attributes.stack_damage;
-                        dmg = PETAL_DATA[id].damage + super_stack * (float)copies;
-                    } else if (copies >= 1) {
+                    if (copies >= 1)
                         dmg = PETAL_DATA[id].damage + stack * (float)(copies - 1);
-                    }
                 }
                 return format_number(dmg * tooltip_dmg_mult()
                     * tooltip_level_mult(id, apply_level));
@@ -239,16 +374,9 @@ static Ui::Element *make_petal_stat_container(PetalID::T id, uint8_t apply_level
             }, { .fill = 0xffffaa77 }),
             new Ui::DynamicText(12, [id](){
                 float stack = PETAL_DATA[id].attributes.stack_damage;
-                uint8_t unique = id == PetalID::kTriangleUnique;
-                if (unique)
-                    stack = PETAL_DATA[PetalID::kTriangleSuper].attributes.stack_damage;
                 if (I18n::use_chinese)
-                    return unique
-                        ? std::format("+{}/枚超级三角形", format_number(stack))
-                        : std::format("+{}/枚同稀有度", format_number(stack));
-                return unique
-                    ? std::format("+{}/Super Triangle", format_number(stack))
-                    : std::format("+{}/same-rarity copy", format_number(stack));
+                    return std::format("+{}/枚同稀有度", format_number(stack));
+                return std::format("+{}/same-rarity copy", format_number(stack));
             })
         }, 0, 5, { .h_justify = Style::Left }));
     }
@@ -272,7 +400,8 @@ static Ui::Element *make_petal_stat_container(PetalID::T id, uint8_t apply_level
             new Ui::DynamicText(12, [](){ return I18n::tr(I18n::kHeal); }, { .fill = 0xffff96cb }),
             new Ui::DynamicText(12, [id, apply_level](){
                 return format_number(PETAL_DATA[id].attributes.constant_heal
-                    * tooltip_level_mult(id, apply_level)) + "/s";
+                    * tooltip_level_mult(id, apply_level)
+                    * heal_tier_catchup(PETAL_DATA[id].rarity)) + "/s";
             })
         }, 0, 5, { .h_justify = Style::Left }));
     }
@@ -281,7 +410,8 @@ static Ui::Element *make_petal_stat_container(PetalID::T id, uint8_t apply_level
             new Ui::DynamicText(12, [](){ return I18n::tr(I18n::kHeal); }, { .fill = 0xffff96cb }),
             new Ui::DynamicText(12, [id, apply_level](){
                 return format_number(PETAL_DATA[id].attributes.burst_heal
-                    * tooltip_level_mult(id, apply_level));
+                    * tooltip_level_mult(id, apply_level)
+                    * heal_tier_catchup(PETAL_DATA[id].rarity));
             })
         }, 0, 5, { .h_justify = Style::Left }));
     }
@@ -390,7 +520,7 @@ static Ui::Element *make_petal_stat_container(PetalID::T id, uint8_t apply_level
         stats.push_back(new Ui::HContainer({
             new Ui::DynamicText(12, [](){ return I18n::tr(I18n::kExtraVision); }, { .fill = 0xffcde23b }),
             new Ui::DynamicText(12, [id, apply_level](){
-                float f = Craft::level_scale_factor(
+                float f = Craft::level_scale_vision(
                     PETAL_DATA[id].attributes.vision_factor,
                     tooltip_level_mult(id, apply_level));
                 return format_pct(100 / f);
@@ -452,7 +582,8 @@ static Ui::Element *make_petal_stat_container(PetalID::T id, uint8_t apply_level
             }, { .fill = 0xff6fdc8c }),
             new Ui::DynamicText(12, [id, apply_level](){
                 return format_number(PETAL_DATA[id].attributes.aura_heal
-                    * tooltip_level_mult(id, apply_level)) + "/s";
+                    * tooltip_level_mult(id, apply_level)
+                    * heal_tier_catchup(PETAL_DATA[id].rarity)) + "/s";
             })
         }, 0, 5, { .h_justify = Style::Left }));
     }
@@ -638,8 +769,10 @@ static Element *make_petal_tooltip_body(PetalID::T id, uint8_t apply_level) {
         ),
         new Ui::DynamicText(14, [id, apply_level](){
             uint8_t r = PETAL_DATA[id].rarity;
-            if (apply_level && r == RarityID::kUnique && Game::petal_levels[id] > 0)
-                return std::format("{} · Lv.{}", I18n::rarity_name(r), Game::petal_levels[id]);
+            if (apply_level && r == RarityID::kUnique
+                && Craft::petal_level_get(Game::petal_levels, id) > 0)
+                return std::format("{} · Lv.{}", I18n::rarity_name(r),
+                    Craft::petal_level_get(Game::petal_levels, id));
             return std::string{I18n::rarity_name(r)};
         }, { .fill = RARITY_COLORS[PETAL_DATA[id].rarity], .h_justify = Style::Left }),
         new Ui::DynamicText(11, [](){

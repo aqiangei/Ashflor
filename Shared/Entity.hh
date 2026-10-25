@@ -59,6 +59,7 @@ public:
     EntityID id;
     uint8_t pending_delete;
     void add_component(uint32_t);
+    void remove_component(uint32_t);
     uint8_t has_component(uint32_t) const;
 
 #define SINGLE(component, name, type) type const &get_##name() const;

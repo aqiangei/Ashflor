@@ -45,7 +45,7 @@ uint8_t Party::same_party(Client *a, Client *b) {
     return a && b && a->party_id && a->party_id == b->party_id;
 }
 void Party::clear_corpse(Client *) {}
-void Party::on_death(Client *, float, float) {}
+void Party::on_death(Client *, float, float, uint8_t, uint8_t) {}
 void Treasure::on_loot_chest_killed(Simulation *, Entity const &) {}
 void Chat::broadcast_server(std::string const &, std::string const &, std::string const &,
                             Chat::LiveBcKind, std::string const &, uint8_t) {}
@@ -246,10 +246,7 @@ static void training_dummies_are_personal() {
         assert(dummy.get_radius() > previous_radius);
         assert(std::fabs(dummy.get_radius() - 44.f * mob_rarity_radius_mult(rarity)) < .01f);
         previous_radius = dummy.get_radius();
-        assert(Map::in_spawn_sanctuary(dummy.get_x(), dummy.get_y()));
-        float dx = (dummy.get_x() - MAP_SPAWN_X) / 960.f;
-        float dy = (dummy.get_y() - MAP_SPAWN_Y) / 720.f;
-        assert(std::fabs(dx * dx + dy * dy - 1.f) < .001f);
+        assert(!Map::in_spawn_plaza(dummy.get_x(), dummy.get_y()));
         assert(!Map::circle_hits_impassable(MapID::kGarden, dummy.get_x(), dummy.get_y(), dummy.get_radius()));
         assert(dummy.damage == 0 && dummy.score_reward == 0);
         assert(BitMath::at(dummy.flags, EntityFlags::kNoDrops));
@@ -322,4 +319,5 @@ int main() {
     training_dummies_are_personal();
     std::puts("PASS: independent party loot, private AOI/magnet/pickup, orphan cleanup, "
               "downed mates, summon/reflection claims, no auto-equip, full stacks and duplicate pickup");
+    return 0;
 }

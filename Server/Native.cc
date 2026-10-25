@@ -70,6 +70,8 @@ static std::string map_static_path(std::string_view url) {
     if (path.empty() || path == "/") return "index.html";
     if (path == "/live" || path == "/live.html") return "live.html";
     if (path == "/codex" || path == "/codex.html") return "codex.html";
+    if (path == "/feedback" || path == "/feedback.html") return "feedback.html";
+    if (path == "/progress.json" || path == "/api/progress") return "progress.json";
     if (path == "/favicon.ico") return "favicon-32.png";
     // Strip leading slash; reject traversal
     if (path[0] == '/') path.erase(0, 1);
@@ -186,8 +188,9 @@ static void send_file(uWS::HttpResponse<false> *res, std::string const &file) {
     res->writeHeader("Content-Type", mime_for(file));
     if (file.find("gardn-client.") != std::string::npos)
         res->writeHeader("Cache-Control", "public, max-age=31536000, immutable");
-    else if (file == "index.html" || file == "sw.js" || file == "feedback.html")
-        res->writeHeader("Cache-Control", "no-cache");
+    else if (file == "index.html" || file == "sw.js" || file == "feedback.html"
+        || file == "live.html" || file == "progress.json")
+        res->writeHeader("Cache-Control", "no-store");
     res->end(data);
 }
 
@@ -348,8 +351,24 @@ uWS::App Server::server = uWS::App()
     int map = map_s.empty() ? -1 : (int) std::strtol(map_s.c_str(), nullptr, 10);
     send_json(res, 200, Chat::query_chatlog_json(before, limit, day, player, channel, map));
 })
-.get("/api/codex", [](auto *res, auto * /*req*/) {
+.get("/api/codex", [](auto *res, auto *req) {
+    std::string gate = query_str(req->getQuery("gate"));
+    if (gate == "1" || gate == "true") {
+        std::string body = Server::live_codex_gate_json();
+        res->writeHeader("Content-Type", "application/json; charset=utf-8");
+        res->writeHeader("Cache-Control", "public, max-age=300");
+        res->writeHeader("Access-Control-Allow-Origin", "*");
+        res->end(body);
+        return;
+    }
     send_json(res, 200, Server::live_codex_json());
+})
+.get("/api/codex-gate", [](auto *res, auto * /*req*/) {
+    std::string body = Server::live_codex_gate_json();
+    res->writeHeader("Content-Type", "application/json; charset=utf-8");
+    res->writeHeader("Cache-Control", "public, max-age=300");
+    res->writeHeader("Access-Control-Allow-Origin", "*");
+    res->end(body);
 })
 .get("/api/map-layout", [](auto *res, auto * /*req*/) {
     std::string body = Server::live_map_layout_json();
@@ -447,7 +466,8 @@ uWS::App Server::server = uWS::App()
 .ws<Client>("/*", {
     .compression = uWS::SHARED_COMPRESSOR,
     .maxPayloadLength = 64 * 1024,
-    .idleTimeout = 120,
+    // Background tabs throttle heartbeats; 120s was dropping AFK players mid-fight.
+    .idleTimeout = 300,
     .maxBackpressure = 1024 * MAX_PACKET_LEN,
     .closeOnBackpressureLimit = false,
     // Only *received* data refreshes the idle timer. With this on, our 20 Hz
