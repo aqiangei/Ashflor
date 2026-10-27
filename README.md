@@ -9,6 +9,48 @@
 
 自己开服看 [INSTALLATION.md](./INSTALLATION.md)。
 
+## 站点与控制台
+
+游戏本体之外还有几张静态网页（香港边缘 `releases/<cacheV>/`；北京 IP 多为反代到港机）。只改 HTML / JSON 时可热更 scp，不必重编客户端。
+
+| 站点 | 入口 | 说明 |
+|------|------|------|
+| 游戏 | [ashflor.com](https://ashflor.com/) | WASM 客户端 |
+| Live 控制台 | [ashflor.com/live](https://ashflor.com/live) | 服况看板 + 管理操作 |
+| 图鉴 | [ashflor.com/codex](https://ashflor.com/codex) | 花瓣 / 怪物 / 机制与美术 |
+| 留言板 | [ashflor.com/feedback.html](https://ashflor.com/feedback.html) | 公开反馈 + 修复进度 |
+| 修复进度数据 | [/progress.json](https://ashflor.com/progress.json)（或 `/api/progress`） | 供留言板轮询；由 `todo/*.txt` 生成 |
+
+北京备用（反代香港，不读 BJ `/opt/ashflor` 静态）：`http://154.8.157.208/live` · `/codex` · `/feedback.html`。
+
+### Live 控制台
+
+运维 / 观战用，不进游戏也能看服况、管公告与刷怪。静态：`Client/public/live.html` + `deploy-info.json`。接口：`GET /api/live`、`/api/live-pos`；管理 `POST /api/admin`。
+
+- **看板：** 在线人数、分图人数、账号/排行榜规模、Boss 存活、当前 `cache_v` 与发版说明、管理鉴权状态
+- **管理（可鉴权）：** 全服公告（游戏内顶栏「广播」）、给在线玩家发花瓣、按地图/玩家附近刷怪。`ASHFLOR_LIVE_AUTH=1` + `ASHFLOR_LIVE_USER` / `ASHFLOR_LIVE_PASS` 打开登录锁；默认未开时可直接操作
+- **其它面板：** 在线玩家表、实时小地图（地形 + 玩家 + Boss，可选 G 模式）、Boss 列表、全服播报、聊天记录、多维排行榜；页顶链到图鉴
+
+### 留言板与修复进度
+
+公开社区页，游戏内首页右上角 / 设置 / 暂停菜单可打开。
+
+| | |
+|--|--|
+| 页面 | **[https://ashflor.com/feedback.html](https://ashflor.com/feedback.html)**（`Client/public/feedback.html`） |
+| 留言数据 | 服务端 `feedback.dat`（异地备份）；登录后可发，游客只读 |
+| 修复进度 | 同页下方「修复进度」面板，约 30s 轮询 `/progress.json` |
+
+**留言板：** 所有玩家可见；限频（约 60 秒一条、每账号 10 分钟最多 3 条、每天最多 10 条）；勿留密码等隐私。运营可用本机会话密钥切换留言处理状态。页脚有 QQ 群入口。
+
+**修复进度：** 源数据在工作区 `todo/MMDD.txt`（条目末尾 `✓` 视为已完成）。用 `tools/publish_progress.py`（可选 `--deploy`）生成并推送 `Client/public/progress.json` 到香港 `current` / `/opt/ashflor`（及北京冷备）。面板按日期展示已完成 / 待办统计，玩家可在留言板直接看到近期修复情况。
+
+### 图鉴
+
+**[https://ashflor.com/codex](https://ashflor.com/codex)**：花瓣/怪物种类、地图筛选、数值与掉落；美术为 `gardn-art.js|wasm`（按 `deploy-info.json` 的 `cache_v` 破缓存）。中文名走 `Shared/PetalNameZh.inc` / `PetalDescZh.inc`（改完需重编 native，不只改 `I18nData.inc`）。
+
+更细的发版路径与鉴权见仓库外工作区 `DEPLOY.md`「Live 控制台 / 留言板 / 热更静态」「图鉴 /codex」。
+
 ## 已做
 
 相对 gardn 上游：账号存档、组队、公会、聊天、合成、中文界面与 i18n，以及地图 / 数值 / UI 调整。
@@ -89,7 +131,7 @@
 
 ### 运维与其它
 - Nginx 反代免端口；重生卡死修复；客户端资源长缓存
-- **Live 看板**：`/live` 在线名册 / Boss / 排行；`/api/live`·`catalog`·`admin`（公告、发瓣、刷怪）；`ASHFLOR_LIVE_AUTH=1` 可开鉴权
+- **Live 控制台**：见上文专节；`/live` 看板 + `/api/admin` 公告/发瓣/刷怪；`ASHFLOR_LIVE_AUTH=1` 可开鉴权
 - 断线 / 重部署等待页 + 接花瓣小游戏
 - 空服 AI Bot；装备槽稀有度底色
 - 手感：移速软曲线、花瓣轨道、野怪 leash、掉落多 roll、AOI / 插值
