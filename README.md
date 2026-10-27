@@ -1,162 +1,39 @@
 # 灰烬 · ashflor
 
-自托管的多人 florr 风格游戏。基于 [gardn](https://github.com/trigonal-bacon/gardn) fork，C++ 编写。
+自托管的多人 [florr.io](https://florr.io) 风格游戏。基于 [gardn](https://github.com/trigonal-bacon/gardn)（AGPL-3.0）fork，C++ / WASM。
 
-## 游玩
+**游玩：** [https://ashflor.com/](https://ashflor.com/)  
+自己开服见 [INSTALLATION.md](./INSTALLATION.md)。
 
-- [https://ashflor.com/](https://ashflor.com/)（推荐）
-- [http://ashflor.com/](http://ashflor.com/) · [http://www.ashflor.com/](http://www.ashflor.com/)
-
-自己开服看 [INSTALLATION.md](./INSTALLATION.md)。
-
-## 站点与控制台
-
-游戏本体之外还有几张静态网页（香港边缘 `releases/<cacheV>/`；北京 IP 多为反代到港机）。只改 HTML / JSON 时可热更 scp，不必重编客户端。
-
-| 站点 | 入口 | 说明 |
-|------|------|------|
-| 游戏 | [ashflor.com](https://ashflor.com/) | WASM 客户端 |
-| Live 控制台 | [ashflor.com/live](https://ashflor.com/live) | 服况看板 + 管理操作 |
-| 图鉴 | [ashflor.com/codex](https://ashflor.com/codex) | 花瓣 / 怪物 / 机制与美术 |
-| 留言板 | [ashflor.com/feedback.html](https://ashflor.com/feedback.html) | 公开反馈 + 修复进度 |
-| 修复进度数据 | [/progress.json](https://ashflor.com/progress.json)（或 `/api/progress`） | 供留言板轮询；由 `todo/*.txt` 生成 |
-
-北京备用（反代香港，不读 BJ `/opt/ashflor` 静态）：`http://154.8.157.208/live` · `/codex` · `/feedback.html`。
-
-### Live 控制台
-
-运维 / 观战用，不进游戏也能看服况、管公告与刷怪。静态：`Client/public/live.html` + `deploy-info.json`。接口：`GET /api/live`、`/api/live-pos`；管理 `POST /api/admin`。
-
-- **看板：** 在线人数、分图人数、账号/排行榜规模、Boss 存活、当前 `cache_v` 与发版说明、管理鉴权状态
-- **管理（可鉴权）：** 全服公告（游戏内顶栏「广播」）、给在线玩家发花瓣、按地图/玩家附近刷怪。`ASHFLOR_LIVE_AUTH=1` + `ASHFLOR_LIVE_USER` / `ASHFLOR_LIVE_PASS` 打开登录锁；默认未开时可直接操作
-- **其它面板：** 在线玩家表、实时小地图（地形 + 玩家 + Boss，可选 G 模式）、Boss 列表、全服播报、聊天记录、多维排行榜；页顶链到图鉴
-
-### 留言板与修复进度
-
-公开社区页，游戏内首页右上角 / 设置 / 暂停菜单可打开。
+## 网页入口
 
 | | |
 |--|--|
-| 页面 | **[https://ashflor.com/feedback.html](https://ashflor.com/feedback.html)**（`Client/public/feedback.html`） |
-| 留言数据 | 服务端 `feedback.dat`（异地备份）；登录后可发，游客只读 |
-| 修复进度 | 同页下方「修复进度」面板，约 30s 轮询 `/progress.json` |
+| 游戏 | [ashflor.com](https://ashflor.com/) |
+| Live 控制台 | [/live](https://ashflor.com/live) — 在线 / Boss / 排行 / 小地图；可发公告、发瓣、刷怪（可选鉴权） |
+| 图鉴 | [/codex](https://ashflor.com/codex) — 花瓣、怪物、机制与数值 |
+| 留言板 | [/feedback.html](https://ashflor.com/feedback.html) — 公开留言；同页展示修复进度 |
 
-**留言板：** 所有玩家可见；限频（约 60 秒一条、每账号 10 分钟最多 3 条、每天最多 10 条）；勿留密码等隐私。运营可用本机会话密钥切换留言处理状态。页脚有 QQ 群入口。
+## 相对上游做了什么
 
-**修复进度：** 源数据在工作区 `todo/MMDD.txt`（条目末尾 `✓` 视为已完成）。用 `tools/publish_progress.py`（可选 `--deploy`）生成并推送 `Client/public/progress.json` 到香港 `current` / `/opt/ashflor`（及北京冷备）。面板按日期展示已完成 / 待办统计，玩家可在留言板直接看到近期修复情况。
+- **八域世界**：花园、沙漠、海洋、雪原、丛林、蚁穴、火山、王城；各图 Boss 与跨图传送
+- **养成**：账号存档、九档稀有度（含究极 / 超凡 / 独特）、合成与材料配方、统一背包与云端配装、等级无硬顶与天赋树
+- **社交**：组队、公会、聊天、多维排行榜、Boss / 高阶合成全服播报
+- **探索**：指引精灵、程序化 ThemeArt、印记 / 宝箱等轻量世界事件
+- **体验**：中文界面、PC / 移动端操作、私有掉落、死亡不掉瓣
+- **运维**：原生 uWS 服、Live 看板与管理 API、公开留言与进度页、Nginx 边缘发版
 
-### 图鉴
+细项变更以游戏内更新日志与留言板「修复进度」为准，不在此罗列。
 
-**[https://ashflor.com/codex](https://ashflor.com/codex)**：花瓣/怪物种类、地图筛选、数值与掉落；美术为 `gardn-art.js|wasm`（按 `deploy-info.json` 的 `cache_v` 破缓存）。中文名走 `Shared/PetalNameZh.inc` / `PetalDescZh.inc`（改完需重编 native，不只改 `I18nData.inc`）。
+## 技术栈
 
-更细的发版路径与鉴权见仓库外工作区 `DEPLOY.md`「Live 控制台 / 留言板 / 热更静态」「图鉴 /codex」。
+| | |
+|--|--|
+| 共享 | 自制 ECS（`Shared/Entity*.hh`） |
+| 服务端 | `gardn-server-native`（uWebSockets）；亦可 WASM + Node |
+| 客户端 | Emscripten → WASM；Canvas2D；`Client/Ui` |
+| 编译默认 | `USE_CODEPOINT_LEN`、`GENERAL_SPATIAL_HASH` |
 
-## 已做
+## 许可
 
-相对 gardn 上游：账号存档、组队、公会、聊天、合成、中文界面与 i18n，以及地图 / 数值 / UI 调整。
-
-线上已落地的改动：
-
-### 群系与 Boss
-- 七大地貌：花园 / 沙漠 / 海洋 / 雪原 / 丛林 / 蚁穴 / 火山 + 王城
-- 海洋 / 雪原 / 火山完整怪表与 Boss（深渊巨口、冬日君王、熔心霸主）
-- 沙漠扩充（沙虫君主等多节虫）；花园花卉守护者
-- 丛林：密林迷宫、沼河、树根 / 树心；古树心多阶段 Boss
-- 王城：六区城墙迷宫、王城怪 / 瓣、堕落国王三阶段 Boss
-- 每图 Boss 锚点唯一、死后定时再刷；靠近时屏幕顶部大红血条
-- 场内传送：花园·沙漠 ↔ 王城，王城北门 → 火山
-
-### 花瓣 / 合成 / 背包
-- 材料掉落 + 配方合成（本地 / 跨群系 / 传说 / 金币商店）；V 键特殊组装车间
-- 稀有度九档：普通→…→神话→**究极**→**超凡**→**独特**；主战花瓣阶梯补齐；神话→究极合成 1.5%
-- 金币与材料仅进背包；Fast / Heavy / Twin 稀有度阶梯；合成同名升级
-- **蜂蜜 / 陨石**稀有度阶梯补齐，特殊商店可购；旧存档 craft_bank 长度兼容
-- 蜂蜜轻抛近距停留；陨石就地种植（玩家不碰、陨石可叠）
-- 合成阶梯：**神话 → 究极 → 超凡 → 独特**；机制瓣悬停显示光环治疗 / 范围 / 持续 / 减速与禁疗秒数
-- 龟背竹：投地扎根治疗光环（范围加大，Epic→Ultra 阶梯范围随稀有度递增）
-- **统一背包**：卸下与拾取直接进入堆叠，不自动补主副装备空槽（无单独仓库）；稀有度色块、滚动条靠右、搜索 / 整理
-- 删除槽靠右；装备拖出回背包；**背包拖到已占用装备槽自动把原瓣退回堆叠**；同种花瓣堆叠 xN；T 键卸载
-- 云端配装预设 20 格，主副槽一起保存与切换（缺瓣降稀有度兜底）；装备栏 10 槽；移动端 R / PC K·L 切预设
-- 花园出生点环形摆放普通到唯一的 9 个测试假人，独立木桩靶心美术，体型按稀有度递增；伤害、DPS、累计伤害仅本人可见，换装自动开启新一轮，可手动重置或停手 3 秒清零，无奖励
-
-### 成长与进度
-- **等级无上限**（已去掉 150 硬顶）；等级由累计 `score` 换算；≤100 缓升、其后立方加陡；击杀经验 ×25（图鉴 XP 同步实发）；死亡等级不回退；每升一级 +1 天赋点
-- **死亡保留本级内经验**（`pending_score`）；重生不清到等级地板；打怪/每 tick **即时写入累计 score**，刷新不丢本级进度
-- **膨胀账号**：累计经验按原高低一次性映射到 130–160（不清零、不碰花瓣/金币）
-- **死亡界面**可正常聊天发消息（回车仍为继续重生）
-- **天赋面板**：木质卡片树 + 大节点；点击选中后用「+ 升级 / − 退回」操作（不误触）；重置二次确认
-- **私有掉落**：未组队看不见也捡不到他人掉落；需累计伤害 ≥ 怪物最大生命 **5%**（Boss **1%**）才有 loot；伤害记在怪身上，玩家重生不重置
-- **Boss 掉落**：压制素材/低稀有填充、抬高 Epic+、至少 3 堆瓣与金币加成（Unique+ 不保底）
-- 三倍掉落加成可随时开关
-- 死亡不掉瓣；退回主页软离场保留花瓣
-- 账号存档；登录后固定游戏名
-- 经验条悬停显示本级 **当前/目标**；打怪红字飘伤、回血粉字 `+N`
-
-### 地图与刷怪
-- 大正方形地图、中心出生、稀疏中立缓冲
-- **九档难度环**对齐花瓣稀有度（Common→Ultra），G 键小地图同色；本环怪为主、相邻为次
-- 刷怪按落点类别 + Zone 加权；出生广场安全区（外圈怪不追进）
-- 河道 / 大路动脉凿通；地形锯齿 / CCD 防穿墙
-- ThemeMaterial 分块地形美化（沙纹 / 水波 / 雪晶 / 灰烬等）
-
-### 探索与动态世界
-- **指引精灵**（非护送）：地图级从区域中心概率刷新，自行走向目标点后消失，再按概率出现；无敌/不受玩家影响；跟到终点附近才奖励币+残片；Unique 级拖尾粒子
-- **ThemeArt**：八域程序化 Canvas 美术（仪式主 NPC / 路旁向导 / 精灵 / 印记垫 / 箱与蜃楼 / 逃逸点 / 序触 / 传闻石）
-- 三点印记、限时触碰、逃逸草丛、序触菇阵、睡觉怪、WorldEvent 传闻种子；Yahaha 推箱仪式 / 路旁向导 / 宝箱多站点
-- 探索掉落走既有金币与 Canon 残片渠道（不新增 PetalID）
-
-### 社交与排行
-- 多维排行榜：在线时长 / 等级 / 发言 / **Boss 击杀** / **高级合成**
-- Boss 击杀全服播报（最高伤害小队/个人）；独特+ 花瓣合成全服播报；排行榜计数与播报同一规则
-- 组队：队友血量与坐标、小地图粉点与倒地标记；邀请等级差上限 50（**队内最低 ≥100 不限**）；**附近自动入队 / 超距自动离队**
-- 公会：创建 / 邀请 / 公会聊天；名牌显示公会名；面板含在线/离线、会长置顶、公告、在线成员组队
-- 聊天气泡约 5 秒；玩家名左下；**怪物无血条时名字与稀有度同行，出血条后稀有度在血条右下**；宝箱始终显示血条
-- 独特花瓣粒子用独特色（粉红），仅 Unique 触发
-- 商店全服广告横幅显示付费者昵称；聊天失焦保留草稿、滚动条拉满；`/` 指令边打边提示
-
-### UI / 移动端
-- **公开留言板**：首页右上角、设置与局内暂停菜单可给作者留言；所有玩家可读，登录后发布，服务器 `feedback.dat` 保存；QQ 入口使用官网企鹅图标、群分享链接并提供复制群号
-- 左下侧栏 IconPark（背包 / 天赋 / 合成 / 特殊）；左上更新日志
-- 设置页 QQ 群 227990150；标题屏与局内暂停设置移动端两列；调试信息叠层可开关
-- 标题屏提亮卡通风；选图切换 ThemeMaterial 背景与群系飞出花瓣；去掉首页「重生携带」预览
-- 首页花园出生点廊道不再刷暖色 channel，避免淡红横杠；通道色改为橄榄绿
-- 怪物图鉴按住显示属性 / 掉落 / 经验；组装锤头图标重绘
-- 死亡后右上角本局击杀与收集摘要
-- 聊天：回车 / 软键盘「发送」+ 按钮；IME 组字中不误发；输入框可输入 WASD
-- G 键小地图：难度环 + **玩家名**标在点上
-- 局内重生不再闪首页（等待出生时保持局内过渡）
-- 滚轮 / 双指捏合缩放视角（默认略近）；点输入框外关闭键盘
-- ESC：移动方式、反转攻防等
-- 移动端：浮动摇杆、圆形攻防、触控放大、安全区 / 背包展开
-
-### 运维与其它
-- Nginx 反代免端口；重生卡死修复；客户端资源长缓存
-- **Live 控制台**：见上文专节；`/live` 看板 + `/api/admin` 公告/发瓣/刷怪；`ASHFLOR_LIVE_AUTH=1` 可开鉴权
-- 断线 / 重部署等待页 + 接花瓣小游戏
-- 空服 AI Bot；装备槽稀有度底色
-- 手感：移速软曲线、花瓣轨道、野怪 leash、掉落多 roll、AOI / 插值
-- **服务端卡顿优化（玩法不变）**：Canonical 碰撞规范格去重（去掉 `unordered_set`）；`query` 代际戳去重；磁铁/拾取只扫附近格；陨石/蜂蜜碰撞与 tick 用 ID 热路径；Boss `boss_ent` 缓存避免每 tick 扫全图；排行榜 `fill_top` 约 5Hz（小地图仍每 tick）；Boss 召唤子怪数 `tick_ai_prepare` 预聚合
-- **服务端稳定性（二创对照）**：空间哈希中心插入+邻格碰撞（格 512）、过大才 fat；NaN/半径钳制；空图跳碰撞；玩家附近刷怪；远距 ~30s unseen despawn；tick 异常退出
-- **稀有度体型**：区刷怪按 rrolf 温和半径表（Unique≈8×），与战斗威胁倍率分离
-- **客户端怪名牌**：名字/稀有度离屏烘焙缓存后 blit
-- `./deploy.sh` 零停机发版 + nginx `?v=` 路由；错版客户端自动硬刷
-
-## 技术
-
-| 部分 | 说明 |
-|------|------|
-| ECS | 自制；见 `Shared/EntityDef.hh`、`Shared/Entity.hh` |
-| Server | uWebSockets，或 Node.js + WASM；默认 canonical 空间哈希 |
-| Client | emscripten → WASM/JS；Canvas2D；`Client/Ui` 自研 UI |
-| 发版 | `./deploy.sh` + nginx `?v=` 路由；错版客户端自动硬刷 |
-
-默认编译开 `USE_CODEPOINT_LEN`（中文截断）与 `GENERAL_SPATIAL_HASH`（大体型碰撞）。
-
-## 许可与致谢
-
-ashflor 是 [trigonal-bacon/gardn](https://github.com/trigonal-bacon/gardn) 的 fork（AGPL-3.0）。游戏设置页作者旁与首页右上角均提供上游仓库链接；请保留对原作者的声明。
-
-- 上游：[gardn](https://github.com/trigonal-bacon/gardn)（trigonal-bacon）
-- 本仓库：[aqiangei/ashflor](https://github.com/aqiangei/ashflor)
-
-见 [LICENSE](./LICENSE)。
+Fork of [trigonal-bacon/gardn](https://github.com/trigonal-bacon/gardn)。请保留对上游作者的声明。本仓库：[aqiangei/ashflor](https://github.com/aqiangei/ashflor)。见 [LICENSE](./LICENSE)。
