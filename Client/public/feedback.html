@@ -9,7 +9,7 @@
 <link rel="icon" href="/favicon.svg">
 <style>
 :root{font-family:system-ui,-apple-system,"Segoe UI","Microsoft YaHei",sans-serif;color:#344734;background:#f6f3df;font-synthesis:none}*{box-sizing:border-box}body{margin:0;background:radial-gradient(ellipse at top left,#e1edc5,transparent 65%);min-height:100vh}main{max-width:1020px;margin:auto;padding:28px 24px 56px}header{display:flex;align-items:center;justify-content:space-between;gap:16px;padding-bottom:30px}.brand{font-weight:800;letter-spacing:.1em;color:#496a3e}a{color:#376d4b}button,.button{font:inherit;cursor:pointer;border:0;border-radius:12px;padding:11px 18px;font-weight:650;background:#e6e9d4;color:#344734;text-decoration:none}button:hover,.button:hover{filter:brightness(.96)}button:focus-visible,a:focus-visible,textarea:focus-visible{outline:3px solid #84ad57;outline-offset:3px}button:disabled{opacity:.5;cursor:default}.intro{margin:12px 0 26px}.eyebrow{font-size:13px;color:#54754a;font-weight:700;letter-spacing:.1em}h1{font-size:clamp(30px,5vw,42px);margin:8px 0 12px;letter-spacing:-.03em}.intro p{line-height:1.8;color:#61705a;margin:0}.layout{display:grid;grid-template-columns:330px minmax(0,1fr);gap:24px;align-items:start}.panel{border:1px solid #d9dfc4;background:#fffcf0;border-radius:20px;box-shadow:0 5px 0 #dce3c2;padding:24px}.composer{position:sticky;top:20px}h2{font-size:19px;margin:0 0 16px}.small{font-size:13px;line-height:1.7;color:#65735e}.identity{font-size:14px;margin-bottom:16px}.identity strong{color:#386743}label{display:block;font-size:14px;font-weight:650;margin-bottom:9px}textarea{width:100%;resize:vertical;min-height:175px;border:1px solid #c9d4b5;border-radius:12px;padding:13px;font:inherit;font-size:15px;line-height:1.7;background:#fffef7;color:#344734}textarea::placeholder{color:#909983}.count{text-align:right;font-size:12px;color:#7c8970;margin:6px 0 16px}.send{width:100%;background:#547d46;color:white;box-shadow:0 3px 0 #365d2c}.status{min-height:24px;font-size:14px;line-height:1.6;margin:14px 0 0;overflow-wrap:anywhere}.status.error{color:#a24f37}.public{border-top:1px solid #e2e6d2;padding-top:16px;margin-top:18px}.list-head{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:12px;flex-wrap:wrap}.list-head h2{margin:0}.list-actions{display:flex;gap:8px;align-items:center;flex-wrap:wrap}.refresh,.mod-btn{font-size:13px;padding:8px 12px}.mod-btn.on{background:#547d46;color:#fff}.messages-scroll{max-height:min(62vh,640px);overflow:auto;-webkit-overflow-scrolling:touch}.message{border-bottom:1px solid #e1e6d1;padding:19px 0}.message:first-child{padding-top:8px}.message:last-child{border-bottom:0;padding-bottom:6px}.message.handled{opacity:.72}.meta{display:flex;flex-wrap:wrap;justify-content:space-between;gap:6px 16px;font-size:12px;color:#7d886f;align-items:center}.meta-right{display:flex;align-items:center;gap:8px;margin-left:auto}.author{font-size:14px;font-weight:750;color:#42603b}.message p{white-space:pre-wrap;overflow-wrap:anywhere;font-size:15px;line-height:1.8;margin:10px 0 0}.copy-btn{display:inline-flex;align-items:center;justify-content:center;gap:0;width:30px;height:30px;padding:0!important;border-radius:999px;border:1px solid #c5d0ad;background:#f3f6e8;color:#4a5d42;flex-shrink:0;box-shadow:none;font-size:0}.copy-btn:hover{background:#e6edd4;color:#2f4a2a;filter:none}.copy-btn:focus-visible{outline:3px solid #84ad57;outline-offset:2px}.copy-btn svg{width:15px;height:15px;display:block;pointer-events:none}.copy-btn.ok{background:#dcecc8;border-color:#8fb56a;color:#2f5a28}.copy-btn.ok svg{display:none}.copy-btn.ok::after{content:"✓";font-size:14px;font-weight:700;line-height:1}.row-actions{display:flex;align-items:center;gap:8px;margin-top:12px;flex-wrap:wrap}.toggle{font-size:12px;padding:6px 12px;border-radius:999px;border:1px solid #c5d0ad;background:#f3f6e8;color:#4a5d42}.toggle.done{background:#dcecc8;border-color:#8fb56a;color:#2f5a28}.toggle:disabled{opacity:.55;cursor:not-allowed}.badge{font-size:11px;padding:3px 8px;border-radius:999px;background:#efe8d4;color:#6a7358}.badge.done{background:#d7e8c0;color:#356338}.badge.fix{background:#d4e4ef;color:#2f5570}.badge.fix.done{background:#c5ddef;color:#1e4a66}.toggle.fix{border-color:#a8c4d8;background:#eaf3f8;color:#2f5570}.toggle.fix.done{background:#cfe3f1;border-color:#6fa0c0;color:#1a4560}.message.resolved{box-shadow:inset 3px 0 0 #6fa0c0}.empty{padding:36px 10px;text-align:center;color:#7b886d;line-height:1.8}.older{display:block;margin:20px auto 0}.older[hidden]{display:none}dialog#auth-dialog{border:1px solid #d9dfc4;border-radius:16px;padding:22px 24px;background:#fffcf0;color:#344734;width:min(340px,calc(100vw - 32px));box-shadow:0 12px 40px #0003}dialog#auth-dialog::backdrop{background:rgba(30,40,28,.35)}dialog#auth-dialog h3{margin:0 0 8px;font-size:17px}dialog#auth-dialog p{margin:0 0 14px;font-size:13px;color:#65735e;line-height:1.6}dialog#auth-dialog input{width:100%;border:1px solid #c9d4b5;border-radius:10px;padding:10px 12px;font:inherit;margin-bottom:14px;background:#fffef7}dialog#auth-dialog .dlg-actions{display:flex;gap:8px;justify-content:flex-end}footer{margin-top:30px;font-size:12px;color:#7d886f;text-align:center;line-height:1.8}footer a{margin:0 6px}
-.progress-panel{margin:24px 0 0}.progress-head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:14px}.progress-head h2{margin:0}.progress-meta{font-size:12px;color:#7d886f;line-height:1.6;text-align:right}.progress-stats{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:14px}.progress-stat{font-size:12px;font-weight:650;padding:5px 10px;border-radius:999px;background:#eef2e0;color:#4a5d42;border:1px solid #d5ddc0}.progress-stat.done{background:#dcecc8;border-color:#8fb56a;color:#2f5a28}.progress-day{border-top:1px solid #e2e6d2;padding-top:14px;margin-top:14px}.progress-day:first-of-type{border-top:0;padding-top:0;margin-top:0}.progress-day-head{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:10px}.progress-day-head button{font-size:12px;padding:6px 10px;background:transparent;border:1px solid #c5d0ad;border-radius:999px;color:#4a5d42}.progress-day h3{margin:0;font-size:15px;color:#42603b}.progress-list{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:6px;overflow:auto}.progress-day.today .progress-list{max-height:min(62vh,640px)}.progress-day:not(.today) .progress-list{max-height:280px}.progress-list li{font-size:13px;line-height:1.55;padding:8px 10px;border-radius:10px;background:#fffef7;border:1px solid #e4e9d4;border-left:3px solid #6fa05a;overflow-wrap:anywhere}.progress-list li .note{display:block;margin-top:4px;font-size:11px;color:#7d886f;line-height:1.5}.progress-empty{font-size:13px;color:#7b886d;padding:8px 0}.progress-err{font-size:13px;color:#a24f37}
+.progress-panel{margin:24px 0 0}.progress-head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:14px}.progress-head h2{margin:0}.progress-meta{font-size:12px;color:#7d886f;line-height:1.6;text-align:right}.progress-stats{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:14px}.progress-stat{font-size:12px;font-weight:650;padding:5px 10px;border-radius:999px;background:#eef2e0;color:#4a5d42;border:1px solid #d5ddc0}.progress-stat.done{background:#dcecc8;border-color:#8fb56a;color:#2f5a28}.progress-day{border-top:1px solid #e2e6d2;padding-top:14px;margin-top:14px}.progress-day:first-of-type{border-top:0;padding-top:0;margin-top:0}.progress-day-head{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:10px}.progress-day-head button{font-size:12px;padding:6px 10px;background:transparent;border:1px solid #c5d0ad;border-radius:999px;color:#4a5d42}.progress-day h3{margin:0;font-size:15px;color:#42603b}.progress-list{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:6px;overflow:auto}.progress-day.today .progress-list{max-height:min(62vh,640px)}.progress-day:not(.today) .progress-list{max-height:280px}.progress-list li{font-size:13px;line-height:1.55;padding:8px 10px;border-radius:10px;background:#fffef7;border:1px solid #e4e9d4;border-left:3px solid #6fa05a;overflow-wrap:anywhere;scroll-margin:72px;transition:background .2s,border-color .2s,box-shadow .2s}.progress-list li .note{display:block;margin-top:4px;font-size:11px;color:#7d886f;line-height:1.5}.progress-list li.flash{animation:prog-flash 1.8s ease-out}.progress-empty{font-size:13px;color:#7b886d;padding:8px 0}.progress-err{font-size:13px;color:#a24f37}@keyframes prog-flash{0%{background:#fff1a3;border-color:#d4b23a;box-shadow:0 0 0 3px rgba(212,178,58,.4)}55%{background:#fff8d0;border-color:#c9b056;box-shadow:0 0 0 2px rgba(212,178,58,.2)}100%{background:#fffef7;border-color:#e4e9d4;box-shadow:none}}.message{cursor:pointer;border-radius:12px;transition:background .15s}.message:hover{background:#f7f9ee}.message.has-progress .author::after{content:" · 可跳转进度";font-weight:550;color:#6fa05a;font-size:11px}
 @media(max-width:700px){main{padding:20px 16px 36px}header{padding-bottom:18px}.layout{grid-template-columns:1fr;gap:20px}.composer{position:static}.panel{padding:20px}.intro{margin-top:8px}textarea{min-height:130px}.intro p{font-size:14px}.messages-scroll{max-height:min(55vh,520px)}.progress-day.today .progress-list{max-height:min(55vh,520px)}.progress-day:not(.today) .progress-list{max-height:220px}.progress-meta{text-align:left}}
 </style>
 <main>
@@ -60,8 +60,8 @@
 (() => {
   'use strict';
   // Force named-tab reloads off stale layouts (progress used to sit above).
-  if (!/[?&]v=prog3(?:&|$)/.test(location.search)) {
-    location.replace('/feedback.html?v=prog3' + location.hash);
+  if (!/[?&]v=prog4(?:&|$)/.test(location.search)) {
+    location.replace('/feedback.html?v=prog4' + location.hash);
     return;
   }
   const $ = id => document.getElementById(id);
@@ -263,6 +263,16 @@
         + (handled ? ' handled' : '')
         + (resolved ? ' resolved' : '');
       item.dataset.id = String(e.id);
+      item.addEventListener('click', (ev) => {
+        // Ignore clicks on buttons / interactive controls inside the card.
+        if (ev.target.closest('button, a, input, textarea, select, label')) return;
+        const li = findProgressLi(body);
+        if (!li) {
+          notify('这条留言暂无对应的修复进度条目。', true);
+          return;
+        }
+        jumpToProgress(li);
+      });
       const meta = document.createElement('div');
       meta.className = 'meta';
       const author = document.createElement('span');
@@ -319,6 +329,7 @@
       $('messages').append(item);
     }
     syncAuthUi();
+    markMessagesWithProgress();
   }
   async function load(append=false) {
     if (busy) return;
@@ -486,6 +497,76 @@
     if (!Number.isFinite(n) || n <= 0) return '';
     try { return date.format(new Date(n)); } catch (_) { return ''; }
   }
+  function normMatch(s) {
+    return String(s || '')
+      .replace(/[✓✅✔]/g, '')
+      .replace(/（[^）]*）/g, '')
+      .replace(/\([^)]*\)/g, '')
+      .replace(/[\s\u3000·•,，.。!！?？:：;；"'“”‘’、/\\|_\-—–]+/g, '')
+      .toLowerCase();
+  }
+  function findProgressLi(bodyText) {
+    const needle = normMatch(bodyText);
+    if (!needle || needle.length < 4) return null;
+    const items = document.querySelectorAll('#progressBody .progress-list li[data-match]');
+    let best = null;
+    let bestScore = 0;
+    for (const li of items) {
+      const hay = li.dataset.match || '';
+      if (!hay) continue;
+      let score = 0;
+      if (hay === needle) score = 1;
+      else if (hay.includes(needle)) score = needle.length / hay.length;
+      else if (needle.includes(hay)) score = hay.length / needle.length;
+      else {
+        const n = Math.min(24, needle.length, hay.length);
+        if (n >= 8 && (hay.startsWith(needle.slice(0, n)) || needle.startsWith(hay.slice(0, n))))
+          score = n / Math.max(hay.length, needle.length);
+      }
+      if (score > bestScore) {
+        bestScore = score;
+        best = li;
+      }
+    }
+    return bestScore >= 0.28 ? best : null;
+  }
+  function expandProgressDay(day) {
+    if (!day) return;
+    const listWrap = day.querySelector('.progress-body');
+    const tog = day.querySelector('.progress-day-head button');
+    if (listWrap && listWrap.hasAttribute('hidden')) {
+      listWrap.removeAttribute('hidden');
+      if (tog) tog.textContent = '收起';
+    }
+  }
+  function jumpToProgress(li) {
+    if (!li) return;
+    const day = li.closest('.progress-day');
+    expandProgressDay(day);
+    const list = li.closest('.progress-list');
+    // Ensure the day list can scroll the target into view before page scroll.
+    if (list && typeof li.scrollIntoView === 'function') {
+      try { li.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'nearest' }); }
+      catch (_) { li.scrollIntoView(true); }
+    }
+    document.querySelectorAll('#progressBody .progress-list li.flash').forEach(el => {
+      el.classList.remove('flash');
+    });
+    // Restart CSS animation even if class was already present.
+    void li.offsetWidth;
+    li.classList.add('flash');
+    clearTimeout(li._flashTimer);
+    li._flashTimer = setTimeout(() => li.classList.remove('flash'), 1900);
+  }
+  function markMessagesWithProgress() {
+    document.querySelectorAll('#messages .message').forEach(item => {
+      const p = item.querySelector('p');
+      const hit = findProgressLi(p ? p.textContent : '');
+      item.classList.toggle('has-progress', !!hit);
+      if (hit) item.title = '点击跳到对应修复进度';
+      else item.removeAttribute('title');
+    });
+  }
   function renderProgress(data) {
     const body = $('progressBody');
     const stats = $('progressStats');
@@ -511,6 +592,7 @@
     days.forEach((d, idx) => {
       const wrap = document.createElement('div');
       wrap.className = 'progress-day' + (idx === 0 ? ' today' : '');
+      wrap.dataset.date = d.date || '';
       const head = document.createElement('div');
       head.className = 'progress-day-head';
       const h3 = document.createElement('h3');
@@ -521,6 +603,7 @@
       if (idx > 0) {
         const tog = document.createElement('button');
         tog.type = 'button';
+        tog.className = 'progress-day-toggle';
         tog.textContent = '展开';
         tog.addEventListener('click', () => {
           const hide = listWrap.hasAttribute('hidden');
@@ -545,7 +628,9 @@
         ul.className = 'progress-list';
         list.forEach(it => {
           const li = document.createElement('li');
-          li.append(document.createTextNode(it.text || ''));
+          const text = it.text || '';
+          li.dataset.match = normMatch(text);
+          li.append(document.createTextNode(text));
           if (it.note) {
             const n = document.createElement('span');
             n.className = 'note';
@@ -559,6 +644,7 @@
       wrap.append(listWrap);
       body.append(wrap);
     });
+    markMessagesWithProgress();
   }
   async function loadProgress() {
     const body = $('progressBody');

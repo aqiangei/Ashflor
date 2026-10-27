@@ -849,6 +849,8 @@ void Game::send_spawn_request() {
 void Game::spawn_in() {
     Writer writer(static_cast<uint8_t *>(OUTGOING_PACKET));
     if (Game::alive()) return;
+    // Game HUD / in-game galleries may still be lazy-building on title.
+    Game::ensure_game_ui();
     if (!socket.ready) {
         account_status = I18n::use_chinese ? "正在连接服务器，请稍后重试" : "Connecting to server; please try again";
         return;

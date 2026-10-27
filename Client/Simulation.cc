@@ -134,6 +134,7 @@ void Entity::tick_lerp(float amt) {
     if (has_component(kFlower)) {
         mana_ratio.step(amt);
         shield_ratio.step(amt);
+        sponge_pending.step(amt);
         float eye_angle = angle.anchor();
         eye_x = lerp(eye_x, cosf(eye_angle) * 2, amt);
         eye_y = lerp(eye_y, sinf(eye_angle) * 4, amt);

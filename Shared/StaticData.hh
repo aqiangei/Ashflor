@@ -33,9 +33,9 @@ extern std::array<struct MobData, MobID::kNumMobs> const MOB_DATA;
 // World mob size / population. Radius×2 + dense multi-segment packs (centipede/
 // leech) blew spatial-hash collide to ~100�?00ms/tick �?keep mild scale only.
 inline constexpr float MOB_RADIUS_MULTIPLIER = 1.25f;
-// Zone dens × FOV target. 1.38/1.25 still overrun at ~10 online (tick gap =
-// motion+client sync). Stay near clone ~16/screen with multiplayer headroom.
-inline constexpr float MOB_DENSITY_MULTIPLIER = 1.12f;
+// Zone dens × FOV target. HK 8c: aim clone ≈16/screen; empty-map drain + REST
+// phase telemetry keep daytime overruns diagnosable.
+inline constexpr float MOB_DENSITY_MULTIPLIER = 1.20f;
 
 inline uint8_t petal_name_is(PetalID::T id, char const *name) {
     return id != PetalID::kNone && id < PetalID::kNumPetals
@@ -83,26 +83,31 @@ using MapTerrain = StaticArray<struct TerrainFeature, MAX_TERRAIN_PER_MAP>;
 // Outer �?harder. Difficulty 0 hub is fixed spawn for new players.
 inline std::array const MAPS = std::to_array<MapZones>({
     // ---- Garden ----
+    // Bees must appear on Mythic+ rings — they used to stop at Unusual (diff≤1),
+    // while the outer cap was only Epic(+1=Legendary), so M+ bees never existed.
     MapZones({
         {
             .left = 0, .top = 0, .right = (float)ARENA_WIDTH, .bottom = (float)ARENA_HEIGHT,
             .density = 3.2f, .drop_multiplier = 0.58,
             .spawns = {
-                { MobID::kDarkLadybug, 120000 }, { MobID::kHornet, 120000 }, { MobID::kSpider, 100000 },
-                { MobID::kEvilCentipede, 28000 }, { MobID::kMassiveBeetle, 12000 },
-                { MobID::kBoulder, 9000 },
+                { MobID::kBee, 110000 }, { MobID::kHornet, 110000 }, { MobID::kSpider, 95000 },
+                { MobID::kDarkLadybug, 90000 }, { MobID::kEvilCentipede, 28000 },
+                { MobID::kMassiveBeetle, 12000 }, { MobID::kBoulder, 9000 },
                 { MobID::kSquare, 1 }
             },
-            .difficulty = 3, .color = 0xff8FC777, .name = "Garden"
+            // Mythic primary; +1 can roll Ultra (cap Ultra). Hub stays soft below.
+            .difficulty = RarityID::kMythic, .color = 0xff8FC777, .name = "Garden"
         },
         {
             .left = 2200, .top = 2200, .right = 15800, .bottom = 15800,
             .density = 2.7f, .drop_multiplier = 0.30,
             .spawns = {
-                { MobID::kSpider, 100000 }, { MobID::kHornet, 100000 }, { MobID::kBeetle, 80000 },
-                { MobID::kEvilCentipede, 20000 }, { MobID::kMassiveBeetle, 8000 }, { MobID::kSquare, 1 }
+                { MobID::kBee, 100000 }, { MobID::kSpider, 95000 }, { MobID::kHornet, 95000 },
+                { MobID::kBeetle, 70000 }, { MobID::kEvilCentipede, 20000 },
+                { MobID::kMassiveBeetle, 8000 }, { MobID::kSquare, 1 }
             },
-            .difficulty = 2, .color = 0xffA8D484, .name = "Garden"
+            // Legendary primary; +1 Mythic so mid-garden can still see M bees.
+            .difficulty = RarityID::kLegendary, .color = 0xffA8D484, .name = "Garden"
         },
         {
             .left = 4800, .top = 4800, .right = 13200, .bottom = 13200,
@@ -114,7 +119,7 @@ inline std::array const MAPS = std::to_array<MapZones>({
             .difficulty = 1, .color = MapTheme::GARDEN_GROUND, .name = "Garden"
         },
         {
-            // Spawn hub �?rich low-tier mix (periphery packs).
+            // Spawn hub — rich low-tier mix (periphery packs).
             .left = 7200, .top = 7200, .right = 10800, .bottom = 10800,
             .density = 2.55f, .drop_multiplier = 0.02,
             .spawns = {

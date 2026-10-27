@@ -422,7 +422,9 @@ Element *Ui::make_chat_panel() {
     });
 
     uint8_t const mobile = Input::is_mobile;
-    float const open_h = mobile ? 320.f : 260.f;
+    // Mobile sits beside bottom-left plaques — keep history shorter so it
+    // does not cover the loadout / joystick.
+    float const open_h = mobile ? 180.f : 260.f;
     auto *scroll = new ChatScroll(history, open_h);
     scroll->style.should_render = [](){
         if (!(Game::can_chat() && Game::should_render_game_ui())) return false;
@@ -433,9 +435,9 @@ Element *Ui::make_chat_panel() {
     };
     scroll->style.h_justify = Style::Left;
 
-    // Mobile: taller/wider target — was easy to miss under the left HUD column.
-    float const input_w = mobile ? 200.f : 360.f;
-    float const input_h = mobile ? 44.f : 32.f;
+    // Mobile: sit right of side plaques; keep input compact but tappable.
+    float const input_w = mobile ? 180.f : 360.f;
+    float const input_h = mobile ? 40.f : 32.f;
     chat_input = new ChatTextInput(Game::chat_draft, input_w, input_h, MAX_CHAT_LENGTH, {
         .line_width = 0,
         .round_radius = 10.f,
@@ -512,11 +514,9 @@ Element *Ui::make_chat_panel() {
         .h_justify = Style::Left,
         .v_justify = Style::Bottom
     });
-    // Desktop: beside left HUD bottom. Mobile: top-left — bottom-left sat
-    // inside the joystick / loadout hitboxes ("stuck in the buttons").
-    if (mobile) elt->style.v_justify = Style::Top;
-    elt->x = mobile ? 10.f : 72.f;
-    elt->y = mobile ? 72.f : -16.f;
+    // Both platforms: right of bottom-left side plaques (same band as drawers).
+    elt->x = mobile ? 92.f : 72.f;
+    elt->y = mobile ? -20.f : -16.f;
     Ui::chat_panel_root = elt;
     return elt;
 }

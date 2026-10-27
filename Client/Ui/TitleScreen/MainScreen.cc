@@ -16,8 +16,9 @@
 #include <Client/Game.hh>
 #include <Client/I18n.hh>
 #include <Client/Input.hh>
-
 #include <Helpers/Math.hh>
+
+#include <emscripten.h>
 
 #include <Shared/Config.hh>
 #include <Shared/StaticData.hh>
@@ -77,6 +78,59 @@ static bool darken_map_ant_nest() { return Game::selected_map != MapID::kAntNest
 static Style soft_btn(uint32_t fill) {
     return { .fill = fill, .line_width = 0, .round_radius = Chrome::kRadius };
 }
+
+// Title map-preview「连接中」— DOM + CSS dots (same as black load screen).
+// Canvas-drawn dots freeze whenever the main thread is busy (UI boot / map bake);
+// CSS animations keep ticking off-thread.
+class ConnectingLabel final : public Element {
+    static constexpr char const *kDomId = "ashflor-connecting";
+public:
+    ConnectingLabel(float size, Style s)
+        : Element(0, size, s) {
+        refactor();
+    }
+
+    void refactor() override {
+        char const *probe = I18n::use_chinese ? "连接中..." : "Connecting...";
+        Game::renderer.set_text_size(height);
+        width = Game::renderer.get_text_size(probe);
+    }
+
+    void on_render(Renderer &) override {
+        char const *label = I18n::use_chinese ? "连接中" : "Connecting";
+        float h = height * (float) Ui::scale;
+        // Center on the canvas layout point; let CSS width:max-content size the box
+        // so「连」and animated dots are never clipped by a tight measureText width.
+        EM_ASM({
+            var el = document.getElementById(UTF8ToString($0));
+            if (!el) return;
+            var lab = el.querySelector(".label");
+            if (lab) lab.textContent = UTF8ToString($1);
+            el.style.display = "block";
+            el.setAttribute("aria-hidden", "false");
+            var r = (typeof Module !== "undefined" && Module.ashflorDpr)
+                ? Module.ashflorDpr
+                : Math.min(window.devicePixelRatio || 1, 2);
+            var fs = Math.max(16, $4 / r);
+            el.style.left = ($2 / r) + "px";
+            el.style.top = ($3 / r) + "px";
+            el.style.height = "auto";
+            el.style.lineHeight = "1";
+            el.style.fontSize = fs + "px";
+            el.style.transform = "translate(-50%, -50%)";
+        }, kDomId, label, screen_x, screen_y, h);
+    }
+
+    void on_render_skip(Renderer &) override {
+        EM_ASM({
+            var el = document.getElementById(UTF8ToString($0));
+            if (!el) return;
+            el.style.display = "none";
+            el.style.transform = "";
+            el.setAttribute("aria-hidden", "true");
+        }, kDomId);
+    }
+};
 
 // White label on bright cartoon buttons (never inherit muddy muted ink)
 static Element *btn_label(float size, std::function<std::string()> const &fn) {
@@ -212,9 +266,7 @@ Element *Ui::make_title_input_box() {
         new Ui::StaticText(68, "ashflor.io", { .fill = Chrome::kTitle }),
         new Ui::Element(0, 6),
         new Ui::Choose(
-            new Ui::DynamicText(36, [](){ return I18n::tr(I18n::kConnecting); }, {
-                .fill = Chrome::kHint
-            }),
+            new ConnectingLabel(36, { .fill = Chrome::kHint }),
             new Ui::VContainer({
                 new Ui::DynamicText(16, [](){
                     if (Game::account_logged_in)
@@ -384,6 +436,8 @@ Element *Ui::make_title_info_box() {
 }
 
 static void open_title_panel(uint8_t panel, Element *) {
+    // Galleries / settings may still be lazy-building across early frames.
+    Game::ensure_game_ui();
     Ui::toggle_panel(panel);
 }
 

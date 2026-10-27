@@ -147,8 +147,11 @@ void tick_entity_motion(Simulation *sim, Entity &ent) {
                         ny = oy;
                     }
                     BitMath::set(ent.flags, EntityFlags::kTerrainBounced);
-                    if (ent.velocity.magnitude() > 1e-3f)
+                    if (ent.velocity.magnitude() > 1e-3f) {
                         ent.heading_angle = ent.velocity.angle();
+                        // Carrot thrust reads heading; keep visual angle in sync.
+                        ent.set_angle(ent.heading_angle);
+                    }
                     x = nx;
                     y = ny;
                     if (blocked(x, y)) {

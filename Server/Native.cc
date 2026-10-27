@@ -178,14 +178,70 @@ static std::string client_ip_from_req(auto *req, auto *res) {
     return {};
 }
 
-static void send_file(uWS::HttpResponse<false> *res, std::string const &file) {
-    std::string data = read_file_bin(file);
+static uint8_t accepts_encoding(std::string_view accepted, char const *encoding) {
+    if (accepted.empty() || accepted.data() == nullptr) return 0;
+    size_t enc_len = std::char_traits<char>::length(encoding);
+    size_t i = 0;
+    while (i < accepted.size()) {
+        while (i < accepted.size() && (accepted[i] == ' ' || accepted[i] == '\t')) ++i;
+        size_t start = i;
+        while (i < accepted.size() && accepted[i] != ',' && accepted[i] != ';') ++i;
+        size_t end = i;
+        while (end > start && (accepted[end - 1] == ' ' || accepted[end - 1] == '\t')) --end;
+        uint8_t match = (end - start == enc_len
+            && accepted.compare(start, enc_len, encoding) == 0);
+        uint8_t q0 = 0;
+        while (i < accepted.size() && accepted[i] != ',') {
+            if (accepted[i] == ';') {
+                size_t j = i + 1;
+                while (j < accepted.size() && (accepted[j] == ' ' || accepted[j] == '\t')) ++j;
+                if (j + 2 <= accepted.size() && accepted[j] == 'q' && accepted[j + 1] == '=') {
+                    j += 2;
+                    if (j < accepted.size() && accepted[j] == '0'
+                        && (j + 1 >= accepted.size() || accepted[j + 1] == ',' || accepted[j + 1] == ';'
+                            || accepted[j + 1] == ' ' || (accepted[j + 1] == '.' && j + 2 < accepted.size()
+                                && accepted[j + 2] == '0')))
+                        q0 = 1;
+                }
+            }
+            ++i;
+        }
+        if (match && !q0) return 1;
+        if (i < accepted.size() && accepted[i] == ',') ++i;
+    }
+    return 0;
+}
+
+static uint8_t file_readable(std::string const &path) {
+    std::ifstream in(path, std::ios::binary);
+    return in ? 1 : 0;
+}
+
+// Prefer precompressed .br / .gz for gardn-client.* (same policy as Wasm.cc).
+static void send_file(uWS::HttpResponse<false> *res, std::string const &file,
+    std::string_view accept_encoding) {
+    std::string served = file;
+    char const *content_encoding = nullptr;
+    if (file == "gardn-client.js" || file == "gardn-client.wasm") {
+        if (accepts_encoding(accept_encoding, "br") && file_readable(file + ".br")) {
+            served = file + ".br";
+            content_encoding = "br";
+        } else if (accepts_encoding(accept_encoding, "gzip") && file_readable(file + ".gz")) {
+            served = file + ".gz";
+            content_encoding = "gzip";
+        }
+    }
+    std::string data = read_file_bin(served);
     if (data.empty()) {
         res->writeStatus("404 Not Found");
         res->end("Not Found");
         return;
     }
     res->writeHeader("Content-Type", mime_for(file));
+    if (content_encoding) {
+        res->writeHeader("Content-Encoding", content_encoding);
+        res->writeHeader("Vary", "Accept-Encoding");
+    }
     if (file.find("gardn-client.") != std::string::npos)
         res->writeHeader("Cache-Control", "public, max-age=31536000, immutable");
     else if (file == "index.html" || file == "sw.js" || file == "feedback.html"
@@ -461,7 +517,7 @@ uWS::App Server::server = uWS::App()
         res->end("Not Found");
         return;
     }
-    send_file(res, file);
+    send_file(res, file, req->getHeader("accept-encoding"));
 })
 .ws<Client>("/*", {
     .compression = uWS::SHARED_COMPRESSOR,

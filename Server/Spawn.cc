@@ -48,6 +48,43 @@ Entity &alloc_drop(Simulation *sim, PetalID::T drop_id, EntityID const team, uin
     return drop;
 }
 
+uint8_t try_merge_coin_drop(Simulation *sim, Entity &drop) {
+    if (sim == nullptr || drop.pending_delete) return 0;
+    if (!drop.has_component(kDrop) || drop.get_drop_id() != PetalID::kCoin) return 0;
+    float const merge_r = 180.f;
+    float const cx = drop.get_x();
+    float const cy = drop.get_y();
+    Entity *best = nullptr;
+    float best_d2 = merge_r * merge_r;
+    uint16_t best_c = 0;
+    sim->spatial_hash.query(cx, cy, merge_r, merge_r, [&](Simulation *, Entity &e) {
+        if (e.id == drop.id || e.pending_delete) return;
+        if (!e.has_component(kDrop) || e.get_drop_id() != PetalID::kCoin) return;
+        if (!(e.get_team() == drop.get_team())) return;
+        float dx = e.get_x() - cx;
+        float dy = e.get_y() - cy;
+        float d2 = dx * dx + dy * dy;
+        if (d2 > merge_r * merge_r) return;
+        uint16_t c = e.get_drop_count();
+        if (best == nullptr || c > best_c || (c == best_c && d2 < best_d2)) {
+            best = &e;
+            best_c = c;
+            best_d2 = d2;
+        }
+    });
+    if (best == nullptr) return 0;
+    uint32_t sum = (uint32_t) best->get_drop_count() + (uint32_t) drop.get_drop_count();
+    if (sum > 65535u) sum = 65535u;
+    best->set_drop_count((uint16_t) sum);
+    best->set_radius(fminf(42.f, 22.f + 2.5f * sqrtf((float) sum)));
+    best->set_x((best->get_x() + cx) * 0.5f);
+    best->set_y((best->get_y() + cy) * 0.5f);
+    // Refresh despawn so farming piles don't vanish mid-merge.
+    entity_set_despawn_tick(*best, 10 * (2 + PETAL_DATA[PetalID::kCoin].rarity) * TPS);
+    sim->request_delete(drop.id);
+    return 1;
+}
+
 Entity &alloc_corpse(
     Simulation *sim, EntityID const team, float x, float y, std::string const &name,
     uint8_t color, uint8_t equip_flags
@@ -104,6 +141,11 @@ static Entity &__alloc_mob(
 
     mob.add_component(kHealth);
     mob.health = mob.max_health = data.health.get_single(seed);
+    // Termites: built-in Mysterious Relic-like HP before rarity threat scales.
+    if (data.attributes.share_damage) {
+        mob.max_health *= 1.5f;
+        mob.health = mob.max_health;
+    }
     mob.damage = data.damage;
     mob.poison_damage = data.attributes.poison_damage;
     mob.set_health_ratio(1);
@@ -335,7 +377,15 @@ static void _finish_player_spawn(Simulation *sim, Entity &camera, Entity &player
         LoadoutSlot &slot = player.loadout[i];
         player.set_loadout_ids(i, id);
         slot.update_id(sim, id);
+        slot.behavior_id = id;
         slot.force_reload();
+        // Battery / Nazar / Wax: spawn fully charged (update_id clears charges).
+        if (id != PetalID::kNone && id < PetalID::kNumPetals) {
+            auto const &a = PETAL_DATA[id].attributes;
+            uint8_t cap = a.wax_block ? 1
+                : (a.nazar_charges ? a.nazar_charges : a.battery_charges);
+            if (cap) slot.effect_charges = cap;
+        }
     }
 
     for (uint32_t i = player.get_loadout_count(); i < player.get_loadout_count() + MAX_SLOT_COUNT; ++i)

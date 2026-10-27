@@ -10,6 +10,8 @@
 
 #include <Client/Game.hh>
 
+#include <Server/PetalMechanics.hh>
+
 #include <Shared/Craft.hh>
 #include <Shared/Recipe.hh>
 #include <Shared/StaticData.hh>
@@ -18,6 +20,7 @@
 #include <Helpers/Math.hh>
 
 #include <algorithm>
+#include <cmath>
 #include <cstring>
 #include <format>
 #include <string>
@@ -132,49 +135,77 @@ static std::string petal_acquisition_hint(PetalID::T id) {
 Element *Ui::UiLoadout::petal_tooltips[PetalID::kNumPetals] = {nullptr};
 Element *Ui::UiLoadout::petal_tooltips_leveled[PetalID::kNumPetals] = {nullptr};
 
+// Title-screen / dead: Mimic left resolve against cached_loadout (same rules as
+// Server/PetalMechanics.hh effective_petal_id).
+static PetalID::T tip_cached_effective(uint32_t slot) {
+    uint32_t n = Game::loadout_count;
+    if (slot >= n) return PetalID::kNone;
+    PetalID::T id = Game::cached_loadout[slot];
+    if (id == PetalID::kNone || id >= PetalID::kNumPetals) return PetalID::kNone;
+    if (!PETAL_DATA[id].attributes.mimic_left) return id;
+    if (n < 2) return PetalID::kNone;
+    PetalID::T left = Game::cached_loadout[slot == 0 ? n - 1 : slot - 1];
+    if (left == PetalID::kNone || left >= PetalID::kNumPetals) return PetalID::kNone;
+    if (PETAL_DATA[left].attributes.mimic_left || PETAL_DATA[left].attributes.corruption)
+        return PetalID::kNone;
+    for (int rarity = PETAL_DATA[id].rarity; rarity >= 0; --rarity) {
+        PetalID::T target = Craft::petal_at_rarity(left, (uint8_t) rarity);
+        if (target != PetalID::kNone && target < PetalID::kNumPetals) return target;
+    }
+    return PetalID::kNone;
+}
+
 static float get_reload_factor() {
     // Matches server Flower.cc: product of loadout extra_reload_factor (Golden Leaf
-    // etc.) with Unique Lv on the first primary copy only, then talent CDR.
+    // etc., Mimic-resolved) × Unique Lv on first primary copy × talent × Cogwheel,
+    // then the global 99% floor.
     float factor = 1.f;
+    uint8_t has_cogwheel = 0;
     if (Game::alive()) {
         Entity &player = Game::simulation.get_ent(Game::player_id);
         uint32_t n = player.get_loadout_count();
         for (uint32_t i = 0; i < n; ++i) {
-            PetalID::T id = player.get_loadout_ids(i);
+            PetalID::T slot_id = player.get_loadout_ids(i);
+            if (slot_id == PetalID::kNone || slot_id >= PetalID::kNumPetals) continue;
+            PetalID::T id = effective_petal_id(player, i);
             if (id == PetalID::kNone || id >= PetalID::kNumPetals) continue;
+            if (std::strcmp(PETAL_DATA[id].name, "Cogwheel") == 0) has_cogwheel = 1;
             float lv_mult = 1.f;
-            if (Craft::can_level_petal(id)) {
+            if (Craft::can_level_petal(slot_id)) {
                 uint8_t first = 1;
                 for (uint32_t j = 0; j < i; ++j) {
-                    if (player.get_loadout_ids(j) == id) { first = 0; break; }
+                    if (player.get_loadout_ids(j) == slot_id) { first = 0; break; }
                 }
                 if (first)
                     lv_mult = Craft::level_stat_mult(
-                        Craft::petal_level_get(Game::petal_levels, id));
+                        Craft::petal_level_get(Game::petal_levels, slot_id));
             }
             factor *= Craft::level_scale_factor(
                 PETAL_DATA[id].attributes.extra_reload_factor, lv_mult);
         }
     } else {
         for (uint32_t i = 0; i < Game::loadout_count; ++i) {
-            PetalID::T id = Game::cached_loadout[i];
+            PetalID::T slot_id = Game::cached_loadout[i];
+            if (slot_id == PetalID::kNone || slot_id >= PetalID::kNumPetals) continue;
+            PetalID::T id = tip_cached_effective(i);
             if (id == PetalID::kNone || id >= PetalID::kNumPetals) continue;
+            if (std::strcmp(PETAL_DATA[id].name, "Cogwheel") == 0) has_cogwheel = 1;
             float lv_mult = 1.f;
-            if (Craft::can_level_petal(id)) {
+            if (Craft::can_level_petal(slot_id)) {
                 uint8_t first = 1;
                 for (uint32_t j = 0; j < i; ++j) {
-                    if (Game::cached_loadout[j] == id) { first = 0; break; }
+                    if (Game::cached_loadout[j] == slot_id) { first = 0; break; }
                 }
                 if (first)
                     lv_mult = Craft::level_stat_mult(
-                        Craft::petal_level_get(Game::petal_levels, id));
+                        Craft::petal_level_get(Game::petal_levels, slot_id));
             }
             factor *= Craft::level_scale_factor(
                 PETAL_DATA[id].attributes.extra_reload_factor, lv_mult);
         }
     }
     factor *= Talent::reload_mult(Game::talent_ranks[TalentID::kCooldown]);
-    // Match server Golden Leaf CDR cap (99%).
+    if (has_cogwheel) factor *= 0.97f;
     if (factor < Craft::kReloadFactorFloor) factor = Craft::kReloadFactorFloor;
     if (factor > Craft::kReloadFactorCeil) factor = Craft::kReloadFactorCeil;
     return factor;
@@ -233,8 +264,10 @@ static float tooltip_dmg_mult() {
     return tooltip_show_buffs() ? get_damage_factor() : 1.f;
 }
 
+// Cooldown tip always mirrors combat (Golden Leaf / talent / Cogwheel).
+// Damage & petal-HP buffs stay behind hold-G.
 static float tooltip_reload_mult() {
-    return tooltip_show_buffs() ? get_reload_factor() : 1.f;
+    return get_reload_factor();
 }
 
 static float tooltip_petal_hp_mult() {
@@ -297,6 +330,8 @@ static Ui::Element *make_petal_stat_container(PetalID::T id, uint8_t apply_level
         effect("命中间隔：", "Hit interval: ", format_number(attrs.hit_interval_seconds) + "s");
     if (attrs.phase_through)
         effect("穿透：", "Phase through: ", std::to_string(attrs.phase_through));
+    if (attrs.equipment == EquipmentFlags::kCutter)
+        effect("穿怪：", "Phase mobs: ", I18n::use_chinese ? "花体可穿过怪物" : "body phases through mobs");
     if (attrs.fixed_orbit_range)
         effect("固定轨道半径：", "Fixed orbit range: ", "是");
     if (attrs.privet_extra_poison > 0.f)
@@ -329,6 +364,10 @@ static Ui::Element *make_petal_stat_container(PetalID::T id, uint8_t apply_level
             effect("减伤比例：", "Mitigation: ", format_pct(attrs.nazar_mitigation * 100.f));
     }
     if (attrs.battery_charges) effect("反击次数：", "Discharge charges: ", std::to_string(attrs.battery_charges));
+    if (attrs.meteor_size_factor > 1.001f)
+        effect("陨石面积：", "Meteor size: ", "×" + format_number(attrs.meteor_size_factor));
+    if (attrs.secondary_cdr_factor > 0.f && attrs.secondary_cdr_factor < 0.999f)
+        effect("副冷却：", "Secondary CD: ", "×" + format_number(attrs.secondary_cdr_factor));
     if (attrs.wax_block) effect("飞弹格挡：", "Projectile blocks: ", "1");
     if (attrs.shovel_burrow) effect("按下防御遁地：", "Press defend to burrow: ", "0.6s / " + format_number(std::fmax(2.f, petal_data.reload)) + "s");
     if (attrs.root_armor > 0.f) effect("每层护甲：", "Armor per stack: ", format_number(attrs.root_armor) + " × " + std::to_string(attrs.root_max_stacks));
@@ -758,12 +797,18 @@ static Element *make_petal_tooltip_body(PetalID::T id, uint8_t apply_level) {
         new Ui::HFlexContainer(
             new Ui::DynamicText(20, [id](){ return I18n::petal_name(id); }, { .fill = 0xffffffff, .h_justify = Style::Left }),
             new Ui::DynamicText(16, [=](){
-                float reload = PETAL_DATA[id].reload * tooltip_reload_mult();
+                float const rf = tooltip_reload_mult();
+                float reload = PETAL_DATA[id].reload * rf;
+                // Match Flower.cc ≥2-tick spawn floor (TPS=20 → 0.1s).
+                float const floor_s = 2.f / (float) TPS;
+                if (reload > 0.f && reload < floor_s) reload = floor_s;
                 if (reload <= 0.f) return std::string{};
-                if (PETAL_DATA[id].attributes.secondary_reload == 0)
+                float sec = PETAL_DATA[id].attributes.secondary_reload;
+                if (sec <= 0.f)
                     return std::format("{:.1f}s ⟳", reload);
-                return std::format("{:.1f} + {:.1f}s ⟳", reload,
-                    PETAL_DATA[id].attributes.secondary_reload);
+                float sec_s = sec * rf;
+                if (sec_s < floor_s) sec_s = floor_s;
+                return std::format("{:.1f} + {:.1f}s ⟳", reload, sec_s);
             }, { .fill = 0xffffffff, .v_justify = Style::Top }),
             5, 10, {}
         ),
@@ -778,11 +823,11 @@ static Element *make_petal_tooltip_body(PetalID::T id, uint8_t apply_level) {
         new Ui::DynamicText(11, [](){
             if (tooltip_show_buffs())
                 return I18n::use_chinese
-                    ? std::string{"【加成后】金叶冷却 · 装备伤害 · 天赋花瓣耐久"}
-                    : std::string{"[Buffed] leaf CDR · gear damage · talent petal HP"};
+                    ? std::string{"【加成后】装备伤害 · 天赋花瓣耐久（冷却已含金叶）"}
+                    : std::string{"[Buffed] gear damage · talent petal HP (CDR always on)"};
             return I18n::use_chinese
-                ? std::string{"按住 G 显示加成后数值"}
-                : std::string{"Hold G for buffed stats"};
+                ? std::string{"冷却已含金叶；按住 G 看伤害/耐久加成"}
+                : std::string{"CDR includes leaf; hold G for damage/HP buffs"};
         }, { .fill = 0xffc8e6a0, .h_justify = Style::Left }),
         new Ui::Element(0, 6),
         new Ui::DynamicText(12, [id](){ return I18n::petal_desc(id); }, { .fill = 0xffffffff, .h_justify = Style::Left }),

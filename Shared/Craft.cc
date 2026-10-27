@@ -116,6 +116,18 @@ namespace Craft {
         return (uint32_t) std::ceil((double) kCraftBatch / (double) chance);
     }
 
+    uint32_t expected_gamble_cost(float chance) {
+        // E[petals / success] = E[cost per attempt] / p
+        // success → spend full batch; miss → uniform lose [min,max], refund rest.
+        if (chance <= 0.0001f) return 999999;
+        double e_loss = 0.5 * (double) (kCraftFailLossMin + kCraftFailLossMax);
+        double e_attempt = (double) chance * (double) kCraftBatch
+            + (1.0 - (double) chance) * e_loss;
+        double e_total = e_attempt / (double) chance;
+        if (!(e_total > 0.0) || e_total >= 999999.0) return 999999;
+        return (uint32_t) std::ceil(e_total);
+    }
+
     uint32_t exchange_cost(uint8_t from_rarity) {
         return expected_cost(success_chance(from_rarity));
     }
@@ -140,6 +152,10 @@ namespace Craft {
 
     uint32_t level_exchange_cost(uint32_t level) {
         return expected_cost(level_success_chance(level));
+    }
+
+    uint32_t level_expected_gamble_cost(uint32_t level) {
+        return expected_gamble_cost(level_success_chance(level));
     }
 
     float level_stat_mult(uint32_t level) {

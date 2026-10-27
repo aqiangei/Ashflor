@@ -37,6 +37,9 @@ namespace Craft {
     // Guaranteed-exchange price: ceil(5 / chance) copies (ignores miss refunds,
     // so it costs a bit more than gambling on average — convenience tax).
     uint32_t expected_cost(float chance);
+    // True gambling EV petals/success: accounts for miss refunding (lose 1–4 only).
+    // For p=0.8% Super→Unique ≈315, not the exchange sticker of 625.
+    uint32_t expected_gamble_cost(float chance);
     uint32_t exchange_cost(uint8_t from_rarity);
 
     // Infinite petal levels: Unique petals merge 5 → +1 Lv and return 1 Unique
@@ -73,6 +76,7 @@ namespace Craft {
     uint8_t can_craft_petal(PetalID::T id);
     float level_success_chance(uint32_t level);
     uint32_t level_exchange_cost(uint32_t level);
+    uint32_t level_expected_gamble_cost(uint32_t level);
     float level_stat_mult(uint32_t level);
     float farm_seconds(uint8_t rarity);
     // Uniform roll in [kCraftFailLossMin, kCraftFailLossMax] for a missed gamble.

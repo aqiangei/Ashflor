@@ -81,7 +81,11 @@ void Button::poll_events(ScreenEvent const &event) {
 
 ToggleButton::ToggleButton(float w, uint8_t *t) : 
     Element(w,w,{ .fill = Chrome::kBtnIron, .stroke_hsv = 0.4, .line_width = 0, .round_radius = Chrome::kRadius }), toggler(t) {
-    apply_mobile_touch_size(width, height);
+    // Dense settings lists: do NOT bump to 64×64 (rows overlap / panel huge).
+    // poll_with_mobile_pad already adds +16 finger slop on top of this.
+    if (Input::mobile_controls() && width < 34.f) {
+        width = height = 34.f;
+    }
     lerp_toggle = 0;
 }
 

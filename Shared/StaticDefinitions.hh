@@ -2588,6 +2588,26 @@ namespace PetalID {
         kSalveUltra,
         kSalveSuper,
         kSalveUnique,
+        // Crater / 陨石坑 — enlarge planted Meteor
+        kCrater,
+        kCraterUnusual,
+        kCraterRare,
+        kCraterEpic,
+        kCraterLegendary,
+        kCraterMythic,
+        kCraterUltra,
+        kCraterSuper,
+        kCraterUnique,
+        // Hourglass / 沙漏 — cut secondary cooldowns
+        kHourglass,
+        kHourglassUnusual,
+        kHourglassRare,
+        kHourglassEpic,
+        kHourglassLegendary,
+        kHourglassMythic,
+        kHourglassUltra,
+        kHourglassSuper,
+        kHourglassUnique,
         kNumPetals
     };
 };
@@ -2932,6 +2952,8 @@ struct PetalAttributes {
     float aura_slow_seconds = 0;     // slow while rooted aura active
     uint8_t defend_only = 0;
     float icon_angle = 0;
+    float meteor_size_factor = 1; // Crater: multiply planted Meteor radius
+    float secondary_cdr_factor = 1; // Hourglass: multiply secondary CDs (<1 faster)
     uint8_t split_projectile = 0;
     uint8_t rotation_style = kPassiveRot;
     uint8_t spawns = MobID::kNumMobs;

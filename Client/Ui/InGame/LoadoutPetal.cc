@@ -7,6 +7,7 @@
 #include <Client/Ui/Extern.hh>
 
 #include <Helpers/Bits.hh>
+#include <Helpers/Math.hh>
 #include <Shared/Craft.hh>
 #include <Shared/Recipe.hh>
 #include <Shared/StaticData.hh>
@@ -904,6 +905,45 @@ void UiLoadoutPetal::on_render(Renderer &ctx) {
         ctx.translate(28.f - tw, -26.f);
         ctx.stroke_text(lv.c_str());
         ctx.fill_text(lv.c_str());
+    }
+    // Sponge: banked damage pill in the top rim. Bound to the live slot id so
+    // swap / unequip clears it immediately (do not follow last_id ghosts).
+    if (!selected && static_pos < Game::loadout_count && Game::alive()) {
+        PetalID::T const slot_id = Game::cached_loadout[static_pos];
+        if (slot_id != PetalID::kNone && slot_id < PetalID::kNumPetals
+            && slot_id == last_id
+            && PETAL_DATA[slot_id].attributes.damage_delay_seconds > 0.f) {
+            Entity const &player = Game::simulation.get_ent(Game::player_id);
+            float pending = (float) player.get_sponge_pending();
+            if (pending >= 1.f) {
+                RenderContext c(&ctx);
+                std::string txt = format_score(pending);
+                ctx.set_text_size(9.5f);
+                float tw = (float) ctx.get_text_size(txt.c_str());
+                float pw = tw + 10.f;
+                if (pw < 22.f) pw = 22.f;
+                if (pw > 48.f) pw = 48.f;
+                float const px = -pw * 0.5f;
+                float const py = -29.5f;
+                float const ph = 11.f;
+                // Soft dark pill nested in the plate's top edge.
+                ctx.set_fill(0xd9181014);
+                ctx.begin_path();
+                ctx.round_rect(px, py, pw, ph, 4.f);
+                ctx.fill();
+                ctx.set_stroke(0x88ff9a72);
+                ctx.set_line_width(1.f);
+                ctx.begin_path();
+                ctx.round_rect(px + 0.5f, py + 0.5f, pw - 1.f, ph - 1.f, 3.5f);
+                ctx.stroke();
+                ctx.set_fill(0xffffe2c4);
+                ctx.set_stroke(0xff2a1410);
+                ctx.set_line_width(1.05f);
+                ctx.translate(0.f, py + ph * 0.5f + 0.5f);
+                ctx.stroke_text(txt.c_str());
+                ctx.fill_text(txt.c_str());
+            }
+        }
     }
 }
 

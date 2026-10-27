@@ -1064,13 +1064,24 @@ static void on_craft_once(Element *, uint8_t e) {
         Game::craft_tray_clear();
     }
 }
-// Guaranteed result for the expected cost (rarity +1, or Unique level +1).
+// Guaranteed result for the exchange sticker (rarity +1, or Unique level +1).
 static uint32_t craft_exchange_price(PetalID::T id) {
     if (id == PetalID::kNone || id >= PetalID::kNumPetals) return 0;
     if (Craft::can_level_petal(id))
         return Craft::level_exchange_cost(Craft::petal_level_get(Game::petal_levels, id));
     if (Craft::can_upgrade_petal(id))
         return Craft::exchange_cost(PETAL_DATA[id].rarity);
+    return 0;
+}
+// True gambling EV (miss refunds 1–4) — what "期望消耗" should show.
+static uint32_t craft_gamble_ev(PetalID::T id) {
+    if (id == PetalID::kNone || id >= PetalID::kNumPetals) return 0;
+    if (Craft::can_level_petal(id))
+        return Craft::level_expected_gamble_cost(
+            Craft::petal_level_get(Game::petal_levels, id));
+    if (Craft::can_upgrade_petal(id))
+        return Craft::expected_gamble_cost(
+            Craft::success_chance(PETAL_DATA[id].rarity));
     return 0;
 }
 static void on_craft_exchange(Element *, uint8_t e) {
@@ -2819,7 +2830,7 @@ Element *Ui::make_craft_panel() {
                         new Ui::DynamicText(17, [](){
                             uint32_t cost = craft_exchange_price(Game::craft_tray_id);
                             if (cost == 0 || cost >= 999999)
-                                return I18n::use_chinese ? std::string{"期望直兑"} : std::string{"Exchange"};
+                                return I18n::use_chinese ? std::string{"保底直兑"} : std::string{"Exchange"};
                             return I18n::use_chinese
                                 ? std::format("直兑 ×{}", format_stack(cost))
                                 : std::format("Buy ×{}", format_stack(cost));
@@ -2839,19 +2850,25 @@ Element *Ui::make_craft_panel() {
                     if (Game::craft_tray_id == PetalID::kNone) return std::string{};
                     PetalID::T tid = Game::craft_tray_id;
                     uint8_t r = PETAL_DATA[tid].rarity;
-                    // High tiers are <1%; integer % wrongly shows "0%".
-                    auto pct_str = [](float p) {
+                    // High tiers are <1%; also show 1/N so nobody confuses EV petals with odds.
+                    auto odds_str = [](float p) {
                         float pct = p * 100.f;
-                        return (pct > 0.f && pct < 10.f)
+                        std::string pct_s = (pct > 0.f && pct < 10.f)
                             ? std::format("{:.1f}%", pct) : std::format("{:.0f}%", pct);
+                        if (p <= 0.f) return pct_s;
+                        uint32_t den = (uint32_t) std::lround(1.0 / (double) p);
+                        if (den < 2) return pct_s;
+                        return pct_s + (I18n::use_chinese
+                            ? std::format("（约1/{}）", den)
+                            : std::format(" (~1/{})", den));
                     };
                     if (Craft::can_level_petal(tid)) {
                         uint32_t lv = Craft::petal_level_get(Game::petal_levels, tid);
                         float p = Craft::level_success_chance(lv);
                         return I18n::use_chinese
-                            ? std::format("Lv.{}→{} {} · 属性+{:.0f}%", lv, lv + 1, pct_str(p),
+                            ? std::format("Lv.{}→{} {} · 属性+{:.0f}%", lv, lv + 1, odds_str(p),
                                 (Craft::level_stat_mult(lv) - 1.f) * 100.f)
-                            : std::format("Lv.{}→{} {} · stats +{:.0f}%", lv, lv + 1, pct_str(p),
+                            : std::format("Lv.{}→{} {} · stats +{:.0f}%", lv, lv + 1, odds_str(p),
                                 (Craft::level_stat_mult(lv) - 1.f) * 100.f);
                     }
                     if (!Craft::can_upgrade_petal(tid))
@@ -2859,7 +2876,7 @@ Element *Ui::make_craft_panel() {
                             ? std::string{"该花瓣没有更高稀有度，无法合成"}
                             : std::string{"No higher rarity — cannot craft"};
                     return std::format("{} {}", I18n::rarity_name((uint8_t)(r + 1)),
-                        pct_str(Craft::success_chance(r)));
+                        odds_str(Craft::success_chance(r)));
                 }, { .fill = Chrome::kBody, .h_justify = Style::Left }),
                 new Ui::DynamicText(13, [](){
                     if (Game::craft_attempt_id == PetalID::kNone) return std::string{};
@@ -2871,11 +2888,21 @@ Element *Ui::make_craft_panel() {
                 }, { .fill = Chrome::kGold, .h_justify = Style::Left }),
                 new Ui::DynamicText(13, [](){
                     PetalID::T tid = Game::craft_tray_id;
-                    uint32_t cost = craft_exchange_price(tid);
-                    if (cost == 0 || cost >= 999999) return std::string{};
-                    return I18n::use_chinese
-                        ? std::format("期望消耗 {} 片 · 持有 {}", cost, Game::craft_owned(tid))
-                        : std::format("Expected cost {} · own {}", cost, Game::craft_owned(tid));
+                    uint32_t ev = craft_gamble_ev(tid);
+                    uint32_t buy = craft_exchange_price(tid);
+                    if (ev == 0 || ev >= 999999) return std::string{};
+                    if (I18n::use_chinese) {
+                        if (buy > 0 && buy < 999999 && buy != ev)
+                            return std::format("期望≈{} 片（含失败退还）· 直兑 {} · 持有 {}",
+                                ev, buy, Game::craft_owned(tid));
+                        return std::format("期望≈{} 片（含失败退还）· 持有 {}",
+                            ev, Game::craft_owned(tid));
+                    }
+                    if (buy > 0 && buy < 999999 && buy != ev)
+                        return std::format("EV≈{} (w/ miss refunds) · buy {} · own {}",
+                            ev, buy, Game::craft_owned(tid));
+                    return std::format("EV≈{} (w/ miss refunds) · own {}",
+                        ev, Game::craft_owned(tid));
                 }, { .fill = Chrome::kBody, .h_justify = Style::Left })
             }, 0, 7, { .h_justify = Style::Left })
         }, 0, 14, { .h_justify = Style::Left }),

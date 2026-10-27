@@ -8,6 +8,8 @@
 class Simulation;
 
 Entity &alloc_drop(Simulation *, PetalID::T, EntityID const team = NULL_ENTITY, uint16_t count = 1);
+// Absorb a coin pile into a nearby same-team coin (reduces entity spam). Returns 1 if deleted.
+uint8_t try_merge_coin_drop(Simulation *, Entity &drop);
 Entity &alloc_corpse(
     Simulation *, EntityID const team, float x, float y, std::string const &name,
     uint8_t color = 0, uint8_t equip_flags = 0

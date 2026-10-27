@@ -24,8 +24,11 @@ inline PetalID::T effective_petal_id(Entity const &flower, uint32_t slot) {
     return PetalID::kNone;
 }
 
+// Entity::flags is SERVERSIDE-only — keep this out of client/Tooltip builds.
+#ifdef SERVERSIDE
 inline bool petal_projectile(Entity const &ent) {
     return ent.has_component(kPetal)
         && (BitMath::at(ent.flags, EntityFlags::kIsDespawning)
             || ent.get_split_projectile());
 }
+#endif

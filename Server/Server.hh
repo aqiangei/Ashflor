@@ -37,15 +37,24 @@ namespace Server {
     extern double max_tick_ms_window;
     extern uint32_t tick_overruns_window;
     extern uint32_t tick_count_window;
-    // Per-tick phase sums across maps (ms) — diagnose collide vs AI vs spawn.
+    // Per-tick phase sums across maps (ms) — diagnose collide vs AI vs spawn
+    // vs former "REST" (motion / client sync / post_tick / disk misc).
     extern double phase_spawn_ms;
     extern double phase_hash_ms;    // refresh + insert + cull setup
     extern double phase_ai_ms;      // flower/mob/petal/health AI
     extern double phase_collide_ms; // spatial_hash.collide(+on_collide)
+    extern double phase_motion_ms;  // curse + physics + segment + camera + score
+    extern double phase_sync_ms;    // _update_client + portals/party/guild/events
+    extern double phase_post_ms;    // Simulation::post_tick deletions/protocol
+    extern double phase_misc_ms;    // roster / LB / account flush outside maps
     extern double phase_spawn_ms_max;
     extern double phase_hash_ms_max;
     extern double phase_ai_ms_max;
     extern double phase_collide_ms_max;
+    extern double phase_motion_ms_max;
+    extern double phase_sync_ms_max;
+    extern double phase_post_ms_max;
+    extern double phase_misc_ms_max;
     extern void init();
     extern void run();
     extern void tick();

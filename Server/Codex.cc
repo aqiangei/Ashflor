@@ -478,6 +478,8 @@ static void emit_petal_attrs(std::string &out, PetalAttributes const &a) {
     jkv_f(out, "lightning_damage", a.lightning_damage, f);
     jkv_u(out, "lightning_chains", a.lightning_chains, f);
     jkv_u(out, "battery_charges", a.battery_charges, f);
+    jkv_f(out, "meteor_size_factor", a.meteor_size_factor, f);
+    jkv_f(out, "secondary_cdr_factor", a.secondary_cdr_factor, f);
     jkv_f(out, "damage_delay_seconds", a.damage_delay_seconds, f);
     jkv_f(out, "on_hit_heal_ratio", a.on_hit_heal_ratio, f);
     jkv_f(out, "hit_interval_seconds", a.hit_interval_seconds, f);

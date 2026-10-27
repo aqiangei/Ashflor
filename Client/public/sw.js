@@ -20,7 +20,9 @@ self.addEventListener("activate", function (event) {
 
 self.addEventListener("fetch", function (event) {
     const url = new URL(event.request.url);
-    if (url.pathname !== "/gardn-client.js" && url.pathname !== "/gardn-client.wasm")
+    // Do NOT intercept .wasm — Chrome's Wasm code cache only works on a normal
+    // HTTP fetch (SW Cache API responses force a full recompile every visit).
+    if (url.pathname !== "/gardn-client.js")
         return;
     if (url.origin !== self.location.origin || url.searchParams.get("v") !== VERSION)
         return;

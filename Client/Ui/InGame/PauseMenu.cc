@@ -54,9 +54,9 @@ public:
 
 static Element *pause_toggle_row(uint8_t *flag, I18n::Str label) {
     uint8_t const m = Input::mobile_controls();
-    float const toggle = m ? 26.f : 28.f;
-    float const text = m ? 13.f : 15.f;
-    float const gap = m ? 8.f : 10.f;
+    float const toggle = 28.f;
+    float const text = m ? 11.f : 15.f;
+    float const gap = m ? 6.f : 10.f;
     return new Ui::HContainer({
         new Ui::ToggleButton(toggle, flag),
         new Ui::DynamicText(text, [label](){ return I18n::tr(label); }, {
@@ -70,16 +70,16 @@ static Element *pause_toggle_row(uint8_t *flag, I18n::Str label) {
 
 Element *Ui::make_pause_menu() {
     uint8_t const m = Input::mobile_controls();
-    float const title = m ? 18.f : 22.f;
-    float const btn_label = m ? 14.f : 16.f;
-    float const row_label = m ? 13.f : 15.f;
-    float const section = m ? 12.f : 13.f;
-    float const hint = m ? 11.f : 12.f;
-    float const btn_w = m ? 200.f : 260.f;
-    float const btn_h = m ? 34.f : 38.f;
-    float const pad = m ? 12.f : 16.f;
-    float const gap = m ? 8.f : 10.f;
-    float const panel_y = m ? 64.f : 56.f;
+    float const title = m ? 15.f : 22.f;
+    float const btn_label = m ? 12.f : 16.f;
+    float const row_label = m ? 11.f : 15.f;
+    float const section = m ? 10.f : 13.f;
+    float const hint = m ? 10.f : 12.f;
+    float const btn_w = m ? 148.f : 260.f;
+    float const btn_h = m ? 28.f : 38.f;
+    float const pad = m ? 8.f : 16.f;
+    float const gap = m ? 6.f : 10.f;
+    float const panel_y = 56.f;
 
     Element *controls_col = new Ui::VContainer({
         new Ui::DynamicText(section, [](){ return I18n::tr(I18n::kSettingsControls); }, {
@@ -91,7 +91,7 @@ Element *Ui::make_pause_menu() {
         pause_toggle_row(&Input::invert_defend, I18n::kInvertDefend),
         pause_toggle_row(&Input::request_mobile, I18n::kRequestMobile),
         pause_toggle_row(&Input::disable_auto_party, I18n::kDisableAutoParty),
-    }, 0, m ? 7.f : 8.f, { .h_justify = Style::Left, .no_animation = 1 });
+    }, 0, m ? 4.f : 8.f, { .h_justify = Style::Left, .no_animation = 1 });
 
     Element *display_col = new Ui::VContainer({
         new Ui::DynamicText(section, [](){ return I18n::tr(I18n::kSettingsDisplay); }, {
@@ -101,16 +101,16 @@ Element *Ui::make_pause_menu() {
         pause_toggle_row(&Game::show_low_rarity_drops, I18n::kShowLowRarityDrops),
         pause_toggle_row(&Game::show_hitboxes, I18n::kShowHitboxes),
         pause_toggle_row(&Game::show_debug, I18n::kDebugStats),
-    }, 0, m ? 7.f : 8.f, { .h_justify = Style::Left, .no_animation = 1 });
+    }, 0, m ? 4.f : 8.f, { .h_justify = Style::Left, .no_animation = 1 });
 
-    // Narrow viewports: stack columns. Wide: side-by-side.
+    // Mobile: always two compact columns. Desktop: two columns when wide.
     float const view_w = (float) (Ui::window_width / Ui::scale);
-    uint8_t const narrow = m || view_w < 720.f;
-    Element *toggles_block = narrow
-        ? (Element *) new Ui::VContainer({ controls_col, display_col }, 0, 12.f, {
+    uint8_t const two_col = m || view_w >= 720.f;
+    Element *toggles_block = two_col
+        ? (Element *) new Ui::HContainer({ controls_col, display_col }, 0, m ? 12.f : 24.f, {
             .h_justify = Style::Left, .no_animation = 1
         })
-        : (Element *) new Ui::HContainer({ controls_col, display_col }, 0, 24.f, {
+        : (Element *) new Ui::VContainer({ controls_col, display_col }, 0, 12.f, {
             .h_justify = Style::Left, .no_animation = 1
         });
 
@@ -156,7 +156,7 @@ Element *Ui::make_pause_menu() {
     float const sticky_h = title + gap + btn_h + pad * 2.f;
     auto *scroller = new AdaptiveScroll(scroll_body, 280.f);
     scroller->top_reserve = panel_y + sticky_h;
-    scroller->bottom_pad = m ? 90.f : 36.f; // leave room for chat / loadout
+    scroller->bottom_pad = 36.f;
 
     Element *elt = new Ui::VContainer({
         new Ui::DynamicText(title, [](){ return I18n::tr(I18n::kPauseMenu); }, {

@@ -26,6 +26,16 @@ static uint8_t _is_hatch_summon(Entity const &ent) {
         && BitMath::at(ent.flags, EntityFlags::kNoDrops);
 }
 
+// Sawblade / Glass: deal contact damage but do not body-block (no push /
+// knockback). Otherwise large ants wedge the petal inside their radius.
+static uint8_t _petal_phases_bodies(Entity const &ent) {
+    if (!ent.has_component(kPetal)) return 0;
+    PetalID::T id = ent.get_petal_id();
+    if (id == PetalID::kNone || id >= PetalID::kNumPetals) return 0;
+    if (PETAL_DATA[id].attributes.phase_through) return 1;
+    return petal_name_is(id, "Sawblade") ? 1 : 0;
+}
+
 static bool _should_interact(Simulation *sim, Entity const &ent1, Entity const &ent2) {
     //if (ent1.has_component(kFlower) || ent2.has_component(kFlower)) return false;
     //if (ent1.has_component(kPetal) || ent2.has_component(kPetal)) return false;
@@ -216,15 +226,25 @@ void on_collide(Simulation *sim, Entity &ent1, Entity &ent2) {
         else if (distance > 0.f)
             separation *= 1.f / distance;
         float ratio = ent2.mass / (ent1.mass + ent2.mass);
-        // Players soft-block each other (overlap resolve + cancel into each
-        // other) but never get attack knockback.
+        // Pure player flowers: no shove / knockback (pass through). Petals and
+        // summons still use normal collision against foreign teams.
         uint8_t const both_players =
             is_player_faction(sim, ent1) && is_player_faction(sim, ent2);
-        if (both_players) {
-            if (ent1.has_component(kFlower) && ent2.has_component(kFlower)) {
-                _cancel_movement(ent1, separation, ent2.velocity - ent1.velocity);
-                _cancel_movement(ent2, separation*-1, ent1.velocity - ent2.velocity);
-            }
+        uint8_t const both_player_flowers =
+            both_players
+            && ent1.has_component(kFlower) && ent2.has_component(kFlower)
+            && !ent1.has_component(kMob) && !ent2.has_component(kMob);
+        // Cutter (刀具): flower body phases through wildlife — still deals
+        // contact body damage below, just no shove / get-stuck-inside.
+        auto flower_cutter_vs_mob = [](Entity const &flower, Entity const &mob) -> uint8_t {
+            if (!flower.has_component(kFlower) || flower.has_component(kMob)) return 0;
+            if (!mob.has_component(kMob)) return 0;
+            return (flower.get_equip_flags() & (1u << EquipmentFlags::kCutter)) ? 1 : 0;
+        };
+        uint8_t const cutter_phase =
+            flower_cutter_vs_mob(ent1, ent2) || flower_cutter_vs_mob(ent2, ent1);
+        if (both_player_flowers || cutter_phase) {
+            // no physical response
         } else if (!(ent1.get_team() == ent2.get_team())) {
             if (ent1.has_component(kFlower) && !ent2.has_component(kPetal))
                 _cancel_movement(ent1, separation, ent2.velocity - ent1.velocity);
@@ -234,14 +254,12 @@ void on_collide(Simulation *sim, Entity &ent1, Entity &ent2) {
                 _cancel_movement(ent2, separation*-1, ent1.velocity - ent2.velocity);
             else
                 _deal_knockback(ent2, separation*-1, 1 - ratio);
+            _deal_push(ent1, separation, ratio, dist);
+            _deal_push(ent2, separation*-1, 1 - ratio, dist);
+        } else if (!both_players) {
+            _deal_push(ent1, separation, ratio, dist);
+            _deal_push(ent2, separation*-1, 1 - ratio, dist);
         }
-        // Player soft-block: shallow overlaps still need a separation floor or
-        // bodies slowly sink through each other (looks like pass-through).
-        float push_dist = dist;
-        if (both_players)
-            push_dist = fmaxf(dist, min_dist * 0.08f);
-        _deal_push(ent1, separation, ratio, push_dist);
-        _deal_push(ent2, separation*-1, 1 - ratio, push_dist);
     }
 
     if (BOTH(kHealth) && (!(ent1.get_team() == ent2.get_team())

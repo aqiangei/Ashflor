@@ -1,4 +1,5 @@
 #include <Server/Process.hh>
+#include <Server/Spawn.hh>
 
 #include <Shared/Entity.hh>
 #include <Shared/Map.hh>
@@ -23,6 +24,12 @@ void tick_drop_behavior(Simulation *sim, Entity &drop) {
     float y = drop.get_y();
     float r = drop.get_radius();
     if (!is_finite(x) || !is_finite(y) || !is_finite(r) || r <= 0.f) return;
+
+    // Staggered coin coalesce — mop up piles that missed the spawn-time merge.
+    if (drop.get_drop_id() == PetalID::kCoin
+        && ((drop.id.id + sim->tick_index) & 7u) == 0u) {
+        if (try_merge_coin_drop(sim, drop)) return;
+    }
 
     // Push out of hills / water so players can walk onto the pile.
     if (Map::circle_hits_impassable(sim->map_id, x, y, r + 4.f)) {

@@ -299,6 +299,8 @@ namespace Game {
     uint8_t try_mobile_l_preset_slot(uint8_t primary_index);
 
     void init();
+    // Finish deferred title/game UI before spawn / panel use (no-op if already done).
+    void ensure_game_ui();
     void reset();
     void send_guest_progress();
     void sync_guest_progress();

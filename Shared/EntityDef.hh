@@ -60,6 +60,7 @@ SINGLE(Flower, equip_flags, uint8_t) \
 SINGLE(Flower, effect_flags, uint8_t) \
 SINGLE(Flower, mana_ratio, Float) \
 SINGLE(Flower, shield_ratio, Float) \
+SINGLE(Flower, sponge_pending, Float) \
 SINGLE(Flower, ability_cooldown, uint16_t) \
 MULTIPLE(Flower, loadout_ids, PetalID::T, 2 * MAX_SLOT_COUNT) \
 MULTIPLE(Flower, loadout_reloads, uint8_t, MAX_SLOT_COUNT) \
@@ -144,6 +145,8 @@ SINGLE(Name, guild, std::string)
     SINGLE(pending_damage, float, =0) \
     SINGLE(pending_damage_dealer, EntityID, =NULL_ENTITY) \
     SINGLE(pending_damage_ticks, game_tick_t, =0) \
+    /* Live Golden Leaf×talent×Cogwheel factor for petal primary + secondary CD. */ \
+    SINGLE(petal_reload_factor, float, =1) \
     SINGLE(dark_marked_ticks, game_tick_t, =0) \
     SINGLE(champion_aura, float, =0) \
     SINGLE(compass_reveal, uint8_t, =0) \

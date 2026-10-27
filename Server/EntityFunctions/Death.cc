@@ -581,6 +581,9 @@ void entity_on_death(Simulation *sim, Entity const &ent) {
                     drop.set_y(cy);
                     drop.velocity.unit_normal(frand() * 2 * (float) M_PI)
                         .set_magnitude(18 + frand() * 20);
+                    // Fold into a nearby coin pile so dense farms don't spawn
+                    // hundreds of separate coin entities (client/server lag).
+                    try_merge_coin_drop(sim, drop);
                 }
             };
 

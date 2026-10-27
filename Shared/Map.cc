@@ -1076,8 +1076,8 @@ static uint8_t resolve_zone_spawn_rarity(uint8_t base_r, uint32_t zone_difficult
 // Zone dens soft floor only — crowd throttle lives in Simulation spawn budget.
 // Former per-flower ×0.82 crush starved combat FOVs while abs_cap already gated.
 static float soft_zone_density_mul(Simulation *, uint32_t difficulty) {
-    // Soft hubs slightly denser only — mid/high stay flat to leave tick budget.
-    return difficulty > RarityID::kUnusual ? 1.00f : 1.08f;
+    // Soft hubs a bit denser; mid/high mild — screen feel from local_combat_target.
+    return difficulty > RarityID::kUnusual ? 1.02f : 1.12f;
 }
 
 // Hub pad must stay open for respawn / dummies. Was 16 — kite + admin spawn
@@ -1086,15 +1086,17 @@ static float soft_zone_density_mul(Simulation *, uint32_t difficulty) {
 static constexpr uint32_t kPlazaMobCap = 4;
 // Zone abs caps = safety valve only. Combat feel = local_combat_target.
 // HK 8c/8G: roomy valve vs BJ 4c (was 72–136 / 5600, then 96–160 / 8000).
-static constexpr uint32_t kSoftAbsCapCommon = 96;
-static constexpr uint32_t kSoftAbsCapUnusual = 112;
-static constexpr uint32_t kSoftAbsCapRare = 128;
-static constexpr uint32_t kSoftAbsCapEpic = 144;
-static constexpr uint32_t kSoftAbsCapLegendaryPlus = 160;
-// Stop/thin earlier than ENTITY_CAP=8192; crowd thin delayed for 8c headroom.
+static constexpr uint32_t kSoftAbsCapCommon = 104;
+static constexpr uint32_t kSoftAbsCapUnusual = 120;
+static constexpr uint32_t kSoftAbsCapRare = 136;
+static constexpr uint32_t kSoftAbsCapEpic = 152;
+static constexpr uint32_t kSoftAbsCapLegendaryPlus = 168;
+// Stop/thin earlier than ENTITY_CAP=8192. Crowd far-FOV cull kicks in well
+// below cap — snow/forest were holding 1k+ ents with 1–5 players → collide 1006.
 static constexpr uint32_t kEntitySpawnStop = 8050;
 static constexpr uint32_t kEntityThinPanic = 9000;
 static constexpr uint32_t kEntityThinCrowd = 7600;
+static constexpr uint32_t kEntityThinFar = 900; // enable far-FOV cull sooner
 
 static uint32_t soft_zone_abs_cap(uint32_t difficulty) {
     if (difficulty == 0) return kSoftAbsCapCommon;
@@ -1119,13 +1121,13 @@ static void combat_fov_half(float &hw, float &hh) {
     hh = 540.f / BASE_FOV + 280.f;
 }
 
-// Screen wildlife target — ~14.5/viewport (clone≈16; leave room for petals/sync).
+// Screen wildlife target — ~16/viewport (florr_clone); soft mul under crowd.
 static float local_combat_target(uint32_t difficulty, uint32_t flowers) {
-    float t = 14.5f;
+    float t = 16.f;
     if (difficulty > RarityID::kUnusual) t *= 0.94f;
-    if (flowers >= 4u) t *= 0.90f;
-    if (flowers >= 8u) t *= 0.82f;
-    if (flowers >= 12u) t *= 0.74f;
+    if (flowers >= 4u) t *= 0.92f;
+    if (flowers >= 8u) t *= 0.85f;
+    if (flowers >= 12u) t *= 0.78f;
     return t;
 }
 
@@ -1194,7 +1196,9 @@ void Map::thin_soft_zone_excess(Simulation *sim) {
     uint32_t const ents = sim->entity_count();
     uint32_t const flowers = count_alive_flowers(sim);
     uint8_t const panic = ents >= kEntityThinPanic;
-    uint8_t const crowd = panic || ents >= kEntityThinCrowd || flowers >= 10u;
+    // Far cull even with few players once biome packs up (yesterday midnight).
+    uint8_t const far = ents >= kEntityThinFar || flowers >= 3u;
+    uint8_t const crowd = panic || ents >= kEntityThinCrowd || flowers >= 10u || far;
     float combat_hw = 0.f, combat_hh = 0.f;
     combat_fov_half(combat_hw, combat_hh);
     // Snapshot flower positions once (crowd far-from-all-FOV deletes).
@@ -1226,10 +1230,12 @@ void Map::thin_soft_zone_excess(Simulation *sim) {
         float slack = panic ? 0.5f : (crowd ? 1.0f : 2.5f);
         if (count <= target + slack) continue;
         float over = count - target;
-        float rate = panic ? 0.40f : (crowd ? 0.28f : 0.18f);
+        float rate = panic ? 0.40f : (crowd ? 0.32f : 0.18f);
+        if (far && !panic) rate = std::max(rate, 0.30f);
         uint32_t budget = (uint32_t)(over * rate + 0.99f);
         if (budget < 1) budget = 1;
-        uint32_t budget_cap = panic ? 28u : (crowd ? 16u : 10u);
+        uint32_t budget_cap = panic ? 36u : (crowd ? 24u : 10u);
+        if (far && budget_cap < 20u) budget_cap = 20u;
         if (budget > budget_cap) budget = budget_cap;
         sim->for_each<kMob>([&](Simulation *s, Entity &ent) {
             if (budget == 0) return;
@@ -1332,7 +1338,9 @@ void Map::_spawn_mob_at(Simulation *sim, uint32_t zone_id, MobID::T mob_id, floa
         mob.zone = zone_id;
         mob.home_x = x;
         mob.home_y = y;
-        mob.immunity_ticks = TPS;
+        // Spawn grace: no outgoing contact for 3s (leech face-spawn etc.).
+        // Damager also refuses hits while immunity_ticks > 0 on wild mobs.
+        mob.immunity_ticks = (game_tick_t)(3 * TPS);
         // Do NOT set kSpawnedFromZone here: alloc_mob runs on_spawn before
         // adding kSegmented to body segments, so a has_component check would
         // still mark every segment and over-decrement zone_mob_counts on death.
@@ -1340,6 +1348,9 @@ void Map::_spawn_mob_at(Simulation *sim, uint32_t zone_id, MobID::T mob_id, floa
         mob.set_rarity(spawn_r);
         float th = mob_spawn_threat_mult(base_r, spawn_r);
         mob.max_health *= th;
+        // Termites: Mysterious Relic-like HP on the zone spawn path too.
+        if (MOB_DATA[mob_id].attributes.share_damage)
+            mob.max_health *= 1.5f;
         mob.health = mob.max_health;
         mob.damage *= mob_spawn_damage_mult(base_r, spawn_r);
         mob.score_reward = (uint32_t) (

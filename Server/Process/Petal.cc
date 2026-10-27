@@ -1,4 +1,5 @@
 #include <Server/Process.hh>
+#include <Server/PetalMechanics.hh>
 
 #include <Server/Client.hh>
 #include <Server/EntityFunctions.hh>
@@ -14,6 +15,22 @@
 #include <Helpers/Vector.hh>
 
 #include <cmath>
+
+// Golden Leaf / talent / Cogwheel + Hourglass secondary CDR.
+static float petal_secondary_ticks(Entity const &player, float secondary_reload) {
+    float rf = player.petal_reload_factor;
+    float sec = 1.f;
+    for (uint32_t i = 0; i < player.get_loadout_count(); ++i) {
+        PetalID::T pid = effective_petal_id(player, i);
+        if (pid == PetalID::kNone || pid >= PetalID::kNumPetals) continue;
+        float f = PETAL_DATA[pid].attributes.secondary_cdr_factor;
+        if (f > 0.f && f < 1.f) sec *= f;
+    }
+    rf *= sec;
+    if (rf < Craft::kReloadFactorFloor) rf = Craft::kReloadFactorFloor;
+    if (rf > Craft::kReloadFactorCeil) rf = Craft::kReloadFactorCeil;
+    return std::fmax(1.f, secondary_reload * (float) TPS * rf);
+}
 
 // Unique level bonus only for petals from the first primary slot holding this ID.
 static float owner_petal_level_mult(Simulation *sim, Entity const &player, Entity const &petal) {
@@ -58,11 +75,37 @@ void tick_petal_behavior(Simulation *sim, Entity &petal) {
         Vector delta(petal.get_x() - player.get_x(), petal.get_y() - player.get_y());
         petal.set_angle(delta.angle());
     }
+    // Compass (Ultra+): point needle at nearest Super+ hostile mob. Mythic- are broken.
+    if (!detached && petal_data.attributes.compass
+        && petal_data.rarity >= RarityID::kUltra) {
+        float const px = player.get_x(), py = player.get_y();
+        float best_d2 = 1e12f;
+        float bx = px, by = py;
+        uint8_t found = 0;
+        float const R = 2800.f;
+        sim->spatial_hash.query(px, py, R, R, [&](Simulation *s, Entity &ent) {
+            if (!ent.has_component(kMob) || !ent.has_component(kHealth)) return;
+            if (ent.get_team() == player.get_team()) return;
+            if (ent.get_rarity() < RarityID::kSuper) return;
+            float dx = ent.get_x() - px, dy = ent.get_y() - py;
+            float d2 = dx * dx + dy * dy;
+            if (d2 > R * R || d2 >= best_d2) return;
+            best_d2 = d2;
+            bx = ent.get_x();
+            by = ent.get_y();
+            found = 1;
+        });
+        if (found) {
+            // Art needle points local -Y; rotate so that axis faces the target.
+            float ang = atan2f(by - py, bx - px) + (float)M_PI * 0.5f;
+            petal.set_angle(ang);
+        }
+    }
     if (detached) {
         PetalID::T pid = petal.get_petal_id();
         if (petal_name_is(pid, "Electric Web")) {
             petal.acceleration.set(0, 0);
-            if (++petal.secondary_reload >= std::fmax(1.f, petal_data.attributes.secondary_reload * TPS)) {
+            if (++petal.secondary_reload >= petal_secondary_ticks(player, petal_data.attributes.secondary_reload)) {
                 petal.secondary_reload = 0;
                 float radius = petal_data.attributes.aura_radius;
                 sim->spatial_hash.query(petal.get_x(), petal.get_y(), radius, radius,
@@ -78,8 +121,14 @@ void tick_petal_behavior(Simulation *sim, Entity &petal) {
             }
             return;
         }
-        if (petal_name_is(pid, "Missile") || petal_name_is(pid, "Magic Missile")
-            || petal_name_is(pid, "Carrot") || petal_name_is(pid, "Sand Leaf Dart")) {
+        if (petal_name_is(pid, "Carrot")) {
+            // Must follow heading_angle — Motion bounce updates that (and velocity),
+            // not get_angle(). Using get_angle() re-drove into the same wall.
+            petal.acceleration.unit_normal(petal.heading_angle)
+                .set_magnitude(2.0 * PLAYER_ACCELERATION);
+            petal.set_angle(petal.heading_angle);
+        } else if (petal_name_is(pid, "Missile") || petal_name_is(pid, "Magic Missile")
+            || petal_name_is(pid, "Sand Leaf Dart")) {
             petal.acceleration.unit_normal(petal.get_angle()).set_magnitude(2.0 * PLAYER_ACCELERATION);
         } else if (petal_is_honey(pid)) {
             // Straight bait toss — slower than Missile so mobs can catch it.
@@ -170,7 +219,7 @@ void tick_petal_behavior(Simulation *sim, Entity &petal) {
     }
     if (petal_data.attributes.ankh_mark
         && BitMath::at(player.input, InputFlags::kDefending)
-        && petal.secondary_reload >= petal_data.attributes.secondary_reload * TPS) {
+        && petal.secondary_reload >= petal_secondary_ticks(player, petal_data.attributes.secondary_reload)) {
         BitMath::set(petal.flags, EntityFlags::kIsDetached);
         petal.velocity.set(0, 0);
         petal.acceleration.set(0, 0);
@@ -182,7 +231,8 @@ void tick_petal_behavior(Simulation *sim, Entity &petal) {
     // otherwise Grapes never spray (wiki import left the field unset).
     uint8_t sec_ready = 1;
     if (petal_data.attributes.secondary_reload > 0) {
-        if (petal.secondary_reload <= petal_data.attributes.secondary_reload * TPS) {
+        float const need = petal_secondary_ticks(player, petal_data.attributes.secondary_reload);
+        if (petal.secondary_reload <= need) {
             ++petal.secondary_reload;
             sec_ready = 0;
         }
@@ -213,22 +263,45 @@ void tick_petal_behavior(Simulation *sim, Entity &petal) {
     if (sec_ready && petal_data.attributes.burst_heal > 0
         && player.dandy_ticks == 0) {
         uint8_t const is_shell = petal_name_is(petal.get_petal_id(), "Shell");
-        uint8_t const want_heal = is_shell || player.health < player.max_health;
+        // Shell: home to nearest ally flower (incl. self). Rose: only owner when hurt.
+        Entity *heal_target = &player;
+        if (is_shell) {
+            float best_d2 = 1e12f;
+            float const px = petal.get_x(), py = petal.get_y();
+            EntityID const team = player.get_team();
+            float const R = 450.f;
+            sim->spatial_hash.query(px, py, R, R, [&](Simulation *s, Entity &ent) {
+                if (!ent.has_component(kFlower) || ent.has_component(kMob)) return;
+                if (ent.get_team() != team) return;
+                if (!s->ent_alive(ent.id)) return;
+                float dx = ent.get_x() - px, dy = ent.get_y() - py;
+                float d2 = dx * dx + dy * dy;
+                if (d2 > R * R) return;
+                if (d2 < best_d2) {
+                    best_d2 = d2;
+                    heal_target = &ent;
+                }
+            });
+        }
+        uint8_t const want_heal = is_shell
+            || heal_target->health < heal_target->max_health;
         if (want_heal) {
-            Vector delta(player.get_x() - petal.get_x(), player.get_y() - petal.get_y());
+            Vector delta(heal_target->get_x() - petal.get_x(),
+                         heal_target->get_y() - petal.get_y());
             // Touch the flower body (not only the tiny core). Old check used petal
             // radius alone (~10) so a stationary player rarely absorbed the rose.
-            float const reach = player.get_radius() + petal.get_radius();
+            float const reach = heal_target->get_radius() + petal.get_radius();
             if (delta.magnitude() < reach) {
                 float amt = petal_data.attributes.burst_heal * lv_mult
                     * heal_tier_catchup(petal_data.rarity);
                 if (is_shell) {
-                    player.flower_shield += amt;
-                    float cap = player.max_health * 0.75f;
+                    heal_target->flower_shield += amt;
+                    float cap = heal_target->max_health * 0.75f;
                     if (cap < amt) cap = amt;
-                    if (player.flower_shield > cap) player.flower_shield = cap;
+                    if (heal_target->flower_shield > cap)
+                        heal_target->flower_shield = cap;
                 } else {
-                    inflict_heal(sim, player, amt);
+                    inflict_heal(sim, *heal_target, amt);
                 }
                 sim->request_delete(petal.id);
                 return;
@@ -318,7 +391,15 @@ void tick_petal_behavior(Simulation *sim, Entity &petal) {
                 petal.friction = 1.f;
                 petal.set_split_projectile(1); // planted / fixed visual
                 // Footprint ≈ 16 flower areas (was 8, then ×2): R = BASE_FLOWER_RADIUS * √16
-                float plant_r = BASE_FLOWER_RADIUS * std::sqrt(16.f);
+                // Crater petal: strongest equipped meteor_size_factor wins.
+                float size_mult = 1.f;
+                for (uint32_t si = 0; si < player.get_loadout_count(); ++si) {
+                    PetalID::T cid = effective_petal_id(player, si);
+                    if (cid == PetalID::kNone || cid >= PetalID::kNumPetals) continue;
+                    float f = PETAL_DATA[cid].attributes.meteor_size_factor;
+                    if (f > size_mult) size_mult = f;
+                }
+                float plant_r = BASE_FLOWER_RADIUS * std::sqrt(16.f) * size_mult;
                 petal.set_radius(plant_r);
                 // Heavy enough that Unique-scale wildlife can't shove it away.
                 // Attr mass is a rarity knob; floor keeps Common usable.
@@ -365,17 +446,39 @@ void tick_petal_behavior(Simulation *sim, Entity &petal) {
                 // silent long-range rocket with no telegraph.
                 float const kBubbleImpulse = PLAYER_ACCELERATION * 20.f;
                 float const kBubbleVelCap = PLAYER_ACCELERATION * 24.f;
-                Vector v(player.get_x() - petal.get_x(), player.get_y() - petal.get_y());
-                float sep = v.magnitude();
-                if (sep > 1.f && std::isfinite(sep)
-                    && player.velocity.magnitude() < kBubbleVelCap) {
-                    v.set_magnitude(kBubbleImpulse);
-                    player.velocity += v;
-                    float nm = player.velocity.magnitude();
-                    if (nm > kBubbleVelCap && std::isfinite(nm))
-                        player.velocity.set_magnitude(kBubbleVelCap);
+                uint8_t const is_magic = petal_name_is(pid, "Magic Bubble");
+                // Magic Bubble: wiki mana gate; leave petal if broke.
+                float const mcost = petal_data.attributes.mana_spawn_cost;
+                uint8_t can_pop = 1;
+                if (is_magic && mcost > 0.f) {
+                    if (player.mana < mcost) can_pop = 0;
+                    else player.mana -= mcost;
                 }
-                sim->request_delete(petal.id);
+                if (can_pop) {
+                    Vector v;
+                    if (is_magic) {
+                        // Wiki: propel along current movement (not away-from-petal).
+                        v = player.velocity;
+                        if (v.magnitude() < 1.f) v = player.acceleration;
+                        if (v.magnitude() < 1.f) {
+                            v.set(player.get_x() - petal.get_x(),
+                                  player.get_y() - petal.get_y());
+                        }
+                    } else {
+                        v.set(player.get_x() - petal.get_x(),
+                              player.get_y() - petal.get_y());
+                    }
+                    float sep = v.magnitude();
+                    if (sep > 1.f && std::isfinite(sep)
+                        && player.velocity.magnitude() < kBubbleVelCap) {
+                        v.set_magnitude(kBubbleImpulse);
+                        player.velocity += v;
+                        float nm = player.velocity.magnitude();
+                        if (nm > kBubbleVelCap && std::isfinite(nm))
+                            player.velocity.set_magnitude(kBubbleVelCap);
+                    }
+                    sim->request_delete(petal.id);
+                }
             }
     } else if (petal_name_is(pid, "Peas") || petal_name_is(pid, "Glass Storm")
         || petal_name_is(pid, "Grapes") || petal_name_is(pid, "Blueberries")) {

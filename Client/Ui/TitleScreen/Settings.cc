@@ -49,14 +49,14 @@ public:
     }
 };
 
-static Element *settings_toggle_row(uint8_t *flag, I18n::Str label, float toggle, float text) {
+static Element *settings_toggle_row(uint8_t *flag, I18n::Str label, float toggle, float text, float gap) {
     return new Ui::HContainer({
         new Ui::ToggleButton(toggle, flag),
         new Ui::DynamicText(text, [label](){ return I18n::tr(label); }, {
             .fill = Chrome::kBody,
             .h_justify = Style::Left
         })
-    }, 0, 10, { .h_justify = Style::Left });
+    }, 0, gap, { .h_justify = Style::Left });
 }
 
 static Element *settings_section(I18n::Str title, std::vector<Element *> rows,
@@ -76,17 +76,18 @@ static Element *settings_section(I18n::Str title, std::vector<Element *> rows,
 
 Element *Ui::make_settings_panel() {
     uint8_t const mobile = Input::is_mobile;
-    float const toggle = mobile ? 26.f : 28.f;
-    float const label = mobile ? 13.f : 15.f;
-    float const pad = mobile ? 14.f : 18.f;
-    float const row_gap = mobile ? 8.f : 10.f;
-    float const section_gap = mobile ? 16.f : 20.f;
-    float const title_sz = mobile ? 12.f : 13.f;
-    float const panel_y = mobile ? 72.f : 84.f;
-    float const header_h = (mobile ? 20.f : 24.f) + 12.f + pad * 2.f;
+    float const toggle = 28.f;
+    float const label = mobile ? 11.f : 15.f;
+    float const pad = mobile ? 8.f : 18.f;
+    float const row_gap = mobile ? 4.f : 10.f;
+    float const section_gap = mobile ? 10.f : 20.f;
+    float const title_sz = mobile ? 10.f : 13.f;
+    float const row_gap_h = mobile ? 6.f : 10.f;
+    float const panel_y = mobile ? 64.f : 84.f;
+    float const header_h = (mobile ? 16.f : 24.f) + 10.f + pad * 2.f;
 
     auto row = [&](uint8_t *flag, I18n::Str text) {
-        return settings_toggle_row(flag, text, toggle, label);
+        return settings_toggle_row(flag, text, toggle, label, row_gap_h);
     };
 
     Element *controls = settings_section(I18n::kSettingsControls, {
@@ -108,53 +109,54 @@ Element *Ui::make_settings_panel() {
         row(&Input::disable_auto_party, I18n::kDisableAutoParty),
     }, title_sz, row_gap);
 
+    // Mobile: always two compact columns. Desktop: two columns when wide.
     float const view_w = (float) (Ui::window_width / Ui::scale);
-    uint8_t const narrow = mobile || view_w < 720.f;
-    Element *toggles_block = narrow
-        ? (Element *) new Ui::VContainer({
-            controls,
-            display,
-            social
-        }, 0, section_gap, { .h_justify = Style::Left, .no_animation = 1 })
-        : (Element *) new Ui::HContainer({
+    uint8_t const two_col = mobile || view_w >= 720.f;
+    Element *toggles_block = two_col
+        ? (Element *) new Ui::HContainer({
             new Ui::VContainer({ controls, social }, 0, section_gap, {
                 .h_justify = Style::Left, .no_animation = 1
             }),
             display
-        }, 0, 28.f, { .h_justify = Style::Left, .no_animation = 1 });
+        }, 0, mobile ? 12.f : 28.f, { .h_justify = Style::Left, .no_animation = 1 })
+        : (Element *) new Ui::VContainer({
+            controls,
+            display,
+            social
+        }, 0, section_gap, { .h_justify = Style::Left, .no_animation = 1 });
 
     Element *actions = new Ui::VContainer({
-        new Ui::Button(mobile ? 160.f : 200.f, mobile ? 32.f : 34.f,
-            new Ui::DynamicText(mobile ? 14.f : 15.f, [](){ return I18n::tr(I18n::kFullscreen); }),
+        new Ui::Button(mobile ? 140.f : 200.f, mobile ? 28.f : 34.f,
+            new Ui::DynamicText(mobile ? 12.f : 15.f, [](){ return I18n::tr(I18n::kFullscreen); }),
             [](Element *, uint8_t e){
                 if (e == Ui::kClick) DOM::toggle_fullscreen();
             },
             nullptr,
             { .fill = Chrome::kBtnSlate, .line_width = 0, .round_radius = Chrome::kRadius }
         ),
-        new Ui::DynamicText(14.f, [](){
+        new Ui::DynamicText(mobile ? 12.f : 14.f, [](){
             return I18n::use_chinese
                 ? std::string{"交流 QQ 群：227990150"}
                 : std::string{"QQ group: 227990150"};
         }, { .fill = Chrome::kGold, .h_justify = Style::Left }),
         new Ui::HContainer({
-            new Ui::Button(mobile ? 120.f : 140.f, 32,
-                new Ui::DynamicText(13, [](){ return I18n::use_chinese ? std::string{"给作者留言"} : std::string{"Feedback"}; }),
+            new Ui::Button(mobile ? 100.f : 140.f, mobile ? 28.f : 32.f,
+                new Ui::DynamicText(mobile ? 11.f : 13.f, [](){ return I18n::use_chinese ? std::string{"给作者留言"} : std::string{"Feedback"}; }),
                 [](Element *, uint8_t e){ if (e == Ui::kClick) DOM::open_feedback_board(); }, nullptr,
                 { .fill = Chrome::kBtnMoss, .line_width = 0, .round_radius = Chrome::kRadius }),
-            new Ui::Button(mobile ? 100.f : 120.f, 32,
-                new Ui::DynamicText(13, [](){ return I18n::use_chinese ? std::string{"加入 QQ 群"} : std::string{"QQ group"}; }),
+            new Ui::Button(mobile ? 90.f : 120.f, mobile ? 28.f : 32.f,
+                new Ui::DynamicText(mobile ? 11.f : 13.f, [](){ return I18n::use_chinese ? std::string{"加入 QQ 群"} : std::string{"QQ group"}; }),
                 [](Element *, uint8_t e){ if (e == Ui::kClick) DOM::open_qq_group(); }, nullptr,
                 { .fill = Chrome::kBtnSlate, .line_width = 0, .round_radius = Chrome::kRadius })
-        }, 0, 10, { .h_justify = Style::Left }),
-        new Ui::DynamicText(13.f, [](){ return I18n::tr(I18n::kMadeBy); }, {
+        }, 0, mobile ? 8.f : 10.f, { .h_justify = Style::Left }),
+        new Ui::DynamicText(mobile ? 11.f : 13.f, [](){ return I18n::tr(I18n::kMadeBy); }, {
             .fill = Chrome::kMuted, .h_justify = Style::Left
         }),
-        new Ui::DynamicText(12.f, [](){ return I18n::tr(I18n::kAssetCredits); }, {
+        new Ui::DynamicText(mobile ? 10.f : 12.f, [](){ return I18n::tr(I18n::kAssetCredits); }, {
             .fill = Chrome::kMuted, .h_justify = Style::Left
         }),
-        new Ui::Button(mobile ? 200.f : 260.f, 30.f,
-            new Ui::DynamicText(12.f, [](){
+        new Ui::Button(mobile ? 170.f : 260.f, mobile ? 26.f : 30.f,
+            new Ui::DynamicText(mobile ? 10.f : 12.f, [](){
                 return I18n::use_chinese
                     ? std::string{"打开上游 gardn 仓库"}
                     : std::string{"Open upstream gardn"};
@@ -166,10 +168,10 @@ Element *Ui::make_settings_panel() {
             nullptr,
             { .fill = Chrome::kBtnMoss, .line_width = 0, .round_radius = Chrome::kRadius }
         ),
-        new Ui::DynamicText(11.f, [](){
+        new Ui::DynamicText(mobile ? 10.f : 11.f, [](){
             return std::string{"github.com/trigonal-bacon/gardn"};
         }, { .fill = 0xff8ab4a0, .h_justify = Style::Left })
-    }, 0, mobile ? 10.f : 12.f, { .h_justify = Style::Left, .no_animation = 1 });
+    }, 0, mobile ? 8.f : 12.f, { .h_justify = Style::Left, .no_animation = 1 });
 
     Element *scroll_body = new Ui::VContainer({
         toggles_block,
@@ -181,11 +183,11 @@ Element *Ui::make_settings_panel() {
     scroller->bottom_pad = mobile ? 24.f : 32.f;
 
     Element *elt = new Ui::VContainer({
-        new Ui::DynamicText(mobile ? 20.f : 24.f, [](){ return I18n::tr(I18n::kSettings); }, {
+        new Ui::DynamicText(mobile ? 16.f : 24.f, [](){ return I18n::tr(I18n::kSettings); }, {
             .fill = Chrome::kTitle
         }),
         scroller
-    }, pad, 12.f, {
+    }, pad, mobile ? 8.f : 12.f, {
         .fill = Chrome::kPanelDeep,
         .line_width = 0,
         .round_radius = Chrome::kRadius,

@@ -415,12 +415,16 @@ void tick_player_behavior(Simulation *sim, Entity &player) {
         }
     }
     buffs.reload_factor *= talent_reload;
+    // Cogwheel before the global floor so tip / combat share one clamped product.
+    if (buffs.has_cogwheel)
+        buffs.reload_factor *= 0.97f;
     // Golden Leaf CDR cap (99%): stacked leaves + Unique Lv + talent cannot
     // push below kReloadFactorFloor (≤0 deleted petal art; ≥2-tick floor below).
     if (buffs.reload_factor < Craft::kReloadFactorFloor)
         buffs.reload_factor = Craft::kReloadFactorFloor;
     if (buffs.reload_factor > Craft::kReloadFactorCeil)
         buffs.reload_factor = Craft::kReloadFactorCeil;
+    player.petal_reload_factor = buffs.reload_factor;
     double health_ratio = player.health / player.max_health;
     if (!player.has_component(kMob)) {
         uint32_t const sc = player.get_score();
@@ -476,8 +480,6 @@ void tick_player_behavior(Simulation *sim, Entity &player) {
         player.root_armor_applied = 0.f;
         if (buffs.has_fragment)
             buffs.damage_factor *= 1.03f;
-        if (buffs.has_cogwheel)
-            buffs.reload_factor *= 0.97f;
         // Mana Orb / Magic Leaf+Cactus capacity + gen
         float mana_cap = buffs.mana_cap;
         if (mana_cap > 0.f) {
@@ -524,14 +526,38 @@ void tick_player_behavior(Simulation *sim, Entity &player) {
             player.immunity_ticks = std::max(player.immunity_ticks, player.burrow_ticks);
         }
         player.previous_input = player.input;
-        // Sponge's first hit fixes the settlement deadline; subsequent hits
-        // cannot keep rolling it forward. Raw settlement still runs lethal saves.
-        if (player.pending_damage_ticks && --player.pending_damage_ticks == 0) {
-            float due = player.pending_damage;
-            auto dealer = player.pending_damage_dealer;
-            player.pending_damage = 0.f;
-            player.pending_damage_dealer = NULL_ENTITY;
-            if (due > 0.f) inflict_damage(sim, dealer, player.id, due, DamageType::kDeferred);
+        // Sponge: banked hits drip evenly over the remaining window (分摊),
+        // not one burst at the end. First hit still locks the deadline.
+        // Unequipping Sponge dumps whatever is left as one deferred hit.
+        if (player.pending_damage > 0.f && player.pending_damage_ticks > 0) {
+            float sponge_delay = 0.f;
+            for (uint32_t si = 0; si < player.get_loadout_count(); ++si) {
+                PetalID::T pid = effective_petal_id(player, si);
+                if (pid == PetalID::kNone || pid >= PetalID::kNumPetals) continue;
+                sponge_delay = std::fmax(sponge_delay,
+                    PETAL_DATA[pid].attributes.damage_delay_seconds);
+            }
+            EntityID const dealer = player.pending_damage_dealer;
+            if (sponge_delay <= 0.f) {
+                float due = player.pending_damage;
+                player.pending_damage = 0.f;
+                player.pending_damage_ticks = 0;
+                player.pending_damage_dealer = NULL_ENTITY;
+                if (due > 0.f)
+                    inflict_damage(sim, dealer, player.id, due, DamageType::kDeferred);
+            } else {
+                float slice = player.pending_damage / (float) player.pending_damage_ticks;
+                --player.pending_damage_ticks;
+                if (player.pending_damage_ticks == 0) {
+                    slice = player.pending_damage;
+                    player.pending_damage = 0.f;
+                    player.pending_damage_dealer = NULL_ENTITY;
+                } else {
+                    player.pending_damage = std::fmax(0.f, player.pending_damage - slice);
+                }
+                if (slice > 0.f)
+                    inflict_damage(sim, dealer, player.id, slice, DamageType::kDeferred);
+            }
         }
         // Champion crown: small aura damage while attacking
         if (buffs.champion_crown
@@ -553,10 +579,11 @@ void tick_player_behavior(Simulation *sim, Entity &player) {
             player.champion_aura = 0.f;
         }
         // Dark Mark / Compass / Paranormal / Soul Splitter flags
+        // Compass pointing is applied in Petal.cc (Ultra+ → nearest Super+).
+        // Paranormal FOV shrink comes from vision_factor on the goggles petal;
+        // Ghost see/hit needs a Ghost mob system (not shipped yet).
         player.compass_reveal = buffs.compass ? 1 : 0;
         player.paranormal_vision = buffs.paranormal ? 1 : 0;
-        if (buffs.compass)
-            buffs.vision_factor = std::fmin(buffs.vision_factor, 0.82f);
         if (buffs.soul_splitter
             && BitMath::at(player.input, InputFlags::kDefending)
             && player.soul_split_cd == 0) {
@@ -622,6 +649,9 @@ void tick_player_behavior(Simulation *sim, Entity &player) {
     player.set_effect_flags(effects);
     player.set_mana_ratio(buffs.mana_cap > 0.f ? player.mana / buffs.mana_cap : 0.f);
     player.set_shield_ratio(player.max_health > 0.f ? player.flower_shield / player.max_health : 0.f);
+    // Integer-quantize so the loadout top-line badge only dirties on whole-HP steps.
+    player.set_sponge_pending(player.pending_damage > 0.5f
+        ? std::floor(player.pending_damage + 0.5f) : 0.f);
     player.set_ability_cooldown(buffs.shovel_burrow ? player.burrow_cooldown : 0);
     float rot_pos = 0;
     uint32_t rotation_count = _get_petal_rotation_count(sim, player);
@@ -750,8 +780,10 @@ void tick_player_behavior(Simulation *sim, Entity &player) {
                 min_reload = std::min(min_reload, this_reload);
                 if (petal_slot.reload >= reload_time) {
                     // Petals with mana_spawn_cost and no mob summon: gate entity spawn on mana.
+                    // defend_only (Magic Bubble): mana is paid on defend-pop, not on orbit spawn.
                     float spawn_cost = petal_data.attributes.mana_spawn_cost;
-                    if (spawn_cost > 0.f && petal_data.attributes.spawns == MobID::kNumMobs) {
+                    if (spawn_cost > 0.f && petal_data.attributes.spawns == MobID::kNumMobs
+                        && !petal_data.attributes.defend_only) {
                         if (player.mana < spawn_cost)
                             continue; // stay at ready reload until mana available
                         player.mana -= spawn_cost;
@@ -852,10 +884,13 @@ void tick_player_behavior(Simulation *sim, Entity &player) {
                     // Rose / burst-heal seeking the flower: skip orbit so a still
                     // player does not keep yanking the petal back to the ring.
                     game_tick_t const sec_reload_ticks =
-                        (game_tick_t)(petal_data.attributes.secondary_reload * TPS);
+                        (game_tick_t) std::fmax(1.f,
+                            petal_data.attributes.secondary_reload * TPS
+                                * buffs.reload_factor);
                     uint8_t const seeking_shell =
                         petal_name_is(behave_id, "Shell")
                         && petal_data.attributes.burst_heal > 0;
+                    // Shell may leave orbit to gift shield to a nearby teammate.
                     uint8_t const seeking_burst_heal =
                         petal_data.attributes.burst_heal > 0
                         && petal_data.attributes.secondary_reload > 0

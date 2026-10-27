@@ -226,6 +226,7 @@ static void process_map_portals(GameInstance *game) {
 
 void GameInstance::tick() {
     simulation.tick();
+    auto t_sync = std::chrono::steady_clock::now();
     process_map_portals(this);
     Party::tick(this);
     Guild::tick(this);
@@ -236,7 +237,12 @@ void GameInstance::tick() {
         TrainingDummy::tick_client(&simulation, client);
         _update_client(&simulation, client);
     }
+    Server::phase_sync_ms += std::chrono::duration<double, std::milli>(
+        std::chrono::steady_clock::now() - t_sync).count();
+    auto t_post = std::chrono::steady_clock::now();
     simulation.post_tick();
+    Server::phase_post_ms += std::chrono::duration<double, std::milli>(
+        std::chrono::steady_clock::now() - t_post).count();
 }
 
 void GameInstance::broadcast(uint8_t const *packet, size_t size) {

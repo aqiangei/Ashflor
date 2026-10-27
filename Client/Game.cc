@@ -240,171 +240,113 @@ std::string const &Game::guest_play_name() {
     return guest_id;
 }
 
+// Spread heavy UI construction across frames so title paints sooner after WASM
+// compile. ensure_game_ui() drains the queue before spawn.
+static uint8_t g_ui_boot_phase = 0;
+
+static void pump_ui_boot_chunk() {
+    switch (g_ui_boot_phase) {
+        case 1:
+            Game::title_ui_window.add_child(Ui::make_settings_panel());
+            Game::title_ui_window.add_child(Ui::make_changelog());
+            Game::title_ui_window.add_child(Ui::make_leaderboard());
+            g_ui_boot_phase = 2;
+            break;
+        case 2:
+            // Galleries are the heaviest title panels (full rarity grids).
+            Game::title_ui_window.add_child(Ui::make_petal_gallery());
+            Game::title_ui_window.add_child(Ui::make_mob_gallery());
+            g_ui_boot_phase = 3;
+            break;
+        case 3:
+            Game::game_ui_window.add_child(Ui::make_death_main_screen());
+            Game::game_ui_window.add_child(Ui::make_level_bar());
+            Game::game_ui_window.add_child(Ui::make_health_bar());
+            Game::game_ui_window.add_child(Ui::make_boss_health_bar());
+            Game::game_ui_window.add_child(Ui::make_server_announce_banner());
+            Game::game_ui_window.add_child(Ui::make_loot_toast());
+            Game::game_ui_window.add_child(Ui::make_update_announce_bubble());
+            Game::game_ui_window.add_child(Ui::make_minimap());
+            Game::game_ui_window.add_child(Ui::make_loadout_backgrounds());
+            Game::game_ui_window.add_child(Ui::make_mobile_joystick());
+            Game::game_ui_window.add_child(Ui::make_mobile_attack_button());
+            Game::game_ui_window.add_child(Ui::make_mobile_defend_button());
+            Game::game_ui_window.add_child(Ui::make_mobile_swap_button());
+            for (uint8_t i = 0; i < MAX_SLOT_COUNT * 2; ++i)
+                Game::game_ui_window.add_child(new Ui::UiLoadoutPetal(i));
+            Game::game_ui_window.add_child(Ui::make_bag_drag_ghost());
+            Game::game_ui_window.add_child(Ui::make_craft_fx_layer());
+            g_ui_boot_phase = 4;
+            break;
+        case 4:
+            Game::game_ui_window.add_child(Ui::make_stat_screen());
+            Game::game_ui_window.add_child(Ui::make_death_life_summary());
+            Game::game_ui_window.add_child(Ui::make_game_topbar());
+            Game::game_ui_window.add_child(Ui::make_leaderboard());
+            Game::game_ui_window.add_child(Ui::make_mob_gallery());
+            Game::game_ui_window.add_child(Ui::make_petal_gallery());
+            Game::game_ui_window.add_child(Ui::make_pause_menu());
+            Game::game_ui_window.add_child(Ui::make_leave_confirm());
+            Game::game_ui_window.add_child(Ui::make_invite_toast());
+            Game::game_ui_window.add_child(Ui::make_guild_panel());
+            Game::game_ui_window.add_child(Ui::make_game_side_buttons());
+            Game::game_ui_window.add_child(Ui::make_inventory_panel());
+            Game::game_ui_window.add_child(Ui::make_presets_panel());
+            Game::game_ui_window.add_child(Ui::make_talents_panel());
+            Game::game_ui_window.add_child(Ui::make_craft_panel());
+            Game::game_ui_window.add_child(Ui::make_special_craft_panel());
+            Game::game_ui_window.add_child(Ui::make_shop_panel());
+            Game::game_ui_window.add_child(Ui::make_shop_announce_prompt());
+            Game::game_ui_window.add_child(Ui::make_boost_panel());
+            // Chat last among game HUD: mobile left-bottom must beat side buttons +
+            // the huge joystick pad in reverse poll order (Window::poll_events).
+            Game::game_ui_window.add_child(Ui::make_chat_panel());
+            Game::game_ui_window.add_child(Ui::make_chat_context_menu());
+            Ui::make_petal_tooltips();
+            Ui::make_mob_tooltips();
+            Game::other_ui_window.add_child(Ui::make_debug_stats());
+            Game::other_ui_window.add_child(
+                [](){
+                    Ui::Element *elt = new Ui::HContainer({
+                        new Ui::DynamicText(16, [](){ return Game::disconnect_message; })
+                    }, 5, 5, {
+                        .fill = 0x40000000,
+                        .round_radius = 5,
+                        .should_render = [](){
+                            return !Game::socket.ready && Game::disconnect_message != "";
+                        },
+                        .v_justify = Ui::Style::Top
+                    });
+                    elt->y = 50;
+                    return elt;
+                }()
+            );
+            Game::other_ui_window.style.no_polling = 1;
+            g_ui_boot_phase = 0;
+            break;
+        default:
+            g_ui_boot_phase = 0;
+            break;
+    }
+}
+
+void Game::ensure_game_ui() {
+    while (g_ui_boot_phase != 0)
+        pump_ui_boot_chunk();
+}
+
 void Game::init() {
     Input::is_mobile = check_mobile();
     Input::request_mobile = Input::is_mobile; // overridden by Storage if saved
     DOM::cache_client();
     Storage::retrieve();
     reset();
-    // Saved username+password → Socket auto-login after verify (see pending_guest_progress).
-    // Brand lives inside make_title_input_box so it cannot overlap the form
-    title_ui_window.add_child(
-        Ui::make_title_input_box()
-    );
-    title_ui_window.add_child(
-        Ui::make_title_info_box()
-    );
-    title_ui_window.add_child(
-        Ui::make_panel_buttons()
-    );
-    title_ui_window.add_child(
-        Ui::make_settings_panel()
-    );
-    title_ui_window.add_child(
-        Ui::make_petal_gallery()
-    );
-    title_ui_window.add_child(
-        Ui::make_mob_gallery()
-    );
-    title_ui_window.add_child(
-        Ui::make_changelog()
-    );
-    title_ui_window.add_child(
-        Ui::make_leaderboard()
-    );
-    title_ui_window.add_child(
-        Ui::make_github_link_button()
-    );
-    game_ui_window.add_child(
-        Ui::make_death_main_screen()
-    );
-    game_ui_window.add_child(
-        Ui::make_level_bar()
-    );
-    game_ui_window.add_child(
-        Ui::make_health_bar()
-    );
-    game_ui_window.add_child(
-        Ui::make_boss_health_bar()
-    );
-    game_ui_window.add_child(
-        Ui::make_server_announce_banner()
-    );
-    game_ui_window.add_child(
-        Ui::make_loot_toast()
-    );
-    game_ui_window.add_child(
-        Ui::make_update_announce_bubble()
-    );
-    game_ui_window.add_child(
-        Ui::make_minimap()
-    );
-    game_ui_window.add_child(
-        Ui::make_loadout_backgrounds()
-    );
-    game_ui_window.add_child(
-        Ui::make_mobile_joystick()
-    );
-    game_ui_window.add_child(
-        Ui::make_mobile_attack_button()
-    );
-    game_ui_window.add_child(
-        Ui::make_mobile_defend_button()
-    );
-    game_ui_window.add_child(
-        Ui::make_mobile_swap_button()
-    );
-    for (uint8_t i = 0; i < MAX_SLOT_COUNT * 2; ++i) game_ui_window.add_child(new Ui::UiLoadoutPetal(i));
-    game_ui_window.add_child(Ui::make_bag_drag_ghost());
-    game_ui_window.add_child(Ui::make_craft_fx_layer());
-    game_ui_window.add_child(
-        Ui::make_stat_screen()
-    );
-    game_ui_window.add_child(
-        Ui::make_death_life_summary()
-    );
-    game_ui_window.add_child(
-        Ui::make_game_topbar()
-    );
-    // In-game copies of title panels (title window is skipped while playing)
-    game_ui_window.add_child(
-        Ui::make_leaderboard()
-    );
-    game_ui_window.add_child(
-        Ui::make_mob_gallery()
-    );
-    game_ui_window.add_child(
-        Ui::make_petal_gallery()
-    );
-    game_ui_window.add_child(
-        Ui::make_pause_menu()
-    );
-    game_ui_window.add_child(
-        Ui::make_leave_confirm()
-    );
-    game_ui_window.add_child(
-        Ui::make_invite_toast()
-    );
-    game_ui_window.add_child(
-        Ui::make_guild_panel()
-    );
-    game_ui_window.add_child(
-        Ui::make_game_side_buttons()
-    );
-    game_ui_window.add_child(
-        Ui::make_inventory_panel()
-    );
-    game_ui_window.add_child(
-        Ui::make_presets_panel()
-    );
-    game_ui_window.add_child(
-        Ui::make_talents_panel()
-    );
-    game_ui_window.add_child(
-        Ui::make_craft_panel()
-    );
-    game_ui_window.add_child(
-        Ui::make_special_craft_panel()
-    );
-    game_ui_window.add_child(
-        Ui::make_shop_panel()
-    );
-    game_ui_window.add_child(
-        Ui::make_shop_announce_prompt()
-    );
-    game_ui_window.add_child(
-        Ui::make_boost_panel()
-    );
-    // Chat last among game HUD: mobile left-bottom must beat side buttons +
-    // the huge joystick pad in reverse poll order (Window::poll_events).
-    game_ui_window.add_child(
-        Ui::make_chat_panel()
-    );
-    game_ui_window.add_child(
-        Ui::make_chat_context_menu()
-    );
-    Ui::make_petal_tooltips();
-    Ui::make_mob_tooltips();
-    other_ui_window.add_child(
-        Ui::make_debug_stats()
-    );
-    other_ui_window.add_child(
-        [](){ 
-            Ui::Element *elt = new Ui::HContainer({
-                new Ui::DynamicText(16, [](){ return Game::disconnect_message; })
-            }, 5, 5, { 
-                .fill = 0x40000000,
-                .round_radius = 5,
-                .should_render = [](){
-                    return !Game::socket.ready && Game::disconnect_message != "";
-                },
-                .v_justify = Ui::Style::Top
-            });
-            elt->y = 50;
-            return elt;
-        }()
-    );
-    other_ui_window.style.no_polling = 1;
+    // Minimal title shell first — galleries / game HUD build across later frames.
+    title_ui_window.add_child(Ui::make_title_input_box());
+    title_ui_window.add_child(Ui::make_title_info_box());
+    title_ui_window.add_child(Ui::make_panel_buttons());
+    title_ui_window.add_child(Ui::make_github_link_button());
+    g_ui_boot_phase = 1;
     // Follow page host so FRP / remote access works (ws/wss + host:port)
     char *dyn_url = (char *) EM_ASM_PTR({
         var proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
@@ -1147,6 +1089,9 @@ void Game::poll_ui_event(Ui::ScreenEvent const &event) {
 }
 
 void Game::tick(double time) {
+    // One deferred UI chunk per frame until boot queue is empty.
+    if (g_ui_boot_phase != 0)
+        pump_ui_boot_chunk();
     double tick_start = Debug::get_timestamp();
     Game::timestamp = time;
     Ui::dt = time - g_last_time;
@@ -1529,12 +1474,16 @@ void Game::tick(double time) {
         }
     }
 
-    // Unequipping Antenna/Observer: restore default zoom (don't keep FOV-adjusted zoom).
+    // Unequipping Antenna/Observer: keep the same on-screen world scale.
+    // Forcing zoom back to 1.28 with a larger FOV felt like "视野变得最小".
     if (alive() && simulation.ent_exists(camera_id)) {
         static float prev_cam_fov = BASE_FOV;
         float cur_fov = simulation.get_ent(camera_id).get_fov();
-        if (prev_cam_fov < BASE_FOV * 0.92f && cur_fov >= BASE_FOV * 0.92f)
-            camera_zoom = 1.28f;
+        if (prev_cam_fov < BASE_FOV * 0.92f && cur_fov >= BASE_FOV * 0.92f
+            && cur_fov > 1e-6f) {
+            camera_zoom = fclamp(camera_zoom * (prev_cam_fov / cur_fov), 0.55f, 2.2f);
+            persist_camera_zoom();
+        }
         prev_cam_fov = cur_fov;
     }
 

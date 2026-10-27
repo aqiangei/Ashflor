@@ -186,19 +186,25 @@ void Simulation::on_tick() {
     ensure_boss(this);
     TrainingDummy::ensure(this);
 
-    // Idle map (Server already ~1 Hz): thin wild mobs slowly, skip collide/AI.
-    // Only zone wildlife (kSpawnedFromZone). WorldEvent / Treasure / explore
-    // props are never zone-spawned — do not wipe them (chat-only bug).
+    // Idle map (Server already ~1 Hz): drain wildlife fast — yesterday's
+    // midnight collide storms were empty/near-empty biomes still holding
+    // 1k+ ents (snow/forest). WorldEvent/Treasure/explore stay (non-zone).
     if (!occupied) {
-        for_each_entity([](Simulation *sim, Entity &ent) {
+        uint32_t budget = 96;
+        uint32_t ents = entity_count();
+        if (ents > 1200u) budget = 160;
+        if (ents > 2000u) budget = 240;
+        for_each_entity([&budget](Simulation *sim, Entity &ent) {
+            if (budget == 0) return;
             if (!ent.has_component(kMob)) return;
             if (ent.zone == 0xFF) return; // boss / special
             if (!BitMath::at(ent.flags, EntityFlags::kSpawnedFromZone)) return;
             if (BitMath::at(ent.flags, EntityFlags::kIsDespawning)) return;
-            // ~1.5% per idle tick → density drops without a stampede of deletes
-            if (frand() < 0.015f) {
+            // ~12%/idle-tick baseline; always honor budget so packed biomes drain
+            if (frand() < 0.12f || budget > 48) {
                 BitMath::set(ent.flags, EntityFlags::kNoDrops);
                 sim->request_delete(ent.id);
+                --budget;
             }
         });
         for_each_entity(entity_clear_references);
@@ -397,13 +403,17 @@ void Simulation::on_tick() {
         Server::phase_collide_ms += _tick_ms_since(t_col);
     }
 
-    tick_curse_behavior(this);
-    for_each<kPhysics>(tick_entity_motion);
-    for_each<kSegmented>(tick_segment_behavior);
-    for_each<kCamera>(tick_camera_behavior);
-    for_each<kScore>(tick_score_behavior);
-    for_each_entity(entity_clear_references);
-    calculate_leaderboard(this);
+    {
+        auto t_motion = std::chrono::steady_clock::now();
+        tick_curse_behavior(this);
+        for_each<kPhysics>(tick_entity_motion);
+        for_each<kSegmented>(tick_segment_behavior);
+        for_each<kCamera>(tick_camera_behavior);
+        for_each<kScore>(tick_score_behavior);
+        for_each_entity(entity_clear_references);
+        calculate_leaderboard(this);
+        Server::phase_motion_ms += _tick_ms_since(t_motion);
+    }
 }
 
 void Simulation::post_tick() {

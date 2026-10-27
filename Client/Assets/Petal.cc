@@ -568,6 +568,12 @@ void draw_static_petal_single(PetalID::T id, Renderer &ctx) {
             ctx.ellipse(0, 0, r * 0.85f, r * 1.05f);
             ctx.fill();
             ctx.stroke();
+            ctx.set_stroke(0xffd4a83a);
+            ctx.set_line_width(1.8f);
+            ctx.begin_path();
+            ctx.move_to(0, -r * 0.7f);
+            ctx.qcurve_to(r * 0.15f, 0, 0, r * 0.7f);
+            ctx.stroke();
             ctx.set_fill(0x66ffe9a0);
             ctx.begin_path();
             ctx.ellipse(-r * 0.2f, -r * 0.25f, r * 0.28f, r * 0.4f);
@@ -5934,8 +5940,17 @@ void draw_static_petal_single(PetalID::T id, Renderer &ctx) {
             ctx.stroke();
             ctx.set_fill(0xffc8ff70);
             ctx.begin_path();
-            ctx.arc(0, 0, s * 0.45f);
+            ctx.arc(0, 0, s * 0.4f);
             ctx.fill();
+            ctx.set_stroke(0xffe8ff90);
+            ctx.set_line_width(1.8f);
+            for (int i = 0; i < 6; ++i) {
+                float a = i * 1.0472f;
+                ctx.begin_path();
+                ctx.move_to(cosf(a) * s * 0.5f, sinf(a) * s * 0.5f);
+                ctx.line_to(cosf(a) * s * 0.92f, sinf(a) * s * 0.92f);
+                ctx.stroke();
+            }
             break;
         }
         case PetalID::kBattery: {
@@ -5988,12 +6003,24 @@ void draw_static_petal_single(PetalID::T id, Renderer &ctx) {
             ctx.set_stroke(0xff3a1040);
             ctx.set_line_width(2.f);
             ctx.begin_path();
-            ctx.arc(0, 0, s * 0.9f);
+            ctx.arc(0, s * 0.08f, s * 0.85f);
             ctx.fill();
             ctx.stroke();
             ctx.set_fill(0xff8a40a0);
             ctx.begin_path();
-            ctx.arc(-s * 0.2f, -s * 0.25f, s * 0.28f);
+            ctx.arc(-s * 0.22f, -s * 0.15f, s * 0.25f);
+            ctx.fill();
+            ctx.set_stroke(0xff3a9028);
+            ctx.set_line_width(2.f);
+            ctx.begin_path();
+            ctx.move_to(0, -s * 0.55f);
+            ctx.line_to(0, -s * 0.95f);
+            ctx.stroke();
+            ctx.set_fill(0xff4aaa38);
+            ctx.begin_path();
+            ctx.move_to(0, -s * 0.7f);
+            ctx.qcurve_to(s * 0.45f, -s * 0.85f, s * 0.35f, -s * 1.1f);
+            ctx.qcurve_to(s * 0.1f, -s * 0.85f, 0, -s * 0.7f);
             ctx.fill();
             break;
         }
@@ -6006,6 +6033,12 @@ void draw_static_petal_single(PetalID::T id, Renderer &ctx) {
             ctx.begin_path();
             ctx.round_rect(-s*0.7f, -s*1.0f, s*1.4f, s*2.0f, 2.f);
             ctx.fill(); ctx.stroke();
+            ctx.begin_path();
+            ctx.move_to(-s * 0.55f, 0); ctx.line_to(s * 0.55f, 0); ctx.stroke();
+            ctx.set_fill(0xff303028);
+            ctx.begin_path(); ctx.arc(0, -s * 0.45f, s * 0.12f); ctx.fill();
+            ctx.begin_path(); ctx.arc(-s * 0.22f, s * 0.4f, s * 0.1f); ctx.fill();
+            ctx.begin_path(); ctx.arc(s * 0.22f, s * 0.4f, s * 0.1f); ctx.fill();
             break;
         }
         case PetalID::kCard: {
@@ -6017,7 +6050,20 @@ void draw_static_petal_single(PetalID::T id, Renderer &ctx) {
             ctx.round_rect(-s*0.75f, -s*1.05f, s*1.5f, s*2.1f, 2.f);
             ctx.fill(); ctx.stroke();
             ctx.set_fill(0xffcc2030);
-            ctx.begin_path(); ctx.arc(0,0,s*0.22f); ctx.fill();
+            ctx.begin_path();
+            ctx.move_to(0, -s * 0.35f);
+            ctx.line_to(s * 0.28f, 0);
+            ctx.line_to(0, s * 0.35f);
+            ctx.line_to(-s * 0.28f, 0);
+            ctx.close_path();
+            ctx.fill();
+            ctx.begin_path();
+            ctx.move_to(-s * 0.45f, -s * 0.75f);
+            ctx.line_to(-s * 0.28f, -s * 0.55f);
+            ctx.line_to(-s * 0.45f, -s * 0.35f);
+            ctx.line_to(-s * 0.62f, -s * 0.55f);
+            ctx.close_path();
+            ctx.fill();
             break;
         }
         case PetalID::kPokerChip: {
@@ -6028,6 +6074,15 @@ void draw_static_petal_single(PetalID::T id, Renderer &ctx) {
             ctx.begin_path(); ctx.arc(0,0,s); ctx.fill(); ctx.stroke();
             ctx.set_fill(0xffffffff);
             ctx.begin_path(); ctx.arc(0,0,s*0.45f); ctx.fill();
+            ctx.set_stroke(0xffffffff);
+            ctx.set_line_width(1.6f);
+            for (int i = 0; i < 8; ++i) {
+                float a = i * 0.7854f;
+                ctx.begin_path();
+                ctx.move_to(cosf(a) * s * 0.72f, sinf(a) * s * 0.72f);
+                ctx.line_to(cosf(a) * s * 0.92f, sinf(a) * s * 0.92f);
+                ctx.stroke();
+            }
             break;
         }
         case PetalID::kBean: {
@@ -6036,8 +6091,16 @@ void draw_static_petal_single(PetalID::T id, Renderer &ctx) {
             ctx.set_stroke(0xff8a6830);
             ctx.set_line_width(2.2f);
             ctx.begin_path();
-            ctx.ellipse(0, 0, s * 1.05f, s * 0.85f);
+            ctx.move_to(-s * 0.9f, 0);
+            ctx.qcurve_to(-s * 0.2f, -s * 0.95f, s * 0.55f, -s * 0.55f);
+            ctx.qcurve_to(s * 1.05f, 0, s * 0.55f, s * 0.55f);
+            ctx.qcurve_to(-s * 0.2f, s * 0.95f, -s * 0.9f, 0);
             ctx.fill(); ctx.stroke();
+            ctx.set_stroke(0xffa88850);
+            ctx.begin_path();
+            ctx.move_to(-s * 0.35f, -s * 0.15f);
+            ctx.qcurve_to(0, 0, s * 0.35f, s * 0.1f);
+            ctx.stroke();
             break;
         }
         case PetalID::kClay: {
@@ -6046,8 +6109,19 @@ void draw_static_petal_single(PetalID::T id, Renderer &ctx) {
             ctx.set_stroke(0xff8a4a28);
             ctx.set_line_width(2.2f);
             ctx.begin_path();
-            ctx.ellipse(0, 0, s * 1.05f, s * 0.85f);
+            ctx.move_to(-s, -s * 0.2f);
+            ctx.line_to(s * 0.2f, -s * 0.85f);
+            ctx.line_to(s, s * 0.15f);
+            ctx.line_to(-s * 0.15f, s * 0.85f);
+            ctx.close_path();
             ctx.fill(); ctx.stroke();
+            ctx.set_fill(0x66ffffff);
+            ctx.begin_path();
+            ctx.move_to(-s * 0.35f, -s * 0.15f);
+            ctx.line_to(s * 0.05f, -s * 0.45f);
+            ctx.line_to(s * 0.15f, -s * 0.15f);
+            ctx.close_path();
+            ctx.fill();
             break;
         }
         case PetalID::kTomato: {
@@ -6056,11 +6130,21 @@ void draw_static_petal_single(PetalID::T id, Renderer &ctx) {
             ctx.set_stroke(0xffa01818);
             ctx.set_line_width(2.2f);
             ctx.begin_path();
-            ctx.arc(0, 0, s * 0.95f);
+            ctx.arc(0, s * 0.08f, s * 0.9f);
+            ctx.fill(); ctx.stroke();
+            ctx.set_fill(0xff3a9028);
+            ctx.set_stroke(0xff286018);
+            ctx.begin_path();
+            ctx.move_to(0, -s * 0.55f);
+            ctx.line_to(-s * 0.35f, -s * 0.95f);
+            ctx.line_to(-s * 0.1f, -s * 0.65f);
+            ctx.line_to(s * 0.15f, -s * 1.0f);
+            ctx.line_to(s * 0.3f, -s * 0.6f);
+            ctx.close_path();
             ctx.fill(); ctx.stroke();
             ctx.set_fill(0x66ffffff);
             ctx.begin_path();
-            ctx.arc(-s * 0.25f, -s * 0.25f, s * 0.28f);
+            ctx.arc(-s * 0.28f, -s * 0.05f, s * 0.22f);
             ctx.fill();
             break;
         }
@@ -6068,21 +6152,42 @@ void draw_static_petal_single(PetalID::T id, Renderer &ctx) {
             float s = fmaxf(8.f, r);
             ctx.set_fill(0xffd8d0b8);
             ctx.set_stroke(0xffa09878);
-            ctx.set_line_width(2.2f);
+            ctx.set_line_width(2.0f);
+            float ox[4] = {-0.45f, 0.35f, -0.1f, 0.55f};
+            float oy[4] = {-0.25f, -0.35f, 0.35f, 0.2f};
+            float orr[4] = {0.42f, 0.36f, 0.38f, 0.3f};
+            for (int i = 0; i < 4; ++i) {
+                ctx.begin_path();
+                ctx.arc(ox[i] * s, oy[i] * s, orr[i] * s);
+                ctx.fill(); ctx.stroke();
+            }
+            ctx.set_stroke(0xffb8b098);
             ctx.begin_path();
-            ctx.ellipse(0, 0, s * 1.05f, s * 0.85f);
-            ctx.fill(); ctx.stroke();
-            ctx.begin_path(); ctx.arc(-s*0.35f, 0, s*0.45f); ctx.fill();
-            ctx.begin_path(); ctx.arc(s*0.35f, 0, s*0.4f); ctx.fill();
+            ctx.move_to(-s * 0.7f, s * 0.55f);
+            ctx.qcurve_to(0, s * 0.85f, s * 0.75f, s * 0.4f);
+            ctx.stroke();
             break;
         }
         case PetalID::kBroccoli: {
             float s = fmaxf(8.f, r);
+            ctx.set_fill(0xff6a4820);
+            ctx.set_stroke(0xff403018);
+            ctx.set_line_width(2.2f);
+            ctx.begin_path();
+            ctx.move_to(-s * 0.15f, s * 0.2f);
+            ctx.line_to(s * 0.15f, s * 0.2f);
+            ctx.line_to(s * 0.12f, s);
+            ctx.line_to(-s * 0.12f, s);
+            ctx.close_path();
+            ctx.fill(); ctx.stroke();
             ctx.set_fill(0xff3a9a40);
             ctx.set_stroke(0xff206028);
-            ctx.set_line_width(2.2f);
-            ctx.begin_path(); ctx.round_rect(-s*0.2f,0,s*0.4f,s,1.5f); ctx.fill();
-            ctx.begin_path(); ctx.arc(0,-s*0.2f,s*0.7f); ctx.fill(); ctx.stroke();
+            for (int i = 0; i < 5; ++i) {
+                float a = -1.2f + i * 0.6f;
+                ctx.begin_path();
+                ctx.arc(cosf(a) * s * 0.35f, -s * 0.25f + sinf(a) * s * 0.15f, s * 0.38f);
+                ctx.fill(); ctx.stroke();
+            }
             break;
         }
         case PetalID::kOrange: {
@@ -6093,9 +6198,21 @@ void draw_static_petal_single(PetalID::T id, Renderer &ctx) {
             ctx.begin_path();
             ctx.arc(0, 0, s * 0.95f);
             ctx.fill(); ctx.stroke();
-            ctx.set_fill(0x66ffffff);
+            ctx.set_stroke(0xffe07018);
+            ctx.set_line_width(1.5f);
+            for (int i = 0; i < 6; ++i) {
+                float a = i * 1.0472f;
+                ctx.begin_path();
+                ctx.move_to(0, 0);
+                ctx.line_to(cosf(a) * s * 0.85f, sinf(a) * s * 0.85f);
+                ctx.stroke();
+            }
+            ctx.set_fill(0xff3a9020);
             ctx.begin_path();
-            ctx.arc(-s * 0.25f, -s * 0.25f, s * 0.28f);
+            ctx.move_to(0, -s * 0.85f);
+            ctx.line_to(-s * 0.18f, -s * 1.05f);
+            ctx.line_to(s * 0.18f, -s * 1.05f);
+            ctx.close_path();
             ctx.fill();
             break;
         }
@@ -6107,6 +6224,15 @@ void draw_static_petal_single(PetalID::T id, Renderer &ctx) {
             ctx.begin_path();
             ctx.round_rect(-s*1.1f, -s*0.45f, s*2.2f, s*0.9f, 2.f);
             ctx.fill(); ctx.stroke();
+            ctx.begin_path();
+            ctx.move_to(-s * 0.9f, -s * 0.15f);
+            ctx.line_to(s * 0.9f, -s * 0.15f);
+            ctx.move_to(-s * 0.9f, s * 0.15f);
+            ctx.line_to(s * 0.9f, s * 0.15f);
+            ctx.stroke();
+            ctx.set_fill(0xff6a5030);
+            ctx.begin_path(); ctx.arc(-s * 0.7f, 0, s * 0.08f); ctx.fill();
+            ctx.begin_path(); ctx.arc(s * 0.7f, 0, s * 0.08f); ctx.fill();
             break;
         }
         case PetalID::kBur: {
@@ -6129,18 +6255,36 @@ void draw_static_petal_single(PetalID::T id, Renderer &ctx) {
             ctx.set_stroke(0xff403018);
             ctx.set_line_width(2.2f);
             ctx.begin_path();
-            ctx.ellipse(0, 0, s * 1.05f, s * 0.85f);
+            ctx.move_to(-s, s * 0.2f);
+            ctx.qcurve_to(-s * 0.4f, -s * 0.85f, s * 0.2f, -s * 0.55f);
+            ctx.qcurve_to(s, -s * 0.2f, s * 0.85f, s * 0.35f);
+            ctx.qcurve_to(0, s * 0.95f, -s, s * 0.2f);
             ctx.fill(); ctx.stroke();
+            ctx.set_fill(0xff8a6838);
+            ctx.begin_path(); ctx.arc(-s * 0.25f, 0, s * 0.18f); ctx.fill();
+            ctx.begin_path(); ctx.arc(s * 0.3f, s * 0.15f, s * 0.14f); ctx.fill();
             break;
         }
         case PetalID::kAir: {
             float s = fmaxf(8.f, r);
-            ctx.set_fill(0x66c8e8ff);
             ctx.set_stroke(0xff88b0d0);
-            ctx.set_line_width(2.2f);
-            ctx.begin_path(); ctx.arc(0,0,s); ctx.fill(); ctx.stroke();
-            ctx.set_fill(0xffffffff);
-            ctx.begin_path(); ctx.arc(0,0,s*0.45f); ctx.fill();
+            ctx.set_line_width(2.4f);
+            ctx.round_line_cap();
+            ctx.begin_path();
+            ctx.move_to(-s * 0.85f, -s * 0.35f);
+            ctx.qcurve_to(-s * 0.2f, -s * 0.85f, s * 0.4f, -s * 0.4f);
+            ctx.qcurve_to(s * 0.95f, 0, s * 0.35f, s * 0.45f);
+            ctx.qcurve_to(-s * 0.15f, s * 0.9f, -s * 0.75f, s * 0.25f);
+            ctx.stroke();
+            ctx.set_fill(0x55c8e8ff);
+            ctx.begin_path();
+            ctx.move_to(-s * 0.55f, -s * 0.15f);
+            ctx.qcurve_to(0, -s * 0.55f, s * 0.45f, -s * 0.1f);
+            ctx.qcurve_to(s * 0.15f, s * 0.45f, -s * 0.45f, s * 0.25f);
+            ctx.close_path();
+            ctx.fill();
+            ctx.set_fill(0xaaffffff);
+            ctx.begin_path(); ctx.arc(s * 0.15f, -s * 0.25f, s * 0.18f); ctx.fill();
             break;
         }
         case PetalID::kBasil: {
@@ -6159,11 +6303,19 @@ void draw_static_petal_single(PetalID::T id, Renderer &ctx) {
             ctx.set_fill(0xfff0f0f8);
             ctx.set_stroke(0xffc0c0d0);
             ctx.set_line_width(2.2f);
+            float ox[5] = {0, -0.5f, 0.48f, -0.25f, 0.28f};
+            float oy[5] = {0.05f, 0.1f, 0.08f, -0.4f, -0.38f};
+            float orr[5] = {0.55f, 0.42f, 0.4f, 0.36f, 0.34f};
+            for (int i = 0; i < 5; ++i) {
+                ctx.begin_path();
+                ctx.arc(ox[i] * s, oy[i] * s, orr[i] * s);
+                ctx.fill(); ctx.stroke();
+            }
+            ctx.set_stroke(0xffa0a0b0);
             ctx.begin_path();
-            ctx.ellipse(0, 0, s * 1.05f, s * 0.85f);
-            ctx.fill(); ctx.stroke();
-            ctx.begin_path(); ctx.arc(-s*0.35f, 0, s*0.45f); ctx.fill();
-            ctx.begin_path(); ctx.arc(s*0.35f, 0, s*0.4f); ctx.fill();
+            ctx.move_to(0, s * 0.55f);
+            ctx.line_to(0, s * 0.95f);
+            ctx.stroke();
             break;
         }
         case PetalID::kRubber: {
@@ -6172,8 +6324,16 @@ void draw_static_petal_single(PetalID::T id, Renderer &ctx) {
             ctx.set_stroke(0xff202028);
             ctx.set_line_width(2.2f);
             ctx.begin_path(); ctx.arc(0,0,s); ctx.fill(); ctx.stroke();
-            ctx.set_fill(0xffffffff);
-            ctx.begin_path(); ctx.arc(0,0,s*0.45f); ctx.fill();
+            ctx.set_stroke(0xff707080);
+            ctx.set_line_width(1.8f);
+            ctx.begin_path();
+            ctx.move_to(-s * 0.55f, -s * 0.2f);
+            ctx.qcurve_to(0, -s * 0.55f, s * 0.55f, -s * 0.15f);
+            ctx.move_to(-s * 0.5f, s * 0.25f);
+            ctx.qcurve_to(0, s * 0.55f, s * 0.5f, s * 0.2f);
+            ctx.stroke();
+            ctx.set_fill(0x88ffffff);
+            ctx.begin_path(); ctx.arc(-s * 0.25f, -s * 0.3f, s * 0.2f); ctx.fill();
             break;
         }
         case PetalID::kGrapes: {
@@ -6181,12 +6341,19 @@ void draw_static_petal_single(PetalID::T id, Renderer &ctx) {
             ctx.set_fill(0xff7040a0);
             ctx.set_stroke(0xff482070);
             ctx.set_line_width(2.2f);
-            for (int i = 0; i < 3; ++i) {
-                float a = i * 2.094395f;
+            for (int i = 0; i < 5; ++i) {
+                float a = i * 1.2566f - 0.4f;
+                float rr = (i < 3) ? 0.4f : 0.32f;
                 ctx.begin_path();
-                ctx.arc(cosf(a)*s*0.35f, sinf(a)*s*0.35f, s*0.42f);
+                ctx.arc(cosf(a) * s * 0.38f, sinf(a) * s * 0.38f + s * 0.1f, s * rr);
                 ctx.fill(); ctx.stroke();
             }
+            ctx.set_stroke(0xff3a9030);
+            ctx.set_line_width(2.f);
+            ctx.begin_path();
+            ctx.move_to(0, -s * 0.55f);
+            ctx.line_to(0, -s * 0.95f);
+            ctx.stroke();
             break;
         }
         case PetalID::kDeadLeaf: {
@@ -6220,8 +6387,20 @@ void draw_static_petal_single(PetalID::T id, Renderer &ctx) {
             ctx.set_stroke(0xff8a6838);
             ctx.set_line_width(2.2f);
             ctx.begin_path(); ctx.round_rect(-s*0.45f,-s,s*0.9f,s*2.f,2.f); ctx.fill(); ctx.stroke();
-            ctx.set_fill(0x66ffffff);
-            ctx.begin_path(); ctx.arc(0,-s*0.35f,s*0.22f); ctx.fill();
+            ctx.begin_path();
+            ctx.move_to(-s * 0.3f, -s * 0.35f);
+            ctx.line_to(s * 0.3f, -s * 0.35f);
+            ctx.move_to(-s * 0.3f, s * 0.15f);
+            ctx.line_to(s * 0.3f, s * 0.15f);
+            ctx.stroke();
+            ctx.set_fill(0xff403020);
+            ctx.begin_path(); ctx.arc(0, -s * 0.55f, s * 0.14f); ctx.fill();
+            ctx.begin_path();
+            ctx.move_to(-s * 0.18f, s * 0.45f);
+            ctx.line_to(0, s * 0.7f);
+            ctx.line_to(s * 0.18f, s * 0.45f);
+            ctx.close_path();
+            ctx.fill();
             break;
         }
         case PetalID::kRoot: {
@@ -6235,11 +6414,22 @@ void draw_static_petal_single(PetalID::T id, Renderer &ctx) {
         }
         case PetalID::kLaser: {
             float s = fmaxf(8.f, r);
+            ctx.set_fill(0xff606070);
+            ctx.set_stroke(0xff303038);
+            ctx.set_line_width(2.2f);
+            ctx.begin_path();
+            ctx.round_rect(-s * 0.35f, -s * 0.35f, s * 0.7f, s * 1.25f, 2.f);
+            ctx.fill(); ctx.stroke();
             ctx.set_fill(0xffff4040);
             ctx.set_stroke(0xffaa2020);
-            ctx.set_line_width(2.2f);
-            ctx.begin_path(); ctx.round_rect(-s*0.25f,-s,s*0.5f,s*2.f,1.5f); ctx.fill(); ctx.stroke();
-            ctx.set_fill(0xffffffff); ctx.begin_path(); ctx.arc(0,-s*0.7f,s*0.18f); ctx.fill();
+            ctx.begin_path();
+            ctx.move_to(-s * 0.18f, -s * 0.35f);
+            ctx.line_to(0, -s * 1.05f);
+            ctx.line_to(s * 0.18f, -s * 0.35f);
+            ctx.close_path();
+            ctx.fill(); ctx.stroke();
+            ctx.set_fill(0xffffffff);
+            ctx.begin_path(); ctx.arc(0, s * 0.15f, s * 0.14f); ctx.fill();
             break;
         }
         case PetalID::kElectricWeb: {
@@ -6260,8 +6450,19 @@ void draw_static_petal_single(PetalID::T id, Renderer &ctx) {
             ctx.set_stroke(0xffcc9830);
             ctx.set_line_width(2.2f);
             ctx.begin_path();
-            ctx.ellipse(0, 0, s * 1.05f, s * 0.85f);
+            ctx.move_to(-s * 0.9f, -s * 0.2f);
+            ctx.qcurve_to(-s * 0.3f, -s * 0.95f, s * 0.4f, -s * 0.55f);
+            ctx.qcurve_to(s * 1.0f, 0, s * 0.7f, s * 0.55f);
+            ctx.qcurve_to(0, s * 0.95f, -s * 0.85f, s * 0.35f);
+            ctx.close_path();
             ctx.fill(); ctx.stroke();
+            ctx.set_fill(0xffe8b848);
+            for (int i = 0; i < 5; ++i) {
+                float a = i * 1.2566f;
+                ctx.begin_path();
+                ctx.arc(cosf(a) * s * 0.35f, sinf(a) * s * 0.28f, s * 0.12f);
+                ctx.fill();
+            }
             break;
         }
         case PetalID::kFang: {
@@ -6290,11 +6491,23 @@ void draw_static_petal_single(PetalID::T id, Renderer &ctx) {
             ctx.set_stroke(0xffd0b040);
             ctx.set_line_width(2.2f);
             ctx.begin_path();
-            ctx.arc(0, 0, s * 0.95f);
+            ctx.arc(0, -s * 0.15f, s * 0.75f);
             ctx.fill(); ctx.stroke();
-            ctx.set_fill(0x66ffffff);
+            ctx.set_fill(0xffc0c0c8);
+            ctx.set_stroke(0xff808088);
             ctx.begin_path();
-            ctx.arc(-s * 0.25f, -s * 0.25f, s * 0.28f);
+            ctx.round_rect(-s * 0.28f, s * 0.4f, s * 0.56f, s * 0.45f, 1.5f);
+            ctx.fill(); ctx.stroke();
+            ctx.set_stroke(0xffe0c860);
+            ctx.begin_path();
+            ctx.move_to(-s * 0.15f, 0);
+            ctx.line_to(0, s * 0.25f);
+            ctx.line_to(s * 0.12f, -s * 0.05f);
+            ctx.line_to(s * 0.05f, s * 0.35f);
+            ctx.stroke();
+            ctx.set_fill(0x88ffffff);
+            ctx.begin_path();
+            ctx.arc(-s * 0.25f, -s * 0.35f, s * 0.2f);
             ctx.fill();
             break;
         }
@@ -6461,12 +6674,17 @@ void draw_static_petal_single(PetalID::T id, Renderer &ctx) {
             ctx.set_fill(0xff4060c0);
             ctx.set_stroke(0xff203888);
             ctx.set_line_width(2.2f);
-            for (int i = 0; i < 3; ++i) {
-                float a = i * 2.094395f;
+            for (int i = 0; i < 4; ++i) {
+                float a = i * 1.5708f + 0.4f;
                 ctx.begin_path();
-                ctx.arc(cosf(a)*s*0.35f, sinf(a)*s*0.35f, s*0.42f);
+                ctx.arc(cosf(a) * s * 0.32f, sinf(a) * s * 0.32f + s * 0.08f, s * 0.38f);
                 ctx.fill(); ctx.stroke();
             }
+            ctx.set_stroke(0xff3a9028);
+            ctx.begin_path();
+            ctx.move_to(0, -s * 0.45f);
+            ctx.line_to(0, -s * 0.9f);
+            ctx.stroke();
             break;
         }
         case PetalID::kFragment: {
@@ -6494,165 +6712,493 @@ void draw_static_petal_single(PetalID::T id, Renderer &ctx) {
             break;
         }
         case PetalID::kManaOrb: {
+            // Crystal mana orb: outer ring, core, rune ticks, highlight.
             float s = fmaxf(8.f, r);
-            ctx.set_fill(0xff60c0ff);
-            ctx.set_stroke(0xff2080c0);
-            ctx.set_line_width(2.2f);
+            ctx.set_fill(0xaa3080d8);
+            ctx.set_stroke(0xff104878);
+            ctx.set_line_width(2.4f);
             ctx.begin_path();
-            ctx.arc(0, 0, s * 0.95f);
+            ctx.arc(0, 0, s * 0.98f);
             ctx.fill(); ctx.stroke();
-            ctx.set_fill(0x66ffffff);
+            ctx.set_fill(0xff70d8ff);
             ctx.begin_path();
-            ctx.arc(-s * 0.25f, -s * 0.25f, s * 0.28f);
+            ctx.arc(0, 0, s * 0.58f);
+            ctx.fill();
+            ctx.set_stroke(0xffc0f0ff);
+            ctx.set_line_width(1.6f);
+            ctx.begin_path();
+            ctx.arc(0, 0, s * 0.72f);
+            ctx.stroke();
+            ctx.round_line_cap();
+            for (int i = 0; i < 4; ++i) {
+                float a = i * 1.5707963f + 0.4f;
+                ctx.begin_path();
+                ctx.move_to(cosf(a) * s * 0.78f, sinf(a) * s * 0.78f);
+                ctx.line_to(cosf(a) * s * 0.92f, sinf(a) * s * 0.92f);
+                ctx.stroke();
+            }
+            ctx.set_fill(0xaaffffff);
+            ctx.begin_path();
+            ctx.arc(-s * 0.28f, -s * 0.32f, s * 0.22f);
             ctx.fill();
             break;
         }
         case PetalID::kMagicLeaf: {
-            float s = fmaxf(8.f, r);
-            ctx.set_fill(0xff50d080);
-            ctx.set_stroke(0xff208050);
-            ctx.set_line_width(2.2f);
+            // Leaf silhouette + veins + mana tip glow (vs plain Leaf green).
+            float s = fmaxf(8.f, r) * 0.85f;
+            ctx.set_fill(0xff48e898);
+            ctx.set_stroke(0xff189060);
+            ctx.set_line_width(2.6f);
+            ctx.round_line_cap();
+            ctx.round_line_join();
             ctx.begin_path();
-            ctx.move_to(0,-s); ctx.qcurve_to(s*0.9f,0,0,s); ctx.qcurve_to(-s*0.9f,0,0,-s);
+            ctx.move_to(-s * 1.4f, 0);
+            ctx.line_to(-s, 0);
+            ctx.bcurve_to(-s * 0.55f, -s * 0.95f, s * 0.35f, -s * 0.95f, s * 1.15f, 0);
+            ctx.bcurve_to(s * 0.35f, s * 0.95f, -s * 0.55f, s * 0.95f, -s, 0);
             ctx.fill(); ctx.stroke();
-            ctx.begin_path(); ctx.move_to(0,-s*0.7f); ctx.line_to(0,s*0.7f); ctx.stroke();
+            ctx.set_stroke(0xff90ffe0);
+            ctx.set_line_width(1.8f);
+            ctx.begin_path();
+            ctx.move_to(-s * 0.55f, 0);
+            ctx.qcurve_to(0, -s * 0.12f, s * 0.7f, 0);
+            ctx.stroke();
+            ctx.begin_path();
+            ctx.move_to(-s * 0.15f, -s * 0.05f);
+            ctx.qcurve_to(s * 0.15f, -s * 0.45f, s * 0.45f, -s * 0.35f);
+            ctx.move_to(-s * 0.15f, s * 0.05f);
+            ctx.qcurve_to(s * 0.15f, s * 0.45f, s * 0.45f, s * 0.35f);
+            ctx.stroke();
+            ctx.set_fill(0x88c0ffff);
+            ctx.begin_path();
+            ctx.arc(s * 0.95f, 0, s * 0.22f);
+            ctx.fill();
             break;
         }
         case PetalID::kMagicCactus: {
+            // Spiky cactus disc (like Cactus) + mana core ring.
             float s = fmaxf(8.f, r);
-            ctx.set_fill(0xff40c060);
-            ctx.set_stroke(0xff208038);
-            ctx.set_line_width(2.2f);
-            ctx.begin_path(); ctx.round_rect(-s*0.2f,0,s*0.4f,s,1.5f); ctx.fill();
-            ctx.begin_path(); ctx.arc(0,-s*0.2f,s*0.7f); ctx.fill(); ctx.stroke();
+            ctx.set_fill(0xff38d878);
+            ctx.set_stroke(0xff189048);
+            ctx.set_line_width(2.4f);
+            ctx.round_line_cap();
+            ctx.round_line_join();
+            ctx.begin_path();
+            ctx.move_to(s, 0);
+            for (uint32_t i = 0; i < 8; ++i) {
+                float base = (float)M_PI * 2.f * (float)i / 8.f;
+                ctx.qcurve_to(
+                    s * 0.72f * cosf(base + (float)M_PI / 8.f),
+                    s * 0.72f * sinf(base + (float)M_PI / 8.f),
+                    s * cosf(base + 2.f * (float)M_PI / 8.f),
+                    s * sinf(base + 2.f * (float)M_PI / 8.f));
+            }
+            ctx.fill(); ctx.stroke();
+            ctx.set_fill(0xff70f0b0);
+            ctx.begin_path();
+            ctx.arc(0, 0, s * 0.42f);
+            ctx.fill();
+            ctx.set_stroke(0xffa0ffff);
+            ctx.set_line_width(1.8f);
+            ctx.begin_path();
+            ctx.arc(0, 0, s * 0.55f);
+            ctx.stroke();
             break;
         }
         case PetalID::kMagicCotton: {
+            // Layered cotton tufts + cool mana tint (vs plain Cotton).
             float s = fmaxf(8.f, r);
-            ctx.set_fill(0xffe0e8ff);
-            ctx.set_stroke(0xff90a0d0);
+            ctx.set_fill(0xffe8f0ff);
+            ctx.set_stroke(0xff90a8e0);
             ctx.set_line_width(2.2f);
+            float ox[5] = {0, -0.55f, 0.52f, -0.28f, 0.3f};
+            float oy[5] = {0, 0.08f, 0.05f, -0.42f, -0.38f};
+            float orr[5] = {0.62f, 0.48f, 0.46f, 0.4f, 0.38f};
+            for (int i = 0; i < 5; ++i) {
+                ctx.begin_path();
+                ctx.arc(ox[i] * s, oy[i] * s, orr[i] * s);
+                ctx.fill(); ctx.stroke();
+            }
+            ctx.set_stroke(0xff70a0e0);
             ctx.begin_path();
-            ctx.ellipse(0, 0, s * 1.05f, s * 0.85f);
-            ctx.fill(); ctx.stroke();
-            ctx.begin_path(); ctx.arc(-s*0.35f, 0, s*0.45f); ctx.fill();
-            ctx.begin_path(); ctx.arc(s*0.35f, 0, s*0.4f); ctx.fill();
+            ctx.move_to(0, s * 0.5f);
+            ctx.line_to(0, s * 0.95f);
+            ctx.stroke();
+            ctx.set_fill(0x66a0d8ff);
+            ctx.begin_path();
+            ctx.arc(0, -s * 0.05f, s * 0.22f);
+            ctx.fill();
             break;
         }
         case PetalID::kMagicEye: {
+            // Third-eye style lid + iris + spark (mana lightning look).
             float s = fmaxf(8.f, r);
-            ctx.set_fill(0xffe0f0ff);
-            ctx.set_stroke(0xff6080c0);
-            ctx.set_line_width(2.2f);
-            ctx.begin_path(); ctx.ellipse(0,0,s,s*0.55f); ctx.fill(); ctx.stroke();
-            ctx.set_fill(0xff101018); ctx.begin_path(); ctx.arc(0,0,s*0.28f); ctx.fill();
+            ctx.set_fill(0xffd8ecff);
+            ctx.set_stroke(0xff4870b8);
+            ctx.set_line_width(2.4f);
+            ctx.round_line_join();
+            ctx.begin_path();
+            ctx.move_to(0, -s * 0.95f);
+            ctx.qcurve_to(s * 1.05f, 0, 0, s * 0.95f);
+            ctx.qcurve_to(-s * 1.05f, 0, 0, -s * 0.95f);
+            ctx.fill(); ctx.stroke();
+            ctx.set_fill(0xff68a0ff);
+            ctx.begin_path();
+            ctx.arc(0, 0, s * 0.42f);
+            ctx.fill();
+            ctx.set_fill(0xff101828);
+            ctx.begin_path();
+            ctx.arc(0, 0, s * 0.2f);
+            ctx.fill();
+            ctx.set_fill(0xffffffff);
+            ctx.begin_path();
+            ctx.arc(s * 0.12f, -s * 0.14f, s * 0.1f);
+            ctx.fill();
+            ctx.set_stroke(0xffa0e8ff);
+            ctx.set_line_width(1.6f);
+            ctx.begin_path();
+            ctx.move_to(s * 0.55f, -s * 0.55f);
+            ctx.line_to(s * 0.85f, -s * 0.85f);
+            ctx.move_to(-s * 0.5f, s * 0.45f);
+            ctx.line_to(-s * 0.78f, s * 0.72f);
+            ctx.stroke();
             break;
         }
         case PetalID::kMagicStinger: {
+            // Purple fragile stinger: tip + mid band + mana notch (≠ Missile).
             float s = fmaxf(8.f, r);
-            ctx.set_fill(0xff8060c0);
-            ctx.set_stroke(0xff503888);
-            ctx.set_line_width(2.2f);
-            ctx.round_line_join(); ctx.begin_path();
-            ctx.move_to(s,0); ctx.line_to(-s*0.55f,s*0.75f); ctx.line_to(-s*0.55f,-s*0.75f);
-            ctx.close_path(); ctx.fill(); ctx.stroke();
+            ctx.set_fill(0xff9060e0);
+            ctx.set_stroke(0xff5030a0);
+            ctx.set_line_width(2.4f);
+            ctx.round_line_cap();
+            ctx.round_line_join();
+            ctx.begin_path();
+            ctx.move_to(s * 1.15f, 0);
+            ctx.line_to(-s * 0.35f, s * 0.72f);
+            ctx.line_to(-s * 0.55f, 0);
+            ctx.line_to(-s * 0.35f, -s * 0.72f);
+            ctx.close_path();
+            ctx.fill(); ctx.stroke();
+            ctx.set_fill(0xffc8a0ff);
+            ctx.begin_path();
+            ctx.move_to(s * 0.35f, 0);
+            ctx.line_to(-s * 0.15f, s * 0.35f);
+            ctx.line_to(-s * 0.25f, 0);
+            ctx.line_to(-s * 0.15f, -s * 0.35f);
+            ctx.close_path();
+            ctx.fill();
+            ctx.set_stroke(0xffe0c8ff);
+            ctx.set_line_width(1.6f);
+            ctx.begin_path();
+            ctx.move_to(-s * 0.55f, -s * 0.25f);
+            ctx.line_to(-s * 0.9f, 0);
+            ctx.line_to(-s * 0.55f, s * 0.25f);
+            ctx.stroke();
             break;
         }
         case PetalID::kMagicMissile: {
+            // Projectile body + fins + cyan exhaust (distinct from Stinger).
             float s = fmaxf(8.f, r);
-            ctx.set_fill(0xff80a0ff);
-            ctx.set_stroke(0xff4060c0);
-            ctx.set_line_width(2.2f);
-            ctx.round_line_join(); ctx.begin_path();
-            ctx.move_to(s,0); ctx.line_to(-s*0.55f,s*0.75f); ctx.line_to(-s*0.55f,-s*0.75f);
-            ctx.close_path(); ctx.fill(); ctx.stroke();
+            ctx.set_fill(0xff6088ff);
+            ctx.set_stroke(0xff2848c0);
+            ctx.set_line_width(2.4f);
+            ctx.round_line_cap();
+            ctx.round_line_join();
+            ctx.begin_path();
+            ctx.move_to(s * 1.1f, 0);
+            ctx.line_to(-s * 0.15f, -s * 0.45f);
+            ctx.line_to(-s * 0.15f, s * 0.45f);
+            ctx.close_path();
+            ctx.fill(); ctx.stroke();
+            ctx.set_fill(0xff4060d0);
+            ctx.begin_path();
+            ctx.move_to(-s * 0.05f, -s * 0.42f);
+            ctx.line_to(-s * 0.75f, -s * 0.75f);
+            ctx.line_to(-s * 0.35f, -s * 0.1f);
+            ctx.close_path();
+            ctx.fill(); ctx.stroke();
+            ctx.begin_path();
+            ctx.move_to(-s * 0.05f, s * 0.42f);
+            ctx.line_to(-s * 0.75f, s * 0.75f);
+            ctx.line_to(-s * 0.35f, s * 0.1f);
+            ctx.close_path();
+            ctx.fill(); ctx.stroke();
+            ctx.set_fill(0xff80ffff);
+            ctx.begin_path();
+            ctx.move_to(-s * 0.2f, -s * 0.22f);
+            ctx.line_to(-s * 1.05f, 0);
+            ctx.line_to(-s * 0.2f, s * 0.22f);
+            ctx.close_path();
+            ctx.fill();
             break;
         }
         case PetalID::kMagicStick: {
+            // Forked stick (like Stick) + purple mana core at tip.
+            float s = fmaxf(8.f, r);
+            ctx.round_line_cap();
+            ctx.round_line_join();
+            ctx.set_stroke(0xff6a4820);
+            ctx.set_line_width(s * 0.42f);
+            ctx.begin_path();
+            ctx.move_to(0, s * 0.95f);
+            ctx.line_to(0, -s * 0.15f);
+            ctx.line_to(s * 0.45f, -s * 0.85f);
+            ctx.move_to(0, -s * 0.15f);
+            ctx.line_to(-s * 0.55f, -s * 0.95f);
+            ctx.stroke();
+            ctx.set_stroke(0xffa87838);
+            ctx.set_line_width(s * 0.22f);
+            ctx.begin_path();
+            ctx.move_to(0, s * 0.9f);
+            ctx.line_to(0, -s * 0.12f);
+            ctx.line_to(s * 0.4f, -s * 0.78f);
+            ctx.move_to(0, -s * 0.12f);
+            ctx.line_to(-s * 0.5f, -s * 0.88f);
+            ctx.stroke();
+            ctx.set_fill(0xff9060ff);
+            ctx.set_stroke(0xffc8a0ff);
+            ctx.set_line_width(1.6f);
+            ctx.begin_path();
+            ctx.arc(-s * 0.52f, -s * 0.92f, s * 0.28f);
+            ctx.fill(); ctx.stroke();
+            ctx.set_fill(0xaaffffff);
+            ctx.begin_path();
+            ctx.arc(-s * 0.6f, -s * 1.02f, s * 0.1f);
+            ctx.fill();
+            break;
+        }
+        case PetalID::kMagicBubble: {
+            // Bubble membrane + twin highlights + violet mana tint.
+            float s = fmaxf(8.f, r);
+            ctx.begin_path();
+            ctx.arc(0, 0, s);
+            ctx.set_stroke(0xb2c0a0ff);
+            ctx.set_line_width(2.8f);
+            ctx.stroke();
+            ctx.begin_path();
+            ctx.arc(0, 0, s - 1.8f);
+            ctx.set_fill(0x5590b0ff);
+            ctx.fill();
+            ctx.begin_path();
+            ctx.arc(s * 0.32f, -s * 0.35f, s * 0.28f);
+            ctx.set_fill(0x66ffffff);
+            ctx.fill();
+            ctx.begin_path();
+            ctx.arc(-s * 0.25f, s * 0.2f, s * 0.16f);
+            ctx.set_fill(0x44e0c0ff);
+            ctx.fill();
+            ctx.set_stroke(0x88ffffff);
+            ctx.set_line_width(1.5f);
+            ctx.begin_path();
+            ctx.partial_arc(0, 0, s * 0.75f, -2.2f, -0.6f, 0);
+            ctx.stroke();
+            break;
+        }
+        case PetalID::kTalisman: {
+            // Coin medallion + cord loop + engraved mark.
+            float s = fmaxf(8.f, r);
+            ctx.set_stroke(0xff887038);
+            ctx.set_line_width(2.2f);
+            ctx.round_line_cap();
+            ctx.begin_path();
+            ctx.move_to(0, s * 0.15f);
+            ctx.line_to(0, s * 1.05f);
+            ctx.stroke();
+            ctx.begin_path();
+            ctx.arc(0, -s * 0.95f, s * 0.22f);
+            ctx.stroke();
+            ctx.set_fill(0xffe0b848);
+            ctx.set_stroke(0xff986828);
+            ctx.set_line_width(2.4f);
+            ctx.begin_path();
+            ctx.arc(0, -s * 0.1f, s * 0.72f);
+            ctx.fill(); ctx.stroke();
+            ctx.set_fill(0xfff8e090);
+            ctx.begin_path();
+            ctx.arc(0, -s * 0.1f, s * 0.48f);
+            ctx.fill();
+            ctx.set_stroke(0xff705018);
+            ctx.set_line_width(1.8f);
+            ctx.begin_path();
+            ctx.move_to(-s * 0.22f, -s * 0.28f);
+            ctx.line_to(0, s * 0.15f);
+            ctx.line_to(s * 0.22f, -s * 0.28f);
+            ctx.stroke();
+            break;
+        }
+        case PetalID::kNazar: {
+            // Evil-eye amulet: concentric rings + pupil.
+            float s = fmaxf(8.f, r);
+            ctx.set_fill(0xffe8e0d0);
+            ctx.set_stroke(0xff908878);
+            ctx.set_line_width(2.2f);
+            ctx.begin_path();
+            ctx.ellipse(0, 0, s * 1.05f, s * 0.72f);
+            ctx.fill(); ctx.stroke();
+            ctx.set_fill(0xff1e6ad0);
+            ctx.begin_path();
+            ctx.ellipse(0, 0, s * 0.78f, s * 0.52f);
+            ctx.fill();
+            ctx.set_fill(0xfff0f4ff);
+            ctx.begin_path();
+            ctx.arc(0, 0, s * 0.38f);
+            ctx.fill();
+            ctx.set_fill(0xff101828);
+            ctx.begin_path();
+            ctx.arc(0, 0, s * 0.18f);
+            ctx.fill();
+            ctx.set_fill(0xffffffff);
+            ctx.begin_path();
+            ctx.arc(s * 0.08f, -s * 0.1f, s * 0.07f);
+            ctx.fill();
+            break;
+        }
+        case PetalID::kCompass: {
+            // Dial + N/S needles + tick marks.
+            float s = fmaxf(8.f, r);
+            ctx.set_fill(0xfff0e8d0);
+            ctx.set_stroke(0xff706858);
+            ctx.set_line_width(2.4f);
+            ctx.begin_path();
+            ctx.arc(0, 0, s);
+            ctx.fill(); ctx.stroke();
+            ctx.set_stroke(0xff908878);
+            ctx.set_line_width(1.5f);
+            for (int i = 0; i < 8; ++i) {
+                float a = i * 0.785398f;
+                ctx.begin_path();
+                ctx.move_to(cosf(a) * s * 0.72f, sinf(a) * s * 0.72f);
+                ctx.line_to(cosf(a) * s * 0.9f, sinf(a) * s * 0.9f);
+                ctx.stroke();
+            }
+            ctx.set_fill(0xffcc2030);
+            ctx.begin_path();
+            ctx.move_to(0, -s * 0.7f);
+            ctx.line_to(s * 0.16f, 0.05f * s);
+            ctx.line_to(-s * 0.16f, 0.05f * s);
+            ctx.close_path();
+            ctx.fill();
+            ctx.set_fill(0xff405080);
+            ctx.begin_path();
+            ctx.move_to(0, s * 0.65f);
+            ctx.line_to(s * 0.14f, -0.02f * s);
+            ctx.line_to(-s * 0.14f, -0.02f * s);
+            ctx.close_path();
+            ctx.fill();
+            ctx.set_fill(0xff303028);
+            ctx.begin_path();
+            ctx.arc(0, 0, s * 0.1f);
+            ctx.fill();
+            break;
+        }
+        case PetalID::kMimic: {
+            // Chest body + lid seam + latch + corner studs.
+            float s = fmaxf(8.f, r);
+            ctx.set_fill(0xff7a9860);
+            ctx.set_stroke(0xff405030);
+            ctx.set_line_width(2.4f);
+            ctx.begin_path();
+            ctx.round_rect(-s * 0.9f, -s * 0.35f, s * 1.8f, s * 1.05f, 3.f);
+            ctx.fill(); ctx.stroke();
+            ctx.set_fill(0xff98b878);
+            ctx.begin_path();
+            ctx.round_rect(-s * 0.9f, -s * 0.85f, s * 1.8f, s * 0.55f, 3.f);
+            ctx.fill(); ctx.stroke();
+            ctx.begin_path();
+            ctx.move_to(-s * 0.9f, -s * 0.32f);
+            ctx.line_to(s * 0.9f, -s * 0.32f);
+            ctx.stroke();
+            ctx.set_fill(0xffd0b040);
+            ctx.begin_path();
+            ctx.round_rect(-s * 0.18f, -s * 0.48f, s * 0.36f, s * 0.32f, 1.5f);
+            ctx.fill(); ctx.stroke();
+            ctx.set_fill(0xffc8a858);
+            for (int i = 0; i < 4; ++i) {
+                float x = (i < 2 ? -1.f : 1.f) * s * 0.72f;
+                float y = (i % 2 == 0 ? -0.7f : 0.45f) * s;
+                ctx.begin_path();
+                ctx.arc(x, y, s * 0.1f);
+                ctx.fill();
+            }
+            break;
+        }
+        case PetalID::kPowder: {
+            // Pouch + spilling dust clouds.
             float s = fmaxf(8.f, r);
             ctx.set_fill(0xffc8a060);
             ctx.set_stroke(0xff806038);
             ctx.set_line_width(2.2f);
-            ctx.begin_path(); ctx.round_rect(-s*0.15f,-s,s*0.3f,s*2.f,1.5f); ctx.fill(); ctx.stroke();
-            ctx.begin_path(); ctx.arc(0,-s*0.7f,s*0.35f); ctx.fill();
-            break;
-        }
-        case PetalID::kMagicBubble: {
-            float s = fmaxf(8.f, r);
-            ctx.set_fill(0x88a0e0ff);
-            ctx.set_stroke(0xff5080c0);
-            ctx.set_line_width(2.2f);
-            ctx.begin_path(); ctx.arc(0,0,s); ctx.fill(); ctx.stroke();
-            ctx.set_fill(0xffffffff);
-            ctx.begin_path(); ctx.arc(0,0,s*0.45f); ctx.fill();
-            break;
-        }
-        case PetalID::kTalisman: {
-            float s = fmaxf(8.f, r);
-            ctx.set_fill(0xffd0b060);
-            ctx.set_stroke(0xff887038);
-            ctx.set_line_width(2.2f);
-            ctx.begin_path(); ctx.arc(0,-s*0.15f,s*0.7f); ctx.fill(); ctx.stroke();
-            ctx.begin_path(); ctx.move_to(0,s*0.4f); ctx.line_to(0,s); ctx.stroke();
-            break;
-        }
-        case PetalID::kNazar: {
-            float s = fmaxf(8.f, r);
-            ctx.set_fill(0xff2060c0);
-            ctx.set_stroke(0xff103080);
-            ctx.set_line_width(2.2f);
-            ctx.begin_path(); ctx.ellipse(0,0,s,s*0.55f); ctx.fill(); ctx.stroke();
-            ctx.set_fill(0xff101018); ctx.begin_path(); ctx.arc(0,0,s*0.28f); ctx.fill();
-            break;
-        }
-        case PetalID::kCompass: {
-            float s = fmaxf(8.f, r);
-            ctx.set_fill(0xffe8e0d0);
-            ctx.set_stroke(0xff808070);
-            ctx.set_line_width(2.2f);
-            ctx.begin_path(); ctx.arc(0,0,s); ctx.fill(); ctx.stroke();
-            ctx.set_fill(0xffcc2030); ctx.begin_path();
-            ctx.move_to(0,-s*0.7f); ctx.line_to(s*0.18f,0); ctx.line_to(-s*0.18f,0); ctx.fill();
-            break;
-        }
-        case PetalID::kMimic: {
-            float s = fmaxf(8.f, r);
-            ctx.set_fill(0xff90b090);
-            ctx.set_stroke(0xff507050);
-            ctx.set_line_width(2.2f);
-            ctx.begin_path(); ctx.round_rect(-s*0.8f,-s*0.55f,s*1.6f,s*1.1f,3.f); ctx.fill(); ctx.stroke();
-            ctx.begin_path(); ctx.move_to(-s*0.8f,0); ctx.line_to(s*0.8f,0); ctx.stroke();
-            break;
-        }
-        case PetalID::kPowder: {
-            float s = fmaxf(8.f, r);
+            ctx.begin_path();
+            ctx.move_to(-s * 0.55f, -s * 0.15f);
+            ctx.line_to(-s * 0.7f, s * 0.75f);
+            ctx.qcurve_to(0, s * 1.05f, s * 0.7f, s * 0.75f);
+            ctx.line_to(s * 0.55f, -s * 0.15f);
+            ctx.qcurve_to(0, -s * 0.45f, -s * 0.55f, -s * 0.15f);
+            ctx.fill(); ctx.stroke();
+            ctx.set_fill(0xffe8d090);
+            ctx.begin_path();
+            ctx.ellipse(0, -s * 0.35f, s * 0.55f, s * 0.22f);
+            ctx.fill(); ctx.stroke();
             ctx.set_fill(0xffe0d0a0);
             ctx.set_stroke(0xffa09060);
-            ctx.set_line_width(2.2f);
-            ctx.begin_path();
-            ctx.ellipse(0, 0, s * 1.05f, s * 0.85f);
-            ctx.fill(); ctx.stroke();
-            ctx.begin_path(); ctx.arc(-s*0.35f, 0, s*0.45f); ctx.fill();
-            ctx.begin_path(); ctx.arc(s*0.35f, 0, s*0.4f); ctx.fill();
+            ctx.begin_path(); ctx.arc(-s * 0.75f, -s * 0.55f, s * 0.28f); ctx.fill(); ctx.stroke();
+            ctx.begin_path(); ctx.arc(-s * 0.95f, -s * 0.25f, s * 0.2f); ctx.fill();
+            ctx.begin_path(); ctx.arc(s * 0.7f, -s * 0.5f, s * 0.24f); ctx.fill(); ctx.stroke();
             break;
         }
         case PetalID::kRelic: {
+            // Stone tablet + glyph + chip highlight.
             float s = fmaxf(8.f, r);
-            ctx.set_fill(0xffc0a860);
+            ctx.set_fill(0xffc8b070);
             ctx.set_stroke(0xff806838);
-            ctx.set_line_width(2.2f);
-            ctx.begin_path(); ctx.round_rect(-s*0.45f,-s,s*0.9f,s*2.f,2.f); ctx.fill(); ctx.stroke();
+            ctx.set_line_width(2.4f);
+            ctx.begin_path();
+            ctx.move_to(-s * 0.55f, -s * 1.05f);
+            ctx.line_to(s * 0.5f, -s * 1.0f);
+            ctx.line_to(s * 0.6f, s * 1.0f);
+            ctx.line_to(-s * 0.5f, s * 1.05f);
+            ctx.close_path();
+            ctx.fill(); ctx.stroke();
+            ctx.set_stroke(0xff605028);
+            ctx.set_line_width(1.8f);
+            ctx.begin_path();
+            ctx.move_to(-s * 0.15f, -s * 0.55f);
+            ctx.line_to(s * 0.2f, -s * 0.55f);
+            ctx.move_to(0, -s * 0.55f);
+            ctx.line_to(0, s * 0.35f);
+            ctx.move_to(-s * 0.25f, s * 0.05f);
+            ctx.line_to(s * 0.28f, s * 0.05f);
+            ctx.stroke();
             ctx.set_fill(0x66ffffff);
-            ctx.begin_path(); ctx.arc(0,-s*0.35f,s*0.22f); ctx.fill();
+            ctx.begin_path();
+            ctx.arc(s * 0.2f, -s * 0.7f, s * 0.16f);
+            ctx.fill();
             break;
         }
         case PetalID::kDarkMark: {
+            // Dark pendant disc + crescent + chain.
             float s = fmaxf(8.f, r);
-            ctx.set_fill(0xff403050);
-            ctx.set_stroke(0xff201828);
+            ctx.set_stroke(0xff302038);
             ctx.set_line_width(2.2f);
-            ctx.begin_path(); ctx.arc(0,-s*0.15f,s*0.7f); ctx.fill(); ctx.stroke();
-            ctx.begin_path(); ctx.move_to(0,s*0.4f); ctx.line_to(0,s); ctx.stroke();
+            ctx.round_line_cap();
+            ctx.begin_path();
+            ctx.move_to(0, s * 0.2f);
+            ctx.line_to(0, s * 1.05f);
+            ctx.stroke();
+            ctx.set_fill(0xff302440);
+            ctx.set_stroke(0xff181020);
+            ctx.set_line_width(2.4f);
+            ctx.begin_path();
+            ctx.arc(0, -s * 0.15f, s * 0.78f);
+            ctx.fill(); ctx.stroke();
+            ctx.set_fill(0xff100818);
+            ctx.begin_path();
+            ctx.arc(s * 0.12f, -s * 0.2f, s * 0.55f);
+            ctx.fill();
+            ctx.set_fill(0xff8060a0);
+            ctx.begin_path();
+            ctx.arc(-s * 0.2f, -s * 0.35f, s * 0.18f);
+            ctx.fill();
             break;
         }
         case PetalID::kChampionCrown: {
@@ -6666,21 +7212,71 @@ void draw_static_petal_single(PetalID::T id, Renderer &ctx) {
             break;
         }
         case PetalID::kSoulSplitter: {
+            // Twin gem halves with seam glow (not a flat box).
             float s = fmaxf(8.f, r);
-            ctx.set_fill(0xffc0a0ff);
+            ctx.set_fill(0xffb090ff);
             ctx.set_stroke(0xff6840b0);
-            ctx.set_line_width(2.2f);
-            ctx.begin_path(); ctx.round_rect(-s*0.8f,-s*0.55f,s*1.6f,s*1.1f,3.f); ctx.fill(); ctx.stroke();
-            ctx.begin_path(); ctx.move_to(-s*0.8f,0); ctx.line_to(s*0.8f,0); ctx.stroke();
+            ctx.set_line_width(2.4f);
+            ctx.round_line_join();
+            ctx.begin_path();
+            ctx.move_to(-s * 0.95f, 0);
+            ctx.line_to(-s * 0.15f, -s * 0.75f);
+            ctx.line_to(-s * 0.15f, s * 0.75f);
+            ctx.close_path();
+            ctx.fill(); ctx.stroke();
+            ctx.begin_path();
+            ctx.move_to(s * 0.95f, 0);
+            ctx.line_to(s * 0.15f, -s * 0.75f);
+            ctx.line_to(s * 0.15f, s * 0.75f);
+            ctx.close_path();
+            ctx.fill(); ctx.stroke();
+            ctx.set_stroke(0xffe8d0ff);
+            ctx.set_line_width(2.f);
+            ctx.begin_path();
+            ctx.move_to(0, -s * 0.85f);
+            ctx.line_to(0, s * 0.85f);
+            ctx.stroke();
+            ctx.set_fill(0x88ffffff);
+            ctx.begin_path();
+            ctx.arc(-s * 0.45f, -s * 0.15f, s * 0.14f);
+            ctx.fill();
+            ctx.begin_path();
+            ctx.arc(s * 0.45f, -s * 0.15f, s * 0.14f);
+            ctx.fill();
             break;
         }
         case PetalID::kGoggles: {
+            // Dual lenses + bridge + strap stubs.
             float s = fmaxf(8.f, r);
-            ctx.set_fill(0xff404050);
             ctx.set_stroke(0xff202028);
-            ctx.set_line_width(2.2f);
-            ctx.begin_path(); ctx.ellipse(0,0,s,s*0.55f); ctx.fill(); ctx.stroke();
-            ctx.set_fill(0xff101018); ctx.begin_path(); ctx.arc(0,0,s*0.28f); ctx.fill();
+            ctx.set_line_width(2.4f);
+            ctx.round_line_cap();
+            ctx.begin_path();
+            ctx.move_to(-s * 1.05f, -s * 0.15f);
+            ctx.line_to(-s * 1.35f, -s * 0.45f);
+            ctx.move_to(s * 1.05f, -s * 0.15f);
+            ctx.line_to(s * 1.35f, -s * 0.45f);
+            ctx.stroke();
+            ctx.set_fill(0xff505868);
+            ctx.begin_path();
+            ctx.ellipse(-s * 0.48f, 0, s * 0.5f, s * 0.42f);
+            ctx.fill(); ctx.stroke();
+            ctx.begin_path();
+            ctx.ellipse(s * 0.48f, 0, s * 0.5f, s * 0.42f);
+            ctx.fill(); ctx.stroke();
+            ctx.set_fill(0xff88d0ff);
+            ctx.begin_path();
+            ctx.ellipse(-s * 0.48f, 0, s * 0.28f, s * 0.24f);
+            ctx.fill();
+            ctx.begin_path();
+            ctx.ellipse(s * 0.48f, 0, s * 0.28f, s * 0.24f);
+            ctx.fill();
+            ctx.set_stroke(0xff303038);
+            ctx.set_line_width(3.f);
+            ctx.begin_path();
+            ctx.move_to(-s * 0.05f, 0);
+            ctx.line_to(s * 0.05f, 0);
+            ctx.stroke();
             break;
         }
         case PetalID::kSalve: {
@@ -6706,6 +7302,69 @@ void draw_static_petal_single(PetalID::T id, Renderer &ctx) {
             ctx.fill();
             break;
         }
+        case PetalID::kCrater: {
+            // Top-down rocky crater ring — sibling to Meteor art, flatter rim.
+            float s = fmaxf(8.f, r);
+            ctx.set_fill(0x30000000);
+            ctx.begin_path();
+            ctx.ellipse(0.4f, 1.2f, s * 1.05f, s * 0.92f);
+            ctx.fill();
+            ctx.set_fill(0xff5a5568);
+            ctx.set_stroke(0xff2e2a38);
+            ctx.set_line_width(2.2f);
+            ctx.begin_path();
+            ctx.arc(0, 0, s);
+            ctx.fill();
+            ctx.stroke();
+            ctx.set_fill(0xff1a1820);
+            ctx.begin_path();
+            ctx.arc(0, 0, s * 0.42f);
+            ctx.fill();
+            ctx.set_stroke(0xff8a8498);
+            ctx.set_line_width(1.6f);
+            for (int i = 0; i < 5; ++i) {
+                float a = i * 1.2566f - 0.3f;
+                ctx.begin_path();
+                ctx.move_to(cosf(a) * s * 0.5f, sinf(a) * s * 0.5f);
+                ctx.line_to(cosf(a) * s * 0.92f, sinf(a) * s * 0.92f);
+                ctx.stroke();
+            }
+            break;
+        }
+        case PetalID::kHourglass: {
+            // Amber glass hourglass with sand waist.
+            float s = fmaxf(8.f, r);
+            ctx.set_stroke(0xff8a6230);
+            ctx.set_line_width(2.2f);
+            ctx.set_fill(0xfff0c878);
+            ctx.begin_path();
+            ctx.move_to(-s * 0.55f, -s * 0.95f);
+            ctx.line_to(s * 0.55f, -s * 0.95f);
+            ctx.line_to(s * 0.12f, 0);
+            ctx.line_to(s * 0.55f, s * 0.95f);
+            ctx.line_to(-s * 0.55f, s * 0.95f);
+            ctx.line_to(-s * 0.12f, 0);
+            ctx.close_path();
+            ctx.fill();
+            ctx.stroke();
+            ctx.set_fill(0xffd4a040);
+            ctx.begin_path();
+            ctx.move_to(-s * 0.35f, s * 0.35f);
+            ctx.line_to(s * 0.35f, s * 0.35f);
+            ctx.line_to(s * 0.45f, s * 0.85f);
+            ctx.line_to(-s * 0.45f, s * 0.85f);
+            ctx.close_path();
+            ctx.fill();
+            ctx.set_stroke(0xffc8a060);
+            ctx.set_line_width(1.6f);
+            ctx.begin_path();
+            ctx.move_to(-s * 0.6f, -s * 0.95f);
+            ctx.line_to(s * 0.6f, -s * 0.95f);
+            ctx.move_to(-s * 0.6f, s * 0.95f);
+            ctx.line_to(s * 0.6f, s * 0.95f);
+            ctx.stroke();
+            break;
+        }
 
         case PetalID::kShell: {
             float s = fmaxf(8.f, r);
@@ -6713,13 +7372,20 @@ void draw_static_petal_single(PetalID::T id, Renderer &ctx) {
             ctx.set_stroke(0xffb09060);
             ctx.set_line_width(2.2f);
             ctx.begin_path();
-            ctx.arc(0, 0, s);
-            ctx.fill();
-            ctx.stroke();
-            ctx.set_fill(0xffffffff);
-            ctx.begin_path();
-            ctx.arc(0, 0, s * 0.45f);
-            ctx.fill();
+            ctx.move_to(s * 0.15f, s * 0.7f);
+            ctx.qcurve_to(s * 1.05f, 0, s * 0.1f, -s * 0.85f);
+            ctx.qcurve_to(-s * 0.95f, -s * 0.2f, -s * 0.55f, s * 0.55f);
+            ctx.qcurve_to(-s * 0.1f, s * 0.95f, s * 0.15f, s * 0.7f);
+            ctx.fill(); ctx.stroke();
+            ctx.set_stroke(0xffc8a878);
+            ctx.set_line_width(1.6f);
+            for (int i = 0; i < 4; ++i) {
+                float t = 0.2f + i * 0.18f;
+                ctx.begin_path();
+                ctx.move_to(s * (0.05f + t * 0.2f), -s * (0.7f - t * 0.3f));
+                ctx.qcurve_to(s * (0.55f - t * 0.2f), s * (t - 0.3f), -s * (0.2f + t * 0.15f), s * (0.35f + t * 0.1f));
+                ctx.stroke();
+            }
             break;
         }
         case PetalID::kGlass: {

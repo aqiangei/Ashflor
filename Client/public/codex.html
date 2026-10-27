@@ -245,7 +245,7 @@
 </header>
 <p class="lead">八域与机制置顶可点进中英文详情。花瓣/怪物/世界实体美术与游戏内同一套 C++ 绘制。点开看全部数值与掉落概率。</p>
 <main id="app"><div class="loading">加载图鉴数据与美术模块…</div></main>
-<script src="/gardn-art.js"></script>
+<!-- gardn-art.js loaded dynamically with ?v= from deploy-info (immutable CDN cache) -->
 
 <div class="overlay" id="overlay" hidden>
   <div class="sheet" role="dialog" aria-modal="true">
@@ -293,11 +293,34 @@
     chest: 6, mirage: 7, flee: 8, height: 9, lore: 10
   };
 
+  async function artCacheV() {
+    try {
+      const di = await fetch("/deploy-info.json", { cache: "no-store" }).then(r => r.json());
+      if (di && di.cache_v) return String(di.cache_v);
+    } catch (_) {}
+    return String(Date.now());
+  }
+
+  function loadScript(src) {
+    return new Promise((resolve, reject) => {
+      const s = document.createElement("script");
+      s.src = src;
+      s.async = true;
+      s.onload = () => resolve();
+      s.onerror = () => reject(new Error("failed to load " + src));
+      document.head.appendChild(s);
+    });
+  }
+
   async function bootArt() {
     if (Art) return Art;
+    const v = await artCacheV();
+    if (typeof createGardnArt !== "function") {
+      await loadScript("/gardn-art.js?v=" + encodeURIComponent(v));
+    }
     if (typeof createGardnArt !== "function") throw new Error("gardn-art.js 未加载");
     Art = await createGardnArt({
-      locateFile: (p) => (p.endsWith(".wasm") ? "/gardn-art.wasm" : p)
+      locateFile: (p) => (p.endsWith(".wasm") ? ("/gardn-art.wasm?v=" + encodeURIComponent(v)) : p)
     });
     if (!Art.TextDecoder) Art.TextDecoder = new TextDecoder();
     Art._ashflor_art_boot();

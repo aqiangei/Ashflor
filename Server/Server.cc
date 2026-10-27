@@ -58,10 +58,18 @@ namespace Server {
     double phase_hash_ms = 0;
     double phase_ai_ms = 0;
     double phase_collide_ms = 0;
+    double phase_motion_ms = 0;
+    double phase_sync_ms = 0;
+    double phase_post_ms = 0;
+    double phase_misc_ms = 0;
     double phase_spawn_ms_max = 0;
     double phase_hash_ms_max = 0;
     double phase_ai_ms_max = 0;
     double phase_collide_ms_max = 0;
+    double phase_motion_ms_max = 0;
+    double phase_sync_ms_max = 0;
+    double phase_post_ms_max = 0;
+    double phase_misc_ms_max = 0;
 }
 
 using namespace Server;
@@ -87,6 +95,10 @@ void Server::tick() {
     Server::phase_hash_ms = 0;
     Server::phase_ai_ms = 0;
     Server::phase_collide_ms = 0;
+    Server::phase_motion_ms = 0;
+    Server::phase_sync_ms = 0;
+    Server::phase_post_ms = 0;
+    Server::phase_misc_ms = 0;
     static uint32_t tick_n = 0;
     ++tick_n;
     if ((tick_n % 60) == 0) // ~3s at 20 TPS
@@ -107,6 +119,7 @@ void Server::tick() {
         online += (uint32_t) Server::games[i].clients.size();
     }
     Server::player_count = online;
+    auto t_misc = std::chrono::steady_clock::now();
     // Online roster under minimap (~2s): name, map, guild, level
     if ((tick_n % 50) == 0 && online > 0) {
         struct Row {
@@ -198,6 +211,8 @@ void Server::tick() {
         }
         if (any) AccountStore::save();
     }
+    Server::phase_misc_ms += std::chrono::duration<double, std::milli>(
+        std::chrono::steady_clock::now() - t_misc).count();
     auto end = std::chrono::steady_clock::now();
     std::chrono::duration<double, std::milli> tick_time = end - start;
     double ms = tick_time.count();
@@ -219,6 +234,14 @@ void Server::tick() {
         Server::phase_ai_ms_max = Server::phase_ai_ms;
     if (Server::phase_collide_ms > Server::phase_collide_ms_max)
         Server::phase_collide_ms_max = Server::phase_collide_ms;
+    if (Server::phase_motion_ms > Server::phase_motion_ms_max)
+        Server::phase_motion_ms_max = Server::phase_motion_ms;
+    if (Server::phase_sync_ms > Server::phase_sync_ms_max)
+        Server::phase_sync_ms_max = Server::phase_sync_ms;
+    if (Server::phase_post_ms > Server::phase_post_ms_max)
+        Server::phase_post_ms_max = Server::phase_post_ms;
+    if (Server::phase_misc_ms > Server::phase_misc_ms_max)
+        Server::phase_misc_ms_max = Server::phase_misc_ms;
     // 20 TPS budget ≈ 50ms; log only when we actually miss the frame
     if (tick_time > 40ms) {
         ++Server::tick_overruns_window;
@@ -226,7 +249,11 @@ void Server::tick() {
             << " spawn=" << Server::phase_spawn_ms
             << "ms hash=" << Server::phase_hash_ms
             << "ms ai=" << Server::phase_ai_ms
-            << "ms collide=" << Server::phase_collide_ms << "ms\n";
+            << "ms collide=" << Server::phase_collide_ms
+            << "ms motion=" << Server::phase_motion_ms
+            << "ms sync=" << Server::phase_sync_ms
+            << "ms post=" << Server::phase_post_ms
+            << "ms misc=" << Server::phase_misc_ms << "ms\n";
     }
     if (win_ticks >= 1200) { // reset window each ~60s
         win_ticks = 0;
@@ -234,6 +261,10 @@ void Server::tick() {
         Server::phase_hash_ms_max = 0;
         Server::phase_ai_ms_max = 0;
         Server::phase_collide_ms_max = 0;
+        Server::phase_motion_ms_max = 0;
+        Server::phase_sync_ms_max = 0;
+        Server::phase_post_ms_max = 0;
+        Server::phase_misc_ms_max = 0;
     }
 
     if (Server::is_draining && !was_draining) {
@@ -345,17 +376,23 @@ std::string Server::live_status_json() {
     out += std::to_string(now_ms);
     // Tick telemetry (same fields as /health) for ops dashboards.
     {
-        char buf[384];
+        char buf[768];
         std::snprintf(buf, sizeof(buf),
             ",\"tick\":{\"last_ms\":%.2f,\"max_ms_60s\":%.2f,\"overruns_60s\":%u,\"samples_60s\":%u,"
             "\"phases\":{\"spawn_ms\":%.2f,\"hash_ms\":%.2f,\"ai_ms\":%.2f,\"collide_ms\":%.2f,"
-            "\"spawn_max_ms\":%.2f,\"hash_max_ms\":%.2f,\"ai_max_ms\":%.2f,\"collide_max_ms\":%.2f}}",
+            "\"motion_ms\":%.2f,\"sync_ms\":%.2f,\"post_ms\":%.2f,\"misc_ms\":%.2f,"
+            "\"spawn_max_ms\":%.2f,\"hash_max_ms\":%.2f,\"ai_max_ms\":%.2f,\"collide_max_ms\":%.2f,"
+            "\"motion_max_ms\":%.2f,\"sync_max_ms\":%.2f,\"post_max_ms\":%.2f,\"misc_max_ms\":%.2f}}",
             Server::last_tick_ms, Server::max_tick_ms_window,
             Server::tick_overruns_window, Server::tick_count_window,
             Server::phase_spawn_ms, Server::phase_hash_ms,
             Server::phase_ai_ms, Server::phase_collide_ms,
+            Server::phase_motion_ms, Server::phase_sync_ms,
+            Server::phase_post_ms, Server::phase_misc_ms,
             Server::phase_spawn_ms_max, Server::phase_hash_ms_max,
-            Server::phase_ai_ms_max, Server::phase_collide_ms_max);
+            Server::phase_ai_ms_max, Server::phase_collide_ms_max,
+            Server::phase_motion_ms_max, Server::phase_sync_ms_max,
+            Server::phase_post_ms_max, Server::phase_misc_ms_max);
         out += buf;
     }
 
@@ -655,12 +692,14 @@ std::string Server::health_json() {
     uint8_t ok = 1;
     if (Server::is_draining) ok = 0;
     if (Server::last_tick_ms >= 100.0) ok = 0;
-    char buf[512];
+    char buf[896];
     std::snprintf(buf, sizeof(buf),
         "{\"ok\":%s,\"status\":\"%s\",\"online\":%u,\"draining\":%s,"
         "\"tick\":{\"last_ms\":%.2f,\"max_ms_60s\":%.2f,\"overruns_60s\":%u,\"samples_60s\":%u,"
         "\"phases\":{\"spawn_ms\":%.2f,\"hash_ms\":%.2f,\"ai_ms\":%.2f,\"collide_ms\":%.2f,"
-        "\"spawn_max_ms\":%.2f,\"hash_max_ms\":%.2f,\"ai_max_ms\":%.2f,\"collide_max_ms\":%.2f}}}",
+        "\"motion_ms\":%.2f,\"sync_ms\":%.2f,\"post_ms\":%.2f,\"misc_ms\":%.2f,"
+        "\"spawn_max_ms\":%.2f,\"hash_max_ms\":%.2f,\"ai_max_ms\":%.2f,\"collide_max_ms\":%.2f,"
+        "\"motion_max_ms\":%.2f,\"sync_max_ms\":%.2f,\"post_max_ms\":%.2f,\"misc_max_ms\":%.2f}}}",
         ok ? "true" : "false",
         ok ? "ok" : "bad",
         Server::player_count,
@@ -671,8 +710,12 @@ std::string Server::health_json() {
         Server::tick_count_window,
         Server::phase_spawn_ms, Server::phase_hash_ms,
         Server::phase_ai_ms, Server::phase_collide_ms,
+        Server::phase_motion_ms, Server::phase_sync_ms,
+        Server::phase_post_ms, Server::phase_misc_ms,
         Server::phase_spawn_ms_max, Server::phase_hash_ms_max,
-        Server::phase_ai_ms_max, Server::phase_collide_ms_max);
+        Server::phase_ai_ms_max, Server::phase_collide_ms_max,
+        Server::phase_motion_ms_max, Server::phase_sync_ms_max,
+        Server::phase_post_ms_max, Server::phase_misc_ms_max);
     return std::string(buf);
 }
 

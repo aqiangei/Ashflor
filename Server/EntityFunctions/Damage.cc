@@ -7,6 +7,7 @@
 #include <Server/Server.hh>
 #include <Server/Spawn.hh>
 #include <Server/TrainingDummy.hh>
+#include <Shared/Craft.hh>
 #include <Shared/Entity.hh>
 #include <Shared/Simulation.hh>
 #include <Shared/SpawnRules.hh>
@@ -68,10 +69,16 @@ void inflict_damage(Simulation *sim, EntityID const atk_id, EntityID const def_i
         && defender.get_nametag_visible())
         return;
     // No PvP unless Corruption is active on either side.
+    // Wild mobs in spawn grace (immunity_ticks): deal no damage either way.
     if (sim->ent_alive(atk_id)) {
         Entity &attacker = sim->get_ent(atk_id);
         if (is_player_faction(sim, attacker) && is_player_faction(sim, defender)
             && !player_faction_pvp(sim, attacker, defender))
+            return;
+        if (attacker.immunity_ticks > 0
+            && attacker.has_component(kMob)
+            && !TrainingDummy::is_dummy(attacker)
+            && !is_player_faction(sim, attacker))
             return;
     }
     // Flower defensive wiki attrs (Cotton absorb / Talisman evasion / Nazar / Wax / Shell / Sponge / Mana)
@@ -105,6 +112,25 @@ void inflict_damage(Simulation *sim, EntityID const atk_id, EntityID const def_i
                     --slot.effect_charges;
                     sim->request_delete(atk_id);
                     return;
+                }
+            }
+        }
+        // Rubber: absorb lightning (contact flash / chain splash from lightning petals).
+        {
+            uint8_t has_rubber = 0;
+            for (uint32_t si = 0; si < defender.get_loadout_count(); ++si) {
+                PetalID::T pid = effective_petal_id(defender, si);
+                if (pid != PetalID::kNone && petal_name_is(pid, "Rubber")) {
+                    has_rubber = 1;
+                    break;
+                }
+            }
+            if (has_rubber && sim->ent_alive(atk_id)) {
+                Entity &atk = sim->get_ent(atk_id);
+                if (atk.has_component(kPetal)) {
+                    PetalAttributes const &A = PETAL_DATA[atk.get_petal_id()].attributes;
+                    if (A.lightning_damage > 0.f || A.mana_lightning_per > 0.f)
+                        return;
                 }
             }
         }
@@ -146,6 +172,9 @@ void inflict_damage(Simulation *sim, EntityID const atk_id, EntityID const def_i
             return;
         auto const &a = PETAL_DATA[defender.get_petal_id()].attributes;
         if (a.phase_through || (a.petal_evasion > 0.f && frand() < a.petal_evasion)) return;
+        // Sponge is a loadout passive: mobs must not knock it off mid-window
+        // (that would dump banked damage / break the drip).
+        if (petal_name_is(defender.get_petal_id(), "Sponge")) return;
     }
     // Petal contact modifiers (read live from PETAL_DATA).
     if (type == DamageType::kContact && sim->ent_alive(atk_id)) {
@@ -297,6 +326,8 @@ void inflict_damage(Simulation *sim, EntityID const atk_id, EntityID const def_i
             if (pid != PetalID::kNone) delay = fmaxf(delay, PETAL_DATA[pid].attributes.damage_delay_seconds);
         }
         if (delay > 0.f) {
+            // First hit opens the sponge window; later hits add to the pool and
+            // are spread across whatever ticks remain (not delayed into one burst).
             if (!defender.pending_damage_ticks)
                 defender.pending_damage_ticks = (game_tick_t)fmaxf(1.f, delay * TPS);
             defender.pending_damage += amt;
@@ -344,37 +375,103 @@ void inflict_damage(Simulation *sim, EntityID const atk_id, EntityID const def_i
     if (damage_dealt > 0.f && defender.has_component(kFlower))
         defender.powder_suppressed_ticks = 3 * TPS;
     defender.set_hit_damage(defender.get_hit_damage() + damage_dealt);
-    // Battery: discharge lightning when the flower is hit.
+    // Battery: wiki — only body-ram vs mob/flower burns charges. Poison /
+    // projectiles / sponge deferred used to empty the pack with no flash.
     if (damage_dealt > 0.f
-        && type != DamageType::kReflect
-        && defender.has_component(kFlower) && !defender.has_component(kMob)) {
-        for (uint32_t si = 0; si < defender.get_loadout_count(); ++si) {
-            PetalID::T pid = effective_petal_id(defender, si);
-            if (pid == PetalID::kNone || pid >= PetalID::kNumPetals) continue;
-            PetalAttributes const &B = PETAL_DATA[pid].attributes;
-            auto &slot = defender.loadout[si];
-            if (B.battery_charges == 0 || B.lightning_damage <= 0.f || !slot.effect_charges) continue;
-            --slot.effect_charges;
-            float const R = 200.f;
-            float const px = defender.get_x();
-            float const py = defender.get_y();
-            float flash = B.lightning_damage;
-            uint8_t left = B.lightning_chains > 0 ? B.lightning_chains : 1;
-            EntityID team = defender.get_team();
-            EntityID src = defender.id;
-            sim->spatial_hash.query(px, py, R, R, [&](Simulation *s, Entity &ent) {
-                if (left == 0) return;
-                if (!ent.has_component(kHealth)) return;
-                if (ent.get_team() == team) return;
-                if (ent.has_component(kPetal) || ent.has_component(kDrop)) return;
-                float dx = ent.get_x() - px;
-                float dy = ent.get_y() - py;
-                if (dx * dx + dy * dy > R * R) return;
-                --left;
-                inflict_damage(s, src, ent.id, flash, DamageType::kSplash);
-                flash *= 0.65f;
-            });
-            break; // one battery discharge per hit
+        && type == DamageType::kContact
+        && defender.has_component(kFlower) && !defender.has_component(kMob)
+        && sim->ent_alive(atk_id)) {
+        Entity &ram = sim->get_ent(atk_id);
+        uint8_t const body_ram = !ram.has_component(kPetal)
+            && (ram.has_component(kMob) || ram.has_component(kFlower));
+        if (body_ram) {
+            for (uint32_t si = 0; si < defender.get_loadout_count(); ++si) {
+                PetalID::T pid = effective_petal_id(defender, si);
+                if (pid == PetalID::kNone || pid >= PetalID::kNumPetals) continue;
+                PetalAttributes const &B = PETAL_DATA[pid].attributes;
+                auto &slot = defender.loadout[si];
+                if (B.battery_charges == 0 || B.lightning_damage <= 0.f
+                    || !slot.effect_charges) continue;
+                float flash = B.lightning_damage;
+                if (Client *owner = Server::client_by_camera(sim, defender.get_parent()))
+                    flash *= Craft::level_stat_mult(
+                        Craft::petal_level_get(owner->petal_levels, pid));
+                // All remaining charges fire at once (wiki: 3 discharges).
+                uint8_t bolts = slot.effect_charges;
+                slot.effect_charges = 0;
+                float const R = 220.f;
+                float const R2 = R * R;
+                EntityID team = defender.get_team();
+                EntityID src = defender.id;
+                float const px = defender.get_x();
+                float const py = defender.get_y();
+                for (uint8_t bolt = 0; bolt < bolts; ++bolt) {
+                    EntityID hit[16];
+                    uint8_t nhit = 0;
+                    EntityID best = NULL_ENTITY;
+                    float best_d2 = R2;
+                    if (sim->ent_alive(atk_id)) {
+                        Entity &a = sim->get_ent(atk_id);
+                        if (a.has_component(kHealth) && !(a.get_team() == team)
+                            && !a.has_component(kPetal) && !a.has_component(kDrop)) {
+                            float dx = a.get_x() - px;
+                            float dy = a.get_y() - py;
+                            float d2 = dx * dx + dy * dy;
+                            if (d2 <= R2) {
+                                best = atk_id;
+                                best_d2 = d2;
+                            }
+                        }
+                    }
+                    if (best == NULL_ENTITY) {
+                        sim->spatial_hash.query(px, py, R, R, [&](Simulation *, Entity &ent) {
+                            if (!ent.has_component(kHealth)) return;
+                            if (ent.get_team() == team) return;
+                            if (ent.has_component(kPetal) || ent.has_component(kDrop)) return;
+                            float dx = ent.get_x() - px;
+                            float dy = ent.get_y() - py;
+                            float d2 = dx * dx + dy * dy;
+                            if (d2 > R2 || d2 >= best_d2) return;
+                            best_d2 = d2;
+                            best = ent.id;
+                        });
+                    }
+                    if (best == NULL_ENTITY) continue;
+                    float chain_dmg = flash;
+                    uint8_t left = B.lightning_chains > 0 ? B.lightning_chains : 1;
+                    float cx = sim->get_ent(best).get_x();
+                    float cy = sim->get_ent(best).get_y();
+                    while (left > 0 && nhit < 16) {
+                        hit[nhit++] = best;
+                        inflict_damage(sim, src, best, chain_dmg, DamageType::kSplash);
+                        --left;
+                        if (left == 0 || !sim->ent_alive(best)) break;
+                        chain_dmg *= 0.65f;
+                        EntityID nxt = NULL_ENTITY;
+                        float nxt_d2 = R2;
+                        float const qx = cx, qy = cy;
+                        sim->spatial_hash.query(qx, qy, R, R, [&](Simulation *, Entity &ent) {
+                            if (!ent.has_component(kHealth)) return;
+                            if (ent.get_team() == team) return;
+                            if (ent.has_component(kPetal) || ent.has_component(kDrop)) return;
+                            for (uint8_t i = 0; i < nhit; ++i)
+                                if (ent.id == hit[i]) return;
+                            float dx = ent.get_x() - qx;
+                            float dy = ent.get_y() - qy;
+                            float d2 = dx * dx + dy * dy;
+                            if (d2 > R2 || d2 >= nxt_d2) return;
+                            nxt_d2 = d2;
+                            nxt = ent.id;
+                        });
+                        if (nxt == NULL_ENTITY) break;
+                        best = nxt;
+                        if (!sim->ent_alive(best)) break;
+                        cx = sim->get_ent(best).get_x();
+                        cy = sim->get_ent(best).get_y();
+                    }
+                }
+                break; // one Battery slot per ram
+            }
         }
     }
     // Record before reflection can kill the source. All player-owned damage,
@@ -402,11 +499,12 @@ void inflict_damage(Simulation *sim, EntityID const atk_id, EntityID const def_i
             && type != DamageType::kReflect
             && type != DamageType::kPoison
             && type != DamageType::kBurn) {
-            // Termite psionic link — keep tight so packs don't feel map-wide shared HP.
-            float const R = 180.f;
+            // Termite psionic link — full hit mirrored to nearby kin (wiki "connected").
+            // 22%/180 was too weak to notice ("白蚁没有连伤").
+            float const R = 420.f;
             float const px = defender.get_x();
             float const py = defender.get_y();
-            float const share = damage_dealt * 0.22f;
+            float const share = damage_dealt;
             EntityID skip = def_id;
             EntityID src = atk_id;
             ++share_depth;

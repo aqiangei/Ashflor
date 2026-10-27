@@ -207,7 +207,7 @@ void DOM::open_feedback_board() {
         // window.open would navigate *this* page — clear first.
         if (window.name === "ashflor-feedback") window.name = "";
         // Bust bfcache / stale named-tab document so UI updates (e.g. copy btn) show up.
-        var fbUrl = "/feedback.html?v=prog3";
+        var fbUrl = "/feedback.html?v=prog4";
         if (Module.feedbackWindow && !Module.feedbackWindow.closed) {
             try { Module.feedbackWindow.location.replace(fbUrl); } catch (e) {}
         } else {
