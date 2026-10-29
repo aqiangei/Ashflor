@@ -1,11 +1,52 @@
 {
   "ok": true,
-  "updated_at": 1793168631429,
+  "updated_at": 1793243611586,
   "days": [
+    {
+      "date": "2026-10-29",
+      "label": "10/29",
+      "done": [
+        {
+          "text": "北京控制台/图鉴反代验收",
+          "note": "live / codex / gardn-art"
+        },
+        {
+          "text": "发版 cacheV=21837+；香港 native + 静态；进度 publish_progress --deploy"
+        },
+        {
+          "text": "小地图/地面贴图对齐 L2 主题",
+          "note": "FlorrTerrain 瓷砖"
+        },
+        {
+          "text": "死亡 Continue 二级留在本图"
+        },
+        {
+          "text": "二级/三级地图传送门互通",
+          "note": "回程贴 hub；PrimeGarden↔Factory/Pyramid"
+        },
+        {
+          "text": "二级图按 florr .tmj 1:1 接入（原尺寸、原出生点、原刷怪带）",
+          "note": "无中心广场挖空、无稀有度同心环"
+        }
+      ],
+      "open": []
+    },
     {
       "date": "2026-10-27",
       "label": "10/27",
       "done": [
+        {
+          "text": "怪太快仇恨太远",
+          "note": "MOB_MOVE 0.70 / AGRO 0.72；贴墙取消仇恨；PLAYER_ACCEL 5.15→6.18"
+        },
+        {
+          "text": "地图偏小/碎/zone 不嵌入",
+          "note": "竞技场 36000²；花园 dirt 路网脊柱；pocket/hub 按图幅比例"
+        },
+        {
+          "text": "花园出生点旁唯一蜜蜂/黄蜂/蜈蚣一圈",
+          "note": "Unique 区 AABB=全图，落点未校验 get_zone_from_pos；现强制独占环带"
+        },
         {
           "text": "假人美术变成方块靶纸",
           "note": "MobRasterCache 离屏未 alpha:true + 假人改回即时绘制"
@@ -228,413 +269,6 @@
         {
           "text": "## Wiki 花瓣图标批次验收",
           "note": "2026-10-26"
-        }
-      ]
-    },
-    {
-      "date": "2026-10-25",
-      "label": "10/25",
-      "done": [
-        {
-          "text": "右上角在线人数滑动窗口加长地图以下调试信息以上都可以用",
-          "note": "RosterScroll 自适应增高；48 行"
-        },
-        {
-          "text": "DBH: 10-25 合成金叶升 Lv.1 后背包没了、合成栏还有",
-          "note": "唯一升级成功未返还产品；现与稀有度合成一样 try_give_petal 回 1 片"
-        },
-        {
-          "text": "闪电无效果不会连锁",
-          "note": "body=0 早退；spawn 把 Unique Lv+amp 写入 damage；最近邻连锁跳跃"
-        },
-        {
-          "text": "黄金叶冷却计算出现实际冷却和面板冷却不符",
-          "note": "G键 get_reload_factor 漏 Unique Lv；与服首槽 level_scale_factor 对齐"
-        },
-        {
-          "text": "建议在死亡时可以直接使用左上角功能",
-          "note": "topbar/暂停/图鉴/排行榜/离开确认：alive||on_game_screen；toggle_pause/guild 死亡可用"
-        },
-        {
-          "text": "控制台刷怪堆积卡服",
-          "note": "kAdminSpawned+45s TTL；同图并发头数≤24 超则清最老；高负载优先回收"
-        },
-        {
-          "text": "为什么唯一等级老是出现问题，根治",
-          "note": "Craft::petal_levels_canonicalize / petal_level_get：落盘/同步/读等级一律按英文名归位到当前 Unique ID；UI/战斗/假人哈希同路径"
-        },
-        {
-          "text": "XD7891",
-          "note": "盘上曾 146；从 103742 备份高水位合并回 Bone/397=155"
-        },
-        {
-          "text": "方块怎么没有用，应该是召唤方块，然后方块特别超模",
-          "note": "Square 蛋孵化召唤；专属超模 HP/伤阶梯；召唤态可追打，野怪 Unique 方块仍静止"
-        },
-        {
-          "text": "我葡萄也没回来（）",
-          "note": "从 103135 备份高水位合并回 Grapes 等；Sili 盘上从未有过 1915/Grapes="
-        },
-        {
-          "text": "葡萄跟豌豆好像依旧不爆q 的 感觉像是q怪爆的花瓣品质调错了",
-          "note": "阶梯 Unique 不再被 PetalTracker 全服独占挡掉；Unique 同档 50%；Golden_Leaf 空格截断 l: 已修"
-        },
-        {
-          "text": "绷带的美术不够细节好看",
-          "note": "创可贴造型：土黄胶布+纱布垫+打孔+红十字；贴身缠绕+致死琥珀环"
-        },
-        {
-          "text": "合成「第N次尝试」空托盘自己涨",
-          "note": "仅 Miss/Win/LevelWin 计次；单包封顶65535；成功清 pity；服端 craft_result 空档 break 防空转"
-        },
-        {
-          "text": "陨石为什么会卡到地形里",
-          "note": "种植时 eject 墙；种植态走地形 CCD"
-        },
-        {
-          "text": "我的2级q葡萄又没了（）",
-          "note": "葡萄专属：Unique Lv 按英文名归位+落盘 Name=lv；登录端高水位合并不再整表清空"
-        },
-        {
-          "text": "天穹圣剑升级后G键其他花瓣的面板伤害显示加成依旧是140%，实际伤害为实际加成",
-          "note": "G键 amp 含 Unique Lv + 同名取最大"
-        },
-        {
-          "text": "高品质黄蜂碰撞箱放大但图片没放大",
-          "note": "Jungle/Frost/Ember/Dune 美术按 MOB_RADIUS 填碰撞箱"
-        },
-        {
-          "text": "唯一怪物不爆唯一豌豆的嘛",
-          "note": "Unique 怪同档掉落 20%→40%"
-        },
-        {
-          "text": "太轻了怪一推就飞"
-        },
-        {
-          "text": "可以让陨石加点质量吗",
-          "note": "种植质量 48+mass×80；属性质量上调"
-        },
-        {
-          "text": "怪物直接刷我脸上把我压死了 而且自己召唤的甲虫为什么逮着我咬",
-          "note": "刷怪距含体型；Corruption 下禁索敌/伤己方主人"
-        },
-        {
-          "text": "电池没有机制",
-          "note": "装备即满充；花体挨打放电已有"
-        },
-        {
-          "text": "尖牙好废",
-          "note": "耐久对齐 Basic×3：10→65610；吸血比仍按 wiki Ultra+ 下调"
-        },
-        {
-          "text": "感觉这游戏护甲系统也跟没有一样",
-          "note": "Ultra+ armor_tier_catchup √3→×3，同回血"
-        },
-        {
-          "text": "这多节怪有都一刷新挤压怪乱飞的情况",
-          "note": "分段 kNoFriendlyCollision，不再同队挤压飞"
-        },
-        {
-          "text": "唯一等级每次重新部署就没了",
-          "note": "盘上 l: 还在；重连空 craft 同步冲客户端；服/端高水位合并；cacheV 21771"
-        },
-        {
-          "text": "玩家等级不对背包却对",
-          "note": "迁港后 s:/等级缩水；从 BJ 停机档高水位合并回 24 人分数/等级，背包保留"
-        },
-        {
-          "text": "加速器磁铁太丑了",
-          "note": "加速器青绿推进舱+尾焰人字；磁铁红蓝马蹄+银极；贴身缩放"
-        },
-        {
-          "text": "加一个回花瓣耐久的花瓣，在做好美术和掉落",
-          "note": "药膏 Salve×9；petal_repair 仅存活时修其他瓣；叶甲虫/瓢虫掉落；绿药膏罐美术"
-        },
-        {
-          "text": "小扁豆吸引力减半",
-          "note": "半径÷2；拉取力度÷2"
-        },
-        {
-          "text": "小扁豆应常驻吸引不是攻击才吸引",
-          "note": "去掉 attacking 门闩；锁敌半径按攻击环+额外"
-        },
-        {
-          "text": "小扁豆打假人没吸引力",
-          "note": "Lentil 索敌误排除假人；已恢复可锁假人"
-        },
-        {
-          "text": "编译中进度条应该按阶段均匀滑动欺骗玩家，而不是说一直卡住让人觉得死机了进不去",
-          "note": "阶段定时匀速滑；超时指数爬；JS完显示准备引擎，instantiate才编译中；21767"
-        },
-        {
-          "text": "怪物怎么一直在攻击假人",
-          "note": "假人仅接玩家花瓣；野怪导弹穿过；AI 清掉假人目标"
-        },
-        {
-          "text": "怪物会卡在假人里",
-          "note": "假人只与花瓣/玩家花碰撞；野怪/召唤物穿过；不索敌假人"
-        },
-        {
-          "text": "在线玩家表加排行榜「在线时长」列",
-          "note": "LB playtime+未刷缓冲；标题页用账号名回退；BJ+HK"
-        },
-        {
-          "text": "根据服务器性能优化（参考二创 florr_clone≈16/屏）",
-          "note": "dens×1.08；区cap安全阀；低负载快补FOV；高负载加速unseenDespawn+hash/AI LOD stride 5→8；thin更狠"
-        },
-        {
-          "text": "怪物怎么这么肉，唯一花瓣都打不动究极",
-          "note": "Ultra+ HP 145800/4e6/2.6e7→2.8e4/1.4e5/7e5；amp软顶5→8；Boss垫8→5"
-        },
-        {
-          "text": "zone可以多点怪物，优化策略也要变",
-          "note": "dens×1.15、区 cap 96–160、FOV 目标 16、刷怪/回收阈值上调"
-        },
-        {
-          "text": "怪物体型还是有问题怎么有的怪物没按稀有度变大",
-          "note": "Bee/Hornet/Queen 美术补 scale；半径 Common→Unique ~7× 相对 baked；召唤/蚁穴继承父稀有度"
-        },
-        {
-          "text": "腐化的时候怎么没被别人的召唤物攻击",
-          "note": "同队早退挡住 PvP 索敌；Corruption 下召唤物可追敌花"
-        },
-        {
-          "text": "移动端聊天框还是卡在按钮里没设计好位置",
-          "note": "改到左上，避开摇杆/装备栏"
-        },
-        {
-          "text": "假人应该还是之前出生点一圈才对，现在怎么排列成这样了",
-          "note": "出生点外圈 ring_r=1850，9 稀有度一圈"
-        },
-        {
-          "text": "绷带应该在角色身上有美术然后绷带状态也要通过角色独特美术状态标识",
-          "note": "装备缠绕贴身；致死缓冲琥珀环+加厚绷带"
-        },
-        {
-          "text": "法老之冠召唤出来的根据背景设计独特美术外观，数值低打不动怪",
-          "note": "木乃伊甲虫美术；专属 HP/伤阶梯；寿命 6s"
-        },
-        {
-          "text": "陨石碰怪消失",
-          "note": "种植后接触伤害免疫，仍挡怪"
-        },
-        {
-          "text": "伤害好像被上限了",
-          "note": "同名 amp 取最强防 Skyblade^n；不同名可乘，总乘软顶 5×"
-        },
-        {
-          "text": "小扁豆没效果",
-          "note": "吸引=攻击环+额外；边缘距离索敌；锁敌几乎纯导向；BJ曾停已拉起并重编原生 14:45"
-        },
-        {
-          "text": "小扁豆数值低了，太近了",
-          "note": "吸引半径大幅上调；拉取力度提高"
-        },
-        {
-          "text": "系统:aqa 击败了 Flower Guardian!为什么总是出现这个我明明没在打",
-          "note": "Boss 播报/击杀统计只算有伤害贡献的队友；若仍见请复现是否队友召唤物"
-        },
-        {
-          "text": "转速过快攻击范围缩小",
-          "note": "高转速加强轨道追赶 + 攻击态径向补正"
-        },
-        {
-          "text": "击飞距离过长",
-          "note": "碰撞击飞系数与花体速度软顶下调"
-        },
-        {
-          "text": "回血花瓣数值都好低你看看是不是出问题了",
-          "note": "Ultra+ heal√3 相对战斗×3 掉档；服务端/tooltip heal_tier_catchup 补回×3"
-        },
-        {
-          "text": "腐化为什么别人要靠特别近才被影响变红",
-          "note": "Unique 扩散 R 160→600，离场红体续约 3s"
-        },
-        {
-          "text": "mimic没生效",
-          "note": "按自身稀有度解析左侧花瓣并生成该 ID；被动/冷却同步；禁抄腐化/拟态"
-        },
-        {
-          "text": "aqa怎么会莫名其妙有击杀播报",
-          "note": "Boss 播报/击杀统计只算有伤害贡献的队友"
-        },
-        {
-          "text": "打怪怎么没掉落",
-          "note": "默认显示低稀有掉落；金币不再被「隐藏普通/罕见」滤掉"
-        },
-        {
-          "text": "33亿伤害什么鬼",
-          "note": "天穹圣剑叠乘；已改最强一份"
-        },
-        {
-          "text": "唯一观察者额外视野 10000%",
-          "note": "Lv 缩放误用金叶 1% 地板→FOV 0.01；改 level_scale_vision 封顶 0.18"
-        },
-        {
-          "text": "局内esc设置一大坨下面留白、不随窗口自适应",
-          "note": "AdaptiveScroll 按内容收缩；标题设置同修"
-        },
-        {
-          "text": "腐化只有体伤没有花瓣伤害",
-          "note": "同队花瓣↔花体在 Corruption PvP 下可碰撞"
-        },
-        {
-          "text": "切装时副槽的装备会丢失或位移部分 （空白副槽先钉住再排主槽；整理不碰副槽；腐化 R 切与服一致），主槽正常"
-        },
-        {
-          "text": "陨石血量有问题",
-          "note": "阶梯 HP + 种植 ×40"
-        },
-        {
-          "text": "编译中进度条要好好做，舒缓玩家焦躁感。也就是说必需有进度一直在加的感觉"
-        },
-        {
-          "text": "怪物怎么在共享伤害",
-          "note": "白蚁灵能；半径/分摊已收紧"
-        },
-        {
-          "text": "未组队时其他玩家召唤物有碰撞箱"
-        },
-        {
-          "text": "低稀有度区刷唯一怪频率异常",
-          "note": "区难度封顶，Unique 仅 Unique 环"
-        },
-        {
-          "text": "挂机不看会dc",
-          "note": "idleTimeout 300s + heartbeat 1.5s"
-        },
-        {
-          "text": "唯一刀具+55体伤过",
-          "note": "Unique 78732→18000，Super 归正"
-        },
-        {
-          "text": "皇家长枪的攻击距离给的太少了",
-          "note": "extra_range≈100"
-        },
-        {
-          "text": "蚁巢地图优化",
-          "note": "按玩家彩色洞室图 NEAREST 32×32 重生成；cacheV 21754"
-        },
-        {
-          "text": "你被击败于加上中文怪物名"
-        },
-        {
-          "text": "留言板「修复进度」板块",
-          "note": "todo→progress.json 30s 轮询；publish_progress.py --deploy"
-        },
-        {
-          "text": "留言复制按钮",
-          "note": "操作行剪贴板图标；命名窗不刷新→?v=copy2+force replace；已热更 client.js/feedback.html"
-        },
-        {
-          "text": "目录加载失败 catalog 502",
-          "note": "服务端已通；force-cache 粘住重启期 502；改 no-store+重试，已部署"
-        },
-        {
-          "text": "实时小地图缺蚁巢",
-          "note": "live.html MAP_NAMES+三处 select value=8；map-layout 改 no-store 清旧缓存；已部署 BJ"
-        },
-        {
-          "text": "公会公告没法使用中文",
-          "note": "DOM sync + guilds.dat UTF-8"
-        },
-        {
-          "text": "指令应该可以两个首字母快捷tab补全，/gi就是/guild-invite。比如/sl就是/squad-leave。全部都要这样做"
-        },
-        {
-          "text": "取消自动组队还是会自动组队",
-          "note": "opt-out 同步离队"
-        },
-        {
-          "text": "pls"
-        },
-        {
-          "text": "三角改成同等级加伤害呗"
-        },
-        {
-          "text": "唯一三角带唯一加伤害吗",
-          "note": "Unique+Unique 同稀有度叠伤"
-        },
-        {
-          "text": "法老王冠照出来要有独特美术，召唤时间上限参考wiki",
-          "note": "美术+召唤6秒"
-        },
-        {
-          "text": "背包搜索花瓣要支持英文"
-        },
-        {
-          "text": "Queen Ant为什么全部等级都全服播报 ，还是说刷出来的boss显示的等级不对",
-          "note": "巢穴女王封顶Super，Unique仅地图锚点Boss"
-        },
-        {
-          "text": "葡萄不会分裂爆开好像还没修好"
-        },
-        {
-          "text": "小扁豆导致乱飞打不准"
-        },
-        {
-          "text": "aqa 孢子云 Unique Lv 没了",
-          "note": "备份已恢复 l:860；AccountStore Unique Lv high-water 防回退已上线"
-        },
-        {
-          "text": "蜈蚣剩下的身体看不见名字等级"
-        },
-        {
-          "text": "bone护甲不减半"
-        },
-        {
-          "text": "血祭怎么没贴图，好多都是这样"
-        },
-        {
-          "text": "腐化花瓣为什么没效果"
-        },
-        {
-          "text": "4qstick 召唤100+qstick"
-        },
-        {
-          "text": "把我手机卡崩了"
-        },
-        {
-          "text": "快削弱stick",
-          "note": "上限6/缩短寿命/削Unique数值与体型"
-        },
-        {
-          "text": "爆开后输出一会15000一会是升级后的27000"
-        },
-        {
-          "text": "豌豆好像也有点问题啊"
-        },
-        {
-          "text": "移动端刚开始横屏按钮不能点击，实时耐久度方向反过来"
-        },
-        {
-          "text": "刚开始黑屏加载有点慢，能不能优化变快或者加上进度条。而且样式不好看"
-        },
-        {
-          "text": "葡萄不会爆开而且没毒伤"
-        },
-        {
-          "text": "留言发不出去 玩家留言一直加载不出来。为什么总是运行的好好的崩了"
-        },
-        {
-          "text": "左下角为什么总是有个重置测试按钮"
-        }
-      ],
-      "open": [
-        {
-          "text": "游戏名是什么"
-        },
-        {
-          "text": "我看看"
-        },
-        {
-          "text": "<img src=\"file://C:\\Users\\Administrator\\Documents\\Tencent Files\\3028753757\\nt_qq\\nt_data\\Pic\\2026-10\\Ori\\256ababb0016379ad099951cb5b96645.jpg\" />哦不不不我的lv155bone怎么消失了"
-        },
-        {
-          "text": "我的为什么还在"
-        },
-        {
-          "text": "当你发现天穹圣剑能叠加时"
         }
       ]
     }
