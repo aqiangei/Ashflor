@@ -110,6 +110,8 @@ public:
     float death_x = 0;
     float death_y = 0;
     uint8_t death_map_id = 0;
+    // Dark Mark death: next Continue forces Hel hub (no exit lockout).
+    uint8_t hel_pending = 0;
     // Full score carried across death/map transfer (not just level floor).
     // Spawn restores this so mid-level XP is not wiped.
     uint32_t pending_score = 0;

@@ -500,6 +500,8 @@ namespace Craft {
         // Filler combat petals that clog bags after long grinds
         if (id == PetalID::kBasic || id == PetalID::kLight || id == PetalID::kHeavy)
             return 0.45f;
+        // Baby Ant / early grind: make Poo easy to farm.
+        if (id == PetalID::kPoo) return 2.4f;
         return 1.f;
     }
 

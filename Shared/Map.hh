@@ -27,21 +27,75 @@ namespace Map {
     // 迷宫格口硬下限（总纲 §1.2 / R7）
     inline constexpr float kMinMazeGate = 800.f;
 
-    // Soft pad around respawn: sparse hub fill + blocks high-diff spawns.
-    // Was 5200×4000 (swallowed the whole Common hub → ~8 mobs total, looked empty).
-    // Keep modest so hub *periphery* can pack Common/Unusual packs.
-    inline bool in_spawn_plaza(float x, float y) {
-        float dx = (x - MAP_SPAWN_X) / 1600.f;
-        float dy = (y - MAP_SPAWN_Y) / 1200.f;
-        return dx * dx + dy * dy < 1.f;
+    // florr L2 layouts from maps/*.tmj (1:1). Others = ashflor procedural.
+    inline bool is_florr_layout(uint8_t map_id) {
+        switch (map_id) {
+            case MapID::kPrimeGarden:
+            case MapID::kSewers:
+            case MapID::kPrimeDesert:
+            case MapID::kWildwood:
+            case MapID::kHel:
+            case MapID::kAntHell:
+            case MapID::kPrimeOcean:
+                return true;
+            default:
+                return false;
+        }
     }
 
-    // Only no-aggro pad: tight ellipse on the hub respawn point (MAP_SPAWN ± jitter).
-    // Wild mobs do not acquire / keep chase here; players may still attack.
-    inline bool in_spawn_sanctuary(float x, float y) {
-        float dx = (x - MAP_SPAWN_X) / 1000.f;
-        float dy = (y - MAP_SPAWN_Y) / 800.f;
+    // Per-map respawn hub (florr player_spawns origin; else arena center).
+    inline void hub_xy(uint8_t map_id, float &x, float &y) {
+        switch (map_id) {
+#include <Shared/FlorrTmjHubs.inc>
+        }
+    }
+
+    inline void florr_extent(uint8_t map_id, float &w, float &h) {
+        switch (map_id) {
+#include <Shared/FlorrTmjExtents.inc>
+        }
+    }
+
+    // Soft pad around respawn: sparse hub fill + blocks high-diff spawns.
+    inline bool in_spawn_plaza(uint8_t map_id, float x, float y) {
+        float hx = MAP_SPAWN_X, hy = MAP_SPAWN_Y;
+        hub_xy(map_id, hx, hy);
+        // Tighter pad on florr hubs — do not clear authored walls around spawn.
+        float sx = is_florr_layout(map_id) ? (ARENA_WIDTH * 0.028f) : (ARENA_WIDTH * 0.055f);
+        float sy = is_florr_layout(map_id) ? (ARENA_HEIGHT * 0.022f) : (ARENA_HEIGHT * 0.042f);
+        float dx = (x - hx) / sx;
+        float dy = (y - hy) / sy;
         return dx * dx + dy * dy < 1.f;
+    }
+    // Legacy: arena-center plaza (L1 default / tests without map_id).
+    inline bool in_spawn_plaza(float x, float y) {
+        return in_spawn_plaza(MapID::kGarden, x, y);
+    }
+
+    // Clear ring around field portals — no auto-spawn / thin packs so gates stay usable.
+    inline bool near_map_portal(uint8_t map_id, float x, float y) {
+        for (MapPortalDef const &p : MAP_PORTALS) {
+            if (p.from_map != map_id) continue;
+            float clear = p.radius + 1200.f;
+            float dx = x - p.x;
+            float dy = y - p.y;
+            if (dx * dx + dy * dy < clear * clear) return true;
+        }
+        return false;
+    }
+
+    // Only no-aggro pad: tight ellipse on the map hub.
+    inline bool in_spawn_sanctuary(uint8_t map_id, float x, float y) {
+        float hx = MAP_SPAWN_X, hy = MAP_SPAWN_Y;
+        hub_xy(map_id, hx, hy);
+        float sx = is_florr_layout(map_id) ? (ARENA_WIDTH * 0.018f) : (ARENA_WIDTH * 0.034f);
+        float sy = is_florr_layout(map_id) ? (ARENA_HEIGHT * 0.015f) : (ARENA_HEIGHT * 0.028f);
+        float dx = (x - hx) / sx;
+        float dy = (y - hy) / sy;
+        return dx * dx + dy * dy < 1.f;
+    }
+    inline bool in_spawn_sanctuary(float x, float y) {
+        return in_spawn_sanctuary(MapID::kGarden, x, y);
     }
 
     extern uint32_t difficulty_at_level(uint32_t);

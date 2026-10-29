@@ -20,7 +20,7 @@ void tick_curse_behavior(Simulation *sim) {
         if (!(ent.get_team() == NULL_ENTITY)) return;
         if (sim->ent_alive(ent.target)) return;
         Entity const &player = sim->get_ent(leader);
-        if (Map::in_spawn_plaza(player.get_x(), player.get_y())) return;
+        if (Map::in_spawn_plaza(sim->map_id, player.get_x(), player.get_y())) return;
         if (is_player_faction(sim, ent) || ent.damage <= 0.f) return;
         Vector delta(player.get_x() - ent.get_x(), player.get_y() - ent.get_y());
         // The level-60 curse must honor Poo just like normal acquisition.

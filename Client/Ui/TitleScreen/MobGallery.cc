@@ -5,6 +5,7 @@
 #include <Client/Ui/Container.hh>
 #include <Client/Ui/DynamicText.hh>
 #include <Client/Ui/StaticText.hh>
+#include <Client/Ui/LazyTooltip.hh>
 #include <Client/Ui/Extern.hh>
 
 #include <Client/Assets/Assets.hh>
@@ -70,10 +71,16 @@ void GalleryMob::on_render(Renderer &ctx) {
     radius *= mob_rarity_radius_mult(display_rarity);
     if (radius > width * 0.5) ctx.scale(0.5 * width / radius);
     ctx.scale(0.5);
-    draw_static_mob(id, ctx, { .radius = radius, .flower_attrs = { .color = ColorID::kGray } });
+    draw_static_mob(id, ctx, {
+        .radius = radius, .rarity = display_rarity,
+        .flower_attrs = { .color = ColorID::kGray }
+    });
     if (data.attributes.segments > 1) {
         ctx.translate(-2 * radius, 0);
-        draw_static_mob(id, ctx, { .radius = radius, .flags = 1<<1, .flower_attrs = { .color = ColorID::kGray } });
+        draw_static_mob(id, ctx, {
+            .radius = radius, .flags = 1<<1, .rarity = display_rarity,
+            .flower_attrs = { .color = ColorID::kGray }
+        });
     }
     }
 }
@@ -192,7 +199,7 @@ static Element *make_mob_stat_container(MobID::T id, uint8_t rarity) {
     return new Ui::VContainer(stats, 0, 2, { .h_justify = Style::Left });
 }
 
-static void make_mob_tooltip(MobID::T id, uint8_t rarity) {
+static Element *make_mob_tooltip(MobID::T id, uint8_t rarity) {
     std::vector<Ui::Element *> children = {
         new Ui::DynamicText(20, [id](){ return I18n::mob_name(id); }, { .fill = 0xffffffff, .h_justify = Style::Left }),
         new Ui::DynamicText(14, [rarity](){ return I18n::rarity_name(rarity); },
@@ -213,13 +220,13 @@ static void make_mob_tooltip(MobID::T id, uint8_t rarity) {
     tooltip->style.fill = 0xb01c2418;
     tooltip->style.round_radius = 12;
     tooltip->refactor();
-    Ui::mob_tooltips[id][rarity] = tooltip;
+    return tooltip;
 }
 
 void Ui::make_mob_tooltips() {
     for (MobID::T i = 0; i < MobID::kNumMobs; ++i)
         for (uint8_t r = 0; r < RarityID::kNumRarities; ++r)
-            make_mob_tooltip(i, r);
+            Ui::mob_tooltips[i][r] = new Ui::LazyTooltip([i, r]() { return make_mob_tooltip(i, r); });
 }
 
 static Element *make_scroll() {

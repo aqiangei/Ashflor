@@ -469,6 +469,8 @@ void inflict_damage(Simulation *sim, EntityID const atk_id, EntityID const def_i
                         cx = sim->get_ent(best).get_x();
                         cy = sim->get_ent(best).get_y();
                     }
+                    if (nhit > 0)
+                        spawn_lightning_bolt_hits(sim, px, py, hit, nhit);
                 }
                 break; // one Battery slot per ram
             }
@@ -500,8 +502,8 @@ void inflict_damage(Simulation *sim, EntityID const atk_id, EntityID const def_i
             && type != DamageType::kPoison
             && type != DamageType::kBurn) {
             // Termite psionic link — full hit mirrored to nearby kin (wiki "connected").
-            // 22%/180 was too weak to notice ("白蚁没有连伤").
-            float const R = 420.f;
+            // Was 180@22% (invisible), then 420 full share; players still said range too small.
+            float const R = 960.f;
             float const px = defender.get_x();
             float const py = defender.get_y();
             float const share = damage_dealt;
@@ -636,18 +638,18 @@ void inflict_damage(Simulation *sim, EntityID const atk_id, EntityID const def_i
             if (training_stats) training_stats->slow_ticks = std::max(training_stats->slow_ticks, sn);
             else if (defender.snare_ticks < sn) defender.snare_ticks = sn;
         }
-        // Lightning chain: jump nearest→nearest (not flat AoE in one query).
-        if (A.lightning_damage > 0.f && A.lightning_chains > 1) {
+        // Lightning / Laser / Blueberries: chain nearest→nearest + bolt VFX.
+        if (A.lightning_damage > 0.f && A.battery_charges == 0) {
             float const R = 220.f;
             float const R2 = R * R;
-            float chain_dmg = (attacker.damage > A.lightning_damage
-                ? attacker.damage : A.lightning_damage) * 0.65f;
-            uint8_t left = A.lightning_chains - 1;
             EntityID atk_team = attacker.get_team();
             EntityID src = atk_id;
             EntityID hit[16];
             uint8_t nhit = 1;
             hit[0] = def_id;
+            uint8_t left = A.lightning_chains > 1 ? (uint8_t)(A.lightning_chains - 1) : 0;
+            float chain_dmg = (attacker.damage > A.lightning_damage
+                ? attacker.damage : A.lightning_damage) * 0.65f;
             float cx = defender.get_x();
             float cy = defender.get_y();
             while (left > 0 && nhit < 16) {
@@ -677,6 +679,7 @@ void inflict_damage(Simulation *sim, EntityID const atk_id, EntityID const def_i
                 cy = nxt.get_y();
                 chain_dmg *= 0.65f;
             }
+            spawn_lightning_bolt_hits(sim, attacker.get_x(), attacker.get_y(), hit, nhit);
         }
         if (A.taunt_radius > 0.f && sim->ent_alive(attacker.base_entity)) {
             float const R = A.taunt_radius;

@@ -94,14 +94,16 @@ namespace Game {
     uint8_t leaving_to_title = 0;
     uint8_t show_debug = 0;
     uint8_t show_hitboxes = 0;
+    uint8_t perf_mode = 0;
     // Default on so Common/Unusual piles (and coins) are not invisible to new
     // players — the "hide clutter" toggle remains in settings/pause.
     uint8_t show_low_rarity_drops = 1;
     uint8_t selected_map = MapID::kGarden;
     uint8_t minimap_expanded = 0;
     std::vector<OnlineRosterEntry> online_roster;
-    // >1 = closer / smaller view. Default slightly zoomed-in vs old 1.0.
-    float camera_zoom = 1.28f;
+    // >1 = closer / smaller view. Keep ≤1 so hub packs + Unique bodies fit on screen
+    // (1.28 default made bees/dummies clip the viewport — 「显示不全」).
+    float camera_zoom = 1.0f;
     uint8_t pause_menu_open = 0;
     uint8_t leave_confirm_open = 0;
     uint8_t game_panel = 0;
@@ -1025,6 +1027,11 @@ void Game::toggle_pause() {
 }
 
 void Game::return_to_title() {
+    spawn_request_at = 0;
+    spawn_retries = 0;
+    Ui::panel_open = Ui::Panel::kNone;
+    Input::freeze_input = 0;
+    Ui::cancel_petal_drags();
     close_game_panel();
     close_guild_panel();
     close_chat();
@@ -1078,8 +1085,22 @@ uint8_t Game::should_render_game_ui() {
 
 void Game::poll_ui_event(Ui::ScreenEvent const &event) {
     Ui::focused = nullptr;
+    // These visible foreground controls must beat background HUD hit boxes.
+    // The death panel is constructed before the HUD, so ordinary reverse child
+    // polling can otherwise let a later, transparent element consume Continue.
+    auto poll_front = [&](Ui::Element *root) {
+        if (root && root->visible && root->style.should_render()) root->poll_events(event);
+    };
+    if (leave_confirm_open && should_render_game_ui())
+        poll_front(Ui::leave_confirm_root);
+    else if (!alive() && on_game_screen && !leaving_to_title
+             && game_panel == kPanelNone && Ui::panel_open == Ui::Panel::kNone
+             && !pause_menu_open && !guild_panel_open && !invite_open
+             && !chat_menu_open && !update_poster_open && !shop_announce_prompt_open)
+        poll_front(Ui::death_screen_root);
     // Prefer game UI while both would be live (circle wipe).
-    if (Game::should_render_game_ui())
+    if (Ui::focused != nullptr) { /* foreground control already owns this event */ }
+    else if (Game::should_render_game_ui())
         game_ui_window.poll_events(event);
     else if (Game::should_render_title_ui())
         title_ui_window.poll_events(event);
@@ -1102,6 +1123,18 @@ void Game::tick(double time) {
     // JS key handlers read this while an HTML <input> is focused (chat, etc.).
     EM_ASM({ Module.ashflorKeyboardMove = $0; },
         (!Input::mobile_controls() && Input::keyboard_movement) ? 1 : 0);
+    // RAF loop reads this for canvas DPR cap (perf mode → 1×, else ≤2×).
+    {
+        static uint8_t prev_perf = 255;
+        if (prev_perf != Game::perf_mode) {
+            prev_perf = Game::perf_mode;
+            EM_ASM({
+                Module.ashflorPerfMode = $0;
+                Module._ashflorBufW = null;
+                Module._ashflorBufH = null;
+            }, Game::perf_mode ? 1 : 0);
+        }
+    }
     simulation.tick();
     
     renderer.reset();
@@ -1158,9 +1191,17 @@ void Game::tick(double time) {
         }
         score = player.get_score();
     } else {
+        bool const just_died = player_id != NULL_ENTITY;
         player_id = NULL_ENTITY;
-        pause_menu_open = 0;
-        leave_confirm_open = 0;
+        // Clear combat overlays ONCE. Clearing leave_confirm_open every dead
+        // frame made the exit dialog disappear before its buttons could click.
+        if (just_died) {
+            pause_menu_open = 0;
+            leave_confirm_open = 0;
+            close_game_panel();
+            Ui::panel_open = Ui::Panel::kNone;
+            Ui::cancel_petal_drags();
+        }
         // Dead / title: clear movement so mobile joystick / attack can't leak
         // NaN-ish or stuck inputs into the next spawn packet.
         Input::game_inputs.x = 0;
@@ -1411,7 +1452,9 @@ void Game::tick(double time) {
     }
     if (socket.ready) {
         sync_auto_party_opt();
-        if (alive()) send_inputs();
+        // Death Continue still needs a keepalive: without packets the server
+        // marks the tab silent after 4s and stops world updates.
+        if (alive() || on_game_screen) send_inputs();
     }
 
     if (Input::keys_held_this_tick.contains(';'))
@@ -1475,13 +1518,13 @@ void Game::tick(double time) {
     }
 
     // Unequipping Antenna/Observer: keep the same on-screen world scale.
-    // Forcing zoom back to 1.28 with a larger FOV felt like "视野变得最小".
+    // Forcing zoom back with a larger FOV felt like "视野变得最小".
     if (alive() && simulation.ent_exists(camera_id)) {
         static float prev_cam_fov = BASE_FOV;
         float cur_fov = simulation.get_ent(camera_id).get_fov();
         if (prev_cam_fov < BASE_FOV * 0.92f && cur_fov >= BASE_FOV * 0.92f
             && cur_fov > 1e-6f) {
-            camera_zoom = fclamp(camera_zoom * (prev_cam_fov / cur_fov), 0.55f, 2.2f);
+            camera_zoom = fclamp(camera_zoom * (prev_cam_fov / cur_fov), 0.42f, 2.0f);
             persist_camera_zoom();
         }
         prev_cam_fov = cur_fov;
@@ -1490,7 +1533,7 @@ void Game::tick(double time) {
     // Wheel zoom — disabled while a game panel (bag/craft/…) is open so scroll owns the wheel
     if (alive() && !chat_open && game_panel == kPanelNone && Input::wheel_delta != 0) {
         float factor = 1.f - Input::wheel_delta * 0.0012f;
-        float next = fclamp(camera_zoom * factor, 0.55f, 2.2f);
+        float next = fclamp(camera_zoom * factor, 0.42f, 2.0f);
         if (next != camera_zoom) {
             camera_zoom = next;
             persist_camera_zoom();
@@ -1571,7 +1614,7 @@ void Game::tick(double time) {
                     if (!pinch_armed && std::fabs(ratio - 1.f) > 0.04f)
                         pinch_armed = 1;
                     if (pinch_armed)
-                        camera_zoom = fclamp(pinch_start_zoom * ratio, 0.55f, 2.2f);
+                        camera_zoom = fclamp(pinch_start_zoom * ratio, 0.42f, 2.0f);
                 }
                 Input::touches[a->id].saturated = 1;
                 Input::touches[b->id].saturated = 1;

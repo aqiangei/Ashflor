@@ -47,6 +47,8 @@ public:
     static uint32_t HSV(uint32_t, float);
     static uint32_t MIX(uint32_t, uint32_t, float);
     static float get_ascii_text_size(char const *);
+    // Finish queued paths before presenting or exposing a canvas to JavaScript.
+    static void flush();
 
     void reset();
     void clear();
@@ -96,6 +98,8 @@ public:
     void draw_image(Renderer &);
     // Cached, embedded original image (no external request at render time).
     void draw_image_data(char const *, float width, float height);
+    // Like draw_image_data but returns 0 if the image is not ready yet.
+    uint8_t try_draw_image_data(char const *, float width, float height);
     void draw_image_at(Renderer &, float x, float y);
 
     void fill_text(char const *);

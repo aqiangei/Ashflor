@@ -32,6 +32,7 @@
 #include <algorithm>
 #include <array>
 #include <chrono>
+#include <cstring>
 #include <iostream>
 
 constexpr std::array<uint32_t, RarityID::kNumRarities> RARITY_TO_XP = {
@@ -102,10 +103,13 @@ static void send_craft_update(Client *client, uint8_t result, PetalID::T petal,
     writer.write<PetalID::T>(petal);
     // Win/buy count (or miss loss). 0 for bank sync / errors.
     writer.write<uint16_t>(amount);
-    for (uint32_t i = 0; i < PetalID::kNumPetals; ++i)
-        writer.write<uint32_t>(client->craft_bank[i]);
+    // Coins + Unique Lv BEFORE craft_bank: bank is kNumPetals varints; if a
+    // deploy adds petals but forgets VERSION_HASH, old clients used to eat the
+    // level trailer and badges went blank (accounts.dat l: still fine).
     writer.write<uint32_t>(client->coins);
     write_sparse_petal_levels(writer, client->petal_levels);
+    for (uint32_t i = 0; i < PetalID::kNumPetals; ++i)
+        writer.write<uint32_t>(client->craft_bank[i]);
     // Optional tail for newer clients; count actual rolls, including All batches.
     writer.write<PetalID::T>(material);
     writer.write<uint32_t>(attempts);
@@ -586,10 +590,6 @@ void Client::on_message(WebSocket *ws, std::string_view message, uint64_t code) 
             client->disconnect();
             return;
         case Serverbound::kClientInput: {
-            if (!client->alive()) break;
-            Simulation *simulation = &client->game->simulation;
-            Entity &camera = simulation->get_ent(client->camera);
-            Entity &player = simulation->get_ent(camera.get_player());
             if (client->check_invalid(
                 validator.validate_float() &&
                 validator.validate_float() &&
@@ -601,6 +601,19 @@ void Client::on_message(WebSocket *ws, std::string_view message, uint64_t code) 
                 validator.validate_uint16() && validator.validate_uint16())) return;
             float x = reader.read<float>();
             float y = reader.read<float>();
+            uint8_t input_flags = reader.read<uint8_t>();
+            uint8_t rot_set = reader.read<uint8_t>();
+            if (rot_set > Talent::kRotSettingMax) rot_set = Talent::kRotSettingMax;
+            client->rot_speed_setting = rot_set;
+            if (has_view) {
+                client->view_half_w = reader.read<uint16_t>();
+                client->view_half_h = reader.read<uint16_t>();
+            }
+            // Death Continue: accept view/keepalive only — no flower to steer.
+            if (!client->alive()) break;
+            Simulation *simulation = &client->game->simulation;
+            Entity &camera = simulation->get_ent(client->camera);
+            Entity &player = simulation->get_ent(camera.get_player());
             // Reject NaN/Inf: comparisons alone let NaN into acceleration and
             // poison motion until the whole arena freezes (esp. after mobile respawns).
             if (!is_finite(x) || !is_finite(y)) break;
@@ -614,14 +627,7 @@ void Client::on_message(WebSocket *ws, std::string_view message, uint64_t code) 
                 else accel.set_magnitude(m / 200 * PLAYER_ACCELERATION);
                 player.acceleration = accel;
             }
-            player.input = reader.read<uint8_t>();
-            uint8_t rot_set = reader.read<uint8_t>();
-            if (rot_set > Talent::kRotSettingMax) rot_set = Talent::kRotSettingMax;
-            client->rot_speed_setting = rot_set;
-            if (has_view) {
-                client->view_half_w = reader.read<uint16_t>();
-                client->view_half_h = reader.read<uint16_t>();
-            }
+            player.input = input_flags;
             break;
         }
         case Serverbound::kClientSpawn: {
@@ -640,6 +646,15 @@ void Client::on_message(WebSocket *ws, std::string_view message, uint64_t code) 
             reader.read<std::string>(name);
             if (client->check_invalid(UTF8Parser::is_valid_utf8(name))) return;
             uint8_t map_id = clamp_to_open_map(reader.read<uint8_t>());
+            // Dark Mark death: force Hel hub on Continue (ignore client map pick).
+            if (client->hel_pending) {
+                map_id = MapID::kHel;
+                client->hel_pending = 0;
+            } else if (client->has_death_pos && map_is_open(client->death_map_id)) {
+                // Death Continue stays on the map you died on. Title selected_map
+                // is often still an L1 biome and was yanking L2/L3 deaths home.
+                map_id = client->death_map_id;
+            }
             uint8_t guest_id_reassigned = 0;
             if (!client->account_name.empty()) {
                 name = client->account_name;
@@ -695,8 +710,9 @@ void Client::on_message(WebSocket *ws, std::string_view message, uint64_t code) 
                 client->send_packet(writer.packet, writer.at - writer.packet);
                 break;
             }
-            // Continue after death ??near death site on same map; first enter / other map ??hub
+            // Continue after death: L1 near death site; L2+ always that map's hub.
             uint8_t near_death = client->has_death_pos && client->death_map_id == map_id;
+            if (near_death && map_tier(map_id) >= 2) near_death = 0;
             float near_x = client->death_x;
             float near_y = client->death_y;
             client->has_death_pos = 0;
@@ -790,17 +806,17 @@ void Client::on_message(WebSocket *ws, std::string_view message, uint64_t code) 
             writer.write<uint32_t>(acc == nullptr ? 1u : acc->level);
             for (uint32_t i = 0; i < 2 * MAX_SLOT_COUNT; ++i)
                 writer.write<PetalID::T>(acc == nullptr ? PetalID::kNone : acc->petals[i]);
-            for (uint32_t i = 0; i < PetalID::kNumPetals; ++i)
-                writer.write<uint32_t>(acc == nullptr ? 0 : acc->craft_bank[i]);
             writer.write<uint32_t>(acc == nullptr ? 0 : acc->coins);
-            // Unique levels in AccountResult so UI badges survive reconnect
-            // without waiting for a later craft sync (deploy / WS drop).
+            // Unique Lv before craft_bank (see send_craft_update) — deploy petal
+            // adds must not scramble badges when hash bump is forgotten.
             if (acc != nullptr)
                 write_sparse_petal_levels(writer, acc->petal_levels);
             else {
                 static std::array<uint32_t, PetalID::kNumPetals> const kEmptyLevels = {};
                 write_sparse_petal_levels(writer, kEmptyLevels);
             }
+            for (uint32_t i = 0; i < PetalID::kNumPetals; ++i)
+                writer.write<uint32_t>(acc == nullptr ? 0 : acc->craft_bank[i]);
             writer.write<uint64_t>(
                 result == AccountResultCode::kAccountOk
                     ? AccountStore::current_session(client->account_name)
@@ -908,6 +924,117 @@ void Client::on_message(WebSocket *ws, std::string_view message, uint64_t code) 
             if (client->check_invalid(validator.validate_uint8() && validator.validate_uint16())) return;
             uint8_t mode = reader.read<uint8_t>();
             uint16_t arg = reader.read<uint16_t>();
+            // Hel Plinko: bet one Poker Chip (any rarity except Unique).
+            if (mode == CraftMode::kCraftPlinko) {
+                if (client->game == nullptr || client->game->map_id != MapID::kHel) {
+                    send_craft_update(client, CraftResultCode::kCraftNoMats, PetalID::kNone);
+                    break;
+                }
+                PetalID::T chip = (PetalID::T) arg;
+                if (chip == PetalID::kNone || chip >= PetalID::kNumPetals
+                    || std::strcmp(PETAL_DATA[chip].name, "Poker Chip") != 0
+                    || PETAL_DATA[chip].rarity >= RarityID::kUnique) {
+                    send_craft_update(client, CraftResultCode::kCraftNoMats, PetalID::kNone);
+                    break;
+                }
+                if (craft_owned(client, chip) < 1) {
+                    send_craft_update(client, CraftResultCode::kCraftNoMats, chip);
+                    break;
+                }
+                if (!consume_craft_mats(client, chip, 1)) {
+                    send_craft_update(client, CraftResultCode::kCraftNoMats, chip);
+                    break;
+                }
+                // Official Hel Plinko bucket multipliers (17 slots, side-heavy).
+                static float const kMult[17] = {
+                    500, 20, 5, 3, 2, 0, 1, 1, 1, 1, 1, 0, 2, 3, 5, 20, 500
+                };
+                static float const kProb[17] = {
+                    0.000015f, 0.000244f, 0.001831f, 0.008545f, 0.027771f,
+                    0.066681f, 0.122070f, 0.174255f, 0.196380f, 0.174255f,
+                    0.122070f, 0.066681f, 0.027771f, 0.008545f, 0.001831f,
+                    0.000244f, 0.000015f
+                };
+                float r = frand();
+                float acc = 0.f;
+                uint8_t bucket = 8;
+                for (uint8_t i = 0; i < 17; ++i) {
+                    acc += kProb[i];
+                    if (r <= acc) { bucket = i; break; }
+                }
+                uint32_t out_n = (uint32_t) kMult[bucket];
+                if (out_n > 0) {
+                    for (uint32_t i = 0; i < out_n; ++i)
+                        try_give_petal(client, chip);
+                }
+                persist_account(client);
+                send_craft_update(client, CraftResultCode::kCraftPlinkoResult, chip, (uint16_t) out_n);
+                break;
+            }
+            // Factory Assembler: convert petals near an Assembler mob.
+            if (mode == CraftMode::kCraftAssemble) {
+                if (client->game == nullptr || client->game->map_id != MapID::kFactory) {
+                    send_craft_update(client, CraftResultCode::kCraftNoMats, PetalID::kNone);
+                    break;
+                }
+                Simulation *sim = &client->game->simulation;
+                if (!sim->ent_exists(client->camera)) break;
+                Entity &cam = sim->get_ent(client->camera);
+                if (!sim->ent_alive(cam.get_player())) {
+                    send_craft_update(client, CraftResultCode::kCraftNoMats, PetalID::kNone);
+                    break;
+                }
+                Entity &player = sim->get_ent(cam.get_player());
+                float px = player.get_x(), py = player.get_y();
+                uint8_t near_asm = 0;
+                uint8_t asm_rarity = RarityID::kCommon;
+                sim->spatial_hash.query(px, py, 420.f, 420.f, [&](Simulation *s, Entity &ent) {
+                    if (!ent.has_component(kMob) || ent.get_mob_id() != MobID::kAssembler) return;
+                    float dx = ent.get_x() - px, dy = ent.get_y() - py;
+                    if (dx * dx + dy * dy > 420.f * 420.f) return;
+                    near_asm = 1;
+                    asm_rarity = ent.get_rarity();
+                });
+                if (!near_asm) {
+                    send_craft_update(client, CraftResultCode::kCraftNoMats, PetalID::kNone);
+                    break;
+                }
+                uint8_t recipe = (uint8_t) arg;
+                // Compact recipe table: consume → produce (same Assembler rarity).
+                struct AsmRecipe { PetalID::T in_base; uint32_t in_n; PetalID::T out_base; uint32_t out_n; };
+                static AsmRecipe const kAsm[] = {
+                    { PetalID::kGlass, 1, PetalID::kSand, 1 },
+                    { PetalID::kSand, 1, PetalID::kGlass, 1 },
+                    { PetalID::kAir, 10, PetalID::kBubble, 1 },
+                    { PetalID::kHoney, 3, PetalID::kWax, 1 },
+                    { PetalID::kBattery, 1, PetalID::kFragment, 1 },
+                    { PetalID::kCogwheel, 2, PetalID::kFragment, 1 },
+                };
+                if (recipe >= sizeof(kAsm) / sizeof(kAsm[0])) {
+                    send_craft_update(client, CraftResultCode::kCraftNoMats, PetalID::kNone);
+                    break;
+                }
+                AsmRecipe const &rec = kAsm[recipe];
+                PetalID::T in_id = Craft::petal_at_rarity(rec.in_base, asm_rarity);
+                PetalID::T out_id = Craft::petal_at_rarity(rec.out_base, asm_rarity);
+                if (in_id == PetalID::kNone || out_id == PetalID::kNone) {
+                    send_craft_update(client, CraftResultCode::kCraftNoMats, PetalID::kNone);
+                    break;
+                }
+                if (craft_owned(client, in_id) < rec.in_n) {
+                    send_craft_update(client, CraftResultCode::kCraftNoMats, in_id);
+                    break;
+                }
+                if (!consume_craft_mats(client, in_id, rec.in_n)) {
+                    send_craft_update(client, CraftResultCode::kCraftNoMats, in_id);
+                    break;
+                }
+                for (uint32_t i = 0; i < rec.out_n; ++i)
+                    try_give_petal(client, out_id);
+                persist_account(client);
+                send_craft_update(client, CraftResultCode::kCraftAssembled, out_id, (uint16_t) rec.out_n);
+                break;
+            }
             if (mode == CraftMode::kCraftBuyAnnounce) {
                 (void) arg;
                 if (client->check_invalid(validator.validate_string(MAX_CHAT_LENGTH))) return;
@@ -1561,17 +1688,17 @@ void Client::on_message(WebSocket *ws, std::string_view message, uint64_t code) 
             Writer writer(Server::OUTGOING_PACKET);
             writer.write<uint8_t>(Clientbound::kAccountResult);
             writer.write<uint8_t>(AccountResultCode::kAccountLoggedOut);
-            // Must match login AccountResult: level is uint32_t (varint).
+            // Must match login AccountResult layout (coins+levels before bank).
             writer.write<uint32_t>(1);
             for (uint32_t i = 0; i < 2 * MAX_SLOT_COUNT; ++i)
                 writer.write<PetalID::T>(PetalID::kNone);
-            for (uint32_t i = 0; i < PetalID::kNumPetals; ++i)
-                writer.write<uint32_t>(0);
             writer.write<uint32_t>(0);
             {
                 static std::array<uint32_t, PetalID::kNumPetals> const kEmptyLevels = {};
                 write_sparse_petal_levels(writer, kEmptyLevels);
             }
+            for (uint32_t i = 0; i < PetalID::kNumPetals; ++i)
+                writer.write<uint32_t>(0);
             writer.write<uint64_t>(0);
             client->send_packet(writer.packet, writer.at - writer.packet);
             send_craft_update(client, CraftResultCode::kCraftBankSync, PetalID::kNone);

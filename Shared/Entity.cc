@@ -10,6 +10,7 @@ Entity::Entity() {
 }
 
 void Entity::init() {
+    CLIENT_ONLY(motion_sample_count = 0;)
     components = 0;
     pending_delete = 0;
     lifetime = 0;

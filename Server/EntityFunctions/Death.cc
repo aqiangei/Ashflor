@@ -465,23 +465,44 @@ void entity_on_death(Simulation *sim, Entity const &ent) {
                 && ent.zone == 0xFF
                 && !ent.has_component(kSegmented);
             // Boss announce: highest personal camera damage among claimers.
+            // Require real contribution (≥1% max HP) — chip + later despawn/DoT
+            // used to credit AFK "aqa 击败了 Flower Guardian" with no fight.
             if (is_map_boss) {
                 Client *mvp = nullptr;
+                float mvp_dmg = 0.f;
                 if (claim_n > 0) {
                     uint8_t bi = 0;
                     for (uint8_t i = 1; i < claim_n; ++i) {
                         if (claim_dmg[i] > claim_dmg[bi]) bi = i;
                     }
-                    mvp = client_for_cam(claim_cams[bi]);
+                    if (claim_dmg[bi] + 1e-3f >= need) {
+                        mvp = client_for_cam(claim_cams[bi]);
+                        mvp_dmg = claim_dmg[bi];
+                    }
                 }
                 if (mvp == nullptr && sim->ent_exists(ent.last_damaged_by)) {
                     EntityID kid = sim->get_ent(ent.last_damaged_by).base_entity;
                     if (sim->ent_alive(kid)) {
                         Entity &killer = sim->get_ent(kid);
-                        if (killer.has_component(kFlower) && sim->ent_alive(killer.get_parent()))
-                            mvp = Server::client_by_camera(sim, killer.get_parent());
+                        if (killer.has_component(kFlower) && sim->ent_alive(killer.get_parent())) {
+                            Client *cand = Server::client_by_camera(sim, killer.get_parent());
+                            // last_damaged_by alone is not enough — must also be
+                            // on the claim tape at threshold (or solo tape empty
+                            // only when we have no claims at all is skipped).
+                            if (cand != nullptr) {
+                                for (uint8_t i = 0; i < claim_n; ++i) {
+                                    if (claim_cams[i] == cand->camera
+                                        && claim_dmg[i] + 1e-3f >= need) {
+                                        mvp = cand;
+                                        mvp_dmg = claim_dmg[i];
+                                        break;
+                                    }
+                                }
+                            }
+                        }
                     }
                 }
+                (void)mvp_dmg;
                 if (mvp != nullptr) {
                     credit_boss_kill_stats(game, mvp, claim_cams, claim_dmg, claim_n);
                     char const *mob_nm = MOB_DATA[ent.get_mob_id()].name;
@@ -748,6 +769,17 @@ void entity_on_death(Simulation *sim, Entity const &ent) {
             camera.set_inventory(i, PetalID::kBasic);
         }
         if (Client *owner = Server::client_by_camera(sim, camera.id)) {
+            // Dark Mark: die while equipped or vulnerability-marked → next Continue → Hel.
+            // No helLockedUntil / exit cooldown.
+            uint8_t send_hel = ent.dark_marked_ticks > 0;
+            if (!send_hel) {
+                for (uint32_t i = 0; i < ent.get_loadout_count(); ++i) {
+                    PetalID::T id = slot_petals[i];
+                    if (id == PetalID::kNone || id >= PetalID::kNumPetals) continue;
+                    if (PETAL_DATA[id].attributes.dark_mark) { send_hel = 1; break; }
+                }
+            }
+            if (send_hel) owner->hel_pending = 1;
             // Nosave: sync write of accounts.dat on death stalls the whole server tick
             AccountStore::capture_nosave(owner);
             client_send_life_summary(owner);

@@ -176,7 +176,16 @@ void Simulation::on_tick() {
         // Corpses have Flower but no Health — don't keep an empty map "occupied".
         if (!ent.has_component(kMob) && ent.has_component(kHealth)) ++flowers;
     });
-    uint8_t const occupied = flowers > 0;
+    // Death Continue / revive wait still has a connected camera. Counting only
+    // living flowers treated a solo death as an empty map: spatial_hash never
+    // rebuilt, _update_client deleted every mob from the client's view, and
+    // wildlife drained under the death screen.
+    uint32_t viewers = 0;
+    for_each<kCamera>([&](Simulation *sim, Entity &cam) {
+        if (Server::client_by_camera(sim, cam.id) != nullptr)
+            ++viewers;
+    });
+    uint8_t const occupied = flowers > 0 || viewers > 0;
 
     auto t_hash0 = std::chrono::steady_clock::now();
     spatial_hash.refresh(ARENA_WIDTH, ARENA_HEIGHT);
@@ -323,7 +332,7 @@ void Simulation::on_tick() {
 
                 game_tick_t unseen_limit = (game_tick_t)(28 * TPS);
                 game_tick_t never_seen_life = (game_tick_t)(55 * TPS);
-                uint8_t in_plaza = Map::in_spawn_plaza(ent.get_x(), ent.get_y());
+                uint8_t in_plaza = Map::in_spawn_plaza(sim->map_id, ent.get_x(), ent.get_y());
                 uint32_t zdiff = RarityID::kNumRarities;
                 if (ent.zone < MAX_ZONES_PER_MAP)
                     zdiff = map_zones(sim->map_id)[ent.zone].difficulty;

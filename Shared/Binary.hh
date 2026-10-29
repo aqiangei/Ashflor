@@ -109,8 +109,10 @@ enum CraftMode : uint8_t {
     kCraftBuySpecial = 3, // arg = PetalID special (legacy coin shop)
     kCraftGambleAll = 4,  // arg = PetalID → craft every possible batch
     kCraftRecipe = 5,     // arg = recipe index; followed by uint8 rarity → resolve real IDs
-    kCraftBuyAnnounce = 6 // arg unused; followed by string → paid screen banner
+    kCraftBuyAnnounce = 6, // arg unused; followed by string → paid screen banner
     // Gamble / GambleAll / Exchange on a Unique petal roll its infinite level.
+    kCraftPlinko = 7,     // Hel only: arg = Poker Chip petal id (not Unique)
+    kCraftAssemble = 8    // Factory: arg = recipe index; must be near Assembler
 };
 
 enum CraftResultCode : uint8_t {
@@ -122,7 +124,9 @@ enum CraftResultCode : uint8_t {
     kCraftNoCoins = 5,
     kCraftBought = 6,
     kCraftInvFull = 7,
-    kCraftLevelWin = 8 // petal = leveled id, amount = new level
+    kCraftLevelWin = 8, // petal = leveled id, amount = new level
+    kCraftPlinkoResult = 9, // petal = chip id, amount = chips after multiplier
+    kCraftAssembled = 10
 };
 
 enum LoadoutPresetResult : uint8_t {

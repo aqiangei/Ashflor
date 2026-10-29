@@ -1,11 +1,27 @@
 {
   "ok": true,
-  "updated_at": 1793066703411,
+  "updated_at": 1793168631429,
   "days": [
     {
       "date": "2026-10-27",
       "label": "10/27",
       "done": [
+        {
+          "text": "假人美术变成方块靶纸",
+          "note": "MobRasterCache 离屏未 alpha:true + 假人改回即时绘制"
+        },
+        {
+          "text": "部署后唯一花瓣等级又没了",
+          "note": "根因：加瓣未 bump VERSION_HASH→craft_bank 错位吃掉 Lv；包序改为先 Lv 后 bank；发版脚本槽位变化自动 +hash；盘上 l: 未丢"
+        },
+        {
+          "text": "安卡的冷却为什么一百多秒有问题",
+          "note": "各稀有度曾全写 256s；按 wiki 256/128/…/1 +0.5s 种植"
+        },
+        {
+          "text": "白蚁伤害共享范围过小",
+          "note": "连伤半径 420→960"
+        },
         {
           "text": "增加一个减少副冷却的花瓣呗（做好美术和掉落）",
           "note": "Hourglass/沙漏；Sandstorm"

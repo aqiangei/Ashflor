@@ -83,6 +83,8 @@ float LerpFloat::anchor() const {
     return value;
 }
 
+void LerpFloat::set_render(float v) { lerp_value = v; }
+
 SeedGenerator::SeedGenerator(uint32_t s) : seed(s) {}
 
 float SeedGenerator::next() {

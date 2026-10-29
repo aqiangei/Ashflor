@@ -9,6 +9,7 @@
 #include <Client/Ui/Extern.hh>
 
 #include <Shared/Map.hh>
+#include <Shared/StaticData.hh>
 #include <Shared/StaticDefinitions.hh>
 #include <Client/StaticData.hh>
 #include <Shared/RarityScale.hh>
@@ -129,6 +130,54 @@ void Minimap::on_render(Renderer &ctx) {
         if (!show_levels)
             (void)static_minimap(mid, width, height, true);
         ctx.draw_image_at(static_minimap(mid, width, height, show_levels), 0.f, 0.f);
+
+        // Field portals for this map (Shared MAP_PORTALS — same table as server transfer).
+        {
+            float const pr = Game::minimap_expanded ? 6.5f : 5.2f;
+            float const name_sz = Game::minimap_expanded ? 10.f : 8.5f;
+            for (MapPortalDef const &p : MAP_PORTALS) {
+                if (p.from_map != mid) continue;
+                if (p.to_map >= MapID::kNumMaps || !map_is_open(p.to_map)) continue;
+                float px = (p.x - left) * sx;
+                float py = (p.y - top) * sy;
+                // Diamond gate marker — cyan so it reads on rarity rings + terrain
+                ctx.set_fill(0xeeffffff);
+                ctx.begin_path();
+                ctx.move_to(px, py - pr - 1.5f);
+                ctx.line_to(px + pr + 1.5f, py);
+                ctx.line_to(px, py + pr + 1.5f);
+                ctx.line_to(px - pr - 1.5f, py);
+                ctx.close_path();
+                ctx.fill();
+                ctx.set_fill(0xff2ee6c8);
+                ctx.set_stroke(0xff0a5a52);
+                ctx.set_line_width(1.4f);
+                ctx.begin_path();
+                ctx.move_to(px, py - pr);
+                ctx.line_to(px + pr, py);
+                ctx.line_to(px, py + pr);
+                ctx.line_to(px - pr, py);
+                ctx.close_path();
+                ctx.fill();
+                ctx.stroke();
+                // Inner dot
+                ctx.set_fill(0xfff0fffc);
+                ctx.begin_path();
+                ctx.arc(px, py, pr * 0.28f);
+                ctx.fill();
+                // Destination map name under the diamond
+                {
+                    RenderContext label(&ctx);
+                    ctx.translate(px, py + pr + 9.f);
+                    ctx.draw_text(I18n::map_name(p.to_map), {
+                        .fill = 0xffd8fff8,
+                        .stroke = 0,
+                        .size = name_sz,
+                        .stroke_scale = 0
+                    });
+                }
+            }
+        }
 
         float self_x = -1.f;
         float self_y = -1.f;

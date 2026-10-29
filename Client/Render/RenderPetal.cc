@@ -3,6 +3,7 @@
 #include <Client/Render/Renderer.hh>
 
 #include <Client/Assets/Assets.hh>
+#include <Client/Assets/FlorrArt.hh>
 #include <Client/Game.hh>
 #include <Client/I18n.hh>
 #include <Client/Input.hh>
@@ -44,6 +45,8 @@ static uint8_t player_owned_petal(Entity const &ent) {
 void render_petal(Renderer &ctx, Entity const &ent) {
     PetalID::T const id = ent.get_petal_id();
     if (id >= PetalID::kNumPetals) return;
+    // Body-worn petals (crowns / goggles): flower draws worn art; skip orbit clone.
+    if (FlorrArt::is_body_worn_petal(id)) return;
     struct PetalData const &data = PETAL_DATA[id];
 
     refresh_tier_overlay_state();

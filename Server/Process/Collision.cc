@@ -40,6 +40,8 @@ static bool _should_interact(Simulation *sim, Entity const &ent1, Entity const &
     //if (ent1.has_component(kFlower) || ent2.has_component(kFlower)) return false;
     //if (ent1.has_component(kPetal) || ent2.has_component(kPetal)) return false;
     if (ent1.pending_delete || ent2.pending_delete) return false;
+    // Lightning bolt nodes are visual-only (must stay in spatial hash for FOV).
+    if (ent1.has_component(kAnimation) || ent2.has_component(kAnimation)) return false;
     // Training dummies: practice targets for players only. Wild mobs / their
     // missiles / hatch packs pass through — otherwise they wedge on the ring
     // and hornet shots look like "怪物一直在攻击假人".
@@ -243,7 +245,17 @@ void on_collide(Simulation *sim, Entity &ent1, Entity &ent2) {
         };
         uint8_t const cutter_phase =
             flower_cutter_vs_mob(ent1, ent2) || flower_cutter_vs_mob(ent2, ent1);
-        if (both_player_flowers || cutter_phase) {
+        // Segment bodies (leech / centipede links): contact damage stays below,
+        // but stacked knockback from 6+ links yeets flowers across the map.
+        // Only the head (seg_head == NULL) may shove the player.
+        auto flower_vs_seg_body = [](Entity const &flower, Entity const &mob) -> uint8_t {
+            if (!flower.has_component(kFlower) || flower.has_component(kMob)) return 0;
+            if (!mob.has_component(kMob)) return 0;
+            return !(mob.seg_head == NULL_ENTITY) ? 1 : 0;
+        };
+        uint8_t const seg_body_phase =
+            flower_vs_seg_body(ent1, ent2) || flower_vs_seg_body(ent2, ent1);
+        if (both_player_flowers || cutter_phase || seg_body_phase) {
             // no physical response
         } else if (!(ent1.get_team() == ent2.get_team())) {
             if (ent1.has_component(kFlower) && !ent2.has_component(kPetal))

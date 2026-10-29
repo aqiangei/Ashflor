@@ -6,13 +6,18 @@
 uint32_t const TPS = 20;
 
 // Tuned for TPS=20 (terminal ≈ accel/friction). Calibrate via screen-width crossing time.
-float const PLAYER_ACCELERATION = 5.15f;
+// +20% base flower speed for clearer kiting vs wild packs.
+float const PLAYER_ACCELERATION = 6.18f;
 float const DEFAULT_FRICTION = 0.32f;
 
 float const SUMMON_RETREAT_RADIUS = 600.0f;
 float const DIGGER_SPAWN_CHANCE = 0.25f;
 // Wild mobs return home when beyond this multiple of detection_radius from zone center
-float const WILD_LEASH_MULT = 1.75f;
+float const WILD_LEASH_MULT = 1.55f;
+// Wild chase / idle walk (not player summons). Stacks after AI sets acceleration.
+float const MOB_MOVE_SPEED_MULT = 0.70f;
+// Applied when allocating wild detection_radius from baked aggro_radius.
+float const MOB_AGGRO_RANGE_MULT = 0.72f;
 
 float const BASE_FLOWER_RADIUS = 25.0f;
 float const BASE_PETAL_ROTATION_SPEED = 4.35f;
@@ -24307,6 +24312,8 @@ std::array<struct PetalData, PetalID::kNumPetals> const PETAL_DATA = {{
         .rarity = RarityID::kUnique,
         .attributes = { .aggro_shrink = 0.925, .defend_only = 1 }
     },
+    // Ankh reload: wiki 256/128/64/32/16/8/4/2/1 (+0.5s plant). Import wrongly
+    // froze every rarity at 256s — players saw 100s+ CD on usable Mythic+.
     {
         .name = "Ankh",
         .description = "When destroyed, teleports the flower back.",
@@ -24324,7 +24331,7 @@ std::array<struct PetalData, PetalID::kNumPetals> const PETAL_DATA = {{
         .health = 30.0,
         .damage = 0.0,
         .radius = 10.0,
-        .reload = 256.0,
+        .reload = 128.0,
         .count = 1,
         .rarity = RarityID::kUnusual,
         .attributes = { .secondary_reload = 0.5, .ankh_mark = 1 }
@@ -24335,7 +24342,7 @@ std::array<struct PetalData, PetalID::kNumPetals> const PETAL_DATA = {{
         .health = 90.0,
         .damage = 0.0,
         .radius = 10.0,
-        .reload = 256.0,
+        .reload = 64.0,
         .count = 1,
         .rarity = RarityID::kRare,
         .attributes = { .secondary_reload = 0.5, .ankh_mark = 1 }
@@ -24346,7 +24353,7 @@ std::array<struct PetalData, PetalID::kNumPetals> const PETAL_DATA = {{
         .health = 270.0,
         .damage = 0.0,
         .radius = 10.0,
-        .reload = 256.0,
+        .reload = 32.0,
         .count = 1,
         .rarity = RarityID::kEpic,
         .attributes = { .secondary_reload = 0.5, .ankh_mark = 1 }
@@ -24357,7 +24364,7 @@ std::array<struct PetalData, PetalID::kNumPetals> const PETAL_DATA = {{
         .health = 810.0,
         .damage = 0.0,
         .radius = 10.0,
-        .reload = 256.0,
+        .reload = 16.0,
         .count = 1,
         .rarity = RarityID::kLegendary,
         .attributes = { .secondary_reload = 0.5, .ankh_mark = 1 }
@@ -24368,7 +24375,7 @@ std::array<struct PetalData, PetalID::kNumPetals> const PETAL_DATA = {{
         .health = 2430.0,
         .damage = 0.0,
         .radius = 10.0,
-        .reload = 256.0,
+        .reload = 8.0,
         .count = 1,
         .rarity = RarityID::kMythic,
         .attributes = { .secondary_reload = 0.5, .ankh_mark = 1 }
@@ -24379,7 +24386,7 @@ std::array<struct PetalData, PetalID::kNumPetals> const PETAL_DATA = {{
         .health = 7290.0,
         .damage = 0.0,
         .radius = 10.0,
-        .reload = 256.0,
+        .reload = 4.0,
         .count = 1,
         .rarity = RarityID::kUltra,
         .attributes = { .secondary_reload = 0.5, .ankh_mark = 1 }
@@ -24390,7 +24397,7 @@ std::array<struct PetalData, PetalID::kNumPetals> const PETAL_DATA = {{
         .health = 21870.0,
         .damage = 0.0,
         .radius = 10.0,
-        .reload = 256.0,
+        .reload = 2.0,
         .count = 1,
         .rarity = RarityID::kSuper,
         .attributes = { .secondary_reload = 0.5, .ankh_mark = 1 }
@@ -24401,7 +24408,7 @@ std::array<struct PetalData, PetalID::kNumPetals> const PETAL_DATA = {{
         .health = 65610.0,
         .damage = 0.0,
         .radius = 10.0,
-        .reload = 256.0,
+        .reload = 1.0,
         .count = 1,
         .rarity = RarityID::kUnique,
         .attributes = { .secondary_reload = 0.5, .ankh_mark = 1 }
@@ -27687,9 +27694,10 @@ std::array<struct MobData, MobID::kNumMobs> const MOB_DATA = {{
         .damage = 10.0,
         .radius = {14.0},
         .xp = 1,
+        // Poo is the primary share; Cotton stays secondary filler.
         .drops = {
-            PetalID::kCotton, PetalID::kPoo, PetalID::kMagicCotton,
-            PetalID::kLight, PetalID::kLeaf, PetalID::kTwin, PetalID::kRice, PetalID::kTriplet}, 
+            PetalID::kPoo, PetalID::kCotton, PetalID::kLight, PetalID::kLeaf,
+            PetalID::kTwin, PetalID::kRice},
         .attributes = {}
     },
     {
@@ -28997,6 +29005,500 @@ std::array<struct MobData, MobID::kNumMobs> const MOB_DATA = {{
             PetalID::kTriangleLegendary, PetalID::kTriangleMythic, PetalID::kTriangleUltra, PetalID::kBone
         },
         .attributes = { .aggro_radius = 420, .share_damage = 1 }
+    },
+    // ---- Jungle stake (Cotton) ----
+    {
+        .name = "Bush",
+        .description = "A leafy bush. Soft cotton sticks to its twigs.",
+        .rarity = RarityID::kCommon,
+        .health = {20.0, 45.0},
+        .damage = 10.0,
+        .radius = {22.0, 40.0},
+        .xp = 2,
+        // Cotton family scales with bush rarity (high-rarity bushes → high Cotton).
+        .drops = {
+            PetalID::kCotton, PetalID::kLeaf, PetalID::kLight, PetalID::kPollen,
+            PetalID::kMagicCotton, PetalID::kMatVine},
+        .attributes = { .aggro_radius = 0, .stationary = 1 }
+    },
+    // ---- Ocean stakes (florrclone P0) ----
+    {
+        .name = "Sponge",
+        .description = "A soft sponge anchored to the reef. Absorbs more than water.",
+        .rarity = RarityID::kCommon,
+        .health = {30.0, 55.0},
+        .damage = 10.0,
+        .radius = {24.0, 42.0},
+        .xp = 2,
+        .drops = {
+            PetalID::kSponge, PetalID::kBubble, PetalID::kSalt, PetalID::kLight},
+        .attributes = { .aggro_radius = 0, .stationary = 1 }
+    },
+    {
+        .name = "Bubble",
+        .description = "A drifting bubble. Pops if you look at it wrong.",
+        .rarity = RarityID::kCommon,
+        .health = {8.0, 18.0},
+        .damage = 5.0,
+        .radius = {12.0, 28.0},
+        .xp = 1,
+        .drops = {
+            PetalID::kBubble, PetalID::kAir, PetalID::kLight, PetalID::kWaterBubble},
+        .attributes = { .aggro_radius = 0 }
+    },
+    // ---- Official jungle combat (P1) ----
+    {
+        .name = "Leafbug",
+        .description = "A shy leaf-shaped bug that blends into the canopy.",
+        .rarity = RarityID::kCommon,
+        .health = {22.0},
+        .damage = 15.0,
+        .radius = {18.0},
+        .xp = 2,
+        .drops = {
+            PetalID::kLeaf, PetalID::kLight, PetalID::kPollen, PetalID::kCotton,
+            PetalID::kMatLeaf, PetalID::kMatVine},
+        .attributes = { .aggro_radius = 280 }
+    },
+    {
+        .name = "Golden Leafbug",
+        .description = "Rare leafbug with a gilt shell. Drops Golden Leaf.",
+        .rarity = RarityID::kUnusual,
+        .health = {35.0},
+        .damage = 18.0,
+        .radius = {18.0},
+        .xp = 6,
+        .drops = {
+            PetalID::kGoldenLeaf, PetalID::kLeaf, PetalID::kCotton, PetalID::kLight,
+            PetalID::kMatLeaf},
+        .attributes = { .aggro_radius = 320 }
+    },
+    {
+        .name = "Firefly",
+        .description = "A blinking light in the undergrowth. Shocking up close.",
+        .rarity = RarityID::kCommon,
+        .health = {18.0},
+        .damage = 25.0,
+        .radius = {14.0},
+        .xp = 2,
+        .drops = {
+            PetalID::kLightning, PetalID::kBattery, PetalID::kLight, PetalID::kWing,
+            PetalID::kMatPollenDust},
+        .attributes = { .aggro_radius = 360 }
+    },
+    {
+        .name = "Magic Firefly",
+        .description = "A brighter firefly charged with wild static.",
+        .rarity = RarityID::kRare,
+        .health = {40.0},
+        .damage = 35.0,
+        .radius = {16.0},
+        .xp = 8,
+        .drops = {
+            PetalID::kLightning, PetalID::kBattery, PetalID::kElectricWeb, PetalID::kWing,
+            PetalID::kMatPollenDust},
+        .attributes = { .aggro_radius = 420 }
+    },
+    {
+        .name = "Jungle Ladybug",
+        .description = "A ladybug adapted to the canopy — less shy than garden kin.",
+        .rarity = RarityID::kCommon,
+        .health = {45.0},
+        .damage = 20.0,
+        .radius = {20.0},
+        .xp = 3,
+        .drops = {
+            PetalID::kLeaf, PetalID::kLight, PetalID::kTwin, PetalID::kIris,
+            PetalID::kMatLeaf, PetalID::kMatSpore},
+        .attributes = { .aggro_radius = 300 }
+    },
+    // ---- Sewers (P3 skeleton) ----
+    {
+        .name = "Roach",
+        .description = "A tough sewer roach. Skitters along the walls.",
+        .rarity = RarityID::kCommon,
+        .health = {40.0},
+        .damage = 20.0,
+        .radius = {16.0},
+        .xp = 2,
+        .drops = {
+            PetalID::kPoo, PetalID::kLight, PetalID::kWing, PetalID::kMatAntenna,
+            PetalID::kMatAntShell},
+        .attributes = { .aggro_radius = 340 }
+    },
+    {
+        .name = "Fly",
+        .description = "A buzzing sewer fly. Hard to pin down.",
+        .rarity = RarityID::kCommon,
+        .health = {15.0},
+        .damage = 15.0,
+        .radius = {12.0},
+        .xp = 1,
+        .drops = {
+            PetalID::kWing, PetalID::kLight, PetalID::kPollen, PetalID::kTwin},
+        .attributes = { .aggro_radius = 380 }
+    },
+    {
+        .name = "Moth",
+        .description = "Drawn to the dim lamps of the sewers.",
+        .rarity = RarityID::kUnusual,
+        .health = {28.0},
+        .damage = 18.0,
+        .radius = {15.0},
+        .xp = 3,
+        .drops = {
+            PetalID::kWing, PetalID::kLight, PetalID::kPollen, PetalID::kCotton,
+            PetalID::kMatPollenDust},
+        .attributes = { .aggro_radius = 300 }
+    },
+    {
+        .name = "Garbage",
+        .description = "A soggy pile of refuse. Better not to ask what's inside.",
+        .rarity = RarityID::kCommon,
+        .health = {50.0, 90.0},
+        .damage = 10.0,
+        .radius = {28.0, 48.0},
+        .xp = 2,
+        .drops = {
+            PetalID::kPoo, PetalID::kSoil, PetalID::kClay, PetalID::kLight,
+            PetalID::kGlass},
+        .attributes = { .aggro_radius = 0, .stationary = 1 }
+    },
+    // ---- Factory / Pyramid L3 skeleton ----
+    {
+        .name = "Cog Beetle",
+        .description = "A beetle with gear-shaped armor plates.",
+        .rarity = RarityID::kCommon,
+        .health = {55.0},
+        .damage = 22.0,
+        .radius = {18.0},
+        .xp = 3,
+        .drops = {
+            PetalID::kHeavy, PetalID::kLight, PetalID::kMatGear, PetalID::kMatSteel},
+        .attributes = { .aggro_radius = 380 }
+    },
+    {
+        .name = "Scrap Heap",
+        .description = "A pile of factory scrap. Screws stick out at odd angles.",
+        .rarity = RarityID::kCommon,
+        .health = {60.0, 100.0},
+        .damage = 10.0,
+        .radius = {30.0, 50.0},
+        .xp = 2,
+        .drops = {
+            PetalID::kHeavy, PetalID::kRock, PetalID::kMatSteel, PetalID::kMatGear},
+        .attributes = { .aggro_radius = 0, .stationary = 1 }
+    },
+    {
+        .name = "Scarab",
+        .description = "A sacred beetle of the tomb corridors.",
+        .rarity = RarityID::kCommon,
+        .health = {45.0},
+        .damage = 20.0,
+        .radius = {16.0},
+        .xp = 3,
+        .drops = {
+            PetalID::kLight, PetalID::kNazar, PetalID::kMatSand, PetalID::kBone},
+        .attributes = { .aggro_radius = 340 }
+    },
+    {
+        .name = "Tomb Guard",
+        .description = "A silent sentinel that wakes when you step too loud.",
+        .rarity = RarityID::kUnusual,
+        .health = {120.0},
+        .damage = 28.0,
+        .radius = {28.0},
+        .xp = 8,
+        .drops = {
+            PetalID::kBone, PetalID::kNazar, PetalID::kPharaohCrown, PetalID::kHeavy,
+            PetalID::kMatSand},
+        .attributes = { .aggro_radius = 420 }
+    },
+    // ---- Hel cast ----
+    {
+        .name = "Hel Beetle",
+        .description = "A crimson beetle from another realm. Hungrier than its cousins.",
+        .rarity = RarityID::kCommon,
+        .health = {140.0},
+        .damage = 36.0,
+        .radius = {36.0},
+        .xp = 12,
+        .drops = {
+            PetalID::kDarkMark, PetalID::kBeetleEgg, PetalID::kWing, PetalID::kTriplet,
+            PetalID::kThirdEye, PetalID::kMatSulfur},
+        .attributes = { .aggro_radius = 520 }
+    },
+    {
+        .name = "Hel Spider",
+        .description = "Spookier. Leaves sticky webs of dark silk.",
+        .rarity = RarityID::kCommon,
+        .health = {80.0},
+        .damage = 20.0,
+        .radius = {16.0},
+        .xp = 10,
+        .drops = {
+            PetalID::kDarkMark, PetalID::kWeb, PetalID::kFang, PetalID::kTriweb,
+            PetalID::kFaster, PetalID::kMatFireCrystal},
+        .attributes = {
+            .poison_damage = { .damage = 6.0, .time = 3.0 }
+        }
+    },
+    {
+        .name = "Hel Wasp",
+        .description = "A wasp that buzzes with resentment from Hel.",
+        .rarity = RarityID::kCommon,
+        .health = {75.0},
+        .damage = 55.0,
+        .radius = {40.0},
+        .xp = 14,
+        .drops = {
+            PetalID::kDarkMark, PetalID::kMissile, PetalID::kWing, PetalID::kDandelion,
+            PetalID::kLightning, PetalID::kMatLavaRock},
+        .attributes = { .aggro_radius = 650 }
+    },
+    {
+        .name = "Hel Centipede",
+        .description = "A mangled centipede with uneven segments and a temper.",
+        .rarity = RarityID::kUnusual,
+        .health = {50.0},
+        .damage = 30.0,
+        .radius = {35.0},
+        .xp = 6,
+        .drops = {
+            PetalID::kDarkMark, PetalID::kDomino, PetalID::kIris, PetalID::kPoisonPeas,
+            PetalID::kBlueIris, PetalID::kMatSulfur},
+        .attributes = {
+            .segments = 10,
+            .poison_damage = { .damage = 8.0, .time = 2.0 }
+        }
+    },
+    {
+        .name = "Gambler",
+        .description = "Gamblers belong in Hel. Dice rattle in its shell.",
+        .rarity = RarityID::kUnusual,
+        .health = {90.0},
+        .damage = 18.0,
+        .radius = {28.0},
+        .xp = 15,
+        .drops = {
+            PetalID::kDice, PetalID::kCard, PetalID::kPokerChip, PetalID::kBasic,
+            PetalID::kMatHolyShard},
+        .attributes = { .aggro_radius = 280 }
+    },
+    // ---- Factory Mecha cast ----
+    {
+        .name = "Mecha Flower",
+        .description = "Someone has been making these mechanical flowers... What could this mean?",
+        .rarity = RarityID::kUnusual,
+        .health = {110.0},
+        .damage = 24.0,
+        .radius = {32.0},
+        .xp = 14,
+        .drops = {
+            PetalID::kBattery, PetalID::kCogwheel, PetalID::kMatGear, PetalID::kMatSteel,
+            PetalID::kMimic},
+        .attributes = { .aggro_radius = 520 }
+    },
+    {
+        .name = "Mecha Spider",
+        .description = "A factory spider that crackles with stored charge.",
+        .rarity = RarityID::kCommon,
+        .health = {70.0},
+        .damage = 22.0,
+        .radius = {16.0},
+        .xp = 10,
+        .drops = {
+            PetalID::kBattery, PetalID::kLightning, PetalID::kWeb, PetalID::kFaster,
+            PetalID::kMatGear},
+        .attributes = { .aggro_radius = 480 }
+    },
+    {
+        .name = "Mecha Wasp",
+        .description = "Fires tracking mecha missiles from a steel thorax.",
+        .rarity = RarityID::kCommon,
+        .health = {80.0},
+        .damage = 45.0,
+        .radius = {38.0},
+        .xp = 14,
+        .drops = {
+            PetalID::kBattery, PetalID::kMissile, PetalID::kWing, PetalID::kMatGear,
+            PetalID::kMatSteel},
+        .attributes = { .aggro_radius = 680 }
+    },
+    {
+        .name = "Mecha Crab",
+        .description = "A crab with a shell-mounted laser. It does not ram.",
+        .rarity = RarityID::kUnusual,
+        .health = {130.0},
+        .damage = 18.0,
+        .radius = {30.0},
+        .xp = 12,
+        .drops = {
+            PetalID::kBattery, PetalID::kLaser, PetalID::kMatSteel, PetalID::kMatGear,
+            PetalID::kHeavy},
+        .attributes = { .aggro_radius = 560 }
+    },
+    {
+        .name = "Barrel",
+        .description = "Under no circumstances let this thing spill.",
+        .rarity = RarityID::kCommon,
+        .health = {90.0, 140.0},
+        .damage = 8.0,
+        .radius = {28.0, 42.0},
+        .xp = 4,
+        .drops = {
+            PetalID::kPoisonPeas, PetalID::kIris, PetalID::kMatSteel, PetalID::kHeavy},
+        .attributes = {
+            .stationary = 1,
+            .poison_damage = { .damage = 12.0, .time = 2.5 }
+        }
+    },
+    {
+        .name = "Assembler",
+        .description = "A factory kiosk that hums with conversion protocols.",
+        .rarity = RarityID::kRare,
+        .health = {400.0},
+        .damage = 5.0,
+        .radius = {40.0},
+        .xp = 20,
+        .drops = {
+            PetalID::kCogwheel, PetalID::kBattery, PetalID::kMatGear, PetalID::kMatSteel,
+            PetalID::kHeavy},
+        .attributes = { .aggro_radius = 0, .stationary = 1 }
+    },
+    // ---- Sewers / Pyramid gap cast ----
+    {
+        .name = "Silverfish",
+        .description = "Those annoying little things that eat clothes. It also loves garbage.",
+        .rarity = RarityID::kCommon,
+        .health = {35.0},
+        .damage = 14.0,
+        .radius = {12.0},
+        .xp = 4,
+        .drops = {
+            PetalID::kFaster, PetalID::kLight, PetalID::kPoo, PetalID::kMatTwig},
+        .attributes = { .aggro_radius = 360 }
+    },
+    {
+        .name = "Tomb",
+        .description = "Huh, what could be in here?",
+        .rarity = RarityID::kRare,
+        .health = {350.0},
+        .damage = 8.0,
+        .radius = {42.0},
+        .xp = 18,
+        .drops = {
+            PetalID::kBone, PetalID::kNazar, PetalID::kPharaohCrown, PetalID::kMatSand,
+            PetalID::kHeavy},
+        .attributes = { .aggro_radius = 0, .stationary = 1 }
+    },
+    {
+        .name = "Mummy Beetle",
+        .description = "This one seems like it shouldn't be alive...",
+        .rarity = RarityID::kUnusual,
+        .health = {120.0},
+        .damage = 28.0,
+        .radius = {34.0},
+        .xp = 12,
+        .drops = {
+            PetalID::kBone, PetalID::kNazar, PetalID::kWing, PetalID::kMatSand,
+            PetalID::kHeavy},
+        .attributes = { .aggro_radius = 440 }
+    },
+    {
+        .name = "Pharaoh Beetle",
+        .description = "That thing on its head looks valuable... We should steal it.",
+        .rarity = RarityID::kEpic,
+        .health = {220.0},
+        .damage = 38.0,
+        .radius = {40.0},
+        .xp = 40,
+        .drops = {
+            PetalID::kPharaohCrown, PetalID::kNazar, PetalID::kBone, PetalID::kTriplet,
+            PetalID::kMatSand},
+        .attributes = { .aggro_radius = 560 }
+    },
+    // ---- florr special / gap cast ----
+    {
+        .name = "Trader",
+        .description = "A quiet broker of petals and rumors.",
+        .rarity = RarityID::kRare,
+        .health = {500.0},
+        .damage = 0.0,
+        .radius = {36.0},
+        .xp = 0,
+        .drops = { PetalID::kBasic, PetalID::kLight },
+        .attributes = { .aggro_radius = 0, .stationary = 1 }
+    },
+    {
+        .name = "Oracle",
+        .description = "Sees rarities you have not earned yet.",
+        .rarity = RarityID::kEpic,
+        .health = {600.0},
+        .damage = 0.0,
+        .radius = {38.0},
+        .xp = 0,
+        .drops = { PetalID::kBasic, PetalID::kYinYang },
+        .attributes = { .aggro_radius = 0, .stationary = 1 }
+    },
+    {
+        .name = "Titan",
+        .description = "A mountain of a flower. Unique crafts begin here.",
+        .rarity = RarityID::kLegendary,
+        .health = {2000.0},
+        .damage = 0.0,
+        .radius = {55.0},
+        .xp = 0,
+        .drops = { PetalID::kBasic, PetalID::kHeavy },
+        .attributes = { .aggro_radius = 0, .stationary = 1 }
+    },
+    {
+        .name = "Worm",
+        .description = "It's supposed to eat dirt but this one's eating flowers.",
+        .rarity = RarityID::kUnusual,
+        .health = {40.0},
+        .damage = 18.0,
+        .radius = {28.0},
+        .xp = 6,
+        .drops = {
+            PetalID::kSoil, PetalID::kLight, PetalID::kClay, PetalID::kMatTwig},
+        .attributes = { .aggro_radius = 400, .segments = 8 }
+    },
+    {
+        .name = "Ghost",
+        .description = "A tormented soul, freeing it is the best you can do for it.",
+        .rarity = RarityID::kRare,
+        .health = {80.0},
+        .damage = 22.0,
+        .radius = {26.0},
+        .xp = 12,
+        .drops = {
+            PetalID::kBasic, PetalID::kYinYang, PetalID::kLight, PetalID::kMatHolyShard},
+        .attributes = { .aggro_radius = 480 }
+    },
+    {
+        .name = "Crystal",
+        .description = "A singing shard of frozen light.",
+        .rarity = RarityID::kUnusual,
+        .health = {70.0, 110.0},
+        .damage = 12.0,
+        .radius = {22.0, 34.0},
+        .xp = 5,
+        .drops = {
+            PetalID::kMatIceCrystal, PetalID::kMatColdIron, PetalID::kLight, PetalID::kHeavy},
+        .attributes = { .stationary = 1 }
+    },
+    {
+        .name = "Nazar Beetle",
+        .description = "This one has a different pattern... what does that mean?",
+        .rarity = RarityID::kRare,
+        .health = {150.0},
+        .damage = 32.0,
+        .radius = {36.0},
+        .xp = 16,
+        .drops = {
+            PetalID::kNazar, PetalID::kWing, PetalID::kTriplet, PetalID::kMatSand},
+        .attributes = { .aggro_radius = 500 }
     }
 }};
 

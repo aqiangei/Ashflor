@@ -3,6 +3,7 @@
 #include <Client/Ui/Container.hh>
 #include <Client/Ui/DynamicText.hh>
 #include <Client/Ui/StaticText.hh>
+#include <Client/Ui/LazyTooltip.hh>
 
 #include <Client/StaticData.hh>
 #include <Client/I18n.hh>
@@ -843,7 +844,7 @@ static Element *make_petal_tooltip_body(PetalID::T id, uint8_t apply_level) {
 
 void Ui::make_petal_tooltips() {
     for (PetalID::T i = 0; i < PetalID::kNumPetals; ++i) {
-        Ui::UiLoadout::petal_tooltips[i] = make_petal_tooltip_body(i, 0);
-        Ui::UiLoadout::petal_tooltips_leveled[i] = make_petal_tooltip_body(i, 1);
+        Ui::UiLoadout::petal_tooltips[i] = new Ui::LazyTooltip([i]() { return make_petal_tooltip_body(i, 0); });
+        Ui::UiLoadout::petal_tooltips_leveled[i] = new Ui::LazyTooltip([i]() { return make_petal_tooltip_body(i, 1); });
     }
 }

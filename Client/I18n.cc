@@ -18,11 +18,14 @@ static char const *const RARITY_ZH[RarityID::kNumRarities] = {
 };
 
 static char const *const ZONE_ZH[] = {
-    "花园", "沙漠", "海洋", "雪原", "丛林", "蚁穴", "火山", "王城", "蚁巢"
+    "花园", "沙漠", "海洋", "雪原", "丛林", "蚁穴", "火山", "王城", "蚁巢", "密林",
+    "下水道", "繁花园", "沙海", "深海", "工厂", "金字塔", "地狱"
 };
 
 static char const *const MAP_EN[] = {
-    "Garden", "Desert", "Ocean", "Snow", "Jungle", "Ant Hell", "Volcano", "Royal Capital", "Ant Nest"
+    "Garden", "Desert", "Ocean", "Snow", "Jungle", "Ant Hell", "Volcano",
+    "Royal Capital", "Ant Nest", "Wildwood", "Sewers", "Prime Garden",
+    "Sand Seas", "Deep Ocean", "Factory", "Pyramid", "Hel"
 };
 
 static char const *const ROYAL_ZONE_ZH[] = {
@@ -201,6 +204,7 @@ static char const *const EN[I18n::kCount] = {
     "Controls",
     "Display",
     "Social",
+    "Performance mode (lower resolution)",
 };
 
 static char const *const ZH[I18n::kCount] = {
@@ -375,6 +379,7 @@ static char const *const ZH[I18n::kCount] = {
     "操作",
     "显示",
     "社交",
+    "性能模式（降低分辨率）",
 };
 
 char const *I18n::tr(Str id) {

@@ -18,8 +18,14 @@ static void _focus_lose_clause(Simulation *sim, Entity &ent, Vector const &v) {
     // Poo on the target flower: drop aggro sooner (same shrink as acquisition).
     if (sim != nullptr && sim->ent_alive(ent.target)) {
         Entity &t = sim->get_ent(ent.target);
-        if (t.has_component(kFlower) && !t.has_component(kMob))
+        if (t.has_component(kFlower) && !t.has_component(kMob)) {
             lim *= flower_aggro_range_mult(t);
+            // Corner / berm hug: break chase so kiting feels responsive.
+            if (flower_hugging_wall(sim, t)) {
+                ent.target = NULL_ENTITY;
+                return;
+            }
+        }
     }
     if (v.magnitude() > lim) ent.target = NULL_ENTITY;
 }
@@ -714,6 +720,120 @@ static void tick_hornet_aggro(Simulation *sim, Entity &ent) {
     }
 }
 
+// Mecha Wasp: hornet cadence but missiles mark for homing (Petal.cc steers).
+static void tick_mecha_wasp_aggro(Simulation *sim, Entity &ent) {
+    if (sim->ent_alive(ent.target)) {
+        Entity &target = sim->get_ent(ent.target);
+        Vector v(target.get_x() - ent.get_x(), target.get_y() - ent.get_y());
+        _focus_lose_clause(sim, ent, v);
+        if (!sim->ent_alive(ent.target)) {
+            ent.ai_state = AIState::kIdle;
+            ent.ai_tick = 0;
+            return;
+        }
+        float dist = v.magnitude();
+        ent.set_angle(v.angle());
+        if (ent.ai_state == 2) {
+            if (dist > 1.f) {
+                Vector back = v;
+                back.set_magnitude(-0.12f * PLAYER_ACCELERATION);
+                ent.acceleration = back;
+            } else ent.acceleration.set(0, 0);
+            if (ent.ai_tick >= (game_tick_t)(0.35f * TPS)) {
+                ent.ai_tick = 0;
+                ent.ai_state = 3;
+                Entity &missile = alloc_petal(sim, PetalID::kMissile, ent);
+                missile.damage = 18;
+                missile.health = missile.max_health = 16;
+                missile.friction = DEFAULT_FRICTION * 0.35f;
+                BitMath::set(missile.flags, EntityFlags::kIsDetached);
+                entity_set_despawn_tick(missile, (game_tick_t)(4.5f * TPS));
+                missile.set_angle(ent.get_angle());
+                missile.velocity.unit_normal(ent.get_angle()).set_magnitude(16 * PLAYER_ACCELERATION);
+                Vector kb;
+                kb.unit_normal(ent.get_angle() - M_PI).set_magnitude(2.2f * PLAYER_ACCELERATION);
+                ent.velocity += kb;
+            }
+            return;
+        }
+        if (ent.ai_state == 3) {
+            if (dist > 340) {
+                v.set_magnitude(PLAYER_ACCELERATION * 0.9f);
+                ent.acceleration = v;
+            } else ent.acceleration.set(0, 0);
+            if (ent.ai_tick >= (game_tick_t)(1.6f * TPS)) {
+                ent.ai_state = 0;
+                ent.ai_tick = 0;
+            }
+            return;
+        }
+        if (dist > 340) {
+            v.set_magnitude(PLAYER_ACCELERATION * 0.9f);
+            ent.acceleration = v;
+        } else ent.acceleration.set(0, 0);
+        if (dist < 900 && ent.ai_tick >= (game_tick_t)(0.45f * TPS)) {
+            ent.ai_state = 2;
+            ent.ai_tick = 0;
+        }
+        return;
+    } else {
+        if (!(ent.target == NULL_ENTITY)) {
+            ent.ai_state = AIState::kIdle;
+            ent.ai_tick = 0;
+            ent.target = NULL_ENTITY;
+        }
+        ent.target = find_nearest_enemy(sim, ent, ent.detection_radius);
+        tick_bee_passive(sim, ent);
+    }
+}
+
+// Mecha Crab: hold range, fire Laser petal bolts (no ram).
+static void tick_mecha_crab_aggro(Simulation *sim, Entity &ent) {
+    if (sim->ent_alive(ent.target)) {
+        Entity &target = sim->get_ent(ent.target);
+        Vector v(target.get_x() - ent.get_x(), target.get_y() - ent.get_y());
+        _focus_lose_clause(sim, ent, v);
+        if (!sim->ent_alive(ent.target)) {
+            ent.ai_state = AIState::kIdle;
+            ent.ai_tick = 0;
+            return;
+        }
+        float dist = v.magnitude();
+        ent.set_angle(v.angle());
+        // Prefer mid range — back off if too close
+        if (dist < 220.f) {
+            Vector back = v;
+            back.set_magnitude(-0.55f * PLAYER_ACCELERATION);
+            ent.acceleration = back;
+        } else if (dist > 480.f) {
+            v.set_magnitude(PLAYER_ACCELERATION * 0.7f);
+            ent.acceleration = v;
+        } else {
+            ent.acceleration.set(0, 0);
+        }
+        if (dist < 700.f && ent.ai_tick >= (game_tick_t)(1.1f * TPS)) {
+            ent.ai_tick = 0;
+            Entity &bolt = alloc_petal(sim, PetalID::kLaser, ent);
+            bolt.damage = 20;
+            bolt.health = bolt.max_health = 10;
+            bolt.friction = DEFAULT_FRICTION * 0.2f;
+            BitMath::set(bolt.flags, EntityFlags::kIsDetached);
+            entity_set_despawn_tick(bolt, (game_tick_t)(2.2f * TPS));
+            bolt.set_angle(ent.get_angle());
+            bolt.velocity.unit_normal(ent.get_angle()).set_magnitude(22.f * PLAYER_ACCELERATION);
+        }
+        return;
+    } else {
+        if (!(ent.target == NULL_ENTITY)) {
+            ent.ai_state = AIState::kIdle;
+            ent.ai_tick = 0;
+            ent.target = NULL_ENTITY;
+        }
+        ent.target = find_nearest_enemy(sim, ent, ent.detection_radius);
+        tick_bee_passive(sim, ent);
+    }
+}
+
 static void tick_centipede_passive(Simulation *sim, Entity &ent) {
     switch(ent.ai_state) {
         case AIState::kIdle: {
@@ -1315,7 +1435,7 @@ void tick_ai_behavior(Simulation *sim, Entity &ent) {
     // the respawn ellipse does not become a farm dump.
     if (BitMath::at(ent.flags, EntityFlags::kSpawnedFromZone)
         && (ent.get_parent() == NULL_ENTITY)
-        && Map::in_spawn_plaza(ent.get_x(), ent.get_y())
+        && Map::in_spawn_plaza(sim->map_id, ent.get_x(), ent.get_y())
         && ent.zone != 0xFF
         && ent.get_mob_id() != MobID::kTrainingDummy) {
         ent.target = NULL_ENTITY;
@@ -1327,9 +1447,13 @@ void tick_ai_behavior(Simulation *sim, Entity &ent) {
     if (sim->ent_alive(ent.target) && !is_player_faction(sim, ent)) {
         auto const &t = sim->get_ent(ent.target);
         if (t.has_component(kFlower) && !t.has_component(kMob)) {
-            float range = 1.35f * ent.detection_radius * flower_aggro_range_mult(t);
-            Vector delta(t.get_x() - ent.get_x(), t.get_y() - ent.get_y());
-            if (delta.magnitude() > range) ent.target = NULL_ENTITY;
+            if (flower_hugging_wall(sim, t)) {
+                ent.target = NULL_ENTITY;
+            } else {
+                float range = 1.35f * ent.detection_radius * flower_aggro_range_mult(t);
+                Vector delta(t.get_x() - ent.get_x(), t.get_y() - ent.get_y());
+                if (delta.magnitude() > range) ent.target = NULL_ENTITY;
+            }
         }
     }
     if (!sim->ent_alive(ent.target) && sim->ent_alive(ent.last_damaged_by)) {
@@ -1340,7 +1464,7 @@ void tick_ai_behavior(Simulation *sim, Entity &ent) {
         Vector delta(attacker.get_x() - ent.get_x(), attacker.get_y() - ent.get_y());
         if (delta.magnitude() <= range
             && !(is_player_faction(sim, attacker)
-              && Map::in_spawn_sanctuary(attacker.get_x(), attacker.get_y()))) {
+              && Map::in_spawn_sanctuary(sim->map_id, attacker.get_x(), attacker.get_y()))) {
             ent.target = ent.last_damaged_by;
             // Break leash-return so hits in the deep ring actually start a chase.
             if (ent.ai_state == AIState::kReturning) {
@@ -1416,7 +1540,7 @@ void tick_ai_behavior(Simulation *sim, Entity &ent) {
     if (sim->ent_alive(ent.target) && !is_player_faction(sim, ent)) {
         Entity &prey = sim->get_ent(ent.target);
         if (is_player_faction(sim, prey)
-            && Map::in_spawn_sanctuary(prey.get_x(), prey.get_y()))
+            && Map::in_spawn_sanctuary(sim->map_id, prey.get_x(), prey.get_y()))
             ent.target = NULL_ENTITY;
     }
     switch(ent.get_mob_id()) {
@@ -1495,6 +1619,17 @@ void tick_ai_behavior(Simulation *sim, Entity &ent) {
         case MobID::kBoulder:
         case MobID::kRock:
         case MobID::kCactus:
+        case MobID::kBush:
+        case MobID::kSponge:
+        case MobID::kGarbage:
+        case MobID::kScrapHeap:
+        case MobID::kBarrel:
+        case MobID::kAssembler:
+        case MobID::kTomb:
+        case MobID::kTrader:
+        case MobID::kOracle:
+        case MobID::kTitan:
+        case MobID::kCrystal:
         case MobID::kPushCrate:
         case MobID::kYahahaPad:
         case MobID::kTreasureNpc:
@@ -1582,6 +1717,89 @@ void tick_ai_behavior(Simulation *sim, Entity &ent) {
         // ---- Ocean ----
         case MobID::kReefStone:
             // Stationary reef boulder — no AI at all.
+            break;
+        case MobID::kBubble:
+            // Passive drift — no aggro.
+            break;
+        case MobID::kLeafbug:
+        case MobID::kGoldenLeafbug:
+            tick_flee(sim, ent, 1.15f);
+            break;
+        case MobID::kFirefly:
+            tick_default_aggro(sim, ent, 1.05f);
+            break;
+        case MobID::kMagicFirefly:
+            tick_default_aggro(sim, ent, 1.2f);
+            break;
+        case MobID::kJungleLadybug:
+            tick_default_neutral(sim, ent);
+            break;
+        case MobID::kRoach:
+            tick_default_aggro(sim, ent, 1.05f);
+            break;
+        case MobID::kFly:
+            tick_default_aggro(sim, ent, 1.25f);
+            break;
+        case MobID::kMoth:
+            tick_default_aggro(sim, ent, 0.95f);
+            break;
+        case MobID::kCogBeetle:
+            tick_default_aggro(sim, ent, 0.95f);
+            break;
+        case MobID::kScarab:
+            tick_default_aggro(sim, ent, 1.05f);
+            break;
+        case MobID::kTombGuard:
+            tick_default_neutral(sim, ent);
+            break;
+        case MobID::kHelBeetle:
+            tick_default_aggro(sim, ent, 1.05f);
+            break;
+        case MobID::kHelSpider:
+            if (ent.lifetime % (TPS) == 0)
+                alloc_web(sim, 28, ent);
+            tick_default_aggro(sim, ent, 1.25f);
+            break;
+        case MobID::kHelWasp:
+            tick_hornet_aggro(sim, ent);
+            break;
+        case MobID::kHelCentipede:
+            if (ent.seg_head == NULL_ENTITY)
+                tick_default_aggro(sim, ent, 1.15f);
+            break;
+        case MobID::kGambler:
+            tick_default_aggro(sim, ent, 0.85f);
+            break;
+        case MobID::kMechaFlower:
+            tick_hornet_aggro(sim, ent);
+            break;
+        case MobID::kMechaSpider:
+            tick_default_aggro(sim, ent, 1.30f);
+            break;
+        case MobID::kMechaWasp:
+            tick_mecha_wasp_aggro(sim, ent);
+            break;
+        case MobID::kMechaCrab:
+            tick_mecha_crab_aggro(sim, ent);
+            break;
+        case MobID::kSilverfish:
+            tick_default_aggro(sim, ent, 1.35f);
+            break;
+        case MobID::kMummyBeetle:
+            tick_default_aggro(sim, ent, 1.00f);
+            break;
+        case MobID::kPharaohBeetle:
+            tick_default_aggro(sim, ent, 1.10f);
+            break;
+        case MobID::kWorm:
+            if (ent.seg_head == NULL_ENTITY)
+                tick_default_aggro(sim, ent, 0.90f);
+            break;
+        case MobID::kGhost:
+            tick_default_aggro(sim, ent, 1.15f);
+            break;
+        case MobID::kNazarBeetle:
+            tick_default_aggro(sim, ent, 1.05f);
             break;
         case MobID::kSeaFry:
             tick_sea_fry(sim, ent);
@@ -1788,6 +2006,12 @@ void tick_ai_behavior(Simulation *sim, Entity &ent) {
             ent.set_angle(0 - ent.get_angle());
         if (ent.get_y() + ent.get_radius() >= ARENA_HEIGHT && angle_within(ent.get_angle(), M_PI / 2, M_PI / 2))
             ent.set_angle(0 - ent.get_angle());
+    }
+    // Wild packs only — player summons / diggers keep full bake speed.
+    if (ent.has_component(kMob) && !is_player_faction(sim, ent)
+        && MOB_MOVE_SPEED_MULT > 0.f && MOB_MOVE_SPEED_MULT < 1.f) {
+        ent.acceleration.x *= MOB_MOVE_SPEED_MULT;
+        ent.acceleration.y *= MOB_MOVE_SPEED_MULT;
     }
     ++ent.ai_tick;
 }

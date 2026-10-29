@@ -109,8 +109,7 @@ void TrainingDummy::ensure(Simulation *sim) {
         EntityID &id = sim->training_dummies[rarity];
         if (sim->ent_alive(id)) continue;
         // Ring around hub spawn (outside plaza ellipse so !in_spawn_plaza).
-        // Was a 3×3 bay at +2100 east — players want the old circle back.
-        float const ring_r = 1850.f;
+        float const ring_r = ARENA_WIDTH * 0.072f;
         float const ang = (float)rarity * (float)(2.0 * 3.14159265358979323846)
             / (float)RarityID::kNumRarities - (float)(3.14159265358979323846 * 0.5);
         float x = MAP_SPAWN_X + ring_r * std::cos(ang);

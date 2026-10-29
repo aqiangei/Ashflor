@@ -21,8 +21,8 @@ void tick_entity_motion(Simulation *sim, Entity &ent) {
     // Player summons and the training bay are unaffected.
     if (ent.has_component(kMob) && ent.damage > 0.f
         && !is_player_faction(sim, ent)
-        && Map::in_spawn_plaza(ent.get_x(), ent.get_y())) {
-        if (!Map::in_spawn_plaza(ent.home_x, ent.home_y)
+        && Map::in_spawn_plaza(sim->map_id, ent.get_x(), ent.get_y())) {
+        if (!Map::in_spawn_plaza(sim->map_id, ent.home_x, ent.home_y)
             && ent.home_x > 0.f && ent.home_y > 0.f) {
             ent.set_x(ent.home_x); ent.set_y(ent.home_y);
             ent.target = NULL_ENTITY;
@@ -35,6 +35,7 @@ void tick_entity_motion(Simulation *sim, Entity &ent) {
         return;
     }
     if (ent.pending_delete) return;
+    if (ent.has_component(kAnimation)) return;
     if (TrainingDummy::is_dummy(ent)) {
         ent.set_x(ent.home_x);
         ent.set_y(ent.home_y);

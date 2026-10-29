@@ -341,6 +341,14 @@ namespace TreasureSites {
             PetalID::kMatIceCrystal, PetalID::kMatVine, PetalID::kMatAntShell,
             PetalID::kMatSulfur, PetalID::kMatSteel,
             PetalID::kMatAntShell, // Ant Nest
+            PetalID::kMatVine, // Wildwood
+            PetalID::kMatTwig, // Sewers
+            PetalID::kMatLeaf, // Prime Garden
+            PetalID::kMatSand, // Prime Desert
+            PetalID::kMatWaterDrop, // Prime Ocean
+            PetalID::kMatSteel, // Factory
+            PetalID::kMatSand, // Pyramid
+            PetalID::kMatSulfur, // Hel
         };
         if (mid >= MapID::kNumMaps) mid = 0;
         return kMats[mid];
@@ -353,6 +361,14 @@ namespace TreasureSites {
             PetalID::kMatSnowFluff, PetalID::kMatResin, PetalID::kMatAntenna,
             PetalID::kMatFireCrystal, PetalID::kMatGear,
             PetalID::kMatAntenna, // Ant Nest
+            PetalID::kMatResin, // Wildwood
+            PetalID::kMatAntenna, // Sewers
+            PetalID::kMatTwig, // Prime Garden
+            PetalID::kMatVenomBarb, // Prime Desert
+            PetalID::kMatSeaSalt, // Prime Ocean
+            PetalID::kMatGear, // Factory
+            PetalID::kMatVenomBarb, // Pyramid
+            PetalID::kMatFireCrystal, // Hel
         };
         if (mid >= MapID::kNumMaps) mid = 0;
         return kMats[mid];
@@ -365,6 +381,14 @@ namespace TreasureSites {
             PetalID::kMatColdIron, PetalID::kMatSpore, PetalID::kMatFormicAcid,
             PetalID::kMatLavaRock, PetalID::kMatHolyShard,
             PetalID::kMatFormicAcid, // Ant Nest
+            PetalID::kMatSpore, // Wildwood
+            PetalID::kMatFormicAcid, // Sewers
+            PetalID::kMatPollenDust, // Prime Garden
+            PetalID::kMatCactusSap, // Prime Desert
+            PetalID::kMatSeashell, // Prime Ocean
+            PetalID::kMatColdIron, // Factory
+            PetalID::kMatCactusSap, // Pyramid
+            PetalID::kMatLavaRock, // Hel
         };
         if (mid >= MapID::kNumMaps) mid = 0;
         return kMats[mid];
@@ -442,6 +466,14 @@ namespace TreasureSites {
             { kVolcano, (uint8_t)(sizeof(kVolcano) / sizeof(kVolcano[0])), PetalID::kMatSulfur },
             { kRoyal, (uint8_t)(sizeof(kRoyal) / sizeof(kRoyal[0])), PetalID::kMatSteel },
             { kAntNest, (uint8_t)(sizeof(kAntNest) / sizeof(kAntNest[0])), PetalID::kMatAntShell },
+            { kJungle, (uint8_t)(sizeof(kJungle) / sizeof(kJungle[0])), PetalID::kMatVine }, // Wildwood
+            { kGarden, (uint8_t)(sizeof(kGarden) / sizeof(kGarden[0])), PetalID::kMatLeaf }, // Sewers
+            { kGarden, (uint8_t)(sizeof(kGarden) / sizeof(kGarden[0])), PetalID::kMatLeaf }, // Prime Garden
+            { kDesert, (uint8_t)(sizeof(kDesert) / sizeof(kDesert[0])), PetalID::kMatSand }, // Prime Desert
+            { kOcean, (uint8_t)(sizeof(kOcean) / sizeof(kOcean[0])), PetalID::kMatWaterDrop }, // Prime Ocean
+            { kRoyal, (uint8_t)(sizeof(kRoyal) / sizeof(kRoyal[0])), PetalID::kMatSteel }, // Factory
+            { kDesert, (uint8_t)(sizeof(kDesert) / sizeof(kDesert[0])), PetalID::kMatSand }, // Pyramid
+            { kVolcano, (uint8_t)(sizeof(kVolcano) / sizeof(kVolcano[0])), PetalID::kMatSulfur }, // Hel
         };
         if (map_id >= MapID::kNumMaps) map_id = 0;
         return kPacks[map_id];

@@ -9,6 +9,8 @@ set(SRCS
     ${ROOT}/ArtExport.cc
     ${ROOT}/ArtI18nStub.cc
     ${ROOT}/Assets/Flower.cc
+    ${ROOT}/Assets/FlorrArt.cc
+    ${ROOT}/Assets/FlorrTerrain.cc
     ${ROOT}/Assets/Mob.cc
     ${ROOT}/Assets/Petal.cc
     ${ROOT}/Assets/ThemeArt.cc

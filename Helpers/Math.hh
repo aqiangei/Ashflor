@@ -43,6 +43,7 @@ public:
     void step(float);
     void step_angle(float);
     float anchor() const;
+    void set_render(float);
 };
 
 class SeedGenerator {

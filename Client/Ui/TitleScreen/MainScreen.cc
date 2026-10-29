@@ -52,27 +52,19 @@ static void select_map_polar(Element *, uint8_t e) {
 static void select_map_jungle(Element *, uint8_t e) {
     if (e == Ui::kClick) Game::selected_map = MapID::kJungle;
 }
-static void select_map_ant_hell(Element *, uint8_t e) {
-    if (e == Ui::kClick) Game::selected_map = MapID::kAntHell;
-}
 static void select_map_volcano(Element *, uint8_t e) {
     if (e == Ui::kClick) Game::selected_map = MapID::kVolcano;
 }
 static void select_map_royal(Element *, uint8_t e) {
     if (e == Ui::kClick) Game::selected_map = MapID::kRoyalCapital;
 }
-static void select_map_ant_nest(Element *, uint8_t e) {
-    if (e == Ui::kClick) Game::selected_map = MapID::kAntNest;
-}
 static bool darken_map_garden() { return Game::selected_map != MapID::kGarden; }
 static bool darken_map_desert() { return Game::selected_map != MapID::kDesert; }
 static bool darken_map_ocean() { return Game::selected_map != MapID::kOcean; }
 static bool darken_map_polar() { return Game::selected_map != MapID::kPolar; }
 static bool darken_map_jungle() { return Game::selected_map != MapID::kJungle; }
-static bool darken_map_ant_hell() { return Game::selected_map != MapID::kAntHell; }
 static bool darken_map_volcano() { return Game::selected_map != MapID::kVolcano; }
 static bool darken_map_royal() { return Game::selected_map != MapID::kRoyalCapital; }
-static bool darken_map_ant_nest() { return Game::selected_map != MapID::kAntNest; }
 
 // Soft title controls — rounded fill, no outer rim stroke
 static Style soft_btn(uint32_t fill) {
@@ -108,9 +100,10 @@ public:
             if (lab) lab.textContent = UTF8ToString($1);
             el.style.display = "block";
             el.setAttribute("aria-hidden", "false");
+            var cap = (typeof Module !== "undefined" && Module.ashflorPerfMode) ? 1 : 2;
             var r = (typeof Module !== "undefined" && Module.ashflorDpr)
                 ? Module.ashflorDpr
-                : Math.min(window.devicePixelRatio || 1, 2);
+                : Math.min(window.devicePixelRatio || 1, cap);
             var fs = Math.max(16, $4 / r);
             el.style.left = ($2 / r) + "px";
             el.style.top = ($3 / r) + "px";
@@ -345,13 +338,10 @@ Element *Ui::make_title_input_box() {
                         make_map_select_button(MapID::kOcean, 0xff3eb6e8, select_map_ocean, darken_map_ocean),
                         make_map_select_button(MapID::kPolar, 0xff8ec8ef, select_map_polar, darken_map_polar)
                     }, 0, 10, {}),
+                    // TITLE_MAPS = 7 L1 biomes; Ant Hell / Nest / Wildwood via portals.
                     new Ui::HContainer({
                         make_map_select_button(MapID::kJungle, 0xff45b06a, select_map_jungle, darken_map_jungle),
-                        make_map_select_button(MapID::kAntHell, 0xffd4a574, select_map_ant_hell, darken_map_ant_hell),
-                        make_map_select_button(MapID::kAntNest, 0xffc48a55, select_map_ant_nest, darken_map_ant_nest),
-                        make_map_select_button(MapID::kVolcano, 0xffff6f4f, select_map_volcano, darken_map_volcano)
-                    }, 0, 10, {}),
-                    new Ui::HContainer({
+                        make_map_select_button(MapID::kVolcano, 0xffff6f4f, select_map_volcano, darken_map_volcano),
                         make_map_select_button(MapID::kRoyalCapital, 0xffe8c45a, select_map_royal, darken_map_royal)
                     }, 0, 10, {})
                 }, 0, 10, { .no_animation = 1 }),

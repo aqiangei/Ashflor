@@ -5,7 +5,7 @@
         <meta http-equiv="Cache-Control" content="no-cache">
         <script>
             // Bumped by deploy-update.ps1 with cacheV. Start wasm fetch ASAP (before CSS/DOM).
-            window.__ASHFLOR_CACHE_V = '21815';
+            window.__ASHFLOR_CACHE_V = '21837';
             (function (v) {
                 try {
                     var href = 'gardn-client.wasm?v=' + v;
@@ -15,8 +15,8 @@
                     link.href = href;
                     link.crossOrigin = 'anonymous';
                     document.head.appendChild(link);
-                    // Warm HTTP cache; Emscripten will reuse via normal fetch.
-                    fetch(href, { credentials: 'same-origin', cache: 'force-cache' }).catch(function () {});
+                    // One preload only: an extra fetch races the streaming loader
+                    // on cold/slow connections and can download the WASM twice.
                 } catch (e) {}
             })(window.__ASHFLOR_CACHE_V);
         </script>
@@ -562,7 +562,7 @@
     <script>
         document.addEventListener("DOMContentLoaded", () => {
             // Prefer head stamp; deploy bumps both __ASHFLOR_CACHE_V and this fallback.
-            var cacheV = (window.__ASHFLOR_CACHE_V || '21815');
+            var cacheV = (window.__ASHFLOR_CACHE_V || '21837');
             var hidden = false;
             var loadingEl = document.getElementById("loading");
             var brandEl = document.getElementById("loading-brand");

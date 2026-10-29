@@ -21,7 +21,8 @@
 #endif
 
 namespace {
-constexpr int kChunkSize = 512;
+int kChunkSize = 512;
+constexpr int kRasterSize = 512;
 constexpr int kChunkPad = 2;
 
 struct Chunk {
@@ -37,10 +38,6 @@ std::vector<Chunk> chunks;
 uint8_t cached_map = 255;
 uint32_t cached_difficulty = 0xffffffffu;
 uint64_t frame = 0;
-// Hysteresis so FOV/zoom near the chunk-count limit does not thrash between
-// full-viewport paint_static and chunk blit (visible as a periodic flash).
-uint8_t full_paint_mode = 0;
-
 bool feature_intersects(TerrainFeature const &f, float left, float top, float right, float bottom) {
     float x0, y0, x1, y1;
     if (f.shape == TerrainShape::kAABB) {
@@ -244,7 +241,6 @@ void paint_static(Renderer &renderer, uint8_t mid, uint32_t difficulty,
         renderer.set_fill(col);
         renderer.fill_rect(def.left, def.top, def.right - def.left, def.bottom - def.top);
     }
-
     TerrainPattern::draw(renderer, mid, leftX, topY, rightX, bottomY);
 
     MapTerrain const &terrain = map_terrain(mid);
@@ -370,14 +366,16 @@ void paint_static(Renderer &renderer, uint8_t mid, uint32_t difficulty,
 
 void render_chunk(Chunk &chunk, uint8_t map_id, uint32_t difficulty) {
     Renderer &r = *chunk.canvas;
-    r.set_dimensions(kChunkSize + 2 * kChunkPad, kChunkSize + 2 * kChunkPad);
+    float const raster_scale = (float)kRasterSize / kChunkSize;
+    r.set_dimensions(kRasterSize + 2 * kChunkPad, kRasterSize + 2 * kChunkPad);
     r.reset();
     r.clear();
     float left = (float)(chunk.x * kChunkSize);
     float top = (float)(chunk.y * kChunkSize);
-    r.translate(-left + kChunkPad, -top + kChunkPad);
-    paint_static(r, map_id, difficulty, left - kChunkPad, top - kChunkPad,
-                 left + kChunkSize + kChunkPad, top + kChunkSize + kChunkPad);
+    r.scale(raster_scale);
+    r.translate(-left + kChunkPad / raster_scale, -top + kChunkPad / raster_scale);
+    paint_static(r, map_id, difficulty, left - kChunkPad / raster_scale, top - kChunkPad / raster_scale,
+                 left + kChunkSize + kChunkPad / raster_scale, top + kChunkSize + kChunkPad / raster_scale);
     chunk.baked_difficulty = difficulty;
 }
 } // namespace
@@ -386,7 +384,6 @@ void MapChunkCache::clear() {
     chunks.clear();
     cached_map = 255;
     cached_difficulty = 0xffffffffu;
-    full_paint_mode = 0;
 }
 
 void MapChunkCache::draw(Renderer &target, uint8_t map_id, uint32_t difficulty,
@@ -403,6 +400,22 @@ void MapChunkCache::draw(Renderer &target, uint8_t map_id, uint32_t difficulty,
         cached_difficulty = difficulty;
     }
     ++frame;
+
+    // Keep the visible map inside the cache even with high FOV / zoom-out.
+    // World tiles grow while raster tiles stay 512px: detail tracks screen size.
+    // The former overflow path repainted all vector terrain on EVERY frame.
+    int tile = 512;
+    size_t const view_budget = mobile ? 24u : 48u;
+    auto tiles_needed = [&](int size) -> size_t {
+        return (size_t)(std::ceil((right-left)/size)+2)
+             * (size_t)(std::ceil((bottom-top)/size)+2);
+    };
+    while (tile < 32768 && tiles_needed(tile) > view_budget) tile *= 2;
+    // Retain the larger tier until zoom changes substantially (hysteresis).
+    if (tile > kChunkSize || (tile < kChunkSize && tiles_needed(tile) < view_budget / 2)) {
+        chunks.clear();
+        kChunkSize = tile;
+    }
 
     // Only chunks whose origin lies inside the arena (edge chunks may pad past).
     int const max_cx = std::max(0, ((int)ARENA_WIDTH - 1) / kChunkSize);
@@ -421,65 +434,8 @@ void MapChunkCache::draw(Renderer &target, uint8_t map_id, uint32_t difficulty,
     float const paint_b = std::min(bottom, (float)ARENA_HEIGHT);
     if (paint_r <= paint_l || paint_b <= paint_t) return;
 
-    // Larger desktop cache stays in blit mode longer (full paint_static every
-    // frame under zoom-out was a steady hitch).
-    size_t limit = mobile ? 48u : 96u;
-    size_t leave_limit = mobile ? 32u : 72u;
-    size_t needed = (size_t)(x1 - x0 + 1) * (size_t)(y1 - y0 + 1);
-    if (needed > limit) full_paint_mode = 1;
-    else if (needed <= leave_limit) full_paint_mode = 0;
-    if (full_paint_mode) {
-        // Still bake a few chunks so leaving full-paint is cheaper next frames.
-        size_t const warm = mobile ? 2u : 4u;
-        size_t warmed = 0;
-        for (int y = y0; y <= y1 && warmed < warm; ++y) {
-            for (int x = x0; x <= x1 && warmed < warm; ++x) {
-                auto it = std::find_if(chunks.begin(), chunks.end(), [=](Chunk const &c) {
-                    return c.x == x && c.y == y;
-                });
-                if (it != chunks.end()) {
-                    it->used = frame;
-                    if (it->baked_difficulty != difficulty) {
-                        render_chunk(*it, map_id, difficulty);
-                        ++warmed;
-                    }
-                    continue;
-                }
-                if (chunks.size() == limit) {
-                    it = std::min_element(chunks.begin(), chunks.end(),
-                        [](Chunk const &a, Chunk const &b) { return a.used < b.used; });
-                    it->x = x; it->y = y;
-                    it->baked_difficulty = 0xffffffffu;
-                } else {
-                    Chunk fresh;
-                    fresh.x = x; fresh.y = y;
-                    fresh.canvas = std::make_unique<Renderer>();
-                    chunks.push_back(std::move(fresh));
-                    it = chunks.end() - 1;
-                }
-                render_chunk(*it, map_id, difficulty);
-                it->used = frame;
-                ++warmed;
-            }
-        }
-        paint_static(target, map_id, difficulty, paint_l, paint_t, paint_r, paint_b);
-        return;
-    }
-
-    // Cold cache (spawn / map change): more first-frame canvas allocs stall the
-    // title→game circle wipe; keep budget modest but above steady-state.
-    size_t missing_pre = 0;
-    for (int y = y0; y <= y1; ++y) {
-        for (int x = x0; x <= x1; ++x) {
-            auto it = std::find_if(chunks.begin(), chunks.end(), [=](Chunk const &c) {
-                return c.x == x && c.y == y;
-            });
-            if (it == chunks.end()) ++missing_pre;
-        }
-    }
-    size_t bake_budget = mobile ? 3u : 6u;
-    if (missing_pre * 2u >= needed)
-        bake_budget = mobile ? 5u : 10u;
+    size_t const limit = mobile ? 48u : 96u;
+    size_t bake_budget = mobile ? 1u : 2u;
     size_t baked = 0;
     size_t missing = 0;
 
@@ -543,9 +499,12 @@ void MapChunkCache::draw(Renderer &target, uint8_t map_id, uint32_t difficulty,
             float const cx1 = cx0 + (float)kChunkSize;
             float const cy1 = cy0 + (float)kChunkSize;
             if (it != chunks.end() && it->canvas) {
+                RenderContext tile_context(&target);
+                float const raster_scale = (float)kRasterSize / kChunkSize;
+                target.scale(1.f / raster_scale);
                 target.draw_image_at(*it->canvas,
-                                     cx0 - (float)kChunkPad,
-                                     cy0 - (float)kChunkPad);
+                                     cx0 * raster_scale - (float)kChunkPad,
+                                     cy0 * raster_scale - (float)kChunkPad);
             } else {
                 float hl = std::max(cx0, paint_l);
                 float ht = std::max(cy0, paint_t);

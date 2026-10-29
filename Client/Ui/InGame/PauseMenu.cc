@@ -98,6 +98,7 @@ Element *Ui::make_pause_menu() {
             .fill = Chrome::kGold, .h_justify = Style::Left
         }),
         pause_toggle_row(&I18n::use_chinese, I18n::kLanguage),
+        pause_toggle_row(&Game::perf_mode, I18n::kPerfMode),
         pause_toggle_row(&Game::show_low_rarity_drops, I18n::kShowLowRarityDrops),
         pause_toggle_row(&Game::show_hitboxes, I18n::kShowHitboxes),
         pause_toggle_row(&Game::show_debug, I18n::kDebugStats),

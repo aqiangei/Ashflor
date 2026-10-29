@@ -210,6 +210,11 @@ void Game::render_game() {
         renderer.scale(ent.animation);
         render_web(renderer, ent);
     });
+    // Absolute world coords inside render_animation (chain may span FOV).
+    simulation.for_each<kAnimation>([&](Simulation *sim, Entity const &ent){
+        RenderContext context(&renderer);
+        render_animation(sim, renderer, ent);
+    });
     simulation.for_each<kDrop>([&](Simulation *sim, Entity const &ent){
         if (!visible(ent)) return;
         // Settings: hide Common/Unusual petal piles unless "show low rarity drops"

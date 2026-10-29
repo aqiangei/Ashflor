@@ -10,3 +10,4 @@ void render_mob(Renderer &, Entity const &);
 void render_name(Renderer &, Entity const &);
 void render_petal(Renderer &, Entity const &);
 void render_web(Renderer &, Entity const &);
+void render_animation(class Simulation *, Renderer &, Entity const &);

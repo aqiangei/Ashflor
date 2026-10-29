@@ -28,5 +28,8 @@ EntityID find_nearest_enemy(Simulation *, Entity const &, float);
 // Poo: multiplier on mob aggro / deaggro range vs this flower (1 = full range).
 float flower_aggro_range_mult(Entity const &);
 
+// Player flower hugging impassable terrain — wilds drop / refuse aggro.
+bool flower_hugging_wall(Simulation *, Entity const &);
+
 void entity_set_despawn_tick(Entity &, game_tick_t);
 void entity_clear_references(Simulation *, Entity &);

@@ -22,6 +22,7 @@ struct MobRenderAttributes {
     uint32_t seed;
     uint32_t flags;
     uint8_t color;
+    uint8_t rarity = 0; // spawn rarity; FlorrArt skips Super+ (soft PNG upscale)
     FlowerRenderAttributes flower_attrs;
 };
 

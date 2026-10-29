@@ -21,6 +21,9 @@
 namespace {
 
 Renderer *g_art = nullptr;
+struct FlushArt {
+    ~FlushArt() { Renderer::flush(); }
+};
 
 void ensure_art() {
     if (g_art != nullptr) return;
@@ -35,6 +38,7 @@ void clear_art(int w, int h) {
     ensure_art();
     g_art->set_dimensions((float) w, (float) h);
     g_art->reset();
+    Renderer::flush();
     EM_ASM({
         var c = Module.ctxs[$0];
         c.setTransform(1, 0, 0, 1, 0, 0);
@@ -60,6 +64,7 @@ EMSCRIPTEN_KEEPALIVE int ashflor_art_ctx_id() {
 }
 
 EMSCRIPTEN_KEEPALIVE void ashflor_art_draw_petal(int petal_id, int w, int h) {
+    FlushArt present;
     if (petal_id <= 0 || petal_id >= (int) PetalID::kNumPetals) return;
     if (w < 8) w = 8;
     if (h < 8) h = 8;
@@ -72,6 +77,7 @@ EMSCRIPTEN_KEEPALIVE void ashflor_art_draw_petal(int petal_id, int w, int h) {
 }
 
 EMSCRIPTEN_KEEPALIVE void ashflor_art_draw_mob(int mob_id, int rarity, int w, int h) {
+    FlushArt present;
     if (mob_id < 0 || mob_id >= (int) MobID::kNumMobs) return;
     if (w < 8) w = 8;
     if (h < 8) h = 8;
@@ -154,6 +160,7 @@ static char const *theme_sample_name(int visual, int map_id) {
 
 EMSCRIPTEN_KEEPALIVE void ashflor_art_draw_theme(int visual, int map_id, int w, int h,
                                                   float anim, unsigned seed, char const *name) {
+    FlushArt present;
     if (visual <= 0 || visual > (int) ThemeArt::Visual::EventLore) return;
     if (map_id < 0) map_id = 0;
     if (map_id >= (int) MapID::kNumMaps) map_id = 0;

@@ -18,7 +18,8 @@ typedef uint16_t game_tick_t;
     COMPONENT(Segmented) \
     COMPONENT(Web) \
     COMPONENT(Score) \
-    COMPONENT(Name)
+    COMPONENT(Name) \
+    COMPONENT(Animation)
 
 #define PERFIELD \
 FIELDS_Physics \
@@ -31,7 +32,8 @@ FIELDS_Mob \
 FIELDS_Drop \
 FIELDS_Segmented \
 FIELDS_Score \
-FIELDS_Name
+FIELDS_Name \
+FIELDS_Animation
 
 #define FIELDS_Physics \
 SINGLE(Physics, x, Float) \
@@ -86,6 +88,8 @@ SINGLE(Drop, drop_count, uint16_t)
 #define FIELDS_Segmented
 
 #define FIELDS_Web
+
+#define FIELDS_Animation
 
 #define FIELDS_Score \
 SINGLE(Score, score, uint32_t)

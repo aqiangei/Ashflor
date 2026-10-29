@@ -1,4 +1,5 @@
 #include <Client/Assets/Assets.hh>
+#include <Client/Assets/FlorrArt.hh>
 
 #include <Client/StaticData.hh>
 
@@ -136,74 +137,76 @@ void draw_static_flower(Renderer &ctx, FlowerRenderAttributes attributes) {
         ctx.scale(0.62f);
         draw_static_petal(PetalID::kMagnet, ctx);
     }
-    // Bandage: layered gauze wraps + fray tips (equipped look).
+    // Bandage: original worn wrap sprite when ready; else procedural gauze.
     if (BitMath::at(attributes.equip_flags, EquipmentFlags::kBandage))
     {
         RenderContext g(&ctx);
-        ctx.round_line_cap();
-        ctx.round_line_join();
-        // Soft under-shadow so wraps sit on the petal body
-        ctx.set_stroke(0x33000000);
-        ctx.set_line_width(7.2f);
-        ctx.begin_path();
-        ctx.move_to(-19, -5);
-        ctx.qcurve_to(-2, -23, 19, -3);
-        ctx.move_to(-18, 5);
-        ctx.qcurve_to(2, 20, 18, 7);
-        ctx.move_to(-12, -14);
-        ctx.qcurve_to(8, -2, 14, 14);
-        ctx.stroke();
-        // Main cream strips
-        ctx.set_stroke(0xfff4ebe0);
-        ctx.set_line_width(6.2f);
-        ctx.begin_path();
-        ctx.move_to(-19, -5);
-        ctx.qcurve_to(-2, -23, 19, -3);
-        ctx.move_to(-18, 5);
-        ctx.qcurve_to(2, 20, 18, 7);
-        ctx.move_to(-12, -14);
-        ctx.qcurve_to(8, -2, 14, 14);
-        ctx.stroke();
-        // Weave seam lines
-        ctx.set_stroke(0xffc8b090);
-        ctx.set_line_width(1.6f);
-        ctx.begin_path();
-        ctx.move_to(-19, -5);
-        ctx.qcurve_to(-2, -23, 19, -3);
-        ctx.move_to(-18, 5);
-        ctx.qcurve_to(2, 20, 18, 7);
-        ctx.move_to(-12, -14);
-        ctx.qcurve_to(8, -2, 14, 14);
-        ctx.stroke();
-        // Soft highlight edge on top strip
-        ctx.set_stroke(0x99ffffff);
-        ctx.set_line_width(1.8f);
-        ctx.begin_path();
-        ctx.move_to(-17, -7);
-        ctx.qcurve_to(-2, -24, 17, -5);
-        ctx.stroke();
-        // Frayed ends
-        ctx.set_stroke(0xffd4c4a8);
-        ctx.set_line_width(1.3f);
-        ctx.begin_path();
-        ctx.move_to(19, -3); ctx.line_to(23, -6);
-        ctx.move_to(19.5f, -1); ctx.line_to(24, -1);
-        ctx.move_to(18, 7); ctx.line_to(22, 10);
-        ctx.move_to(18.5f, 5); ctx.line_to(23, 6);
-        ctx.stroke();
-        // Tiny red seal over the cross-wrap
-        ctx.set_fill(0xffe04848);
-        ctx.set_stroke(0xffa02828);
-        ctx.set_line_width(1.1f);
-        ctx.begin_path();
-        ctx.arc(4, 0, 2.6f);
-        ctx.fill();
-        ctx.stroke();
-        ctx.set_stroke(0xfffff0f0);
-        ctx.set_line_width(1.4f);
-        ctx.begin_path();
-        ctx.move_to(2.4f, 0); ctx.line_to(5.6f, 0);
-        ctx.move_to(4, -1.6f); ctx.line_to(4, 1.6f);
-        ctx.stroke();
+        if (!FlorrArt::try_draw_worn(FlorrArt::kWornBandage, ctx, 56.f)) {
+            ctx.round_line_cap();
+            ctx.round_line_join();
+            // Soft under-shadow so wraps sit on the petal body
+            ctx.set_stroke(0x33000000);
+            ctx.set_line_width(7.2f);
+            ctx.begin_path();
+            ctx.move_to(-19, -5);
+            ctx.qcurve_to(-2, -23, 19, -3);
+            ctx.move_to(-18, 5);
+            ctx.qcurve_to(2, 20, 18, 7);
+            ctx.move_to(-12, -14);
+            ctx.qcurve_to(8, -2, 14, 14);
+            ctx.stroke();
+            // Main cream strips
+            ctx.set_stroke(0xfff4ebe0);
+            ctx.set_line_width(6.2f);
+            ctx.begin_path();
+            ctx.move_to(-19, -5);
+            ctx.qcurve_to(-2, -23, 19, -3);
+            ctx.move_to(-18, 5);
+            ctx.qcurve_to(2, 20, 18, 7);
+            ctx.move_to(-12, -14);
+            ctx.qcurve_to(8, -2, 14, 14);
+            ctx.stroke();
+            // Weave seam lines
+            ctx.set_stroke(0xffc8b090);
+            ctx.set_line_width(1.6f);
+            ctx.begin_path();
+            ctx.move_to(-19, -5);
+            ctx.qcurve_to(-2, -23, 19, -3);
+            ctx.move_to(-18, 5);
+            ctx.qcurve_to(2, 20, 18, 7);
+            ctx.move_to(-12, -14);
+            ctx.qcurve_to(8, -2, 14, 14);
+            ctx.stroke();
+            // Soft highlight edge on top strip
+            ctx.set_stroke(0x99ffffff);
+            ctx.set_line_width(1.8f);
+            ctx.begin_path();
+            ctx.move_to(-17, -7);
+            ctx.qcurve_to(-2, -24, 17, -5);
+            ctx.stroke();
+            // Frayed ends
+            ctx.set_stroke(0xffd4c4a8);
+            ctx.set_line_width(1.3f);
+            ctx.begin_path();
+            ctx.move_to(19, -3); ctx.line_to(23, -6);
+            ctx.move_to(19.5f, -1); ctx.line_to(24, -1);
+            ctx.move_to(18, 7); ctx.line_to(22, 10);
+            ctx.move_to(18.5f, 5); ctx.line_to(23, 6);
+            ctx.stroke();
+            // Tiny red seal over the cross-wrap
+            ctx.set_fill(0xffe04848);
+            ctx.set_stroke(0xffa02828);
+            ctx.set_line_width(1.1f);
+            ctx.begin_path();
+            ctx.arc(4, 0, 2.6f);
+            ctx.fill();
+            ctx.stroke();
+            ctx.set_stroke(0xfffff0f0);
+            ctx.set_line_width(1.4f);
+            ctx.begin_path();
+            ctx.move_to(2.4f, 0); ctx.line_to(5.6f, 0);
+            ctx.move_to(4, -1.6f); ctx.line_to(4, 1.6f);
+            ctx.stroke();
+        }
     }
 }

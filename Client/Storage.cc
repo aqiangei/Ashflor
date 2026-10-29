@@ -39,7 +39,35 @@ namespace StorageProtocol {
     void store(char const *name, uint32_t len) {
         _custom_b16_encode(len);
         EM_ASM({
-            window.localStorage[Module.TextDecoder.decode(HEAPU8.subarray($0,$0+$1))] = Module.TextDecoder.decode(HEAPU8.subarray($2,$2+$3));
+            const key = Module.TextDecoder.decode(HEAPU8.subarray($0,$0+$1));
+            const value = Module.TextDecoder.decode(HEAPU8.subarray($2,$2+$3));
+            let state = Module['storageWrites'];
+            if (!state) {
+                state = Module['storageWrites'] = ({ last:new Map(), pending:new Map(), timer:0 });
+                state.flush = function() {
+                    clearTimeout(state.timer); state.timer = 0;
+                    state.pending.forEach(function(v,k) {
+                        try { window.localStorage.setItem(k,v); }
+                        catch(e) { state.last.delete(k); console.warn('Local save unavailable',e); }
+                    });
+                    state.pending.clear();
+                };
+                window.addEventListener('pagehide',state.flush);
+                document.addEventListener('visibilitychange',function() {
+                    if (document.hidden) state.flush();
+                });
+            }
+            if (state.last.get(key) === value) return;
+            state.last.set(key,value);
+            // Loot/XP can change every 50ms. Coalesce large guest/gallery saves
+            // instead of synchronously writing all keys on every server tick.
+            if (key === 'guest' || key === 'petals' || key === 'mobs') {
+                state.pending.set(key,value);
+                if (!state.timer) state.timer = setTimeout(state.flush,500);
+            } else {
+                try { window.localStorage.setItem(key,value); }
+                catch(e) { state.last.delete(key); console.warn('Local save unavailable',e); }
+            }
         }, name, std::strlen(name), buffer, 2 * len);
     }
 
@@ -170,7 +198,8 @@ public:
     X(17, Game::rot_speed_setting) \
     X(21, Game::show_debug) \
     X(23, Game::show_hitboxes) \
-    X(24, Game::show_low_rarity_drops)
+    X(24, Game::show_low_rarity_drops) \
+    X(26, Game::perf_mode)
 
 #define X(ct, name) static auto checker_##ct = MutationObserver(name);
 STORED
@@ -247,20 +276,31 @@ void Storage::retrieve() {
                 Input::disable_auto_party = BitMath::at(b2, 1);
                 Game::show_hitboxes = BitMath::at(b2, 2);
                 Game::show_low_rarity_drops = BitMath::at(b2, 3);
+                // bit6 marks a user-chosen perf_mode (bit4). Old bit5 saves from the
+                // brief "default on" ship are ignored so everyone stays sharp unless opted in.
+                if (BitMath::at(b2, 6))
+                    Game::perf_mode = BitMath::at(b2, 4);
             }
         } else {
             Input::request_mobile = Input::is_mobile;
         }
     }
     {
-        // florr_clone-style remembered FOV multiplier (centi-units, 55..220)
+        // florr_clone-style remembered FOV multiplier (centi-units, 42..200)
         uint32_t len = StorageProtocol::retrieve("cam_zoom", 4);
         if (len >= 2) {
             Decoder reader(&StorageProtocol::buffer[0]);
             uint16_t z = reader.read<uint16_t>();
             float zoom = z / 100.f;
-            if (zoom >= 0.55f && zoom <= 2.2f)
+            if (zoom > 2.0f && zoom <= 2.2f)
+                zoom = 2.0f;
+            if (zoom >= 0.42f && zoom <= 2.0f) {
+                // Old default was 1.28 — that clipped hub packs (「显示不全」).
+                // Pull remembered near-default over-zoom back to 1.0 once.
+                if (zoom > 1.05f && zoom <= 1.35f)
+                    zoom = 1.0f;
                 Game::camera_zoom = zoom;
+            }
         }
     }
     {
@@ -576,6 +616,8 @@ void Storage::set() {
             | ((Input::disable_auto_party ? 1 : 0) << 1)
             | ((Game::show_hitboxes ? 1 : 0) << 2)
             | ((Game::show_low_rarity_drops ? 1 : 0) << 3)
+            | ((Game::perf_mode ? 1 : 0) << 4)
+            | (1 << 6)
         );
         StorageProtocol::store("settings", writer.at - writer.base);
     }

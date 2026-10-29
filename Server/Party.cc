@@ -12,9 +12,12 @@
 #include <Shared/Binary.hh>
 #include <Shared/Config.hh>
 #include <Shared/Entity.hh>
+#include <Shared/Map.hh>
 #include <Shared/Simulation.hh>
 #include <Shared/StaticData.hh>
+#include <Shared/StaticDefinitions.hh>
 
+#include <Helpers/Bits.hh>
 #include <Helpers/Math.hh>
 #include <Helpers/UTF8.hh>
 
@@ -635,5 +638,59 @@ void Party::tick(GameInstance *game) {
             send_update(dead);
         if (dead->revive_progress >= REVIVE_TICKS)
             do_revive(dead, who);
+    }
+
+    // Dark Mark on corpse → transfer attacker to Hel (no exit lockout).
+    // Attack while standing on any party corpse with Mark equipped.
+    if (map_is_open(MapID::kHel)) {
+        std::vector<Client *> mark_send;
+        for (Client *c : game->clients) {
+            if (c == nullptr || !c->alive()) continue;
+            Entity &cam = sim->get_ent(c->camera);
+            Entity &player = sim->get_ent(cam.get_player());
+            if (player.immunity_ticks > 0) continue;
+            if (!BitMath::at(player.input, InputFlags::kAttacking)) continue;
+            uint8_t has_mark = 0;
+            for (uint32_t i = 0; i < player.get_loadout_count(); ++i) {
+                PetalID::T id = player.get_loadout_ids(i);
+                if (id == PetalID::kNone || id >= PetalID::kNumPetals) continue;
+                if (PETAL_DATA[id].attributes.dark_mark) { has_mark = 1; break; }
+            }
+            if (!has_mark) continue;
+            float px = player.get_x(), py = player.get_y();
+            uint8_t near_corpse = 0;
+            for (Client *dead : game->clients) {
+                if (dead == nullptr || !dead->awaiting_revive) continue;
+                float dx = px - dead->corpse_x, dy = py - dead->corpse_y;
+                if (dx * dx + dy * dy <= REVIVE_RADIUS * REVIVE_RADIUS) {
+                    near_corpse = 1;
+                    break;
+                }
+            }
+            if (near_corpse) mark_send.push_back(c);
+        }
+        for (Client *c : mark_send) {
+            if (c == nullptr || c->game != game || !c->alive()) continue;
+            Entity &cam = sim->get_ent(c->camera);
+            Entity &player = sim->get_ent(cam.get_player());
+            std::string name = player.get_name();
+            GameInstance *dest = &Server::games[MapID::kHel];
+            game->transfer_client(c, dest);
+            if (c->game != dest) continue;
+            if (!dest->simulation.ent_exists(c->camera)) continue;
+            Entity &ncam = dest->simulation.get_ent(c->camera);
+            if (dest->simulation.ent_exists(ncam.get_player()))
+                dest->simulation.request_delete(ncam.get_player());
+            Entity &nplayer = alloc_player(&dest->simulation, ncam.get_team());
+            float dxp = MAP_SPAWN_X, dyp = MAP_SPAWN_Y;
+            Map::resolve_circle_terrain(dest->map_id, dxp, dyp, BASE_FLOWER_RADIUS + 8);
+            player_spawn_at(&dest->simulation, ncam, nplayer, dxp, dyp);
+            nplayer.set_name(name);
+            nplayer.set_guild(c->guild_name);
+            c->play_name = name;
+            nplayer.immunity_ticks = (game_tick_t)(4.0f * TPS);
+            Party::apply_team(c);
+            notify(c, "[地狱] 暗黑标记感应到尸体，你被卷入了地狱。");
+        }
     }
 }

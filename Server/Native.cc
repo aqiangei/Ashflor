@@ -56,6 +56,7 @@ static char const *mime_for(std::string const &path) {
     if (ends(".json") || ends(".webmanifest")) return "application/json; charset=utf-8";
     if (ends(".svg")) return "image/svg+xml";
     if (ends(".png")) return "image/png";
+    if (ends(".webp")) return "image/webp";
     if (ends(".ico")) return "image/x-icon";
     if (ends(".css")) return "text/css; charset=utf-8";
     if (ends(".br")) return "application/octet-stream";

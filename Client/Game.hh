@@ -154,6 +154,8 @@ namespace Game {
     extern uint8_t show_hitboxes;
     // 0 = hide Common/Unusual ground drops (default); 1 = show them.
     extern uint8_t show_low_rarity_drops;
+    // 1 = cap canvas DPR at 1 (fewer pixels → smoother Canvas2D).
+    extern uint8_t perf_mode;
     extern uint8_t selected_map; // MapID for title-screen world select
     extern uint8_t minimap_expanded; // 0 compact full-map, 1 larger full-map (toggle M)
     struct OnlineRosterEntry {
@@ -163,7 +165,7 @@ namespace Game {
         uint32_t level = 1;
     };
     extern std::vector<OnlineRosterEntry> online_roster;
-    extern float camera_zoom; // client zoom multiplier (default 1.28 = slightly closer)
+    extern float camera_zoom; // client zoom multiplier (default 1.0; >1 = closer)
     void persist_camera_zoom(); // localStorage cam_zoom (florr_clone-style recall)
     extern uint8_t pause_menu_open;
     extern uint8_t leave_confirm_open;

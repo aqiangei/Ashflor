@@ -23,6 +23,10 @@ void apply_mob_live_rarity(Entity &mob, uint8_t spawn_rarity);
 Entity &alloc_player(Simulation *, EntityID const);
 Entity &alloc_petal(Simulation *, PetalID::T, Entity const &);
 Entity &alloc_web(Simulation *, float, Entity const &);
+// Ephemeral zigzag bolt: node i.parent = node i-1 (client walks roots→children).
+void spawn_lightning_bolt(Simulation *, float const *xs, float const *ys, uint8_t n);
+void spawn_lightning_bolt_hits(Simulation *, float sx, float sy,
+    EntityID const *hits, uint8_t nhit);
 Entity &alloc_cpu_camera(Simulation *, EntityID const);
 
 void player_spawn(Simulation *, Entity &, Entity &);

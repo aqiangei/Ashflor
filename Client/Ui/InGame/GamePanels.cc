@@ -832,9 +832,11 @@ static void play_result(uint8_t result, PetalID::T petal, uint32_t amount) {
         for (uint32_t i = 0; i < n_speck; ++i)
             spawn_speck(cx, cy, col);
     } else if (result == CraftResultCode::kCraftExchanged
-        || result == CraftResultCode::kCraftBought) {
-        // Shop / assemble / exchange: fly straight into the bag (legacy).
-        if (petal != PetalID::kNone && petal < PetalID::kNumPetals) {
+        || result == CraftResultCode::kCraftBought
+        || result == CraftResultCode::kCraftAssembled
+        || result == CraftResultCode::kCraftPlinkoResult) {
+        // Shop / assemble / exchange / plinko: fly into bag when chips returned.
+        if (petal != PetalID::kNone && petal < PetalID::kNumPetals && amount > 0) {
             uint32_t n = amount > 0 ? amount : 1u;
             fly_result_claim(petal, n);
             win_flash = 1.f;
@@ -844,6 +846,10 @@ static void play_result(uint8_t result, PetalID::T petal, uint32_t amount) {
             if (r < RarityID::kNumRarities) col = RARITY_COLORS[r] | 0xff000000;
             for (uint32_t i = 0; i < 10; ++i)
                 spawn_speck(cx, cy, col);
+        } else if (result == CraftResultCode::kCraftPlinkoResult) {
+            tray_shake = 1.f;
+            for (uint32_t i = 0; i < 10; ++i)
+                spawn_speck(cx, cy, 0xff886655);
         }
     } else if (result == CraftResultCode::kCraftLevelWin) {
         // Level-up: no product to claim — just flash in the petal's color.
@@ -1046,8 +1052,30 @@ static void clear_result_fx() {
 }
 } // namespace CraftFx
 
+static void on_assemble_once(Element *, uint8_t e) {
+    if (e != Ui::kClick) return;
+    if (Game::simulation.arena_info.map_id != MapID::kFactory) return;
+    // Try recipes 0..5 until server accepts (needs nearby Assembler + mats).
+    static uint8_t s_recipe = 0;
+    Game::craft_petals(CraftMode::kCraftAssemble, (PetalID::T) s_recipe, 1);
+    s_recipe = (uint8_t)((s_recipe + 1) % 6);
+}
+
 static void on_craft_once(Element *, uint8_t e) {
     if (e != Ui::kClick) return;
+    // Hel: craft panel becomes Plinko — drop one Poker Chip from the tray.
+    if (Game::simulation.arena_info.map_id == MapID::kHel) {
+        PetalID::T id = Game::craft_tray_id;
+        if (id == PetalID::kNone || id >= PetalID::kNumPetals) return;
+        if (std::strcmp(PETAL_DATA[id].name, "Poker Chip") != 0) return;
+        if (PETAL_DATA[id].rarity >= RarityID::kUnique) return;
+        if (Game::craft_tray_count < 1 && Game::craft_bank[id] < 1) return;
+        CraftFx::begin_craft_absorb();
+        Game::craft_petals(CraftMode::kCraftPlinko, id, 1);
+        if (Game::craft_tray_count > 0) --Game::craft_tray_count;
+        if (Game::craft_tray_count == 0) Game::craft_tray_clear();
+        return;
+    }
     if (Game::craft_tray_id == PetalID::kNone || Game::craft_tray_count < Craft::kCraftBatch)
         return;
     PetalID::T id = Game::craft_tray_id;
@@ -2823,11 +2851,19 @@ Element *Ui::make_craft_panel() {
             new Ui::VContainer({
                 new Ui::HContainer({
                     new Ui::Button(112, 48,
-                        new Ui::DynamicText(19, [](){ return I18n::use_chinese ? "合成" : "Craft"; }),
+                        new Ui::DynamicText(19, [](){
+                            if (Game::simulation.arena_info.map_id == MapID::kHel)
+                                return I18n::use_chinese ? "投入" : "Drop";
+                            return I18n::use_chinese ? "合成" : "Craft";
+                        }),
                         on_craft_once, nullptr,
                         { .fill = Chrome::kBtnStone, .round_radius = 8 }),
                     new Ui::Button(112, 48,
                         new Ui::DynamicText(17, [](){
+                            if (Game::simulation.arena_info.map_id == MapID::kFactory)
+                                return I18n::use_chinese ? std::string{"组装"} : std::string{"Assemble"};
+                            if (Game::simulation.arena_info.map_id == MapID::kHel)
+                                return I18n::use_chinese ? std::string{"—"} : std::string{"—"};
                             uint32_t cost = craft_exchange_price(Game::craft_tray_id);
                             if (cost == 0 || cost >= 999999)
                                 return I18n::use_chinese ? std::string{"保底直兑"} : std::string{"Exchange"};
@@ -2835,13 +2871,30 @@ Element *Ui::make_craft_panel() {
                                 ? std::format("直兑 ×{}", format_stack(cost))
                                 : std::format("Buy ×{}", format_stack(cost));
                         }),
-                        on_craft_exchange, nullptr,
+                        [](Element *elt, uint8_t ev) {
+                            if (Game::simulation.arena_info.map_id == MapID::kFactory)
+                                on_assemble_once(elt, ev);
+                            else if (Game::simulation.arena_info.map_id != MapID::kHel)
+                                on_craft_exchange(elt, ev);
+                        }, nullptr,
                         { .fill = Chrome::kBtnStone, .round_radius = 8 })
                 }, 0, 8, { .h_justify = Style::Left }),
                 new Ui::DynamicText(15, [](){
+                    if (Game::simulation.arena_info.map_id == MapID::kHel)
+                        return I18n::use_chinese ? "地狱：投入扑克筹码玩 Plinko" : "Hel: drop Poker Chips into Plinko";
+                    if (Game::simulation.arena_info.map_id == MapID::kFactory)
+                        return I18n::use_chinese ? "靠近组装台后点「组装」轮换配方" : "Near Assembler: Assemble cycles recipes";
                     return I18n::use_chinese ? "将五个相同的花瓣" : "Place five matching petals";
                 }, { .fill = Chrome::kTitle, .h_justify = Style::Left }),
                 new Ui::DynamicText(15, [](){
+                    if (Game::simulation.arena_info.map_id == MapID::kHel)
+                        return I18n::use_chinese
+                            ? "倍率 0×–500×（唯一筹码不可用）"
+                            : "Multipliers 0×–500× (Unique chips blocked)";
+                    if (Game::simulation.arena_info.map_id == MapID::kFactory)
+                        return I18n::use_chinese
+                            ? "玻璃↔沙、空气→泡泡、蜜→蜡、电池/齿轮→碎片"
+                            : "Glass↔Sand, Air→Bubble, Honey→Wax, Battery/Cog→Fragment";
                     return I18n::use_chinese
                         ? "升阶；唯一栏放材料，末格Lv.1起显示（失败损失1–4）"
                         : "rank up; Unique=mats, last cell from Lv.1 (miss loses 1–4)";

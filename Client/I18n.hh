@@ -181,6 +181,7 @@ namespace I18n {
         kSettingsControls,
         kSettingsDisplay,
         kSettingsSocial,
+        kPerfMode,
         kCount
     };
 

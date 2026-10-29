@@ -135,9 +135,10 @@ void DOM::update_pos_and_dimension(char const *name, float x, float y, float w, 
         {
             const name = UTF8ToString($0);
             const elem = document.getElementById(name);
+            const cap = (typeof Module !== "undefined" && Module.ashflorPerfMode) ? 1 : 2;
             const r = (typeof Module !== "undefined" && Module.ashflorDpr)
                 ? Module.ashflorDpr
-                : Math.min(window.devicePixelRatio || 1, 2);
+                : Math.min(window.devicePixelRatio || 1, cap);
             elem.style.left = ($1 - $3 / 2) / r + "px";
             elem.style.top = ($2 - $4 / 2) / r + "px";
             elem.style.width = ($3 / r - 10) + "px";

@@ -3,6 +3,7 @@
 #include <Client/Render/Renderer.hh>
 
 #include <Client/Assets/Assets.hh>
+#include <Client/Assets/MobRasterCache.hh>
 #include <Client/Assets/ThemeArt.hh>
 #include <Client/Particle.hh>
 #include <Client/Ui/Extern.hh>
@@ -40,7 +41,10 @@ void render_mob(Renderer &ctx, Entity const &ent) {
     if ((ent.get_mob_id() == MobID::kBeetle || ent.get_mob_id() == MobID::kMassiveBeetle)
         && (nm == "Undead Beetle" || nm == "亡灵甲虫"))
         BitMath::set(flags, 2);
-    MobRenderAttributes attrs = {ent.animation, ent.get_radius(), ent.id.id, flags, ent.get_color()};
+    MobRenderAttributes attrs = {
+        ent.animation, ent.get_radius(), ent.id.id, flags, ent.get_color(),
+        ent.get_rarity()
+    };
     if (ent.has_component(kFlower)) {
         attrs.flower_attrs = {
             .radius = ent.get_radius(),
@@ -56,6 +60,9 @@ void render_mob(Renderer &ctx, Entity const &ent) {
     ThemeArt::Visual const theme = ThemeArt::resolve(ent.get_mob_id(), nm, map_id);
     if (theme != ThemeArt::Visual::None) {
         ThemeArt::draw(ctx, theme, map_id, attrs.radius, attrs.animation, attrs.seed, nm);
+    } else if (!ent.has_component(kFlower)
+            && MobRasterCache::try_draw(ent.get_mob_id(), attrs, ctx)) {
+        // Discrete-pose blit — skips per-frame Mob.cc path drawing.
     } else {
         draw_static_mob(ent.get_mob_id(), ctx, attrs);
         // E: lightweight sleep overlay (no new AI) — Z marks above sleeping event mobs.

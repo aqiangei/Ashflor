@@ -158,12 +158,19 @@ void Socket::connect(std::string const url) {
             const gen = ++socketGen;
             retireSocket(Module.socket);
             let socket = Module.socket = new WebSocket(string);
+            // A stalled browser handshake otherwise waits for its long native
+            // timeout before retrying, leaving the title stuck at connecting.
+            let handshakeTimer = setTimeout(function() {
+                if (gen === socketGen && socket.readyState === 0) socket.close();
+            }, 8000);
             socket.binaryType = "arraybuffer";
             socket.onopen = function() {
+                clearTimeout(handshakeTimer);
                 if (gen !== socketGen) return;
                 _on_message(0, 0, 0);
             };
             socket.onclose = function(a) {
+                clearTimeout(handshakeTimer);
                 // Replaced sockets often report 1006 — must not surface as a real drop
                 if (gen !== socketGen) return;
                 _on_message(2, a.code, stringToNewUTF8(a.reason || ""));
@@ -232,7 +239,7 @@ void Socket::connect(std::string const url) {
             });
         }
 
-        setTimeout(connect, 400);
+        connect();
     }, INCOMING_PACKET, url.c_str(), (int)Serverbound::kHeartbeat);
 }
 

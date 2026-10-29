@@ -31,6 +31,7 @@ namespace Ui {
 
     Element *pause_menu_root = nullptr;
     Element *leave_confirm_root = nullptr;
+    Element *death_screen_root = nullptr;
     Element *game_topbar_root = nullptr;
     Element *panel_buttons_root = nullptr;
     Element *game_side_buttons_root = nullptr;

@@ -150,7 +150,10 @@ static Entity &__alloc_mob(
     mob.poison_damage = data.attributes.poison_damage;
     mob.set_health_ratio(1);
 
-    mob.detection_radius = data.attributes.aggro_radius;
+    // Soften wild acquisition; player-team summons / diggers keep full bake.
+    float aggro = data.attributes.aggro_radius;
+    if (team == NULL_ENTITY) aggro *= MOB_AGGRO_RANGE_MULT;
+    mob.detection_radius = aggro;
     // Default XP; zone spawn / AI callbacks may override.
     mob.score_reward = data.xp;
 
@@ -315,6 +318,52 @@ Entity &alloc_web(Simulation *sim, float radius, Entity const &parent) {
     return web;
 }
 
+void spawn_lightning_bolt(Simulation *sim, float const *xs, float const *ys, uint8_t n) {
+    if (sim == nullptr || xs == nullptr || ys == nullptr || n < 2) return;
+    EntityID last = NULL_ENTITY;
+    for (uint8_t i = 0; i < n; ++i) {
+        if (!is_finite(xs[i]) || !is_finite(ys[i])) continue;
+        Entity &anim = sim->alloc_ent();
+        anim.add_component(kPhysics);
+        anim.set_x(xs[i]);
+        anim.set_y(ys[i]);
+        anim.set_radius(3.5f);
+        anim.set_angle(0);
+        anim.mass = 1.f;
+        anim.friction = 1.f;
+        anim.add_component(kRelations);
+        anim.set_parent(last);
+        anim.add_component(kAnimation);
+        BitMath::set(anim.flags, EntityFlags::kNoDrops);
+        // Same-tick FOV: hash was rebuilt at tick start; insert so _update_client sees us.
+        sim->spatial_hash.insert(anim);
+        // Fade via deletion_tick (~TPS/5); client paints zigzag while pending.
+        sim->request_delete(anim.id);
+        last = anim.id;
+    }
+}
+
+void spawn_lightning_bolt_hits(Simulation *sim, float sx, float sy,
+    EntityID const *hits, uint8_t nhit) {
+    if (sim == nullptr || hits == nullptr || nhit == 0) return;
+    if (!is_finite(sx) || !is_finite(sy)) return;
+    float xs[17];
+    float ys[17];
+    uint8_t n = 0;
+    xs[n] = sx;
+    ys[n] = sy;
+    ++n;
+    for (uint8_t i = 0; i < nhit && n < 17; ++i) {
+        if (!sim->ent_exists(hits[i])) continue;
+        Entity const &ent = sim->get_ent(hits[i]);
+        if (!ent.has_component(kPhysics)) continue;
+        xs[n] = ent.get_x();
+        ys[n] = ent.get_y();
+        ++n;
+    }
+    spawn_lightning_bolt(sim, xs, ys, n);
+}
+
 Entity &alloc_cpu_camera(Simulation *sim, EntityID const team) {
     Entity &ent = sim->alloc_ent();
     ent.add_component(kCamera);
@@ -402,8 +451,10 @@ static void _finish_player_spawn(Simulation *sim, Entity &camera, Entity &player
 void player_spawn(Simulation *sim, Entity &camera, Entity &player) {
     // Hub spawn: first map entry / Continue without a death site.
     // Death Continue uses player_spawn_at near death (Client.cc); party revive / portals too.
-    float spawn_x = MAP_SPAWN_X + (frand() - 0.5f) * 240.f;
-    float spawn_y = MAP_SPAWN_Y + (frand() - 0.5f) * 240.f;
+    float hx = MAP_SPAWN_X, hy = MAP_SPAWN_Y;
+    Map::hub_xy(sim->map_id, hx, hy);
+    float spawn_x = hx + (frand() - 0.5f) * 240.f;
+    float spawn_y = hy + (frand() - 0.5f) * 240.f;
     Map::resolve_circle_terrain(sim->map_id, spawn_x, spawn_y, BASE_FLOWER_RADIUS + 8);
     spawn_x = fclamp(spawn_x, BASE_FLOWER_RADIUS, ARENA_WIDTH - BASE_FLOWER_RADIUS);
     spawn_y = fclamp(spawn_y, BASE_FLOWER_RADIUS, ARENA_HEIGHT - BASE_FLOWER_RADIUS);

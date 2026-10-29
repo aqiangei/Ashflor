@@ -7,10 +7,15 @@ include_directories(..)
 
 set(SRCS
     Assets/Flower.cc
+    Assets/FlorrArt.cc
+    Assets/FlorrTerrain.cc
     Assets/Mob.cc
+    Assets/MobRasterCache.cc
     Assets/Petal.cc
+    Assets/PetalRasterCache.cc
     Assets/ThemeArt.cc
     Assets/Web.cc
+    Render/RenderAnimation.cc
     Render/RenderDrop.cc
     Render/RenderFlower.cc
     Render/RenderHealth.cc

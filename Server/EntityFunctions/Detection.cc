@@ -71,6 +71,13 @@ bool flower_is_corrupted(Simulation *sim, Entity const &ent) {
 
 bool player_faction_pvp(Simulation *sim, Entity const &a, Entity const &b) {
     if (!is_player_faction(sim, a) || !is_player_faction(sim, b)) return false;
+    // Hel: full FFA (no exit lock). Own petals vs owner still blocked in Collision.
+    if (sim != nullptr && sim->map_id == MapID::kHel) {
+        Entity const *fa = _controlled_flower_of(sim, a);
+        Entity const *fb = _controlled_flower_of(sim, b);
+        if (fa == nullptr || fb == nullptr) return false;
+        return !(fa->id == fb->id);
+    }
     return flower_is_corrupted(sim, a) || flower_is_corrupted(sim, b);
 }
 
@@ -86,6 +93,22 @@ float flower_aggro_range_mult(Entity const &flower) {
     }
     if (shrink <= 0.f) return 1.f;
     return fmaxf(0.05f, 1.f - fminf(0.95f, shrink));
+}
+
+bool flower_hugging_wall(Simulation *sim, Entity const &flower) {
+    if (sim == nullptr) return false;
+    if (!flower.has_component(kFlower) || flower.has_component(kMob)) return false;
+    float const x = flower.get_x();
+    float const y = flower.get_y();
+    float const r = flower.get_radius();
+    // Touching / nearly touching impassable — kite into berms to break chase.
+    if (Map::circle_hits_impassable(sim->map_id, x, y, r + 22.f)) return true;
+    constexpr float d = 32.f;
+    if (Map::circle_hits_impassable(sim->map_id, x + d, y, r)) return true;
+    if (Map::circle_hits_impassable(sim->map_id, x - d, y, r)) return true;
+    if (Map::circle_hits_impassable(sim->map_id, x, y + d, r)) return true;
+    if (Map::circle_hits_impassable(sim->map_id, x, y - d, r)) return true;
+    return false;
 }
 
 EntityID find_nearest_enemy(Simulation *simulation, Entity const &entity, float radius) {
@@ -132,7 +155,11 @@ EntityID find_nearest_enemy(Simulation *simulation, Entity const &entity, float 
         // Hub respawn pad only: wild mobs never acquire aggro on players inside
         // (players may still attack). Larger plaza / roads are not sanctuaries.
         if (!seeker_player && is_player_faction(sim, ent)
-            && Map::in_spawn_sanctuary(ent.get_x(), ent.get_y()))
+            && Map::in_spawn_sanctuary(sim->map_id, ent.get_x(), ent.get_y()))
+            return;
+        // Hugging a wall: drop acquisition so corner-kiting works.
+        if (!seeker_player && ent.has_component(kFlower) && !ent.has_component(kMob)
+            && flower_hugging_wall(sim, ent))
             return;
         // Hatch pets: leash aggro to the owning flower, not an egg petal.
         EntityID home_id = entity.get_parent();

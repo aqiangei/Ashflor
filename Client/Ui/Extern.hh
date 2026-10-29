@@ -34,6 +34,7 @@ namespace Ui {
     // Roots used for click-outside dismiss
     extern Element *pause_menu_root;
     extern Element *leave_confirm_root;
+    extern Element *death_screen_root;
     extern Element *game_topbar_root;
     extern Element *panel_buttons_root;
     extern Element *game_side_buttons_root;

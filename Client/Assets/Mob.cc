@@ -1,4 +1,5 @@
 #include <Client/Assets/Assets.hh>
+#include <Client/Assets/FlorrArt.hh>
 
 #include <Client/StaticData.hh>
 #include <Shared/RarityScale.hh>
@@ -16,6 +17,8 @@ void draw_static_mob(MobID::T mob_id, Renderer &ctx, MobRenderAttributes attr) {
     float animation_value = sinf(attr.animation);
     uint32_t seed = attr.seed;
     uint32_t base_color = 0xffffe763;
+    // Original florr sprites when present; ashflor biome/custom mobs keep cases below.
+    if (FlorrArt::try_draw_mob(mob_id, ctx, radius, flags, attr.rarity)) return;
     switch(mob_id) {
         case MobID::kTrainingDummy: {
             ctx.scale(radius / 44.f);
@@ -3090,6 +3093,804 @@ void draw_static_mob(MobID::T mob_id, Renderer &ctx, MobRenderAttributes attr) {
             ctx.arc(20, -14, 7);
             ctx.fill();
             break;
+        case MobID::kBush: {
+            ctx.scale(radius / 26.f);
+            // Leaf clumps
+            ctx.set_fill(0xff4FA84A);
+            ctx.set_stroke(0xff2E6B2A);
+            ctx.set_line_width(2.2f);
+            ctx.begin_path();
+            ctx.ellipse(-10, -2, 16, 14);
+            ctx.ellipse(10, -2, 16, 14);
+            ctx.ellipse(0, -12, 15, 13);
+            ctx.fill();
+            ctx.stroke();
+            // Cotton tufts (white fluff)
+            ctx.set_fill(0xffF2F0E8);
+            ctx.begin_path();
+            ctx.arc(-8, -10, 4.5f);
+            ctx.arc(7, -14, 4.f);
+            ctx.arc(2, 2, 3.5f);
+            ctx.fill();
+            // Tiny eyes
+            ctx.set_fill(0xff1E2A1C);
+            ctx.begin_path();
+            ctx.arc(-5, 4, 2.f);
+            ctx.arc(5, 4, 2.f);
+            ctx.fill();
+            break;
+        }
+        case MobID::kSponge: {
+            ctx.scale(radius / 26.f);
+            ctx.set_fill(0xffE8B86A);
+            ctx.set_stroke(0xffA87840);
+            ctx.set_line_width(2.4f);
+            ctx.begin_path();
+            ctx.ellipse(0, 0, 20, 17);
+            ctx.fill();
+            ctx.stroke();
+            // Pore dots
+            ctx.set_fill(0xffC89850);
+            ctx.begin_path();
+            ctx.arc(-8, -4, 3.2f);
+            ctx.arc(6, -6, 2.8f);
+            ctx.arc(-2, 6, 3.5f);
+            ctx.arc(9, 4, 2.5f);
+            ctx.fill();
+            ctx.set_fill(0xff3E2A14);
+            ctx.begin_path();
+            ctx.arc(-5, 3, 2.f);
+            ctx.arc(5, 3, 2.f);
+            ctx.fill();
+            break;
+        }
+        case MobID::kBubble: {
+            ctx.scale(radius / 18.f);
+            ctx.set_fill(0x66C8EEFF);
+            ctx.set_stroke(0xff8ED4F0);
+            ctx.set_line_width(2.f);
+            ctx.begin_path();
+            ctx.arc(0, 0, 14);
+            ctx.fill();
+            ctx.stroke();
+            // Highlight
+            ctx.set_fill(0xAAFFFFFF);
+            ctx.begin_path();
+            ctx.arc(-4, -5, 4.f);
+            ctx.fill();
+            break;
+        }
+        case MobID::kLeafbug:
+        case MobID::kGoldenLeafbug: {
+            uint8_t gold = mob_id == MobID::kGoldenLeafbug;
+            ctx.scale(radius / 18.f);
+            // Legs tucked under leaf silhouette
+            ctx.set_stroke(gold ? 0xff8A7020 : 0xff2E5A22);
+            ctx.set_line_width(1.5f);
+            ctx.round_line_cap();
+            for (int i = 0; i < 3; ++i) {
+                float y = -5.f + i * 5.f;
+                ctx.begin_path();
+                ctx.move_to(-4, y); ctx.line_to(-16, y - 3.f);
+                ctx.move_to(-4, y); ctx.line_to(-16, y + 3.f);
+                ctx.stroke();
+            }
+            ctx.set_fill(gold ? 0xffE8C84A : 0xff6DB84A);
+            ctx.set_stroke(gold ? 0xffA88820 : 0xff3E7A2E);
+            ctx.set_line_width(2.2f);
+            ctx.begin_path();
+            ctx.ellipse(0, 0, 14, 9);
+            ctx.fill();
+            ctx.stroke();
+            // Midrib + side veins
+            ctx.set_stroke(gold ? 0xffA88820 : 0xff3E7A2E);
+            ctx.set_line_width(1.6f);
+            ctx.begin_path();
+            ctx.move_to(-10, 0); ctx.line_to(10, 0);
+            ctx.move_to(0, 0); ctx.line_to(-4, -5);
+            ctx.move_to(0, 0); ctx.line_to(-4, 5);
+            ctx.move_to(2, 0); ctx.line_to(-1, -6);
+            ctx.move_to(2, 0); ctx.line_to(-1, 6);
+            ctx.stroke();
+            // Stem tip
+            ctx.set_fill(gold ? 0xffC8A030 : 0xff4A8A38);
+            ctx.begin_path();
+            ctx.ellipse(-12, 0, 3.5f, 2.2f);
+            ctx.fill();
+            ctx.set_fill(0xff1E2A1C);
+            ctx.begin_path();
+            ctx.arc(6, -2.5f, 1.6f);
+            ctx.arc(6, 2.5f, 1.6f);
+            ctx.fill();
+            break;
+        }
+        case MobID::kFirefly:
+        case MobID::kMagicFirefly: {
+            uint8_t magic = mob_id == MobID::kMagicFirefly;
+            ctx.scale(radius / 14.f);
+            // Glow halo
+            ctx.set_fill(magic ? 0x6680FFE0 : 0x66FFE080);
+            ctx.begin_path();
+            ctx.arc(0, 0, 12);
+            ctx.fill();
+            // Body
+            ctx.set_fill(0xff2A2A28);
+            ctx.set_stroke(0xff101010);
+            ctx.set_line_width(1.5f);
+            ctx.begin_path();
+            ctx.ellipse(0, 0, 7, 5);
+            ctx.fill();
+            ctx.stroke();
+            // Light organ
+            ctx.set_fill(magic ? 0xffA0FFE8 : 0xffFFE060);
+            ctx.begin_path();
+            ctx.arc(0, 3, magic ? 4.5f : 3.5f);
+            ctx.fill();
+            break;
+        }
+        case MobID::kJungleLadybug: {
+            ctx.scale(radius / 20.f);
+            ctx.set_fill(0xffC43C2E);
+            ctx.set_stroke(0xff2E1A12);
+            ctx.set_line_width(2.2f);
+            ctx.begin_path();
+            ctx.arc(0, 0, 14);
+            ctx.fill();
+            ctx.stroke();
+            // Spots
+            ctx.set_fill(0xff1E2A1C);
+            ctx.begin_path();
+            ctx.arc(-5, -4, 3.2f);
+            ctx.arc(5, -3, 2.8f);
+            ctx.arc(-2, 5, 3.f);
+            ctx.arc(6, 4, 2.5f);
+            ctx.fill();
+            // Head
+            ctx.set_fill(0xff1A1410);
+            ctx.begin_path();
+            ctx.arc(10, 0, 5);
+            ctx.fill();
+            break;
+        }
+        case MobID::kRoach: {
+            ctx.scale(radius / 16.f);
+            ctx.set_fill(0xff5A3A22);
+            ctx.set_stroke(0xff2A1A10);
+            ctx.set_line_width(2.f);
+            ctx.begin_path();
+            ctx.ellipse(0, 0, 12, 7);
+            ctx.fill();
+            ctx.stroke();
+            ctx.set_stroke(0xff2A1A10);
+            ctx.set_line_width(1.5f);
+            ctx.begin_path();
+            ctx.move_to(-4, -6); ctx.line_to(-10, -11);
+            ctx.move_to(-4, 6); ctx.line_to(-10, 11);
+            ctx.move_to(4, -6); ctx.line_to(8, -10);
+            ctx.move_to(4, 6); ctx.line_to(8, 10);
+            ctx.stroke();
+            ctx.set_fill(0xff1A1008);
+            ctx.begin_path();
+            ctx.arc(7, -2, 1.5f);
+            ctx.arc(7, 2, 1.5f);
+            ctx.fill();
+            break;
+        }
+        case MobID::kFly: {
+            ctx.scale(radius / 12.f);
+            ctx.set_fill(0xff3A3A38);
+            ctx.begin_path();
+            ctx.ellipse(0, 0, 6, 4);
+            ctx.fill();
+            ctx.set_fill(0x6688AACC);
+            ctx.begin_path();
+            ctx.ellipse(-5, -5, 5, 3);
+            ctx.ellipse(5, -5, 5, 3);
+            ctx.fill();
+            ctx.set_fill(0xff101010);
+            ctx.begin_path();
+            ctx.arc(3, -1, 1.2f);
+            ctx.arc(3, 1, 1.2f);
+            ctx.fill();
+            break;
+        }
+        case MobID::kMoth: {
+            ctx.scale(radius / 15.f);
+            ctx.set_fill(0xffC8B898);
+            ctx.set_stroke(0xff6A5A40);
+            ctx.set_line_width(1.8f);
+            ctx.begin_path();
+            ctx.ellipse(-8, 0, 9, 12);
+            ctx.ellipse(8, 0, 9, 12);
+            ctx.fill();
+            ctx.stroke();
+            ctx.set_fill(0xff4A4030);
+            ctx.begin_path();
+            ctx.ellipse(0, 0, 4, 6);
+            ctx.fill();
+            break;
+        }
+        case MobID::kGarbage: {
+            ctx.scale(radius / 28.f);
+            ctx.set_fill(0xff6A7A5A);
+            ctx.set_stroke(0xff3A4A30);
+            ctx.set_line_width(2.4f);
+            ctx.begin_path();
+            ctx.round_rect(-18, -12, 36, 28, 6.f);
+            ctx.fill();
+            ctx.stroke();
+            ctx.set_fill(0xff8A6A4A);
+            ctx.begin_path();
+            ctx.ellipse(-6, -4, 7, 5);
+            ctx.ellipse(8, 2, 6, 4);
+            ctx.fill();
+            ctx.set_fill(0xff2A2A20);
+            ctx.begin_path();
+            ctx.arc(-5, 6, 2.f);
+            ctx.arc(5, 6, 2.f);
+            ctx.fill();
+            break;
+        }
+        case MobID::kCogBeetle: {
+            ctx.scale(radius / 18.f);
+            ctx.set_fill(0xff8A9098);
+            ctx.set_stroke(0xff3A4048);
+            ctx.set_line_width(2.2f);
+            ctx.begin_path();
+            ctx.arc(0, 0, 12);
+            ctx.fill();
+            ctx.stroke();
+            // Gear teeth
+            ctx.set_fill(0xff6A7078);
+            for (int i = 0; i < 6; ++i) {
+                float a = (float)i * (float)M_PI / 3.f;
+                ctx.begin_path();
+                ctx.arc(std::cos(a) * 13.f, std::sin(a) * 13.f, 3.2f);
+                ctx.fill();
+            }
+            ctx.set_fill(0xff1A1E22);
+            ctx.begin_path();
+            ctx.arc(4, -2, 1.6f);
+            ctx.arc(4, 2, 1.6f);
+            ctx.fill();
+            break;
+        }
+        case MobID::kScrapHeap: {
+            ctx.scale(radius / 30.f);
+            ctx.set_fill(0xff6A7078);
+            ctx.set_stroke(0xff2A3038);
+            ctx.set_line_width(2.4f);
+            ctx.begin_path();
+            ctx.round_rect(-20, -14, 40, 30, 4.f);
+            ctx.fill();
+            ctx.stroke();
+            ctx.set_fill(0xffC94D4C);
+            ctx.begin_path();
+            ctx.arc(-8, -4, 4.f);
+            ctx.arc(10, 2, 3.5f);
+            ctx.fill();
+            ctx.set_fill(0xff1A1E22);
+            ctx.begin_path();
+            ctx.arc(-5, 6, 2.f);
+            ctx.arc(5, 6, 2.f);
+            ctx.fill();
+            break;
+        }
+        case MobID::kScarab: {
+            ctx.scale(radius / 16.f);
+            ctx.set_fill(0xff2A6A4A);
+            ctx.set_stroke(0xff0E3A28);
+            ctx.set_line_width(2.f);
+            ctx.begin_path();
+            ctx.ellipse(0, 0, 11, 8);
+            ctx.fill();
+            ctx.stroke();
+            ctx.set_fill(0xffD5AD55);
+            ctx.begin_path();
+            ctx.move_to(0, -6); ctx.line_to(3, 0); ctx.line_to(0, 6); ctx.line_to(-3, 0);
+            ctx.close_path();
+            ctx.fill();
+            ctx.set_fill(0xff0A1A10);
+            ctx.begin_path();
+            ctx.arc(5, -2, 1.5f);
+            ctx.arc(5, 2, 1.5f);
+            ctx.fill();
+            break;
+        }
+        case MobID::kTombGuard: {
+            ctx.scale(radius / 28.f);
+            ctx.set_fill(0xffC8B070);
+            ctx.set_stroke(0xff6A4A28);
+            ctx.set_line_width(2.6f);
+            ctx.begin_path();
+            ctx.round_rect(-14, -22, 28, 40, 3.f);
+            ctx.fill();
+            ctx.stroke();
+            // Crown stripe
+            ctx.set_fill(0xffD5AD55);
+            ctx.begin_path();
+            ctx.rect(-14, -22, 28, 6);
+            ctx.fill();
+            ctx.set_fill(0xff2A1C0C);
+            ctx.begin_path();
+            ctx.arc(-5, -8, 2.2f);
+            ctx.arc(5, -8, 2.2f);
+            ctx.fill();
+            break;
+        }
+        case MobID::kHelBeetle: {
+            ctx.scale(radius / 36.f);
+            ctx.set_fill(0xff8A2030);
+            ctx.set_stroke(0xff2A0810);
+            ctx.set_line_width(3.f);
+            ctx.begin_path();
+            ctx.ellipse(0, 0, 22, 16);
+            ctx.fill();
+            ctx.stroke();
+            ctx.set_fill(0xffC94D4C);
+            ctx.begin_path();
+            ctx.ellipse(8, 0, 10, 10);
+            ctx.fill();
+            // Teeth mouth
+            ctx.set_fill(0xff1A0A0C);
+            ctx.begin_path();
+            ctx.move_to(16, -6); ctx.line_to(28, -3); ctx.line_to(16, 0);
+            ctx.move_to(16, 0); ctx.line_to(28, 3); ctx.line_to(16, 6);
+            ctx.fill();
+            ctx.set_fill(0xffF0E0A0);
+            ctx.begin_path();
+            ctx.arc(10, -5, 2.2f);
+            ctx.arc(10, 5, 2.2f);
+            ctx.fill();
+            break;
+        }
+        case MobID::kHelSpider: {
+            ctx.scale(radius / 16.f);
+            ctx.set_fill(0xff5A1020);
+            ctx.set_stroke(0xff1A0508);
+            ctx.set_line_width(2.2f);
+            ctx.begin_path();
+            ctx.arc(0, 0, 10);
+            ctx.fill();
+            ctx.stroke();
+            ctx.set_stroke(0xff3A0A14);
+            ctx.set_line_width(1.8f);
+            for (int i = 0; i < 4; ++i) {
+                float a = -0.9f + i * 0.55f;
+                ctx.begin_path();
+                ctx.move_to(-2, -4); ctx.line_to(-16 * std::cos(a), -14 * std::sin(a) - 4);
+                ctx.move_to(-2, 4); ctx.line_to(-16 * std::cos(a), 14 * std::sin(a) + 4);
+                ctx.stroke();
+            }
+            ctx.set_fill(0xffE07070);
+            ctx.begin_path();
+            ctx.arc(4, -3, 1.8f);
+            ctx.arc(4, 3, 1.8f);
+            ctx.fill();
+            break;
+        }
+        case MobID::kHelWasp: {
+            ctx.scale(radius / 40.f);
+            ctx.set_fill(0xff6A1828);
+            ctx.set_stroke(0xff2A0810);
+            ctx.set_line_width(2.4f);
+            ctx.begin_path();
+            ctx.ellipse(0, 0, 18, 12);
+            ctx.fill();
+            ctx.stroke();
+            ctx.set_fill(0xffC94D4C);
+            ctx.begin_path();
+            ctx.ellipse(-10, 0, 8, 8);
+            ctx.fill();
+            // Wings
+            ctx.set_fill(0x66F0A0A8);
+            ctx.begin_path();
+            ctx.ellipse(4, -14, 14, 7);
+            ctx.ellipse(4, 14, 14, 7);
+            ctx.fill();
+            ctx.set_fill(0xff1A0A0C);
+            ctx.begin_path();
+            ctx.arc(-12, -3, 1.8f);
+            ctx.arc(-12, 3, 1.8f);
+            ctx.fill();
+            break;
+        }
+        case MobID::kHelCentipede: {
+            ctx.scale(radius / 35.f);
+            ctx.set_fill(0xff7A2030);
+            ctx.set_stroke(0xff2A0810);
+            ctx.set_line_width(2.5f);
+            ctx.begin_path();
+            ctx.ellipse(0, 0, 18, 14);
+            ctx.fill();
+            ctx.stroke();
+            // Damaged bite marks
+            ctx.set_fill(0xff1A0A10);
+            ctx.begin_path();
+            ctx.arc(-6, -8, 4.f);
+            ctx.arc(4, 9, 3.5f);
+            ctx.fill();
+            ctx.set_fill(0xffE07070);
+            ctx.begin_path();
+            ctx.arc(8, -4, 2.f);
+            ctx.arc(8, 4, 2.f);
+            ctx.fill();
+            break;
+        }
+        case MobID::kGambler: {
+            ctx.scale(radius / 28.f);
+            // Dice body
+            ctx.set_fill(0xffF0E8E0);
+            ctx.set_stroke(0xff4A2030);
+            ctx.set_line_width(2.6f);
+            ctx.begin_path();
+            ctx.round_rect(-14, -14, 28, 28, 3.f);
+            ctx.fill();
+            ctx.stroke();
+            ctx.set_fill(0xff2A1018);
+            ctx.begin_path();
+            ctx.arc(-5, -5, 2.4f);
+            ctx.arc(5, -5, 2.4f);
+            ctx.arc(0, 5, 2.4f);
+            ctx.arc(-5, 5, 2.4f);
+            ctx.arc(5, 5, 2.4f);
+            ctx.fill();
+            // Red suit pip
+            ctx.set_fill(0xffC94D4C);
+            ctx.begin_path();
+            ctx.move_to(0, -18); ctx.line_to(4, -12); ctx.line_to(-4, -12);
+            ctx.close_path();
+            ctx.fill();
+            break;
+        }
+        case MobID::kMechaFlower: {
+            ctx.scale(radius / 32.f);
+            ctx.set_fill(0xff8A9098);
+            ctx.set_stroke(0xff2A3038);
+            ctx.set_line_width(2.4f);
+            for (int i = 0; i < 6; ++i) {
+                float a = (float)i * (float)M_PI / 3.f;
+                ctx.begin_path();
+                ctx.ellipse(std::cos(a) * 14.f, std::sin(a) * 14.f, 7.f, 5.f);
+                ctx.fill();
+                ctx.stroke();
+            }
+            ctx.set_fill(0xffC94D4C);
+            ctx.begin_path();
+            ctx.arc(0, 0, 8.f);
+            ctx.fill();
+            ctx.set_fill(0xff1A1E22);
+            ctx.begin_path();
+            ctx.arc(-3, -2, 1.6f);
+            ctx.arc(3, -2, 1.6f);
+            ctx.fill();
+            break;
+        }
+        case MobID::kMechaSpider: {
+            ctx.scale(radius / 16.f);
+            ctx.set_fill(0xff6A7080);
+            ctx.set_stroke(0xff2A3038);
+            ctx.set_line_width(2.f);
+            ctx.begin_path();
+            ctx.arc(0, 0, 9);
+            ctx.fill();
+            ctx.stroke();
+            ctx.set_stroke(0xffC94D4C);
+            ctx.set_line_width(1.6f);
+            for (int i = 0; i < 4; ++i) {
+                float a = -0.85f + i * 0.5f;
+                ctx.begin_path();
+                ctx.move_to(-2, -3); ctx.line_to(-15 * std::cos(a), -12 * std::sin(a) - 3);
+                ctx.move_to(-2, 3); ctx.line_to(-15 * std::cos(a), 12 * std::sin(a) + 3);
+                ctx.stroke();
+            }
+            ctx.set_fill(0xff7CF0FF);
+            ctx.begin_path();
+            ctx.arc(4, -2.5f, 1.8f);
+            ctx.arc(4, 2.5f, 1.8f);
+            ctx.fill();
+            break;
+        }
+        case MobID::kMechaWasp: {
+            ctx.scale(radius / 38.f);
+            ctx.set_fill(0xff7A8088);
+            ctx.set_stroke(0xff2A3038);
+            ctx.set_line_width(2.4f);
+            ctx.begin_path();
+            ctx.ellipse(0, 0, 16, 11);
+            ctx.fill();
+            ctx.stroke();
+            ctx.set_fill(0xffC94D4C);
+            ctx.begin_path();
+            ctx.ellipse(-10, 0, 8, 7);
+            ctx.fill();
+            ctx.set_fill(0x6690E0F0);
+            ctx.begin_path();
+            ctx.ellipse(2, -12, 12, 6);
+            ctx.ellipse(2, 12, 12, 6);
+            ctx.fill();
+            ctx.set_fill(0xff1A1E22);
+            ctx.begin_path();
+            ctx.arc(-12, -3, 1.7f);
+            ctx.arc(-12, 3, 1.7f);
+            ctx.fill();
+            break;
+        }
+        case MobID::kMechaCrab: {
+            ctx.scale(radius / 30.f);
+            ctx.set_fill(0xff8A6870);
+            ctx.set_stroke(0xff3A2830);
+            ctx.set_line_width(2.4f);
+            ctx.begin_path();
+            ctx.ellipse(0, 2, 18, 12);
+            ctx.fill();
+            ctx.stroke();
+            // Shell laser mount
+            ctx.set_fill(0xff4A5560);
+            ctx.begin_path();
+            ctx.round_rect(-6, -14, 12, 10, 2.f);
+            ctx.fill();
+            ctx.set_fill(0xff7CF0FF);
+            ctx.begin_path();
+            ctx.arc(0, -10, 3.f);
+            ctx.fill();
+            ctx.set_fill(0xff1A1E22);
+            ctx.begin_path();
+            ctx.arc(-8, 0, 2.f);
+            ctx.arc(8, 0, 2.f);
+            ctx.fill();
+            break;
+        }
+        case MobID::kBarrel: {
+            ctx.scale(radius / 28.f);
+            ctx.set_fill(0xff8A6A3A);
+            ctx.set_stroke(0xff3A2A18);
+            ctx.set_line_width(2.6f);
+            ctx.begin_path();
+            ctx.round_rect(-14, -18, 28, 36, 4.f);
+            ctx.fill();
+            ctx.stroke();
+            ctx.set_stroke(0xff5A4028);
+            ctx.set_line_width(2.f);
+            ctx.begin_path();
+            ctx.move_to(-14, -8); ctx.line_to(14, -8);
+            ctx.move_to(-14, 8); ctx.line_to(14, 8);
+            ctx.stroke();
+            // Hazard stripe
+            ctx.set_fill(0xffC94D4C);
+            ctx.begin_path();
+            ctx.rect(-14, -2, 28, 4);
+            ctx.fill();
+            break;
+        }
+        case MobID::kAssembler: {
+            ctx.scale(radius / 40.f);
+            ctx.set_fill(0xff5A6570);
+            ctx.set_stroke(0xff1A2028);
+            ctx.set_line_width(2.8f);
+            ctx.begin_path();
+            ctx.round_rect(-18, -20, 36, 40, 3.f);
+            ctx.fill();
+            ctx.stroke();
+            ctx.set_fill(0xff2A3038);
+            ctx.begin_path();
+            ctx.round_rect(-12, -12, 24, 16, 2.f);
+            ctx.fill();
+            ctx.set_fill(0xff2ee6c8);
+            ctx.begin_path();
+            ctx.arc(-5, -4, 2.2f);
+            ctx.arc(5, -4, 2.2f);
+            ctx.arc(0, 4, 2.2f);
+            ctx.fill();
+            ctx.set_fill(0xffC94D4C);
+            ctx.begin_path();
+            ctx.rect(-4, 12, 8, 6);
+            ctx.fill();
+            break;
+        }
+        case MobID::kSilverfish: {
+            ctx.scale(radius / 12.f);
+            ctx.set_fill(0xffC0C4C8);
+            ctx.set_stroke(0xff606468);
+            ctx.set_line_width(1.6f);
+            ctx.begin_path();
+            ctx.ellipse(0, 0, 10, 5);
+            ctx.fill();
+            ctx.stroke();
+            ctx.set_fill(0xff909498);
+            for (int i = 0; i < 4; ++i) {
+                float x = -6.f + i * 3.5f;
+                ctx.begin_path();
+                ctx.ellipse(x, -5, 2.2f, 1.2f);
+                ctx.ellipse(x, 5, 2.2f, 1.2f);
+                ctx.fill();
+            }
+            ctx.set_fill(0xff2A2A2A);
+            ctx.begin_path();
+            ctx.arc(6, -1.5f, 1.2f);
+            ctx.arc(6, 1.5f, 1.2f);
+            ctx.fill();
+            break;
+        }
+        case MobID::kTomb: {
+            ctx.scale(radius / 42.f);
+            ctx.set_fill(0xffC8B070);
+            ctx.set_stroke(0xff6A4A28);
+            ctx.set_line_width(2.8f);
+            ctx.begin_path();
+            ctx.move_to(0, -22);
+            ctx.line_to(18, 18);
+            ctx.line_to(-18, 18);
+            ctx.close_path();
+            ctx.fill();
+            ctx.stroke();
+            ctx.set_fill(0xffD5AD55);
+            ctx.begin_path();
+            ctx.rect(-6, 0, 12, 14);
+            ctx.fill();
+            break;
+        }
+        case MobID::kMummyBeetle: {
+            ctx.scale(radius / 34.f);
+            ctx.set_fill(0xffE8D8B0);
+            ctx.set_stroke(0xff8A7A50);
+            ctx.set_line_width(2.4f);
+            ctx.begin_path();
+            ctx.ellipse(0, 0, 18, 14);
+            ctx.fill();
+            ctx.stroke();
+            // Wrappings
+            ctx.set_stroke(0xffB8A878);
+            ctx.set_line_width(2.f);
+            ctx.begin_path();
+            ctx.move_to(-14, -4); ctx.line_to(14, -6);
+            ctx.move_to(-14, 4); ctx.line_to(14, 2);
+            ctx.stroke();
+            ctx.set_fill(0xff2A2010);
+            ctx.begin_path();
+            ctx.arc(8, -3, 2.f);
+            ctx.arc(8, 3, 2.f);
+            ctx.fill();
+            break;
+        }
+        case MobID::kPharaohBeetle: {
+            ctx.scale(radius / 40.f);
+            ctx.set_fill(0xff2A6A4A);
+            ctx.set_stroke(0xff0E3A28);
+            ctx.set_line_width(2.6f);
+            ctx.begin_path();
+            ctx.ellipse(0, 2, 20, 15);
+            ctx.fill();
+            ctx.stroke();
+            // Crown
+            ctx.set_fill(0xffD5AD55);
+            ctx.set_stroke(0xff8A6A20);
+            ctx.set_line_width(1.8f);
+            ctx.begin_path();
+            ctx.move_to(-10, -10);
+            ctx.line_to(-6, -20);
+            ctx.line_to(0, -12);
+            ctx.line_to(6, -22);
+            ctx.line_to(10, -10);
+            ctx.close_path();
+            ctx.fill();
+            ctx.stroke();
+            ctx.set_fill(0xff0A1A10);
+            ctx.begin_path();
+            ctx.arc(6, 0, 2.2f);
+            ctx.arc(6, 6, 2.2f);
+            ctx.fill();
+            break;
+        }
+        case MobID::kTrader:
+        case MobID::kOracle:
+        case MobID::kTitan: {
+            uint8_t kind = mob_id == MobID::kTitan ? 2 : (mob_id == MobID::kOracle ? 1 : 0);
+            float sc = kind == 2 ? 55.f : 36.f;
+            ctx.scale(radius / sc);
+            ctx.set_fill(kind == 2 ? 0xffC9A227 : (kind == 1 ? 0xff7A8AC8 : 0xffB89A6A));
+            ctx.set_stroke(0xff2A2A2A);
+            ctx.set_line_width(2.6f);
+            ctx.begin_path();
+            ctx.arc(0, 0, kind == 2 ? 28.f : 18.f);
+            ctx.fill();
+            ctx.stroke();
+            ctx.set_fill(0xff222222);
+            ctx.begin_path();
+            ctx.arc(-6, -4, 2.4f);
+            ctx.arc(6, -4, 2.4f);
+            ctx.fill();
+            if (kind == 1) {
+                ctx.set_stroke(0xffE8E8FF);
+                ctx.set_line_width(2.f);
+                ctx.begin_path();
+                ctx.arc(0, 0, 22.f);
+                ctx.stroke();
+            }
+            break;
+        }
+        case MobID::kWorm: {
+            ctx.scale(radius / 28.f);
+            ctx.set_fill(0xffC4A070);
+            ctx.set_stroke(0xff6A4A28);
+            ctx.set_line_width(2.2f);
+            ctx.begin_path();
+            ctx.ellipse(0, 0, 16, 10);
+            ctx.fill();
+            ctx.stroke();
+            ctx.set_fill(0xff2A1C10);
+            ctx.begin_path();
+            ctx.arc(8, -3, 1.8f);
+            ctx.arc(8, 3, 1.8f);
+            ctx.fill();
+            break;
+        }
+        case MobID::kGhost: {
+            ctx.scale(radius / 26.f);
+            ctx.set_fill(0x99E8F0FF);
+            ctx.set_stroke(0x6680A0C0);
+            ctx.set_line_width(2.f);
+            ctx.begin_path();
+            ctx.arc(0, -2, 14.f);
+            ctx.fill();
+            ctx.stroke();
+            ctx.begin_path();
+            ctx.move_to(-14, 0);
+            ctx.line_to(-10, 14); ctx.line_to(-4, 8);
+            ctx.line_to(0, 14); ctx.line_to(4, 8);
+            ctx.line_to(10, 14); ctx.line_to(14, 0);
+            ctx.fill();
+            ctx.set_fill(0xff203040);
+            ctx.begin_path();
+            ctx.arc(-5, -4, 2.f);
+            ctx.arc(5, -4, 2.f);
+            ctx.fill();
+            break;
+        }
+        case MobID::kCrystal: {
+            ctx.scale(radius / 22.f);
+            ctx.set_fill(0xffA0E8FF);
+            ctx.set_stroke(0xff4070A0);
+            ctx.set_line_width(2.4f);
+            ctx.begin_path();
+            ctx.move_to(0, -16);
+            ctx.line_to(12, 0);
+            ctx.line_to(0, 16);
+            ctx.line_to(-12, 0);
+            ctx.close_path();
+            ctx.fill();
+            ctx.stroke();
+            ctx.set_fill(0xffE8FFFF);
+            ctx.begin_path();
+            ctx.move_to(0, -8); ctx.line_to(5, 0); ctx.line_to(0, 8); ctx.line_to(-5, 0);
+            ctx.close_path();
+            ctx.fill();
+            break;
+        }
+        case MobID::kNazarBeetle: {
+            ctx.scale(radius / 36.f);
+            ctx.set_fill(0xff4A6A8A);
+            ctx.set_stroke(0xff1A2A3A);
+            ctx.set_line_width(2.6f);
+            ctx.begin_path();
+            ctx.ellipse(0, 0, 20, 15);
+            ctx.fill();
+            ctx.stroke();
+            // Nazar eye
+            ctx.set_fill(0xffE8E8F0);
+            ctx.begin_path();
+            ctx.arc(0, 0, 8.f);
+            ctx.fill();
+            ctx.set_fill(0xff2A6AD0);
+            ctx.begin_path();
+            ctx.arc(0, 0, 5.f);
+            ctx.fill();
+            ctx.set_fill(0xff101018);
+            ctx.begin_path();
+            ctx.arc(0, 0, 2.2f);
+            ctx.fill();
+            break;
+        }
         case MobID::kJungleStone:
             ctx.scale(radius / 23.f);
             ctx.set_fill(0xff5C6B58);

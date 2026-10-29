@@ -1,15 +1,18 @@
 #include <Client/Render/RenderEntity.hh>
 
 #include <Client/Assets/Assets.hh>
+#include <Client/Assets/FlorrArt.hh>
 #include <Client/Render/Renderer.hh>
 
 #include <Client/Game.hh>
 
 #include <Helpers/Bits.hh>
 #include <Shared/Entity.hh>
+#include <Shared/StaticData.hh>
 #include <Shared/StaticDefinitions.hh>
 
 #include <cmath>
+#include <cstring>
 
 namespace {
 // Party-revive marker: a rock beside the body so teammates spot downs at range.
@@ -171,4 +174,34 @@ void render_flower(Renderer &ctx, Entity const &ent) {
         .equip_flags = ent.get_equip_flags(),
         .color = ent.get_color()
     });
+    // Crowns / goggles: worn overlays from loadout (orbit clone is hidden in RenderPetal).
+    {
+        uint8_t has_champion = 0, has_pharaoh = 0, has_goggles = 0;
+        uint32_t const n = ent.get_loadout_count();
+        for (uint32_t i = 0; i < n; ++i) {
+            PetalID::T const pid = ent.get_loadout_ids(i);
+            if (pid == PetalID::kNone || pid >= PetalID::kNumPetals) continue;
+            char const *name = PETAL_DATA[pid].name;
+            if (name == nullptr) continue;
+            if (std::strcmp(name, "Champion's Crown") == 0) has_champion = 1;
+            else if (std::strcmp(name, "Pharaoh's Crown") == 0) has_pharaoh = 1;
+            else if (std::strcmp(name, "Paranormal Goggles") == 0) has_goggles = 1;
+        }
+        float const r = ent.get_radius();
+        if (has_champion) {
+            RenderContext w(&ctx);
+            ctx.translate(0.f, -r * 0.95f);
+            FlorrArt::try_draw_worn(FlorrArt::kWornChampionCrown, ctx, r * 1.55f);
+        }
+        if (has_pharaoh) {
+            RenderContext w(&ctx);
+            ctx.translate(0.f, -r * 0.55f);
+            FlorrArt::try_draw_worn(FlorrArt::kWornPharaohCrown, ctx, r * 2.1f);
+        }
+        if (has_goggles) {
+            RenderContext w(&ctx);
+            ctx.translate(0.f, -r * 0.12f);
+            FlorrArt::try_draw_worn(FlorrArt::kWornGoggles, ctx, r * 1.45f);
+        }
+    }
 }

@@ -5,9 +5,10 @@
 
 #include <cstdint>
 
-// Large non-square arena — layouts generated per map_id (spirals / boxes / corridors)
-inline uint32_t const ARENA_WIDTH = 28000;
-inline uint32_t const ARENA_HEIGHT = 20000;
+// Square arena sized between florr_clone (~32k) and live florr (~42k).
+// Layouts are generated per map_id (spirals / boxes / dirt spines / corridors).
+inline uint32_t const ARENA_WIDTH = 36000;
+inline uint32_t const ARENA_HEIGHT = 36000;
 // Fixed hub spawn (map center) — buffered by difficulty-0 zone
 inline float const MAP_SPAWN_X = ARENA_WIDTH * 0.5f;
 inline float const MAP_SPAWN_Y = ARENA_HEIGHT * 0.5f;
@@ -25,9 +26,9 @@ inline uint32_t const MAX_PETALS_IN_CLUMP = 4;
 inline uint32_t const MAX_DIFFICULTY = 8;
 inline uint32_t const MAX_DROPS_PER_MOB = 12;
 // Concept maps need many specialty Zone AABBs + large terrain pieces
-inline uint32_t const MAX_ZONES_PER_MAP = 48;
+inline uint32_t const MAX_ZONES_PER_MAP = 64;
 // Corridor/gate/ford channel paint + pocket bridges need headroom past legacy 192.
-inline uint32_t const MAX_TERRAIN_PER_MAP = 280;
+inline uint32_t const MAX_TERRAIN_PER_MAP = 560;
 inline uint32_t const TERRAIN_OUTLINE_MAX = 72;
 
 namespace MapID {
@@ -41,11 +42,19 @@ namespace MapID {
         kVolcano,
         kRoyalCapital, // 王城 — append only
         kAntNest,    // 三族蚁穴 — player layout; Fire|Black|Termite — append only
+        kWildwood,   // L2 — florr jungle.tmj (portal from L1 Jungle); append only
+        kSewers,     // L2 — florr Sewers; Garden south portal
+        kPrimeGarden, // L2 — official/florr Garden; Garden north portal
+        kPrimeDesert, // L2 — official desert / 沙海; Desert portal
+        kPrimeOcean,  // L2 — official ocean / 深海; Ocean portal
+        kFactory,     // L3 — Mecha/Factory; portal from Prime Garden
+        kPyramid,     // L3 — Pyramid; portal from Prime Garden
+        kHel,         // special L2 — Dark Mark death send; no title entry
         kNumMaps
     };
 }
 
-// Maps that boot / tick / appear in title select.
+// All maps that boot / tick / accept portals (L1 + L2 hubs).
 // Each map: separate MapGen::ensure + GameInstance::init (not one mega-batch).
 inline constexpr uint8_t OPEN_MAPS[] = {
     MapID::kGarden,
@@ -57,9 +66,30 @@ inline constexpr uint8_t OPEN_MAPS[] = {
     MapID::kVolcano,
     MapID::kRoyalCapital,
     MapID::kAntNest,
+    MapID::kWildwood,
+    MapID::kSewers,
+    MapID::kPrimeGarden,
+    MapID::kPrimeDesert,
+    MapID::kPrimeOcean,
+    MapID::kFactory,
+    MapID::kPyramid,
+    MapID::kHel,
 };
 inline constexpr uint8_t OPEN_MAP_COUNT =
     (uint8_t)(sizeof(OPEN_MAPS) / sizeof(OPEN_MAPS[0]));
+
+// Title select = L1 entry only (Ant Hell / Ant Nest / Wildwood via portals).
+inline constexpr uint8_t TITLE_MAPS[] = {
+    MapID::kGarden,
+    MapID::kDesert,
+    MapID::kOcean,
+    MapID::kPolar,
+    MapID::kJungle,
+    MapID::kVolcano,
+    MapID::kRoyalCapital,
+};
+inline constexpr uint8_t TITLE_MAP_COUNT =
+    (uint8_t)(sizeof(TITLE_MAPS) / sizeof(TITLE_MAPS[0]));
 
 inline uint8_t map_is_open(uint8_t map_id) {
     for (uint8_t i = 0; i < OPEN_MAP_COUNT; ++i)
@@ -70,6 +100,26 @@ inline uint8_t map_is_open(uint8_t map_id) {
 inline uint8_t clamp_to_open_map(uint8_t map_id) {
     if (map_is_open(map_id)) return map_id;
     return MapID::kGarden;
+}
+
+// L1 = title biomes; L2+ = portal-only hubs (death Continue → same map hub).
+inline uint8_t map_tier(uint8_t map_id) {
+    switch (map_id) {
+        case MapID::kFactory:
+        case MapID::kPyramid:
+            return 3;
+        case MapID::kAntHell:
+        case MapID::kAntNest:
+        case MapID::kWildwood:
+        case MapID::kSewers:
+        case MapID::kPrimeGarden:
+        case MapID::kPrimeDesert:
+        case MapID::kPrimeOcean:
+        case MapID::kHel:
+            return 2;
+        default:
+            return 1;
+    }
 }
 
 namespace TerrainKind {
@@ -133,6 +183,26 @@ namespace MapTheme {
     inline uint32_t const ROYAL_HILL = 0xff3E4355;
     inline uint32_t const ROYAL_WATER = 0xff4a6d8c;
     inline uint32_t const ROYAL_CHANNEL = 0x99c94d4c;
+    // Sewers — damp concrete / sludge
+    inline uint32_t const SEWER_GROUND = 0xff6B7068;
+    inline uint32_t const SEWER_HILL = 0xff2A2E28;
+    inline uint32_t const SEWER_WATER = 0xff3D5A3A;
+    inline uint32_t const SEWER_CHANNEL = 0x997A8A6A;
+    // Factory — steel deck / oil
+    inline uint32_t const FACTORY_GROUND = 0xff7A8088;
+    inline uint32_t const FACTORY_HILL = 0xff2A3038;
+    inline uint32_t const FACTORY_WATER = 0xff3A4550;
+    inline uint32_t const FACTORY_CHANNEL = 0x99C94D4C;
+    // Pyramid — sandstone / tomb shadow
+    inline uint32_t const PYRAMID_GROUND = 0xffE2C48A;
+    inline uint32_t const PYRAMID_HILL = 0xff6A4A28;
+    inline uint32_t const PYRAMID_WATER = 0xff3A5A6A;
+    inline uint32_t const PYRAMID_CHANNEL = 0x99D5AD55;
+    // Hel — ashen crimson underworld (Mark death destination)
+    inline uint32_t const HEL_GROUND = 0xff3A1A22;
+    inline uint32_t const HEL_HILL = 0xff1A0A10;
+    inline uint32_t const HEL_WATER = 0xff5A1020;
+    inline uint32_t const HEL_CHANNEL = 0x99C94D4C;
     // Legacy weave accents (secondary only — walls use ThemeMaterial outlines)
     inline uint32_t const WEAVE_LIGHT = 0x40ffffff;
     inline uint32_t const WEAVE_DARK = 0x30000000;
@@ -2745,6 +2815,53 @@ namespace MobID {
         kBabyTermite,
         kWorkerTermite,
         kSoldierTermite,
+        // Jungle stake (Cotton) — append only
+        kBush,
+        // Ocean stakes (florrclone P0) — append only
+        kSponge,
+        kBubble,
+        // Official jungle combat (florrclone P1) — append only
+        kLeafbug,
+        kGoldenLeafbug,
+        kFirefly,
+        kMagicFirefly,
+        kJungleLadybug,
+        // Sewers (florrclone P3 skeleton) — append only
+        kRoach,
+        kFly,
+        kMoth,
+        kGarbage,
+        // Factory / Pyramid (L3 skeleton) — append only
+        kCogBeetle,
+        kScrapHeap,
+        kScarab,
+        kTombGuard,
+        // Hel cast — append only
+        kHelBeetle,
+        kHelSpider,
+        kHelWasp,
+        kHelCentipede,
+        kGambler,
+        // Factory Mecha cast — append only
+        kMechaFlower,
+        kMechaSpider,
+        kMechaWasp,
+        kMechaCrab,
+        kBarrel,
+        kAssembler,
+        // Sewers / Pyramid gap cast — append only
+        kSilverfish,
+        kTomb,
+        kMummyBeetle,
+        kPharaohBeetle,
+        // florr special / gap cast — append only
+        kTrader,
+        kOracle,
+        kTitan,
+        kWorm,
+        kGhost,
+        kCrystal,
+        kNazarBeetle,
         kNumMobs
     };
 };

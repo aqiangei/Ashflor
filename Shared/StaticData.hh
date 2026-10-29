@@ -14,6 +14,8 @@ extern float const DEFAULT_FRICTION;
 extern float const SUMMON_RETREAT_RADIUS;
 extern float const DIGGER_SPAWN_CHANCE;
 extern float const WILD_LEASH_MULT;
+extern float const MOB_MOVE_SPEED_MULT;
+extern float const MOB_AGGRO_RANGE_MULT;
 
 extern float const BASE_FLOWER_RADIUS;
 extern float const BASE_PETAL_ROTATION_SPEED;
@@ -102,9 +104,10 @@ inline std::array const MAPS = std::to_array<MapZones>({
             .left = 2200, .top = 2200, .right = 15800, .bottom = 15800,
             .density = 2.7f, .drop_multiplier = 0.30,
             .spawns = {
-                { MobID::kBee, 100000 }, { MobID::kSpider, 95000 }, { MobID::kHornet, 95000 },
-                { MobID::kBeetle, 70000 }, { MobID::kEvilCentipede, 20000 },
-                { MobID::kMassiveBeetle, 8000 }, { MobID::kSquare, 1 }
+                { MobID::kRock, 70000 }, { MobID::kBee, 95000 }, { MobID::kSpider, 90000 },
+                { MobID::kHornet, 90000 }, { MobID::kBeetle, 65000 },
+                { MobID::kEvilCentipede, 20000 }, { MobID::kMassiveBeetle, 8000 },
+                { MobID::kSquare, 1 }
             },
             // Legendary primary; +1 Mythic so mid-garden can still see M bees.
             .difficulty = RarityID::kLegendary, .color = 0xffA8D484, .name = "Garden"
@@ -113,19 +116,22 @@ inline std::array const MAPS = std::to_array<MapZones>({
             .left = 4800, .top = 4800, .right = 13200, .bottom = 13200,
             .density = 2.65f, .drop_multiplier = 0.10,
             .spawns = {
-                { MobID::kBee, 100000 }, { MobID::kLadybug, 90000 }, { MobID::kBeetle, 60000 },
-                { MobID::kCentipede, 15000 }, { MobID::kShinyLadybug, 2000 }, { MobID::kSquare, 1 }
+                { MobID::kRock, 160000 }, { MobID::kBee, 90000 }, { MobID::kLadybug, 100000 },
+                { MobID::kBeetle, 55000 }, { MobID::kCentipede, 15000 },
+                { MobID::kShinyLadybug, 2000 }, { MobID::kSquare, 1 }
             },
             .difficulty = 1, .color = MapTheme::GARDEN_GROUND, .name = "Garden"
         },
         {
-            // Spawn hub — rich low-tier mix (periphery packs).
-            .left = 7200, .top = 7200, .right = 10800, .bottom = 10800,
+            // Spawn hub — Rock-heavy stakes (~70% passive/stationary feel).
+            // Template AABB only; MapGen recenters on MAP_SPAWN (arena mid).
+            .left = ARENA_WIDTH * 0.45f, .top = ARENA_HEIGHT * 0.46f,
+            .right = ARENA_WIDTH * 0.55f, .bottom = ARENA_HEIGHT * 0.54f,
             .density = 2.55f, .drop_multiplier = 0.02,
             .spawns = {
-                { MobID::kRock, 220000 }, { MobID::kLadybug, 200000 },
-                { MobID::kBee, 180000 }, { MobID::kBeetle, 140000 },
-                { MobID::kCentipede, 50000 }, { MobID::kShinyLadybug, 8000 },
+                { MobID::kRock, 320000 }, { MobID::kLadybug, 180000 },
+                { MobID::kBee, 120000 }, { MobID::kBeetle, 80000 },
+                { MobID::kCentipede, 30000 }, { MobID::kShinyLadybug, 6000 },
                 { MobID::kSquare, 1 }
             },
             .difficulty = 0, .color = MapTheme::GARDEN_GROUND, .name = "Garden"
@@ -147,9 +153,10 @@ inline std::array const MAPS = std::to_array<MapZones>({
             .left = 2200, .top = 2200, .right = 15800, .bottom = 15800,
             .density = 2.7f, .drop_multiplier = 0.28,
             .spawns = {
-                { MobID::kCactus, 130000 }, { MobID::kDuneBeetle, 130000 },
-                { MobID::kDuneSpider, 105000 }, { MobID::kDuneHornet, 95000 },
-                { MobID::kScorpion, 85000 }, { MobID::kSquare, 1 }
+                { MobID::kCactus, 160000 }, { MobID::kDuneStone, 80000 },
+                { MobID::kDuneBeetle, 110000 }, { MobID::kDuneSpider, 90000 },
+                { MobID::kDuneHornet, 80000 }, { MobID::kScorpion, 70000 },
+                { MobID::kSquare, 1 }
             },
             .difficulty = 2, .color = 0xffc9923c, .name = "Desert"
         },
@@ -157,20 +164,20 @@ inline std::array const MAPS = std::to_array<MapZones>({
             .left = 4800, .top = 4800, .right = 13200, .bottom = 13200,
             .density = 2.65f, .drop_multiplier = 0.09,
             .spawns = {
-                { MobID::kCactus, 130000 }, { MobID::kDuneBeetle, 130000 },
-                { MobID::kSandMite, 155000 }, { MobID::kScorpion, 85000 },
-                { MobID::kSquare, 1 }
+                { MobID::kCactus, 180000 }, { MobID::kDuneStone, 140000 },
+                { MobID::kSandMite, 140000 }, { MobID::kDuneBeetle, 90000 },
+                { MobID::kScorpion, 60000 }, { MobID::kSquare, 1 }
             },
             .difficulty = 1, .color = 0xffd4a84b, .name = "Desert"
         },
         {
-            // Spawn hub �?rich low-tier desert pack.
+            // Spawn hub — cactus / stone stakes.
             .left = 7200, .top = 7200, .right = 10800, .bottom = 10800,
             .density = 2.55f, .drop_multiplier = 0.02,
             .spawns = {
-                { MobID::kDuneStone, 160000 }, { MobID::kSandMite, 180000 },
-                { MobID::kCactus, 150000 }, { MobID::kDuneBeetle, 140000 },
-                { MobID::kScorpion, 60000 }, { MobID::kSquare, 1 }
+                { MobID::kCactus, 220000 }, { MobID::kDuneStone, 200000 },
+                { MobID::kSandMite, 140000 }, { MobID::kDuneBeetle, 90000 },
+                { MobID::kScorpion, 40000 }, { MobID::kSquare, 1 }
             },
             .difficulty = 0, .color = MapTheme::DESERT_GROUND, .name = "Desert"
         }
@@ -201,20 +208,21 @@ inline std::array const MAPS = std::to_array<MapZones>({
             .left = 4800, .top = 4800, .right = 13200, .bottom = 13200,
             .density = 2.65f, .drop_multiplier = 0.08,
             .spawns = {
-                { MobID::kMoonJelly, 110000 }, { MobID::kCoralStar, 120000 },
-                { MobID::kReefCrab, 100000 }, { MobID::kSeaFry, 150000 },
+                { MobID::kSponge, 140000 }, { MobID::kBubble, 130000 },
+                { MobID::kReefStone, 100000 }, { MobID::kSeaFry, 120000 },
+                { MobID::kCoralStar, 90000 }, { MobID::kMoonJelly, 70000 },
                 { MobID::kSquare, 1 }
             },
             .difficulty = 1, .color = 0xff00669c, .name = "Ocean"
         },
         {
-            // Spawn hub �?rich low-tier ocean pack.
+            // Spawn hub — reef stone / fry stakes.
             .left = 7200, .top = 7200, .right = 10800, .bottom = 10800,
             .density = 2.55f, .drop_multiplier = 0.02,
             .spawns = {
-                { MobID::kReefStone, 140000 }, { MobID::kSeaFry, 160000 },
-                { MobID::kMoonJelly, 130000 }, { MobID::kCoralStar, 130000 },
-                { MobID::kReefCrab, 90000 }, { MobID::kSquare, 1 }
+                { MobID::kSponge, 200000 }, { MobID::kBubble, 180000 },
+                { MobID::kReefStone, 140000 }, { MobID::kSeaFry, 140000 },
+                { MobID::kCoralStar, 80000 }, { MobID::kSquare, 1 }
             },
             .difficulty = 0, .color = MapTheme::OCEAN_GROUND, .name = "Ocean"
         }
@@ -293,20 +301,20 @@ inline std::array const MAPS = std::to_array<MapZones>({
             .left = 4800, .top = 4800, .right = 13200, .bottom = 13200,
             .density = 2.7f, .drop_multiplier = 0.09,
             .spawns = {
-                { MobID::kLeafBeetle, 140000 }, { MobID::kJungleMite, 130000 },
-                { MobID::kVineBug, 90000 }, { MobID::kJungleWasp, 90000 },
-                { MobID::kSquare, 1 }
+                { MobID::kBush, 140000 }, { MobID::kLeafbug, 120000 },
+                { MobID::kJungleLadybug, 100000 }, { MobID::kFirefly, 90000 },
+                { MobID::kJungleStone, 70000 }, { MobID::kSquare, 1 }
             },
             .difficulty = 1, .color = 0xff40916c, .name = "Jungle Edge"
         },
         {
-            // hub �?rich low-tier jungle; no wasps (aggro on sight)
+            // hub — Bush / Leafbug stakes; no wasps (aggro on sight)
             .left = 7200, .top = 7200, .right = 10800, .bottom = 10800,
             .density = 2.55f, .drop_multiplier = 0.02,
             .spawns = {
-                { MobID::kJungleStone, 130000 }, { MobID::kJungleCrawler, 150000 },
-                { MobID::kLeafBeetle, 140000 }, { MobID::kJungleMite, 140000 },
-                { MobID::kVineBug, 70000 }, { MobID::kSquare, 1 }
+                { MobID::kBush, 200000 }, { MobID::kLeafbug, 160000 },
+                { MobID::kJungleLadybug, 120000 }, { MobID::kFirefly, 80000 },
+                { MobID::kJungleStone, 100000 }, { MobID::kSquare, 1 }
             },
             .difficulty = 0, .color = MapTheme::JUNGLE_GROUND, .name = "Jungle Hub"
         }
@@ -337,18 +345,18 @@ inline std::array const MAPS = std::to_array<MapZones>({
             .left = 4800, .top = 4800, .right = 13200, .bottom = 13200,
             .density = 2.7f, .drop_multiplier = 0.10,
             .spawns = {
-                { MobID::kBabyAnt, 180000 }, { MobID::kWorkerAnt, 120000 },
+                { MobID::kBabyAnt, 220000 }, { MobID::kWorkerAnt, 110000 },
                 { MobID::kAntHole, 3000 }, { MobID::kSquare, 1 }
             },
             .difficulty = 1, .color = 0xffa98467, .name = "Ant Hell"
         },
         {
-            // Spawn hub �?rich low-tier ant pack.
+            // Spawn hub — Baby Ant heavy (Poo farm).
             .left = 7200, .top = 7200, .right = 10800, .bottom = 10800,
             .density = 2.55f, .drop_multiplier = 0.02,
             .spawns = {
-                { MobID::kBabyAnt, 200000 }, { MobID::kWorkerAnt, 160000 },
-                { MobID::kAntHole, 40000 }, { MobID::kSoldierAnt, 50000 },
+                { MobID::kBabyAnt, 280000 }, { MobID::kWorkerAnt, 120000 },
+                { MobID::kAntHole, 35000 }, { MobID::kSoldierAnt, 35000 },
                 { MobID::kSquare, 1 }
             },
             .difficulty = 0, .color = MapTheme::ANT_GROUND, .name = "Ant Hell"
@@ -401,14 +409,14 @@ inline std::array const MAPS = std::to_array<MapZones>({
     // ---- Royal Capital (exactly 6 zones; geometry rewritten by build_zones_royal) ----
     MapZones({
         {
-            // 0 Outer Wall �?rich low-tier capital pack
+            // 0 Outer Wall — rich low-tier capital pack
             .left = 0, .top = 0, .right = (float)ARENA_WIDTH, .bottom = (float)ARENA_HEIGHT,
             .density = 2.55f, .drop_multiplier = 0.02,
             .spawns = {
                 { MobID::kRoyalBoulder, 140000 }, { MobID::kRoyalPebble, 150000 },
                 { MobID::kRustMite, 160000 }, { MobID::kCoinBeetle, 120000 },
                 { MobID::kMimicChest, 80000 }, { MobID::kWanderingGuard, 50000 },
-                { MobID::kSquare, 1 }
+                { MobID::kTrader, 12000 }, { MobID::kSquare, 1 }
             },
             .difficulty = 0, .color = RARITY_COLORS[RarityID::kCommon], .name = "Outer Wall"
         },
@@ -419,7 +427,7 @@ inline std::array const MAPS = std::to_array<MapZones>({
             .spawns = {
                 { MobID::kRustMite, 300000 }, { MobID::kMimicChest, 250000 },
                 { MobID::kCoinBeetle, 200000 }, { MobID::kWanderingGuard, 250000 },
-                { MobID::kSquare, 1 }
+                { MobID::kTrader, 18000 }, { MobID::kSquare, 1 }
             },
             .difficulty = RarityID::kEpic, .color = RARITY_COLORS[RarityID::kEpic], .name = "Common Quarter"
         },
@@ -445,24 +453,24 @@ inline std::array const MAPS = std::to_array<MapZones>({
             .difficulty = RarityID::kMythic, .color = RARITY_COLORS[RarityID::kMythic], .name = "Barracks"
         },
         {
-            // 4 Ruined Quarter — Ultra
+            // 4 Ruined Quarter — Ultra (Oracle rare attach)
             .left = 600, .top = 800, .right = 10500, .bottom = 9500,
             .density = 3.2f, .drop_multiplier = 0.55,
             .spawns = {
                 { MobID::kPhantomOrb, 400000 }, { MobID::kFallenKnight, 250000 },
                 { MobID::kMimicChest, 200000 }, { MobID::kRustMite, 150000 },
-                { MobID::kSquare, 1 }
+                { MobID::kOracle, 10000 }, { MobID::kSquare, 1 }
             },
             .difficulty = RarityID::kUltra, .color = RARITY_COLORS[RarityID::kUltra], .name = "Ruined Quarter"
         },
         {
-            // 5 Royal Palace — Super
+            // 5 Royal Palace — Super (Titan rare attach near throne)
             .left = 14500, .top = 4500, .right = 24500, .bottom = 11500,
             .density = 3.3f, .drop_multiplier = 0.58,
             .spawns = {
                 { MobID::kShieldSentinel, 350000 }, { MobID::kSpearSentinel, 300000 },
                 { MobID::kFallenKnight, 250000 }, { MobID::kWanderingGuard, 100000 },
-                { MobID::kSquare, 1 }
+                { MobID::kTitan, 8000 }, { MobID::kSquare, 1 }
             },
             .difficulty = RarityID::kSuper, .color = RARITY_COLORS[RarityID::kSuper], .name = "Royal Palace"
         }
@@ -508,6 +516,344 @@ inline std::array const MAPS = std::to_array<MapZones>({
             },
             .difficulty = 0, .color = MapTheme::ANT_GROUND, .name = "Ant Nest"
         }
+    }),
+    // ---- Wildwood (L2) — former Ashflor jungle dens ----
+    MapZones({
+        {
+            .left = 0, .top = 0, .right = (float)ARENA_WIDTH, .bottom = (float)ARENA_HEIGHT,
+            .density = 3.4f, .drop_multiplier = 0.58,
+            .spawns = {
+                { MobID::kEmeraldMantis, 120000 }, { MobID::kStoneGuardian, 80000 },
+                { MobID::kCarnivorousPlant, 100000 }, { MobID::kVineBug, 90000 },
+                { MobID::kJungleWasp, 110000 }, { MobID::kSquare, 1 }
+            },
+            .difficulty = 3, .color = 0xff1b4332, .name = "Wildwood Deep"
+        },
+        {
+            .left = 2200, .top = 2200, .right = 15800, .bottom = 15800,
+            .density = 2.8f, .drop_multiplier = 0.28,
+            .spawns = {
+                { MobID::kJungleSpider, 130000 }, { MobID::kPoisonToad, 90000 },
+                { MobID::kSporeMushroom, 100000 }, { MobID::kRiverCrab, 80000 },
+                { MobID::kJungleWasp, 100000 }, { MobID::kSquare, 1 }
+            },
+            .difficulty = 2, .color = 0xff2d6a4f, .name = "Wildwood Mid"
+        },
+        {
+            .left = 4800, .top = 4800, .right = 13200, .bottom = 13200,
+            .density = 2.7f, .drop_multiplier = 0.09,
+            .spawns = {
+                { MobID::kLeafBeetle, 140000 }, { MobID::kJungleMite, 130000 },
+                { MobID::kVineBug, 90000 }, { MobID::kJungleWasp, 90000 },
+                { MobID::kSquare, 1 }
+            },
+            .difficulty = 1, .color = 0xff40916c, .name = "Wildwood Edge"
+        },
+        {
+            .left = 7200, .top = 7200, .right = 10800, .bottom = 10800,
+            .density = 2.55f, .drop_multiplier = 0.02,
+            .spawns = {
+                { MobID::kJungleStone, 160000 }, { MobID::kJungleCrawler, 160000 },
+                { MobID::kLeafBeetle, 140000 }, { MobID::kJungleMite, 120000 },
+                { MobID::kVineBug, 60000 }, { MobID::kSquare, 1 }
+            },
+            .difficulty = 0, .color = MapTheme::JUNGLE_GROUND, .name = "Wildwood Hub"
+        }
+    }),
+    // ---- Sewers (L2) ----
+    MapZones({
+        {
+            .left = 0, .top = 0, .right = (float)ARENA_WIDTH, .bottom = (float)ARENA_HEIGHT,
+            .density = 3.3f, .drop_multiplier = 0.55,
+            .spawns = {
+                { MobID::kRoach, 120000 }, { MobID::kSilverfish, 110000 },
+                { MobID::kMoth, 100000 }, { MobID::kFly, 100000 },
+                { MobID::kSpider, 70000 }, { MobID::kSquare, 1 }
+            },
+            .difficulty = 3, .color = 0xff3A3E38, .name = "Deep Sewers"
+        },
+        {
+            .left = 2200, .top = 2200, .right = 15800, .bottom = 15800,
+            .density = 2.8f, .drop_multiplier = 0.28,
+            .spawns = {
+                { MobID::kRoach, 120000 }, { MobID::kSilverfish, 110000 },
+                { MobID::kFly, 120000 }, { MobID::kGarbage, 70000 },
+                { MobID::kSquare, 1 }
+            },
+            .difficulty = 2, .color = 0xff4A5048, .name = "Sewer Mid"
+        },
+        {
+            .left = 4800, .top = 4800, .right = 13200, .bottom = 13200,
+            .density = 2.7f, .drop_multiplier = 0.10,
+            .spawns = {
+                { MobID::kGarbage, 150000 }, { MobID::kSilverfish, 120000 },
+                { MobID::kFly, 130000 }, { MobID::kRoach, 100000 },
+                { MobID::kSquare, 1 }
+            },
+            .difficulty = 1, .color = 0xff5A6058, .name = "Sewer Edge"
+        },
+        {
+            .left = 7200, .top = 7200, .right = 10800, .bottom = 10800,
+            .density = 2.55f, .drop_multiplier = 0.02,
+            .spawns = {
+                { MobID::kGarbage, 200000 }, { MobID::kSilverfish, 100000 },
+                { MobID::kFly, 140000 }, { MobID::kRoach, 120000 },
+                { MobID::kSquare, 1 }
+            },
+            .difficulty = 0, .color = MapTheme::SEWER_GROUND, .name = "Sewer Hub"
+        }
+    }),
+    // ---- Prime Garden (L2 official garden) ----
+    MapZones({
+        {
+            .left = 0, .top = 0, .right = (float)ARENA_WIDTH, .bottom = (float)ARENA_HEIGHT,
+            .density = 3.2f, .drop_multiplier = 0.56,
+            .spawns = {
+                { MobID::kHornet, 110000 }, { MobID::kSpider, 110000 },
+                { MobID::kDarkLadybug, 100000 }, { MobID::kEvilCentipede, 28000 },
+                { MobID::kMassiveBeetle, 12000 }, { MobID::kSquare, 1 }
+            },
+            .difficulty = 3, .color = 0xff6FA85A, .name = "Prime Deep"
+        },
+        {
+            .left = 2200, .top = 2200, .right = 15800, .bottom = 15800,
+            .density = 2.7f, .drop_multiplier = 0.30,
+            .spawns = {
+                { MobID::kRock, 80000 }, { MobID::kBee, 100000 }, { MobID::kSpider, 95000 },
+                { MobID::kHornet, 95000 }, { MobID::kBeetle, 70000 },
+                { MobID::kCentipede, 18000 }, { MobID::kSquare, 1 }
+            },
+            .difficulty = 2, .color = 0xff8FC777, .name = "Prime Mid"
+        },
+        {
+            .left = 4800, .top = 4800, .right = 13200, .bottom = 13200,
+            .density = 2.65f, .drop_multiplier = 0.10,
+            .spawns = {
+                { MobID::kRock, 180000 }, { MobID::kLadybug, 140000 },
+                { MobID::kBee, 120000 }, { MobID::kBeetle, 60000 },
+                { MobID::kSquare, 1 }
+            },
+            .difficulty = 1, .color = 0xffA8D484, .name = "Prime Edge"
+        },
+        {
+            .left = 7200, .top = 7200, .right = 10800, .bottom = 10800,
+            .density = 2.55f, .drop_multiplier = 0.02,
+            .spawns = {
+                { MobID::kRock, 280000 }, { MobID::kLadybug, 180000 },
+                { MobID::kBee, 140000 }, { MobID::kBeetle, 70000 },
+                { MobID::kShinyLadybug, 8000 }, { MobID::kSquare, 1 }
+            },
+            .difficulty = 0, .color = MapTheme::GARDEN_GROUND, .name = "Prime Hub"
+        }
+    }),
+    // ---- Prime Desert / 沙海 (L2) ----
+    MapZones({
+        {
+            .left = 0, .top = 0, .right = (float)ARENA_WIDTH, .bottom = (float)ARENA_HEIGHT,
+            .density = 3.2f, .drop_multiplier = 0.56,
+            .spawns = {
+                { MobID::kDuneSpider, 110000 }, { MobID::kSandstorm, 100000 },
+                { MobID::kScorpion, 100000 }, { MobID::kDesertCentipede, 28000 },
+                { MobID::kDuneTitan, 16000 }, { MobID::kSquare, 1 }
+            },
+            .difficulty = 3, .color = 0xffb57a2a, .name = "Sand Seas Deep"
+        },
+        {
+            .left = 2200, .top = 2200, .right = 15800, .bottom = 15800,
+            .density = 2.7f, .drop_multiplier = 0.28,
+            .spawns = {
+                { MobID::kCactus, 150000 }, { MobID::kDuneBeetle, 120000 },
+                { MobID::kDuneSpider, 100000 }, { MobID::kScorpion, 90000 },
+                { MobID::kSquare, 1 }
+            },
+            .difficulty = 2, .color = 0xffc9923c, .name = "Sand Seas Mid"
+        },
+        {
+            .left = 4800, .top = 4800, .right = 13200, .bottom = 13200,
+            .density = 2.65f, .drop_multiplier = 0.09,
+            .spawns = {
+                { MobID::kCactus, 180000 }, { MobID::kDuneStone, 150000 },
+                { MobID::kSandMite, 130000 }, { MobID::kSquare, 1 }
+            },
+            .difficulty = 1, .color = 0xffd4a84b, .name = "Sand Seas Edge"
+        },
+        {
+            .left = 7200, .top = 7200, .right = 10800, .bottom = 10800,
+            .density = 2.55f, .drop_multiplier = 0.02,
+            .spawns = {
+                { MobID::kCactus, 240000 }, { MobID::kDuneStone, 200000 },
+                { MobID::kSandMite, 140000 }, { MobID::kSquare, 1 }
+            },
+            .difficulty = 0, .color = MapTheme::DESERT_GROUND, .name = "Sand Seas Hub"
+        }
+    }),
+    // ---- Prime Ocean / 深海 (L2) ----
+    MapZones({
+        {
+            .left = 0, .top = 0, .right = (float)ARENA_WIDTH, .bottom = (float)ARENA_HEIGHT,
+            .density = 3.2f, .drop_multiplier = 0.56,
+            .spawns = {
+                { MobID::kSeaLeech, 40000 }, { MobID::kMorayEel, 100000 },
+                { MobID::kInkCuttle, 80000 }, { MobID::kAbyssShark, 40000 },
+                { MobID::kSquare, 1 }
+            },
+            .difficulty = 3, .color = 0xff023e8a, .name = "Deep Ocean"
+        },
+        {
+            .left = 2200, .top = 2200, .right = 15800, .bottom = 15800,
+            .density = 2.7f, .drop_multiplier = 0.28,
+            .spawns = {
+                { MobID::kSpinePuffer, 110000 }, { MobID::kMorayEel, 90000 },
+                { MobID::kReefCrab, 100000 }, { MobID::kSeaLeech, 30000 },
+                { MobID::kSquare, 1 }
+            },
+            .difficulty = 2, .color = 0xff005582, .name = "Deep Mid"
+        },
+        {
+            .left = 4800, .top = 4800, .right = 13200, .bottom = 13200,
+            .density = 2.65f, .drop_multiplier = 0.08,
+            .spawns = {
+                { MobID::kSponge, 140000 }, { MobID::kBubble, 130000 },
+                { MobID::kCoralStar, 110000 }, { MobID::kSeaFry, 120000 },
+                { MobID::kSquare, 1 }
+            },
+            .difficulty = 1, .color = 0xff00669c, .name = "Deep Edge"
+        },
+        {
+            .left = 7200, .top = 7200, .right = 10800, .bottom = 10800,
+            .density = 2.55f, .drop_multiplier = 0.02,
+            .spawns = {
+                { MobID::kSponge, 200000 }, { MobID::kBubble, 180000 },
+                { MobID::kReefStone, 150000 }, { MobID::kSeaFry, 140000 },
+                { MobID::kSquare, 1 }
+            },
+            .difficulty = 0, .color = MapTheme::OCEAN_GROUND, .name = "Deep Hub"
+        }
+    }),
+    // ---- Factory (L3) ----
+    MapZones({
+        {
+            .left = 0, .top = 0, .right = (float)ARENA_WIDTH, .bottom = (float)ARENA_HEIGHT,
+            .density = 3.3f, .drop_multiplier = 0.58,
+            .spawns = {
+                { MobID::kMechaFlower, 100000 }, { MobID::kMechaWasp, 110000 },
+                { MobID::kMechaSpider, 90000 }, { MobID::kMechaCrab, 70000 },
+                { MobID::kAssembler, 8000 }, { MobID::kSquare, 1 }
+            },
+            .difficulty = 3, .color = 0xff3A4550, .name = "Factory Deep"
+        },
+        {
+            .left = 2200, .top = 2200, .right = 15800, .bottom = 15800,
+            .density = 2.8f, .drop_multiplier = 0.30,
+            .spawns = {
+                { MobID::kMechaSpider, 120000 }, { MobID::kMechaFlower, 100000 },
+                { MobID::kBarrel, 90000 }, { MobID::kMechaCrab, 60000 },
+                { MobID::kSquare, 1 }
+            },
+            .difficulty = 2, .color = 0xff4A5560, .name = "Factory Mid"
+        },
+        {
+            .left = 4800, .top = 4800, .right = 13200, .bottom = 13200,
+            .density = 2.7f, .drop_multiplier = 0.10,
+            .spawns = {
+                { MobID::kBarrel, 160000 }, { MobID::kMechaSpider, 120000 },
+                { MobID::kScrapHeap, 100000 }, { MobID::kSquare, 1 }
+            },
+            .difficulty = 1, .color = 0xff5A6570, .name = "Factory Edge"
+        },
+        {
+            .left = 7200, .top = 7200, .right = 10800, .bottom = 10800,
+            .density = 2.55f, .drop_multiplier = 0.02,
+            .spawns = {
+                { MobID::kBarrel, 200000 }, { MobID::kScrapHeap, 140000 },
+                { MobID::kCogBeetle, 80000 }, { MobID::kSquare, 1 }
+            },
+            .difficulty = 0, .color = MapTheme::FACTORY_GROUND, .name = "Factory Hub"
+        }
+    }),
+    // ---- Pyramid (L3) ----
+    MapZones({
+        {
+            .left = 0, .top = 0, .right = (float)ARENA_WIDTH, .bottom = (float)ARENA_HEIGHT,
+            .density = 3.3f, .drop_multiplier = 0.58,
+            .spawns = {
+                { MobID::kPharaohBeetle, 50000 }, { MobID::kMummyBeetle, 100000 },
+                { MobID::kTombGuard, 90000 }, { MobID::kTomb, 20000 },
+                { MobID::kSquare, 1 }
+            },
+            .difficulty = 3, .color = 0xff8A6A3A, .name = "Pyramid Deep"
+        },
+        {
+            .left = 2200, .top = 2200, .right = 15800, .bottom = 15800,
+            .density = 2.8f, .drop_multiplier = 0.30,
+            .spawns = {
+                { MobID::kMummyBeetle, 110000 }, { MobID::kScarab, 120000 },
+                { MobID::kTombGuard, 80000 }, { MobID::kTomb, 25000 },
+                { MobID::kSquare, 1 }
+            },
+            .difficulty = 2, .color = 0xffB08A4A, .name = "Pyramid Mid"
+        },
+        {
+            .left = 4800, .top = 4800, .right = 13200, .bottom = 13200,
+            .density = 2.7f, .drop_multiplier = 0.10,
+            .spawns = {
+                { MobID::kScarab, 140000 }, { MobID::kTomb, 40000 },
+                { MobID::kDuneStone, 100000 }, { MobID::kSandMite, 80000 },
+                { MobID::kSquare, 1 }
+            },
+            .difficulty = 1, .color = 0xffD0A85A, .name = "Pyramid Edge"
+        },
+        {
+            .left = 7200, .top = 7200, .right = 10800, .bottom = 10800,
+            .density = 2.55f, .drop_multiplier = 0.02,
+            .spawns = {
+                { MobID::kScarab, 160000 }, { MobID::kTomb, 50000 },
+                { MobID::kDuneStone, 140000 }, { MobID::kSandMite, 100000 },
+                { MobID::kSquare, 1 }
+            },
+            .difficulty = 0, .color = MapTheme::PYRAMID_GROUND, .name = "Pyramid Hub"
+        }
+    }),
+    // ---- Hel (special L2 — Mark death) ----
+    MapZones({
+        {
+            .left = 0, .top = 0, .right = (float)ARENA_WIDTH, .bottom = (float)ARENA_HEIGHT,
+            .density = 3.4f, .drop_multiplier = 0.55,
+            .spawns = {
+                { MobID::kHelBeetle, 120000 }, { MobID::kHelSpider, 110000 },
+                { MobID::kHelWasp, 90000 }, { MobID::kHelCentipede, 40000 },
+                { MobID::kGambler, 30000 }, { MobID::kSquare, 1 }
+            },
+            .difficulty = 3, .color = 0xff2A1018, .name = "Hel Deep"
+        },
+        {
+            .left = 2200, .top = 2200, .right = 15800, .bottom = 15800,
+            .density = 2.9f, .drop_multiplier = 0.28,
+            .spawns = {
+                { MobID::kHelSpider, 130000 }, { MobID::kHelBeetle, 100000 },
+                { MobID::kHelWasp, 80000 }, { MobID::kGambler, 40000 },
+                { MobID::kSquare, 1 }
+            },
+            .difficulty = 2, .color = 0xff3A1820, .name = "Hel Mid"
+        },
+        {
+            .left = 4800, .top = 4800, .right = 13200, .bottom = 13200,
+            .density = 2.7f, .drop_multiplier = 0.10,
+            .spawns = {
+                { MobID::kHelBeetle, 140000 }, { MobID::kHelSpider, 120000 },
+                { MobID::kGambler, 50000 }, { MobID::kSquare, 1 }
+            },
+            .difficulty = 1, .color = 0xff4A2030, .name = "Hel Edge"
+        },
+        {
+            .left = 7200, .top = 7200, .right = 10800, .bottom = 10800,
+            .density = 2.55f, .drop_multiplier = 0.02,
+            .spawns = {
+                { MobID::kHelBeetle, 160000 }, { MobID::kHelSpider, 120000 },
+                { MobID::kGambler, 60000 }, { MobID::kSquare, 1 }
+            },
+            .difficulty = 0, .color = MapTheme::HEL_GROUND, .name = "Hel Hub"
+        }
     })
 });
 
@@ -526,34 +872,115 @@ struct MapPortalDef {
     float dest_y;
 };
 
+// Portal pad offset from hub. L2/L3 exit gates sit HERE (not map edges) so
+// florr tmj walls never bury them — transfer only, layouts stay untouched.
+inline float const PORTAL_HUB_OFF = 560.f;
+
 inline std::array const MAP_PORTALS = std::to_array<MapPortalDef>({
-    // Garden east → Royal Capital plaza
+    // ---- L1 edge gates (ashflor own layouts; edges are walkable) ----
+    // Garden east → Royal Capital
     { MapID::kGarden, MapID::kRoyalCapital,
       ARENA_WIDTH * 0.88f, ARENA_HEIGHT * 0.50f, 220.f,
       MAP_SPAWN_X, MAP_SPAWN_Y },
-    // Desert west → Royal Capital plaza
+    // Garden north → Prime Garden (L2 florr hub)
+    { MapID::kGarden, MapID::kPrimeGarden,
+      ARENA_WIDTH * 0.50f, ARENA_HEIGHT * 0.18f, 220.f,
+      10638.f, 30151.f },
+    // Garden south → Sewers (L2 florr hub)
+    { MapID::kGarden, MapID::kSewers,
+      ARENA_WIDTH * 0.50f, ARENA_HEIGHT * 0.86f, 220.f,
+      2433.f, 29233.f },
+    // Garden NE → Ant Nest (L2)
+    { MapID::kGarden, MapID::kAntNest,
+      ARENA_WIDTH * 0.82f, ARENA_HEIGHT * 0.22f, 220.f,
+      MAP_SPAWN_X, MAP_SPAWN_Y },
+    // Garden SE → Ant Hell (L2 florr hub)
+    { MapID::kGarden, MapID::kAntHell,
+      ARENA_WIDTH * 0.82f, ARENA_HEIGHT * 0.78f, 220.f,
+      15616.f, 14272.f },
+    // Desert west → Royal Capital
     { MapID::kDesert, MapID::kRoyalCapital,
       ARENA_WIDTH * 0.12f, ARENA_HEIGHT * 0.50f, 220.f,
       MAP_SPAWN_X, MAP_SPAWN_Y },
-    // Ocean west → Royal Capital plaza
+    // Desert east → Prime Desert (L2 florr hub)
+    { MapID::kDesert, MapID::kPrimeDesert,
+      ARENA_WIDTH * 0.88f, ARENA_HEIGHT * 0.50f, 220.f,
+      2176.f, 1081.f },
+    // Ocean west → Royal Capital
     { MapID::kOcean, MapID::kRoyalCapital,
       ARENA_WIDTH * 0.12f, ARENA_HEIGHT * 0.50f, 220.f,
       MAP_SPAWN_X, MAP_SPAWN_Y },
-    // Royal west gate → Garden hub
+    // Ocean east → Prime Ocean (L2 florr hub)
+    { MapID::kOcean, MapID::kPrimeOcean,
+      ARENA_WIDTH * 0.88f, ARENA_HEIGHT * 0.50f, 220.f,
+      13489.f, 12889.f },
+    // Jungle west → Wildwood (L2 florr hub)
+    { MapID::kJungle, MapID::kWildwood,
+      ARENA_WIDTH * 0.12f, ARENA_HEIGHT * 0.50f, 220.f,
+      2183.f, 1942.f },
+    // Royal gates
     { MapID::kRoyalCapital, MapID::kGarden,
       ARENA_WIDTH * 0.10f, ARENA_HEIGHT * 0.50f, 240.f,
       MAP_SPAWN_X, MAP_SPAWN_Y },
-    // Royal east gate → Desert hub
     { MapID::kRoyalCapital, MapID::kDesert,
       ARENA_WIDTH * 0.90f, ARENA_HEIGHT * 0.50f, 240.f,
       MAP_SPAWN_X, MAP_SPAWN_Y },
-    // Royal south → Ocean hub (east gate already Desert)
     { MapID::kRoyalCapital, MapID::kOcean,
       ARENA_WIDTH * 0.50f, ARENA_HEIGHT * 0.90f, 240.f,
       MAP_SPAWN_X, MAP_SPAWN_Y },
-    // Royal north → Volcano hub
     { MapID::kRoyalCapital, MapID::kVolcano,
       ARENA_WIDTH * 0.50f, ARENA_HEIGHT * 0.10f, 240.f,
+      MAP_SPAWN_X, MAP_SPAWN_Y },
+    { MapID::kVolcano, MapID::kRoyalCapital,
+      ARENA_WIDTH * 0.50f, ARENA_HEIGHT * 0.90f, 240.f,
+      MAP_SPAWN_X, MAP_SPAWN_Y },
+
+    // ---- L2/L3 hub gates (coords = florr player_spawns ± PORTAL_HUB_OFF) ----
+    // Ant Nest (ashflor layout — arena hub)
+    { MapID::kAntNest, MapID::kGarden,
+      MAP_SPAWN_X - PORTAL_HUB_OFF, MAP_SPAWN_Y, 240.f,
+      MAP_SPAWN_X, MAP_SPAWN_Y },
+    // Ant Hell hub 15616,14272 → Garden
+    { MapID::kAntHell, MapID::kGarden,
+      15056.f, 14272.f, 240.f,
+      MAP_SPAWN_X, MAP_SPAWN_Y },
+    // Wildwood hub 2183,1942 → Jungle
+    { MapID::kWildwood, MapID::kJungle,
+      2743.f, 1942.f, 240.f,
+      MAP_SPAWN_X, MAP_SPAWN_Y },
+    // Sewers hub 2433,29233 → Garden
+    { MapID::kSewers, MapID::kGarden,
+      2433.f, 28673.f, 240.f,
+      MAP_SPAWN_X, MAP_SPAWN_Y },
+    // Prime Garden hub 10638,30151 → Garden (south)
+    { MapID::kPrimeGarden, MapID::kGarden,
+      10638.f, 30711.f, 240.f,
+      MAP_SPAWN_X, MAP_SPAWN_Y },
+    // Prime Desert hub 2176,1081 → Desert
+    { MapID::kPrimeDesert, MapID::kDesert,
+      1616.f, 1081.f, 240.f,
+      MAP_SPAWN_X, MAP_SPAWN_Y },
+    // Prime Ocean hub 13489,12889 → Ocean
+    { MapID::kPrimeOcean, MapID::kOcean,
+      12929.f, 12889.f, 240.f,
+      MAP_SPAWN_X, MAP_SPAWN_Y },
+    // L3 from Prime Garden hub
+    { MapID::kPrimeGarden, MapID::kFactory,
+      10078.f, 30151.f, 220.f,
+      MAP_SPAWN_X, MAP_SPAWN_Y },
+    { MapID::kPrimeGarden, MapID::kPyramid,
+      11198.f, 30151.f, 220.f,
+      MAP_SPAWN_X, MAP_SPAWN_Y },
+    // L3 returns → Prime Garden hub
+    { MapID::kFactory, MapID::kPrimeGarden,
+      MAP_SPAWN_X + PORTAL_HUB_OFF, MAP_SPAWN_Y, 240.f,
+      10638.f, 30151.f },
+    { MapID::kPyramid, MapID::kPrimeGarden,
+      MAP_SPAWN_X - PORTAL_HUB_OFF, MAP_SPAWN_Y, 240.f,
+      10638.f, 30151.f },
+    // Hel exit hub 1329,1964
+    { MapID::kHel, MapID::kGarden,
+      1329.f, 1404.f, 240.f,
       MAP_SPAWN_X, MAP_SPAWN_Y },
 });
 

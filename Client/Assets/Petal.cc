@@ -1,4 +1,8 @@
 #include <Client/Assets/Assets.hh>
+#include <Client/Assets/FlorrArt.hh>
+#ifndef ART_STANDALONE
+#include <Client/Assets/PetalRasterCache.hh>
+#endif
 
 #include <Client/I18n.hh>
 #include <Client/StaticData.hh>
@@ -21,6 +25,13 @@ static PetalID::T petal_art_base(PetalID::T id) {
 void draw_static_petal_single(PetalID::T id, Renderer &ctx) {
     float r = PETAL_DATA[id].radius;
     PetalID::T art = petal_art_base(id);
+    // Florr sprites first. Never bake them into PetalRasterCache — if the PNG is
+    // still loading, a procedural bake would lock out florrclone art forever.
+    if (FlorrArt::try_draw_petal(art, ctx, r)) return;
+#ifndef ART_STANDALONE
+    if (!FlorrArt::has_petal_sprite(art) && PetalRasterCache::try_draw(art, ctx))
+        return;
+#endif
     switch(art) {
         case PetalID::kNone:
             break;

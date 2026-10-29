@@ -43,6 +43,26 @@ static Element *make_entries(std::initializer_list<std::pair<char const *, char 
 
 static Element *make_changelog_contents() {
     Element *elt = new Ui::VContainer({
+        make_date("2026年10月29日", "October 29th 2026"),
+        make_entries({
+            {"二级地图按 florr 原图 1:1 接入：原出生点、原刷怪带，去掉中心广场挖空与稀有度同心环",
+             "L2 maps use florr .tmj 1:1 — original hubs & spawn bands; no plaza dig / rarity onion"},
+            {"一级↔二级↔三级传送门互通；落在目标图出生点；回程门贴出生点旁",
+             "Portals link L1↔L2↔L3; land on map hub; return gates sit by the hub"},
+            {"二级死亡 Continue 留在本图；小地图与地面贴图对齐各图主题",
+             "L2 death Continue stays on that map; minimap/ground tiles match biome themes"},
+        }),
+        make_divider(),
+        make_date("2026年10月28日", "October 28th 2026"),
+        make_entries({
+            {"地图放大至 36000²；花园改为 dirt 路网脊柱，迷宫/环谷挂在路旁",
+             "Arena 36000²; Garden dirt-spine roads with mazes/rings on the arms"},
+            {"出生点旁不再刷「唯一」蜜蜂/黄蜂/蜈蚣：外环 Unique 区只能落在独占环带",
+             "No Unique hub packs: Unique zone samples only its exclusive outer ring"},
+            {"玩家基础移速提高；野生怪移速/仇恨范围下调；贴墙取消仇恨",
+             "Faster flower base speed; wilds slower + shorter aggro; wall-hug drops chase"},
+        }),
+        make_divider(),
         make_date("2026年10月27日", "October 27th 2026"),
         make_entries({
             {"新花瓣「陨石坑」：装备后扩大种植陨石占地（岩石/巨石掉落）",
@@ -53,8 +73,14 @@ static Element *make_changelog_contents() {
              "Battery: body-ram only, fires all charges with chains; poison/shots no longer drain; phases"},
             {"卸下触角/观察者后保持当前视距比例，不再突然缩到最近",
              "Unequipping Antenna/Observer keeps apparent zoom instead of snapping close"},
-            {"白蚁连伤恢复为范围内满额分摊，并自带神秘遗物式 +50% 生命",
-             "Termite shared damage is full within range again, plus +50% Relic-like HP"},
+            {"白蚁连伤满额分摊、+50% 生命；共享半径再加大（约原 2.3 倍）",
+             "Termite shared damage: full share, +50% HP; link radius increased again"},
+            {"安卡冷却按稀有度递减（神话约 8s，不再全档 256s）",
+             "Ankh reload scales by rarity again (Mythic ~8s; was stuck at 256s)"},
+            {"发版后唯一等级徽章：登录包先下发 Lv 再下发背包；新增花瓣自动 bump 协议哈希",
+             "Unique Lv before craft_bank in login/craft packets; auto bump VERSION_HASH when petal count grows"},
+            {"客户端流畅度：花瓣/怪物 2× 栅格缓存后 blit；性能模式可选（默认清晰 DPR≤2）",
+             "Client smoothness: 2× petal/mob raster cache + blit; optional perf mode (default sharp DPR≤2)"},
         }),
         make_divider(),
         make_date("2026年10月26日", "October 26th 2026"),

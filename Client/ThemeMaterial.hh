@@ -88,6 +88,46 @@ namespace TerrainArt {
               0xff4B3026, 0xff704A35, 0xffA77751, 0xff856044, 0xff38241E,
               0xff582F0E, 0x668C5E3B, 0xffB08968, 0x99D9C09B,
               Style::kDirt, 7.5f, 18.f, 32.f, 68.f },
+            // Wildwood — L2 jungle twin (slightly cooler canopy)
+            { 0xff4AA87A, 0x40255A42, 0x4488C8A0,
+              0xff061812, 0xff163828, 0xff358060, 0xff0A2218, 0xff030C08,
+              0xff255A42, 0x664AA87A, 0xff88C8A0, 0x99C8E8D0,
+              Style::kJungle, 8.f, 24.f, 40.f, 64.f },
+            // Sewers — damp concrete
+            { 0xff6B7068, 0x403A3E38, 0x445A6A4A,
+              0xff1A1E18, 0xff2A2E28, 0xff7A8A6A, 0xff222620, 0xff0E100C,
+              0xff3D5A3A, 0x665A7A4A, 0xff8A9A7A, 0x99A8B898,
+              Style::kDirt, 7.5f, 16.f, 28.f, 70.f },
+            // Prime Garden — brighter twin of L1 garden
+            { 0xffB9DB91, 0x338FC777, 0x55F6E9B5,
+              0xff285B35, 0xff4E914C, 0xff85C96D, 0xff34733D, 0xff1E472A,
+              0xff40916C, 0x66A8E6C0, 0xffC8D6A8, 0x99A8B87A,
+              Style::kHedge, 7.f, 22.f, 36.f, 72.f },
+            // Prime Desert / Sand Seas
+            { 0xffF2D79B, 0x40E6BE79, 0x55F9E7BA,
+              0xff593A2C, 0xffB77B4C, 0xffE8AD69, 0xff815337, 0xff3E281C,
+              0xff2A9D8F, 0x6640C4B0, 0xffC9955C, 0x99E8AD69,
+              Style::kRock, 7.f, 18.f, 32.f, 80.f },
+            // Prime Ocean / Deep Ocean
+            { 0xff3AA0C8, 0x400077B6, 0x5590E0F0,
+              0xff021F45, 0xff023E8A, 0xff4CC9F0, 0xff012A55, 0xff011428,
+              0xff00B4D8, 0x66A0E8FF, 0xffFF85A1, 0x99FFE0EA,
+              Style::kReef, 6.5f, 16.f, 28.f, 76.f },
+            // Factory — steel deck
+            { 0xff7A8088, 0x403A4550, 0x55C94D4C,
+              0xff1A2028, 0xff2A3038, 0xff9AA0A8, 0xff3A4550, 0xff101418,
+              0xffC94D4C, 0x66E07070, 0xffA8B0B8, 0x99C0C8D0,
+              Style::kMasonry, 7.5f, 14.f, 26.f, 68.f },
+            // Pyramid — sandstone tomb
+            { 0xffE2C48A, 0x40B08A4A, 0x55D5AD55,
+              0xff4A3018, 0xff6A4A28, 0xffE8C878, 0xff8A6A3A, 0xff2A1C0C,
+              0xff3A5A6A, 0x665A8A9A, 0xffD5AD55, 0x99E8D0A0,
+              Style::kRock, 7.f, 18.f, 32.f, 76.f },
+            // Hel — ashen crimson underworld
+            { 0xff3A1A22, 0x40201018, 0x55C94D4C,
+              0xff0A0408, 0xff1A0A10, 0xffC94D4C, 0xff2A1018, 0xff050208,
+              0xffC94D4C, 0x66E07070, 0xffF4A261, 0x99FFD6A5,
+              Style::kLava, 7.5f, 18.f, 30.f, 74.f },
         };
         static_assert(sizeof(kTable) / sizeof(kTable[0]) == MapID::kNumMaps,
                       "ThemeMaterial table must cover every MapID");

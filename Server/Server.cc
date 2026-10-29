@@ -356,7 +356,8 @@ static void json_append_slot_list(std::string &out, PetalID::T const *slots, uin
 
 std::string Server::live_status_json() {
     static char const *const MAP_ZH[MapID::kNumMaps] = {
-        "花园", "沙漠", "海洋", "雪原", "丛林", "蚁穴", "火山", "王城", "蚁巢"
+        "花园", "沙漠", "海洋", "雪原", "丛林", "蚁穴", "火山", "王城", "蚁巢", "密林",
+        "下水道", "繁花园", "沙海", "深海", "工厂", "金字塔", "地狱"
     };
     auto now_ms = (uint64_t) std::chrono::duration_cast<std::chrono::milliseconds>(
         std::chrono::system_clock::now().time_since_epoch()).count();
@@ -853,7 +854,8 @@ std::string Server::live_map_layout_json() {
     if (!cached.empty()) return cached;
 
     static char const *const MAP_ZH[MapID::kNumMaps] = {
-        "花园", "沙漠", "海洋", "雪原", "丛林", "蚁穴", "火山", "王城", "蚁巢"
+        "花园", "沙漠", "海洋", "雪原", "丛林", "蚁穴", "火山", "王城", "蚁巢", "密林",
+        "下水道", "繁花园", "沙海", "深海", "工厂", "金字塔", "地狱"
     };
     constexpr uint32_t kOutlineCap = 32;
     float oxs[kOutlineCap];
@@ -1149,7 +1151,7 @@ std::string Server::live_admin_spawn(uint8_t map_id, uint32_t mob_id, float x, f
         near_mode = 1;
     } else if (!(base_x > 0.f && base_y > 0.f && base_x < ARENA_WIDTH && base_y < ARENA_HEIGHT)) {
         // Never default onto the hub pad — that is how the center got farm-dumped.
-        base_x = MAP_SPAWN_X + 2800.f;
+        base_x = MAP_SPAWN_X + ARENA_WIDTH * 0.09f;
         base_y = MAP_SPAWN_Y;
         near_mode = 2;
     }
@@ -1185,12 +1187,14 @@ std::string Server::live_admin_spawn(uint8_t map_id, uint32_t mob_id, float x, f
         }
         Map::resolve_circle_terrain(map_id, sx, sy, 80.f);
         // Push out of respawn ellipse if a near-player dump landed on the pad.
-        if (Map::in_spawn_plaza(sx, sy)) {
+        if (Map::in_spawn_plaza(map_id, sx, sy)) {
+            float hx = MAP_SPAWN_X, hy = MAP_SPAWN_Y;
+            Map::hub_xy(map_id, hx, hy);
             float ang = frand() * 6.2831853f;
-            sx = MAP_SPAWN_X + std::cos(ang) * 2200.f;
-            sy = MAP_SPAWN_Y + std::sin(ang) * 1700.f;
+            sx = hx + std::cos(ang) * (ARENA_WIDTH * 0.075f);
+            sy = hy + std::sin(ang) * (ARENA_HEIGHT * 0.058f);
             Map::resolve_circle_terrain(map_id, sx, sy, 80.f);
-            if (Map::in_spawn_plaza(sx, sy)) continue;
+            if (Map::in_spawn_plaza(map_id, sx, sy)) continue;
         }
         // on_spawn runs for every segment — mark + TTL the whole worm.
         game_tick_t const ttl = admin_spawn_ttl();
@@ -1208,7 +1212,8 @@ std::string Server::live_admin_spawn(uint8_t map_id, uint32_t mob_id, float x, f
 
     std::string msg = "已在";
     static char const *const MAP_ZH[MapID::kNumMaps] = {
-        "花园", "沙漠", "海洋", "雪原", "丛林", "蚁穴", "火山", "王城", "蚁巢"
+        "花园", "沙漠", "海洋", "雪原", "丛林", "蚁穴", "火山", "王城", "蚁巢", "密林",
+        "下水道", "繁花园", "沙海", "深海", "工厂", "金字塔", "地狱"
     };
     msg += MAP_ZH[map_id];
     msg += " 刷出 ";

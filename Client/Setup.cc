@@ -75,7 +75,12 @@ extern "C" {
         } else if (type == 2 || type == 3) {
             Input::ended_touches[id] = { .id = id, .x = x, .y = y };
             if (type == 3) Input::ended_touches.erase(id);
-            Input::touches.erase(id);
+            // A quick tap can begin and end between two RAFs. Keep it through
+            // one UI poll, then release in Input::reset, so it is not lost.
+            if (type == 2 && Input::began_touches.contains(id)) {
+                auto it = Input::touches.find(id);
+                if (it != Input::touches.end()) { it->second.x=x; it->second.y=y; }
+            } else Input::touches.erase(id);
         } else {
             auto iter = Input::touches.find(id);
             if (iter == Input::touches.end()) return;
@@ -100,15 +105,26 @@ extern "C" {
         Game::renderer.width = width;
         Game::renderer.height = height;
         Game::tick(d);
+        Renderer::flush();
+        static uint8_t last_playing = 255;
+        uint8_t const playing = Game::alive();
+        if (playing != last_playing) {
+            last_playing = playing;
+            EM_ASM({ Module['ashflorPlaying'] = !!$0; }, (int)playing);
+        }
     }
 
 }
 
 int setup_inputs() {
     EM_ASM({
-        // Cap DPR: full 3x canvas on phones makes Canvas2D feel lagged
-        Module.ashflorDpr = Math.min(window.devicePixelRatio || 1, 2);
-        const dpr = () => Module.ashflorDpr || Math.min(window.devicePixelRatio || 1, 2);
+        // Default sharp (≤2×). Perf mode opt-in → 1× for weak GPUs.
+        Module.ashflorPerfMode = (typeof Module.ashflorPerfMode === "number")
+            ? Module.ashflorPerfMode : 0;
+        const ashflorDprCap = () => Module.ashflorPerfMode ? 1 : 2;
+        Module.ashflorDpr = Math.min(window.devicePixelRatio || 1, ashflorDprCap());
+        const dpr = () => Module.ashflorDpr
+            || Math.min(window.devicePixelRatio || 1, ashflorDprCap());
         window.addEventListener("keydown", (e) => {
             // IME composition (Chinese etc.): don't steal Enter / don't send chat mid-compose
             if (e.isComposing || e.keyCode === 229) return;
@@ -207,7 +223,8 @@ void main_loop() {
     EM_ASM({
         function loop(time)
         {
-            Module.ashflorDpr = Math.min(window.devicePixelRatio || 1, 2);
+            const cap = Module.ashflorPerfMode ? 1 : 2;
+            Module.ashflorDpr = Math.min(window.devicePixelRatio || 1, cap);
             const r = Module.ashflorDpr;
             let width = Math.max(1, Math.round(innerWidth * r));
             let height = Math.max(1, Math.round(innerHeight * r));
@@ -267,7 +284,9 @@ void main_loop() {
 int setup_canvas() {
     EM_ASM({
         Module.canvas = document.getElementById("canvas");
-        Module.ashflorDpr = Math.min(window.devicePixelRatio || 1, 2);
+        if (typeof Module.ashflorPerfMode !== "number") Module.ashflorPerfMode = 0;
+        const cap = Module.ashflorPerfMode ? 1 : 2;
+        Module.ashflorDpr = Math.min(window.devicePixelRatio || 1, cap);
         const r = Module.ashflorDpr;
         Module.canvas.width = Math.max(1, Math.round(innerWidth * r));
         Module.canvas.height = Math.max(1, Math.round(innerHeight * r));

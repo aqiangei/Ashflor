@@ -1,5 +1,6 @@
 #include <Client/Game.hh>
 #include <Client/DOM.hh>
+#include <Client/Debug.hh>
 
 #include <Client/I18n.hh>
 #include <Client/Input.hh>
@@ -100,10 +101,8 @@ void Game::on_message(uint8_t *ptr, uint32_t len) {
                 for (uint32_t i = 0; i < 2 * MAX_SLOT_COUNT; ++i)
                     reader.read<PetalID::T>();
             }
-            for (uint32_t i = 0; i < PetalID::kNumPetals; ++i)
-                craft_bank[i] = reader.read<uint32_t>();
             coins = reader.read<uint32_t>();
-            // Sparse Unique levels (same layout as kCraftUpdate trailer).
+            // Sparse Unique levels BEFORE craft_bank (server ≥ VERSION_HASH 22487).
             {
                 uint16_t n_levels = reader.read<uint16_t>();
                 // Logged-in: high-water merge only. Clearing then applying used
@@ -132,6 +131,8 @@ void Game::on_message(uint8_t *ptr, uint32_t len) {
                     guest_petal_levels = petal_levels;
                 }
             }
+            for (uint32_t i = 0; i < PetalID::kNumPetals; ++i)
+                craft_bank[i] = reader.read<uint32_t>();
             uint64_t token = reader.read<uint64_t>();
             if (account_logged_in)
                 session_token = token;
@@ -217,8 +218,6 @@ void Game::on_message(uint8_t *ptr, uint32_t len) {
             uint8_t result = reader.read<uint8_t>();
             PetalID::T petal = reader.read<PetalID::T>();
             uint16_t amount = reader.read<uint16_t>();
-            for (uint32_t i = 0; i < PetalID::kNumPetals; ++i)
-                craft_bank[i] = reader.read<uint32_t>();
             coins = reader.read<uint32_t>();
             {
                 uint16_t n_levels = reader.read<uint16_t>();
@@ -245,6 +244,8 @@ void Game::on_message(uint8_t *ptr, uint32_t len) {
                     guest_petal_levels = petal_levels;
                 }
             }
+            for (uint32_t i = 0; i < PetalID::kNumPetals; ++i)
+                craft_bank[i] = reader.read<uint32_t>();
             // Optional tail: material + roll count for All batches.
             // ONLY Miss/Win/LevelWin may advance the pity counter. BankSync /
             // shop / errors also carry a zero tail; if client↔server petal
@@ -333,13 +334,26 @@ void Game::on_message(uint8_t *ptr, uint32_t len) {
                 craft_status = I18n::use_chinese
                     ? "背包已满，先腾出空位"
                     : "Backpack full — free a slot first";
+            else if (result == CraftResultCode::kCraftPlinkoResult) {
+                uint32_t n = amount;
+                craft_status = I18n::use_chinese
+                    ? std::format("Plinko：{} ×{}", I18n::petal_name(petal), n)
+                    : std::format("Plinko: {} ×{}", I18n::petal_name(petal), n);
+            } else if (result == CraftResultCode::kCraftAssembled) {
+                uint32_t n = amount > 0 ? amount : 1u;
+                craft_status = I18n::use_chinese
+                    ? std::format("组装获得 {} ×{}", I18n::petal_name(petal), n)
+                    : std::format("Assembled {} ×{}", I18n::petal_name(petal), n);
+            }
             if (petal < PetalID::kNumPetals && petal != PetalID::kNone)
                 seen_petals[petal] = 1;
             if ((result == CraftResultCode::kCraftWin
                 || result == CraftResultCode::kCraftMiss
                 || result == CraftResultCode::kCraftExchanged
                 || result == CraftResultCode::kCraftBought
-                || result == CraftResultCode::kCraftLevelWin)
+                || result == CraftResultCode::kCraftLevelWin
+                || result == CraftResultCode::kCraftPlinkoResult
+                || result == CraftResultCode::kCraftAssembled)
                 && petal != PetalID::kNone)
                 Ui::craft_play_result(result, petal, amount > 0 ? amount : 1u);
             break;
@@ -475,6 +489,7 @@ void Game::on_message(uint8_t *ptr, uint32_t len) {
             break;
         }
         case Clientbound::kClientUpdate: {
+            double const received_at = Debug::get_timestamp();
             simulation_ready = 1;
             EntityID new_camera = reader.read<EntityID>();
             // Soft-leave keeps the old camera + world. Map transfer / new
@@ -507,6 +522,7 @@ void Game::on_message(uint8_t *ptr, uint32_t len) {
                 assert(simulation.ent_exists(curr_id));
                 Entity &ent = simulation.get_ent(curr_id);
                 ent.read(&reader, BitMath::at(create, 0));
+                  ent.record_motion_sample(received_at);
                 if (BitMath::at(create, 1)) ent.pending_delete = 1;
                 if (curr_id.id < ENTITY_CAP)
                     seen_gen[curr_id.id] = snap_gen;
@@ -840,7 +856,12 @@ void Game::send_spawn_request() {
     writer.write<uint8_t>(Serverbound::kClientSpawn);
     std::string name = Game::account_logged_in ? Game::username : Game::guest_play_name();
     writer.write<std::string>(name);
+    // Title pick for fresh entry; death Continue uses the arena you died in.
     uint8_t map_id = clamp_to_open_map(Game::selected_map);
+    if (Game::on_game_screen && !Game::alive()) {
+        uint8_t cur = Game::simulation.arena_info.map_id;
+        if (map_is_open(cur)) map_id = cur;
+    }
     writer.write<uint8_t>(map_id);
     socket.send(writer.packet, writer.at - writer.packet);
     spawn_request_at = Game::timestamp;
@@ -1157,7 +1178,10 @@ void Game::swap_all_petals() {
 
 void Game::craft_petals(uint8_t mode, PetalID::T petal_id, uint16_t max_batches) {
     if (!socket.ready || !(alive() || on_game_screen)) return;
-    if (petal_id == PetalID::kNone || petal_id >= PetalID::kNumPetals) return;
+    // Assemble uses arg as recipe index (0-based); Plinko/others need a real petal.
+    if (mode != CraftMode::kCraftAssemble
+        && (petal_id == PetalID::kNone || petal_id >= PetalID::kNumPetals))
+        return;
     if (max_batches == 0) max_batches = 1;
     // uint16 wire; All-drain uses a high cap so miss refunds can keep feeding rolls.
     if (max_batches > 65535) max_batches = 65535;

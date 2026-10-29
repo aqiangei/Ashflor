@@ -100,6 +100,7 @@ Element *Ui::make_settings_panel() {
 
     Element *display = settings_section(I18n::kSettingsDisplay, {
         row(&I18n::use_chinese, I18n::kLanguage),
+        row(&Game::perf_mode, I18n::kPerfMode),
         row(&Game::show_low_rarity_drops, I18n::kShowLowRarityDrops),
         row(&Game::show_hitboxes, I18n::kShowHitboxes),
         row(&Game::show_debug, I18n::kDebugStats),

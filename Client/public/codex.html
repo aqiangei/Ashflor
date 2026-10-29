@@ -312,6 +312,28 @@
     });
   }
 
+  // Warm petal/mob sprites in the background. Never block bootArt — awaiting
+  // the full urls.json (hundreds of images) left the page stuck on "加载中".
+  function preloadFlorrSpritesBackground() {
+    if (!Art) return;
+    fetch("/florr-art/urls.json", { cache: "force-cache" })
+      .then(r => (r.ok ? r.json() : []))
+      .then(urls => {
+        if (!Array.isArray(urls) || !urls.length) return;
+        if (!Art.embeddedImages) Art.embeddedImages = new Map();
+        // Petals/mobs only — terrain tiles are for the in-game chunk bake.
+        urls.filter(u => u && !String(u).includes("/tiles/")).forEach(url => {
+          let img = Art.embeddedImages.get(url);
+          if (img) return;
+          img = new Image();
+          img.decoding = "async";
+          img.src = url;
+          Art.embeddedImages.set(url, img);
+        });
+      })
+      .catch(() => {});
+  }
+
   async function bootArt() {
     if (Art) return Art;
     const v = await artCacheV();
@@ -324,6 +346,7 @@
     });
     if (!Art.TextDecoder) Art.TextDecoder = new TextDecoder();
     Art._ashflor_art_boot();
+    preloadFlorrSpritesBackground();
     return Art;
   }
 

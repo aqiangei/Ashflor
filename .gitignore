@@ -1,8 +1,19 @@
 build/
+build-*/
 wasm_build/
 node_modules/
 .vs/
 .vscode/
+Server/uWebSockets/
+Server/build-native/
+Server/build-native-check/
+Client/build-art/
+Client/build-perf/
+Client/public/florr-art/
+*.bak
+*.bak-*
+__pycache__/
+tools/__pycache__/
 gardn-client.js
 gardn-client.wasm
 gardn-client.js.br
@@ -24,3 +35,8 @@ feedback.dat.bak.tmp
 feedback-salt.dat
 feedback-salt.dat.tmp
 backups/
+
+# accidental Windows path junk
+d*/
+Client/public/gardn-art.*
+

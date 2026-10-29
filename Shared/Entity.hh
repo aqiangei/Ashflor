@@ -85,6 +85,10 @@ public:
 #undef SINGLE
 #undef MULTIPLE
 #else
+    struct MotionSample { float x, y; double at; };
+    MotionSample motion_samples[10];
+    uint8_t motion_sample_count = 0;
+    void record_motion_sample(double);
     void tick_lerp(float);
     void read(Reader *, uint8_t);
 

@@ -748,6 +748,10 @@ uint32_t Map::terrain_outline(TerrainFeature const &f, float *xs, float *ys, uin
 }
 
 uint8_t Map::resolve_circle_terrain(uint8_t map_id, float &x, float &y, float radius) {
+    // Most movers are on open ground. Use the existing conservative terrain
+    // index before scanning every feature for penetration resolution. Safe
+    // channels already return false here, matching the channel carve-out below.
+    if (!circle_hits_impassable(map_id, x, y, radius)) return 0;
     MapTerrain const &terrain = map_terrain(map_id);
     // Standing on a safe artery: do not shove the player out of overlapping hills.
     for (TerrainFeature const &ch : terrain) {
@@ -933,9 +937,11 @@ uint32_t Map::sample_connectivity(uint8_t map_id, float step) {
                 walk[idx(ix, iy)] = 1;
         }
     }
-    // BFS from spawn
-    uint32_t sx = (uint32_t)(MAP_SPAWN_X / step);
-    uint32_t sy = (uint32_t)(MAP_SPAWN_Y / step);
+    // BFS from map hub (florr player_spawns or arena center)
+    float hx = MAP_SPAWN_X, hy = MAP_SPAWN_Y;
+    hub_xy(map_id, hx, hy);
+    uint32_t sx = (uint32_t)(hx / step);
+    uint32_t sy = (uint32_t)(hy / step);
     if (sx >= gw) sx = gw / 2;
     if (sy >= gh) sy = gh / 2;
     // Find nearest walkable cell to spawn
@@ -1040,7 +1046,7 @@ void Map::remove_mob(Simulation *sim, Entity const &ent) {
     // uint32_t and trigger spawn storms → entity-cap SEGV loops.
     if (sim->zone_mob_counts[zone] > 0)
         --sim->zone_mob_counts[zone];
-    if (in_spawn_plaza(ent.get_x(), ent.get_y()) && sim->plaza_mob_count > 0)
+    if (in_spawn_plaza(sim->map_id, ent.get_x(), ent.get_y()) && sim->plaza_mob_count > 0)
         --sim->plaza_mob_count;
 }
 
@@ -1064,8 +1070,22 @@ static float zone_exclusive_area(uint8_t map_id, uint32_t zone_id) {
 // Zone spawn rarity: primary/adjacent tilt, never below the mob's baked base.
 // Cap Unique to Unique-difficulty rings only — Square's baked Unique used to
 // force Unique in Common hubs ("低稀有度区全是唯一怪").
-static uint8_t resolve_zone_spawn_rarity(uint8_t base_r, uint32_t zone_difficulty) {
+// Optional world (x,y): farther from hub slightly ups the +1 tilt so outer
+// pockets of a ring feel meaner than the inner edge.
+static uint8_t resolve_zone_spawn_rarity(uint8_t base_r, uint32_t zone_difficulty,
+                                         float x = 0.f, float y = 0.f,
+                                         uint8_t use_pos = 0) {
     uint8_t spawn_r = pick_zone_spawn_rarity(zone_difficulty);
+    if (use_pos && zone_difficulty > RarityID::kUnusual) {
+        float cx = ARENA_WIDTH * 0.5f, cy = ARENA_HEIGHT * 0.5f;
+        float dx = x - cx, dy = y - cy;
+        float dist = std::sqrt(dx * dx + dy * dy);
+        float maxd = std::sqrt(cx * cx + cy * cy);
+        float t = maxd > 1.f ? dist / maxd : 0.f;
+        if (t > 0.42f && frand() < (t - 0.42f) * 0.55f
+            && spawn_r < MAX_DIFFICULTY)
+            ++spawn_r;
+    }
     if (base_r < RarityID::kNumRarities && spawn_r < base_r)
         spawn_r = base_r;
     uint8_t cap = zone_spawn_rarity_cap(zone_difficulty);
@@ -1258,7 +1278,7 @@ void Map::thin_soft_zone_excess(Simulation *sim) {
         uint32_t live = 0;
         sim->for_each<kMob>([&](Simulation *, Entity &ent) {
             if (ent.pending_delete) return;
-            if (!in_spawn_plaza(ent.get_x(), ent.get_y())) return;
+            if (!in_spawn_plaza(sim->map_id, ent.get_x(), ent.get_y())) return;
             // Keep dummies / map boss / explore props.
             if (ent.get_mob_id() == MobID::kTrainingDummy) return;
             if (ent.zone == 0xFF) return;
@@ -1274,7 +1294,7 @@ void Map::thin_soft_zone_excess(Simulation *sim) {
             sim->for_each<kMob>([&](Simulation *s, Entity &ent) {
                 if (budget == 0) return;
                 if (ent.pending_delete) return;
-                if (!in_spawn_plaza(ent.get_x(), ent.get_y())) return;
+                if (!in_spawn_plaza(sim->map_id, ent.get_x(), ent.get_y())) return;
                 if (ent.get_mob_id() == MobID::kTrainingDummy) return;
                 if (ent.zone == 0xFF) return;
                 if (ent.damage <= 0.f && ent.score_reward == 0
@@ -1286,13 +1306,31 @@ void Map::thin_soft_zone_excess(Simulation *sim) {
             });
         }
     }
+    // Portal clear rings: cull packs that wandered onto gates (no loot).
+    {
+        uint8_t mid = sim->map_id;
+        uint32_t budget = 10;
+        sim->for_each<kMob>([&](Simulation *s, Entity &ent) {
+            if (budget == 0) return;
+            if (ent.pending_delete) return;
+            if (!near_map_portal(mid, ent.get_x(), ent.get_y())) return;
+            if (ent.get_mob_id() == MobID::kTrainingDummy) return;
+            if (ent.zone == 0xFF) return;
+            if (ent.damage <= 0.f && ent.score_reward == 0
+                && BitMath::at(ent.flags, EntityFlags::kNoDrops))
+                return;
+            BitMath::set(ent.flags, EntityFlags::kNoDrops);
+            s->request_delete(ent.id);
+            --budget;
+        });
+    }
 }
 
 void Map::spawn_random_mob(Simulation *sim, float x, float y) {
     uint32_t zone_id = Map::get_zone_from_pos(sim->map_id, x, y);
     struct ZoneDefinition const &zone = map_zones(sim->map_id)[zone_id];
-    // Respawn plaza: never auto-spawn — hub stays clear for players / dummies.
-    if (in_spawn_plaza(x, y)) return;
+    // Respawn plaza / portal rings: never auto-spawn — gates stay clear.
+    if (in_spawn_plaza(sim->map_id, x, y) || near_map_portal(sim->map_id, x, y)) return;
     if ((float)sim->zone_mob_counts[zone_id] >= soft_zone_spawn_target(sim, zone_id, zone))
         return;
     float sum = 0;
@@ -1316,7 +1354,7 @@ void Map::spawn_random_mob(Simulation *sim, float x, float y) {
 // 生成一只怪并套用 Zone 难度倍率 / 记账。spawn_rarity 须与采样 clearance 一致。
 void Map::_spawn_mob_at(Simulation *sim, uint32_t zone_id, MobID::T mob_id, float x, float y, uint8_t spawn_rarity) {
     if (zone_id >= map_zones(sim->map_id).size() || mob_id >= MobID::kNumMobs) return;
-    if (in_spawn_plaza(x, y)) return;
+    if (in_spawn_plaza(sim->map_id, x, y) || near_map_portal(sim->map_id, x, y)) return;
     struct ZoneDefinition const &zone = map_zones(sim->map_id)[zone_id];
     uint32_t diff = zone.difficulty;
     uint8_t base_r = MOB_DATA[mob_id].rarity;
@@ -1332,7 +1370,7 @@ void Map::_spawn_mob_at(Simulation *sim, uint32_t zone_id, MobID::T mob_id, floa
     // Zone/plaza count once per spawn call — alloc_mob runs on_spawn for every
     // centipede segment, which would otherwise inflate density caps.
     sim->zone_mob_counts[zone_id]++;
-    if (in_spawn_plaza(x, y)) sim->plaza_mob_count++;
+    if (in_spawn_plaza(sim->map_id, x, y)) sim->plaza_mob_count++;
 
     Entity &head = alloc_mob(sim, mob_id, x, y, NULL_ENTITY, [&](Entity &mob){
         mob.zone = zone_id;
@@ -1441,7 +1479,7 @@ uint32_t Map::pick_spawn_zone(uint8_t map_id) {
 // Network-AOI half-extents (must match _spawn_zone_mob_once). Reject candidates
 // before corridor/clearance probes — those were the ~90ms spawn_max spikes.
 static void spawn_aoi_half(float &hw, float &hh) {
-    constexpr float kMinClientZoom = 0.55f;
+    constexpr float kMinClientZoom = 0.42f; // match client wheel/pinch floor
     hw = 960.f / (BASE_FOV * kMinClientZoom) + 420.f;
     hh = 540.f / (BASE_FOV * kMinClientZoom) + 420.f;
 }
@@ -1462,6 +1500,44 @@ static uint8_t point_near_flower_aoi(Simulation *sim, float x, float y, float hw
     return near;
 }
 
+// Soft pack: sample an open sibling near (px,py) inside the zone's exclusive
+// ownership (get_zone_from_pos), not merely its AABB — Unique's AABB is the
+// whole map and used to dump Unique packs onto the Common hub pad.
+static uint8_t sample_near_in_zone(Simulation *sim, uint32_t zone_id,
+                                   ZoneDefinition const &zone,
+                                   float px, float py, float clearance,
+                                   float lo, float hi, float &ox, float &oy) {
+    float const margin = 60.f;
+    float aoi_hw = 0.f, aoi_hh = 0.f;
+    spawn_aoi_half(aoi_hw, aoi_hh);
+    for (uint32_t t = 0; t < 8; ++t) {
+        float ang = frand() * 2.f * (float)M_PI;
+        float dist = lo + frand() * (hi - lo);
+        float x = px + std::cos(ang) * dist;
+        float y = py + std::sin(ang) * dist;
+        if (x < zone.left + margin || x > zone.right - margin) continue;
+        if (y < zone.top + margin || y > zone.bottom - margin) continue;
+        if (Map::get_zone_from_pos(sim->map_id, x, y) != zone_id) continue;
+        if (!point_near_flower_aoi(sim, x, y, aoi_hw, aoi_hh)) continue;
+        if (circle_hits_impassable(sim->map_id, x, y, clearance)) continue;
+        if (in_safe_channel(sim->map_id, x, y)) continue;
+        if (in_spawn_plaza(sim->map_id, x, y) || near_map_portal(sim->map_id, x, y)) continue;
+        bool too_close = false;
+        float const pad = kMinSpawnPlayerDist + clearance + BASE_FLOWER_RADIUS;
+        float const pad2 = pad * pad;
+        sim->for_each<kFlower>([&](Simulation *, Entity &ent) {
+            if (too_close) return;
+            if (ent.has_component(kMob)) return;
+            float dx = ent.get_x() - x, dy = ent.get_y() - y;
+            if (dx * dx + dy * dy < pad2) too_close = true;
+        });
+        if (too_close) continue;
+        ox = x; oy = y;
+        return 1;
+    }
+    return 0;
+}
+
 // 在指定 Zone 内按落点类别采样合法落点（clearance 含稀有度体型）。
 uint8_t Map::sample_spawn_point(Simulation *sim, uint32_t zone_id, uint8_t mob_id, float &ox, float &oy, uint8_t spawn_rarity) {
     MapZones const &zones = map_zones(sim->map_id);
@@ -1479,6 +1555,39 @@ uint8_t Map::sample_spawn_point(Simulation *sim, uint32_t zone_id, uint8_t mob_i
     if (zw <= 0.f || zh <= 0.f) return 0;
     float aoi_hw = 0.f, aoi_hh = 0.f;
     spawn_aoi_half(aoi_hw, aoi_hh);
+
+    // Nest / boss pull for Chase+Open: pack wildlife around AntHole or Boss seat.
+    float nest_x = 0.f, nest_y = 0.f;
+    uint8_t have_nest = 0;
+    if (cls == SpawnClass::kChase || cls == SpawnClass::kOpen) {
+        float bx = 0.f, by = 0.f;
+        uint8_t bm = 0;
+        if (Map::boss_anchor(sim->map_id, bx, by, bm) && bm
+            && bx >= zone.left && bx <= zone.right
+            && by >= zone.top && by <= zone.bottom) {
+            nest_x = bx; nest_y = by; have_nest = 1;
+        }
+        if (!have_nest) {
+            float best2 = 1e30f;
+            float zcx = 0.5f * (zone.left + zone.right);
+            float zcy = 0.5f * (zone.top + zone.bottom);
+            sim->for_each<kMob>([&](Simulation *, Entity &m) {
+                if (m.pending_delete) return;
+                if (m.get_mob_id() != MobID::kAntHole) return;
+                float mx = m.get_x(), my = m.get_y();
+                if (mx < zone.left || mx > zone.right || my < zone.top || my > zone.bottom)
+                    return;
+                float dx = mx - zcx, dy = my - zcy;
+                float d2 = dx * dx + dy * dy;
+                if (d2 < best2) { best2 = d2; nest_x = mx; nest_y = my; have_nest = 1; }
+            });
+        }
+        if (!have_nest && (zone.anchor_x != 0.f || zone.anchor_y != 0.f)) {
+            nest_x = zone.anchor_x;
+            nest_y = zone.anchor_y;
+            have_nest = 1;
+        }
+    }
 
     for (uint32_t attempt = 0; attempt < 12; ++attempt) {
         float x = 0.f, y = 0.f;
@@ -1550,14 +1659,29 @@ uint8_t Map::sample_spawn_point(Simulation *sim, uint32_t zone_id, uint8_t mob_i
             break;
         }
         default: {
-            x = zone.left + margin + frand() * zw;
-            y = zone.top + margin + frand() * zh;
+            // ~35%: nest/landmark pull so Chase packs feel territorial.
+            if (have_nest && attempt < 7 && frand() < 0.35f) {
+                float spread = 180.f + frand() * 320.f;
+                x = nest_x + (frand() * 2.f - 1.f) * spread;
+                y = nest_y + (frand() * 2.f - 1.f) * spread;
+                if (x < zone.left + margin || x > zone.right - margin
+                    || y < zone.top + margin || y > zone.bottom - margin) {
+                    x = zone.left + margin + frand() * zw;
+                    y = zone.top + margin + frand() * zh;
+                }
+            } else {
+                x = zone.left + margin + frand() * zw;
+                y = zone.top + margin + frand() * zh;
+            }
             break;
         }
         }
         if (!ok) continue;
         if (x < zone.left + margin || x > zone.right - margin) continue;
         if (y < zone.top + margin || y > zone.bottom - margin) continue;
+        // Nested rings share AABB with the hub: later overlays own the center.
+        // Without this, Unique (full-map AABB) planted Unique bees on the pad.
+        if (Map::get_zone_from_pos(sim->map_id, x, y) != zone_id) continue;
         // Default/anchor picks: reject far-from-player before clearance probes.
         if (!point_near_flower_aoi(sim, x, y, aoi_hw, aoi_hh)) continue;
         if (circle_hits_impassable(sim->map_id, x, y, clearance)) continue;
@@ -1665,6 +1789,7 @@ uint8_t Map::_spawn_zone_mob_once(Simulation *sim) {
         return 0;
 
     uint8_t base_r = MOB_DATA[mob_id].rarity;
+    // Provisional rarity for body clearance; final tilt uses landing distance.
     uint8_t spawn_r = resolve_zone_spawn_rarity(base_r, zone.difficulty);
 
     float x = 0.f, y = 0.f;
@@ -1693,9 +1818,30 @@ uint8_t Map::_spawn_zone_mob_once(Simulation *sim) {
         });
         if (near) return 0;
     }
-    // Never auto-spawn inside the respawn ellipse (kite/admin piles belong elsewhere).
-    if (in_spawn_plaza(x, y)) return 0;
+    // Never auto-spawn inside the respawn ellipse or portal clear rings.
+    if (in_spawn_plaza(sim->map_id, x, y) || near_map_portal(sim->map_id, x, y)) return 0;
+    spawn_r = resolve_zone_spawn_rarity(base_r, zone.difficulty, x, y, 1);
     _spawn_mob_at(sim, zone_id, mob_id, x, y, spawn_r);
+
+    // Soft clusters: Chase/Open wildlife sometimes arrive as 2–4 packs.
+    if ((cls == SpawnClass::kChase || cls == SpawnClass::kOpen)
+        && mob_id != MobID::kAntHole
+        && mob_id != MobID::kSquare
+        && frand() < 0.30f) {
+        uint32_t extras = 1u + (uint32_t)(frand() * 3.f); // 1–3 siblings
+        float pack_r = MOB_DATA[mob_id].radius.get_single(0.5f) * MOB_RADIUS_MULTIPLIER
+            * mob_spawn_radius_mult(base_r, spawn_r);
+        float pack_clear = pack_r + 8.f;
+        for (uint32_t i = 0; i < extras; ++i) {
+            if (sim->entity_count() + spawn_entity_cost(mob_id) > kEntitySpawnStop) break;
+            if ((float)sim->zone_mob_counts[zone_id] >= hard) break;
+            float sx = 0.f, sy = 0.f;
+            if (!sample_near_in_zone(sim, zone_id, zone, x, y, pack_clear, 140.f, 320.f, sx, sy))
+                break;
+            uint8_t sr = resolve_zone_spawn_rarity(base_r, zone.difficulty, sx, sy, 1);
+            _spawn_mob_at(sim, zone_id, mob_id, sx, sy, sr);
+        }
+    }
     return 1;
 }
 

@@ -633,14 +633,22 @@ static char const *height_pad_name(uint8_t mid, uint8_t p) {
     static char const *kSulf[3] = { "温硫晶", "热硫晶", "灼硫晶" };
     static char const *kCrest[3] = { "旧纹章", "褪色纹章", "新纹章" };
     switch (mid) {
-    case MapID::kDesert: return kCact[p];
-    case MapID::kOcean: return kShell[p];
+    case MapID::kDesert:
+    case MapID::kPrimeDesert: return kCact[p];
+    case MapID::kOcean:
+    case MapID::kPrimeOcean: return kShell[p];
     case MapID::kPolar: return kIce[p];
-    case MapID::kJungle: return kResin[p];
+    case MapID::kJungle:
+    case MapID::kWildwood: return kResin[p];
     case MapID::kAntNest:
     case MapID::kAntHell: return kFung[p];
+    case MapID::kSewers: return kFung[p];
+    case MapID::kPrimeGarden: return kResin[p];
     case MapID::kVolcano: return kSulf[p];
-    case MapID::kRoyalCapital: return kCrest[p];
+    case MapID::kRoyalCapital:
+    case MapID::kFactory: return kCrest[p];
+    case MapID::kPyramid: return kCact[p];
+    case MapID::kHel: return kSulf[p];
     default: return kMush[p];
     }
 }

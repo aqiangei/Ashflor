@@ -120,9 +120,11 @@ uint32_t Simulation::emergency_reclaim_entities(uint32_t budget) {
                 ++freed;
             }
         );
-        // Webs / transient.
+        // Webs / lightning arcs / transient.
         scan(
-            [&](Entity &e) { return e.has_component(kWeb); },
+            [&](Entity &e) {
+                return e.has_component(kWeb) || e.has_component(kAnimation);
+            },
             [&](Entity &e) {
                 if (freed >= budget) return;
                 _delete_ent(e.id);

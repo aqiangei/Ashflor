@@ -37,6 +37,7 @@ uint8_t Input::is_valid() {
 }
 
 void Input::reset() {
+    for (auto const &[id, touch] : Input::ended_touches) Input::touches.erase(id);
     Input::began_touches.clear();
     Input::ended_touches.clear();
     Input::keys_held_this_tick.clear();

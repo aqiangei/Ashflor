@@ -9,9 +9,12 @@
 #include <Shared/StaticData.hh>
 
 #include <cmath>
+#include <algorithm>
 #include <iostream>
 
 namespace {
+double motion_last_snapshot = 0, motion_lateness = 0;
+double motion_delay = 75, motion_delay_frame = -1;
 float estimate_max_hp(Entity const &ent) {
     if (ent.has_component(kMob)) {
         MobID::T mid = ent.get_mob_id();
@@ -36,6 +39,32 @@ float estimate_max_hp(Entity const &ent) {
 }
 } // namespace
 
+void Entity::record_motion_sample(double now) {
+    // Short mob-only playback history absorbs snapshot jitter. Player/camera
+    // stay on their responsive path; no speculative movement through walls.
+    if (!has_component(kMob) || has_component(kFlower) || !has_component(kPhysics)) return;
+    if (now != motion_last_snapshot) {
+        double gap = now-motion_last_snapshot;
+        if (!motion_last_snapshot || gap>500) motion_lateness=0;
+        else motion_lateness=std::max(motion_lateness*.99,std::max(0.0,gap-50.0));
+        motion_last_snapshot=now;
+    }
+    float const nx = x.anchor(), ny = y.anchor();
+    if (motion_sample_count) {
+        auto const &last = motion_samples[motion_sample_count - 1];
+        float dx = nx-last.x, dy = ny-last.y;
+        if (dx*dx + dy*dy > 600.f*600.f || now-last.at > 500.0) {
+            motion_sample_count = 0; // teleport / tab resume: start at authority
+            x.set_render(nx); y.set_render(ny);
+        }
+    }
+    if (motion_sample_count == 10) {
+        for (int i=0; i<9; ++i) motion_samples[i] = motion_samples[i+1];
+        motion_sample_count = 9;
+    }
+    motion_samples[motion_sample_count++] = {nx,ny,now};
+}
+
 void Entity::tick_lerp(float amt) {
     // rrolf-style: snappier local flower + camera (less input lag); keep the
     // global curve for everyone else so remote entities don't jitter.
@@ -51,10 +80,32 @@ void Entity::tick_lerp(float amt) {
         float prev_x = x;
         float prev_y = y;
         if (!pending_delete) {
-            x.step(phys_amt);
-            y.step(phys_amt);
+            if (motion_sample_count >= 2 && has_component(kMob) && !has_component(kFlower)) {
+                // Slew the shared playback delay so changing the jitter buffer
+                // cannot reverse all mobs or jump their positions in one frame.
+                if (motion_delay_frame != Game::timestamp) {
+                    motion_delay_frame=Game::timestamp;
+                    double target=std::clamp(65.0+motion_lateness,75.0,200.0);
+                    double dt=std::clamp((double)Ui::dt,0.0,50.0);
+                    motion_delay+=std::clamp(target-motion_delay,-dt*.03,dt*.15);
+                }
+                double const playback = Game::timestamp - motion_delay;
+                MotionSample a = motion_samples[0], b = a;
+                for (uint8_t i=1; i<motion_sample_count; ++i) {
+                    b = motion_samples[i];
+                    if (b.at >= playback) break;
+                    a = b;
+                }
+                float const t = b.at > a.at
+                    ? fclamp((float)((playback-a.at)/(b.at-a.at)),0.f,1.f) : 1.f;
+                x.set_render(a.x+(b.x-a.x)*t);
+                y.set_render(a.y+(b.y-a.y)*t);
+            } else {
+                x.step(phys_amt);
+                y.step(phys_amt);
+            }
         }
-        if (has_component(kDrop) || has_component(kWeb)) {
+        if (has_component(kDrop) || has_component(kWeb) || has_component(kAnimation)) {
             if (lifetime < TPS)
                 animation = lerp(animation, 1, amt * 0.75);
             else animation = 1;
@@ -64,9 +115,18 @@ void Entity::tick_lerp(float amt) {
         }
         radius.step(amt);
         angle.step_angle(phys_amt);
-        if (pending_delete)
-            // Match server deletion_tick (~TPS/5 ≈ 200ms): finish inflate before hard delete.
-            deletion_animation = fclamp(deletion_animation + Ui::dt / 150.f, 0, 1);
+        if (pending_delete) {
+            if (has_component(kAnimation)) {
+                // Short bolt: snap toward fade so one FOV packet still reads.
+                if (deletion_animation == 0.f)
+                    deletion_animation = 1.f - powf(0.9f, 60.f * (float)lifetime / (float)TPS);
+                else
+                    deletion_animation = lerp(deletion_animation, 1.f, amt * 0.55f);
+            } else {
+                // Match server deletion_tick (~TPS/5 ≈ 200ms): finish inflate before hard delete.
+                deletion_animation = fclamp(deletion_animation + Ui::dt / 150.f, 0, 1);
+            }
+        }
     }
     if (has_component(kCamera)) {
         camera_x.step(cam_amt);

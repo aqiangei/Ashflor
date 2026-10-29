@@ -7,6 +7,7 @@
 #include <Client/Ui/DynamicText.hh>
 #include <Client/Ui/Container.hh>
 #include <Client/Ui/StaticText.hh>
+#include <Client/Ui/Extern.hh>
 
 #include <Client/Assets/Assets.hh>
 #include <Shared/Entity.hh>
@@ -152,5 +153,6 @@ Element *Ui::make_death_main_screen() {
             && !Game::leaving_to_title
             && Game::should_render_game_ui();
     } });
+    Ui::death_screen_root = container;
     return container;
 }

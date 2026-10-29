@@ -108,15 +108,18 @@ void tick_petal_behavior(Simulation *sim, Entity &petal) {
             if (++petal.secondary_reload >= petal_secondary_ticks(player, petal_data.attributes.secondary_reload)) {
                 petal.secondary_reload = 0;
                 float radius = petal_data.attributes.aura_radius;
-                sim->spatial_hash.query(petal.get_x(), petal.get_y(), radius, radius,
+                float const wx = petal.get_x(), wy = petal.get_y();
+                sim->spatial_hash.query(wx, wy, radius, radius,
                     [&](Simulation *s, Entity &target) {
                         if (!target.has_component(kHealth) || !target.has_component(kMob)
                             || target.get_team() == petal.get_team()) return;
-                        Vector delta(target.get_x() - petal.get_x(), target.get_y() - petal.get_y());
+                        Vector delta(target.get_x() - wx, target.get_y() - wy);
                         if (delta.magnitude() > radius) return;
                         target.slow_ticks = std::max(target.slow_ticks, (game_tick_t)(TPS / 2));
+                        EntityID one = target.id;
                         inflict_damage(s, petal.id, target.id, petal_data.attributes.lightning_damage,
                             DamageType::kSplash);
+                        spawn_lightning_bolt_hits(s, wx, wy, &one, 1);
                     });
             }
             return;
@@ -129,6 +132,20 @@ void tick_petal_behavior(Simulation *sim, Entity &petal) {
             petal.set_angle(petal.heading_angle);
         } else if (petal_name_is(pid, "Missile") || petal_name_is(pid, "Magic Missile")
             || petal_name_is(pid, "Sand Leaf Dart")) {
+            // Mecha Wasp missiles home on the wasp's current target.
+            if (player.has_component(kMob) && player.get_mob_id() == MobID::kMechaWasp
+                && sim->ent_alive(player.target)) {
+                Entity &tgt = sim->get_ent(player.target);
+                float want = std::atan2(tgt.get_y() - petal.get_y(), tgt.get_x() - petal.get_x());
+                float cur = petal.get_angle();
+                float d = want - cur;
+                while (d > (float)M_PI) d -= (float)(2.0 * M_PI);
+                while (d < -(float)M_PI) d += (float)(2.0 * M_PI);
+                float max_turn = 2.8f / TPS;
+                if (d > max_turn) d = max_turn;
+                if (d < -max_turn) d = -max_turn;
+                petal.set_angle(cur + d);
+            }
             petal.acceleration.unit_normal(petal.get_angle()).set_magnitude(2.0 * PLAYER_ACCELERATION);
         } else if (petal_is_honey(pid)) {
             // Straight bait toss — slower than Missile so mobs can catch it.
@@ -323,8 +340,10 @@ void tick_petal_behavior(Simulation *sim, Entity &petal) {
         float const px = player.get_x(), py = player.get_y();
         EntityID team = player.get_team();
         EntityID src = petal.id;
+        EntityID hit[16];
+        uint8_t nhit = 0;
         sim->spatial_hash.query(px, py, R, R, [&](Simulation *s, Entity &ent) {
-            if (chains == 0) return;
+            if (chains == 0 || nhit >= 16) return;
             if (!ent.has_component(kHealth)) return;
             if (ent.get_team() == team) return;
             if (ent.has_component(kPetal) || ent.has_component(kDrop)) return;
@@ -332,10 +351,14 @@ void tick_petal_behavior(Simulation *sim, Entity &petal) {
             if (dx * dx + dy * dy > R * R) return;
             if (!fired) { player.mana -= spend; fired = true; }
             --chains;
+            hit[nhit++] = ent.id;
             inflict_damage(s, src, ent.id, flash, DamageType::kSplash);
             flash *= 0.7f;
         });
-        if (fired) petal.secondary_reload = 0;
+        if (fired) {
+            spawn_lightning_bolt_hits(sim, px, py, hit, nhit);
+            petal.secondary_reload = 0;
+        }
         return;
     }
     PetalID::T pid = petal.get_petal_id();

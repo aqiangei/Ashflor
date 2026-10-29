@@ -1,4 +1,5 @@
 #include <Client/Render/Renderer.hh>
+#include <Client/Render/CanvasBatch.hh>
 
 #include <Helpers/Macros.hh>
 #include <Helpers/Math.hh>
@@ -8,6 +9,7 @@
 #include <cstring>
 #include <iostream>
 #include <algorithm>
+#include <unordered_map>
 #include <emscripten.h>
 
 std::vector<Renderer *> Renderer::renderers;
@@ -19,12 +21,11 @@ static void mark_transform_dirty(Renderer *r) {
 static void flush_transform(Renderer *r) {
     if (!r->transform_dirty) return;
     r->transform_dirty = false;
-    EM_ASM({
-        Module.ctxs[$0].setTransform($1, $2, $4, $5, $3, $6);
-    }, r->id, r->context.transform_matrix[0], r->context.transform_matrix[1],
-       r->context.transform_matrix[2], r->context.transform_matrix[3],
-       r->context.transform_matrix[4], r->context.transform_matrix[5]);
+    auto const *m = r->context.transform_matrix;
+    CanvasBatch::emit(CanvasBatch::Transform, r->id, {m[0],m[1],m[3],m[4],m[2],m[5]});
 }
+
+void Renderer::flush() { CanvasBatch::flush(); }
 
 // The renderer owns one baseline context as a member. It is state storage,
 // not a saved canvas state, so its destructor must not call restore().
@@ -36,9 +37,7 @@ RenderContext::RenderContext(Renderer *r) {
     flush_transform(r);
     *this = r->context;
     renderer = r;
-    EM_ASM({
-        Module.ctxs[$0].save();
-    }, r->id);
+    CanvasBatch::emit(CanvasBatch::Save, r->id);
 }
 
 void RenderContext::reset() {
@@ -54,14 +53,13 @@ void RenderContext::reset() {
 RenderContext::~RenderContext() {
     if (renderer == nullptr) return;
     renderer->context = *this;
-    EM_ASM({
-        Module.ctxs[$0].restore();
-    }, renderer->id);
+    CanvasBatch::emit(CanvasBatch::Restore, renderer->id);
     // Canvas and C++ matrix both restored to the saved pair.
     renderer->transform_dirty = false;
 }
 
 Renderer::Renderer() : context() {
+    CanvasBatch::flush();
     id = EM_ASM_INT({
         let idx;
         if (Module.availableCtxs.length > 0)
@@ -79,8 +77,11 @@ Renderer::Renderer() : context() {
             // Opaque: cleared frames composite as solid (still fill void after resize).
             Module.ctxs[idx] = document.getElementById('canvas').getContext('2d', { alpha: false });
         } else {
+            // Must request alpha — bare getContext('2d') can yield an opaque
+            // buffer; Mob/Petal raster caches then blit as solid squares
+            // (training dummy looked like a boxed target tile).
             const canvas = new OffscreenCanvas(1,1);
-            Module.ctxs[idx] = canvas.getContext('2d');
+            Module.ctxs[idx] = canvas.getContext('2d', { alpha: true });
         }
 #endif
         return idx;
@@ -97,6 +98,7 @@ Renderer::~Renderer() {
     context.renderer = nullptr;
     auto it = std::find(renderers.begin(), renderers.end(), this);
     if (it != renderers.end()) renderers.erase(it);
+    CanvasBatch::flush();
     EM_ASM({
         if ($0 == 0)
             throw new Error('Tried to delete the main context');
@@ -130,15 +132,14 @@ void Renderer::reset() {
 
 void Renderer::clear() {
     flush_transform(this);
-    EM_ASM({
-        Module.ctxs[$0].clearRect(0, 0, $1, $2);
-    }, id, width, height);
+    CanvasBatch::emit(CanvasBatch::Clear, id, {width,height});
 }
 
 void Renderer::set_dimensions(float w, float h) {
     if (width == w && height == h) return;
     width = w;
     height = h;
+    CanvasBatch::flush();
     EM_ASM({
         Module.ctxs[$0].canvas.width = $1;
         Module.ctxs[$0].canvas.height = $2;
@@ -152,59 +153,40 @@ void Renderer::add_color_filter(uint32_t c, float v) {
 
 void Renderer::set_fill(uint32_t v) {
     v = MIX(v, context.color_filter, context.amount);
-    EM_ASM({
-    Module.ctxs[$0].fillStyle = "rgba("+$3+","+$2+","+$1+","+$4/255+")";
-    }, id, v & 255, (v >> 8) & 255, (v >> 16) & 255, v >> 24);
+    CanvasBatch::emit(CanvasBatch::FillStyle, id, {(double)v});
 }
 
 void Renderer::set_stroke(uint32_t v) {
     v = MIX(v, context.color_filter, context.amount);
-    EM_ASM({
-    Module.ctxs[$0].strokeStyle = "rgba("+$3+","+$2+","+$1+","+$4/255+")";
-    }, id, v & 255, (v >> 8) & 255, (v >> 16) & 255, v >> 24);
+    CanvasBatch::emit(CanvasBatch::StrokeStyle, id, {(double)v});
 }
 
 void Renderer::set_line_width(float v) {
-    EM_ASM({
-    Module.ctxs[$0].lineWidth = $1;
-    }, id, v);
+    CanvasBatch::emit(CanvasBatch::LineWidth, id, {v});
 }
 
 void Renderer::set_text_size(float v) {
-    // Heavy weight first — avoids thin/petty UI type
-    EM_ASM({
-    Module.ctxs[$0].font = "800 " + $1 + "px \"Noto Sans SC\", \"Microsoft YaHei\", \"Segoe UI\", sans-serif";
-    }, id, v);
+    CanvasBatch::emit(CanvasBatch::Font, id, {v});
 }
 
 void Renderer::set_global_alpha(float v) {
-    EM_ASM({
-    Module.ctxs[$0].globalAlpha = $1;
-    }, id, v);
+    CanvasBatch::emit(CanvasBatch::Alpha, id, {v});
 }
 
 void Renderer::round_line_cap() {
-    EM_ASM({
-    Module.ctxs[$0].lineCap = "round";
-    }, id);
+    CanvasBatch::emit(CanvasBatch::Cap, id);
 }
 
 void Renderer::round_line_join() {
-    EM_ASM({
-    Module.ctxs[$0].lineJoin = "round";
-    }, id);
+    CanvasBatch::emit(CanvasBatch::Join, id);
 }
 
 void Renderer::center_text_align() {
-    EM_ASM({
-    Module.ctxs[$0].textAlign = "center";
-    }, id);
+    CanvasBatch::emit(CanvasBatch::Align, id);
 }
 
 void Renderer::center_text_baseline() {
-    EM_ASM({
-    Module.ctxs[$0].textBaseline = "middle";
-    }, id);
+    CanvasBatch::emit(CanvasBatch::Baseline, id);
 }
 
 void Renderer::set_transform(float a, float b, float c, float d, float e, float f) {
@@ -259,45 +241,33 @@ void Renderer::reset_transform() {
 
 void Renderer::begin_path() {
     flush_transform(this);
-    EM_ASM({
-        Module.ctxs[$0].beginPath();
-    }, id);
+    CanvasBatch::emit(CanvasBatch::Begin, id);
 }
 
 void Renderer::move_to(float x, float y) {
     flush_transform(this);
-    EM_ASM({
-        Module.ctxs[$0].moveTo($1, $2);
-    }, id, x, y);
+    CanvasBatch::emit(CanvasBatch::Move, id, {x,y});
 }
 
 void Renderer::line_to(float x, float y) {
     flush_transform(this);
-    EM_ASM({
-        Module.ctxs[$0].lineTo($1, $2);
-    }, id, x, y);
+    CanvasBatch::emit(CanvasBatch::Line, id, {x,y});
 }
 
 void Renderer::qcurve_to(float x, float y, float x1, float y1) {
     flush_transform(this);
-    EM_ASM({
-        Module.ctxs[$0].quadraticCurveTo($1, $2, $3, $4);
-    }, id, x, y, x1, y1);
+    CanvasBatch::emit(CanvasBatch::Quadratic, id, {x,y,x1,y1});
 }
 
 void Renderer::bcurve_to(float x, float y, float x1, float y1, float x2, float y2) {
     flush_transform(this);
-    EM_ASM({
-        Module.ctxs[$0].bezierCurveTo($1, $2, $3, $4, $5, $6);
-    }, id, x, y, x1, y1, x2, y2);
+    CanvasBatch::emit(CanvasBatch::Bezier, id, {x,y,x1,y1,x2,y2});
 }
 
 
 void Renderer::partial_arc(float x, float y, float r, float sa, float ea, uint8_t ccw) {
     flush_transform(this);
-    EM_ASM({
-        Module.ctxs[$0].arc($1, $2, $3, $4, $5, !!$6);
-    }, id, x, y, r, sa, ea, ccw);
+    CanvasBatch::emit(CanvasBatch::Arc, id, {x,y,r,sa,ea,(double)ccw});
 }
 
 void Renderer::arc(float x, float y, float r) {
@@ -310,9 +280,7 @@ void Renderer::reverse_arc(float x, float y, float r) {
 
 void Renderer::ellipse(float x, float y, float r1, float r2, float a) {
     flush_transform(this);
-    EM_ASM({
-        Module.ctxs[$0].ellipse($1, $2, $3, $4, $5, 2 * Math.PI, 0);
-    }, id, x, y, r1, r2, a);
+    CanvasBatch::emit(CanvasBatch::Ellipse, id, {x,y,r1,r2,a});
 }
 
 void Renderer::ellipse(float x, float y, float r1, float r2) {
@@ -321,23 +289,17 @@ void Renderer::ellipse(float x, float y, float r1, float r2) {
 
 void Renderer::fill_rect(float x, float y, float w, float h) {
     flush_transform(this);
-    EM_ASM({
-        Module.ctxs[$0].fillRect($1, $2, $3, $4);
-    }, id, x, y, w, h);
+    CanvasBatch::emit(CanvasBatch::FillRect, id, {x,y,w,h});
 }
 
 void Renderer::stroke_rect(float x, float y, float w, float h) {
     flush_transform(this);
-    EM_ASM({
-        Module.ctxs[$0].strokeRect($1, $2, $3, $4);
-    }, id, x, y, w, h);
+    CanvasBatch::emit(CanvasBatch::StrokeRect, id, {x,y,w,h});
 }
 
 void Renderer::rect(float x, float y, float w, float h) {
     flush_transform(this);
-    EM_ASM({
-        Module.ctxs[$0].rect($1, $2, $3, $4);
-    }, id, x, y, w, h);
+    CanvasBatch::emit(CanvasBatch::Rect, id, {x,y,w,h});
 }
 
 void Renderer::round_rect(float x, float y, float w, float h, float r) {
@@ -353,27 +315,19 @@ void Renderer::round_rect(float x, float y, float w, float h, float r) {
 }
 
 void Renderer::close_path() {
-    EM_ASM({
-        Module.ctxs[$0].closePath();
-    }, id);
+    CanvasBatch::emit(CanvasBatch::Close, id);
 }
 
 void Renderer::fill(uint8_t o) {
-    EM_ASM({
-        Module.ctxs[$0].fill($1 ? "nonzero" : "evenodd");
-    }, id, o);
+    CanvasBatch::emit(CanvasBatch::Fill, id, {(double)o});
 }
 
 void Renderer::stroke() {
-    EM_ASM({
-        Module.ctxs[$0].stroke();
-    }, id);
+    CanvasBatch::emit(CanvasBatch::Stroke, id);
 }
 
 void Renderer::clip() {
-    EM_ASM({
-        Module.ctxs[$0].clip();
-    }, id);
+    CanvasBatch::emit(CanvasBatch::Clip, id);
 }
 
 void Renderer::clip_rect(float x, float y, float w, float h) {
@@ -390,64 +344,65 @@ void Renderer::clip_rect(float x, float y, float w, float h) {
 
 void Renderer::draw_image(Renderer &ctx) {
     flush_transform(this);
-    EM_ASM({
-        Module.ctxs[$0].drawImage(Module.ctxs[$1].canvas, $2, $3);
-    }, id, ctx.id, -ctx.width / 2, -ctx.height / 2);
+    CanvasBatch::emit(CanvasBatch::ImageCanvas,id,{(double)ctx.id,-ctx.width/2,-ctx.height/2});
 }
 
 void Renderer::draw_image_data(char const *data, float width, float height) {
+    (void)try_draw_image_data(data, width, height);
+}
+
+uint8_t Renderer::try_draw_image_data(char const *data, float width, float height) {
+    static std::unordered_map<std::string,int> handles;
+    auto it=handles.find(data);
+    int handle;
+    if(it==handles.end()) {
+        handle=EM_ASM_INT({
+            const key=UTF8ToString($0);
+            if(!Module.embeddedImages)Module.embeddedImages=new Map();
+            let img=Module.embeddedImages.get(key);
+            if(!img){img=new Image();img.src=key;Module.embeddedImages.set(key,img);}
+            if(!img.complete||!img.naturalWidth)return -1;
+            if(!Module['imageHandles'])Module['imageHandles']=[];
+            Module['imageHandles'].push(img);
+            return Module['imageHandles'].length-1;
+        },data);
+        if(handle<0)return 0;
+        handles.emplace(data,handle);
+    } else handle=it->second;
     flush_transform(this);
-    EM_ASM({
-        const key = UTF8ToString($1);
-        if (!Module.embeddedImages) Module.embeddedImages = new Map();
-        let img = Module.embeddedImages.get(key);
-        if (!img) {
-            img = new Image();
-            img.src = key;
-            Module.embeddedImages.set(key, img);
-        }
-        if (!img.complete || !img.naturalWidth) return;
-        const scale = Math.min($2 / img.naturalWidth, $3 / img.naturalHeight);
-        const w = img.naturalWidth * scale;
-        const h = img.naturalHeight * scale;
-        Module.ctxs[$0].drawImage(img, -w / 2, -h / 2, w, h);
-    }, id, data, width, height);
+    CanvasBatch::emit(CanvasBatch::ImageBitmap,id,{(double)handle,width,height});
+    return 1;
 }
 
 void Renderer::draw_image_at(Renderer &ctx, float x, float y) {
     flush_transform(this);
-    EM_ASM({
-        Module.ctxs[$0].drawImage(Module.ctxs[$1].canvas, $2, $3);
-    }, id, ctx.id, x, y);
+    CanvasBatch::emit(CanvasBatch::ImageCanvas,id,{(double)ctx.id,x,y});
 }
 
 void Renderer::fill_text(char const *text) {
     flush_transform(this);
-    EM_ASM({
-        Module.ctxs[$0].fillText(Module.TextDecoder.decode(HEAPU8.subarray($1, $1+$2)),0,0);
-    }, id, text, std::strlen(text));
+    auto const &owned=CanvasBatch::texts().emplace_back(text);
+    CanvasBatch::emit(CanvasBatch::FillText,id,{(double)(uintptr_t)owned.data(),(double)owned.size()});
 }
 
 void Renderer::stroke_text(char const *text) {
     flush_transform(this);
-    EM_ASM({
-        Module.ctxs[$0].strokeText(Module.TextDecoder.decode(HEAPU8.subarray($1, $1+$2)),0,0);
-    }, id, text, std::strlen(text));
+    auto const &owned=CanvasBatch::texts().emplace_back(text);
+    CanvasBatch::emit(CanvasBatch::StrokeText,id,{(double)(uintptr_t)owned.data(),(double)owned.size()});
 }
 
 void Renderer::draw_text(char const *text, struct TextArgs const args) {
-    set_fill(args.fill);
-    set_stroke(args.stroke);
-    set_text_size(args.size);
-    if (args.stroke_scale > 0) {
-        set_line_width(args.size * args.stroke_scale);
-        stroke_text(text);
-    }
-    fill_text(text);
+    flush_transform(this);
+    auto const &owned=CanvasBatch::texts().emplace_back(text);
+    uint32_t const fill=MIX(args.fill,context.color_filter,context.amount);
+    uint32_t const stroke=MIX(args.stroke,context.color_filter,context.amount);
+    CanvasBatch::emit(CanvasBatch::Text,id,{(double)(uintptr_t)owned.data(),(double)owned.size(),
+        (double)fill,(double)stroke,args.size,args.stroke_scale>0?args.size*args.stroke_scale:0.0});
 }
 
 float Renderer::get_text_size(char const *text) {
     flush_transform(this);
+    CanvasBatch::flush();
     return EM_ASM_DOUBLE({
         return Module.ctxs[$0].measureText(Module.TextDecoder.decode(HEAPU8.subarray($1, $1+$2)),0,0).width;
     }, id, text, std::strlen(text));
