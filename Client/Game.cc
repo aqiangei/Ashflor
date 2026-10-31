@@ -563,6 +563,9 @@ void Game::toggle_game_panel(uint8_t panel) {
         || leave_confirm_open) return;
     if (chat_open) close_chat();
     if (pause_menu_open) pause_menu_open = 0;
+    // Bottom-left drawers retract top-left galleries/settings (and vice versa).
+    if (Ui::panel_open != Ui::Panel::kNone)
+        Ui::panel_open = Ui::Panel::kNone;
     if (game_panel == panel) {
         game_panel = kPanelNone;
         return;
@@ -1116,8 +1119,8 @@ void Game::tick(double time) {
     double tick_start = Debug::get_timestamp();
     Game::timestamp = time;
     Ui::dt = time - g_last_time;
-    // Global entity lerp (~0.42 @60fps). Local flower/camera use a snappier
-    // curve in Entity::tick_lerp (rrolf-inspired dual-rate).
+    // UI/health ease. World positions use the shared motion curve in
+    // Simulation::on_tick, while mobs keep their snapshot playback buffer.
     Ui::lerp_amount = 1 - pow(1 - 0.42, Ui::dt * 60 / 1000);
     g_last_time = time;
     // JS key handlers read this while an HTML <input> is focused (chat, etc.).

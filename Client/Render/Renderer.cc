@@ -25,7 +25,30 @@ static void flush_transform(Renderer *r) {
     CanvasBatch::emit(CanvasBatch::Transform, r->id, {m[0],m[1],m[3],m[4],m[2],m[5]});
 }
 
-void Renderer::flush() { CanvasBatch::flush(); }
+namespace {
+struct TextMetric { float width; uint64_t used; };
+// Include the exact font size in the key; share metrics across all canvases.
+// In particular, transforms and DPR do not affect Canvas measureText widths.
+std::unordered_map<std::string, TextMetric> text_metrics;
+uint64_t metric_clock = 0;
+}
+
+void Renderer::flush() {
+    CanvasBatch::flush();
+    // Web fonts can arrive after first paint. Invalidate at frame boundaries
+    // rather than forcing a JS call and a batch drain for every cache hit.
+    static int font_epoch = -1;
+    int epoch = EM_ASM_INT({
+        if (!Module['watchTextFonts'] && typeof document !== 'undefined' && document.fonts) {
+            Module['watchTextFonts'] = true;
+            document.fonts.addEventListener('loadingdone', function() {
+                Module['textFontEpoch'] = (Module['textFontEpoch'] || 0) + 1;
+            });
+        }
+        return Module['textFontEpoch'] || 0;
+    });
+    if (epoch != font_epoch) { text_metrics.clear(); font_epoch = epoch; }
+}
 
 // The renderer owns one baseline context as a member. It is state storage,
 // not a saved canvas state, so its destructor must not call restore().
@@ -144,6 +167,7 @@ void Renderer::set_dimensions(float w, float h) {
         Module.ctxs[$0].canvas.width = $1;
         Module.ctxs[$0].canvas.height = $2;
     }, id, w, h);
+    context.text_size = 0; // resizing resets the browser's font
 }
 
 void Renderer::add_color_filter(uint32_t c, float v) {
@@ -166,6 +190,7 @@ void Renderer::set_line_width(float v) {
 }
 
 void Renderer::set_text_size(float v) {
+    context.text_size = v;
     CanvasBatch::emit(CanvasBatch::Font, id, {v});
 }
 
@@ -392,6 +417,7 @@ void Renderer::stroke_text(char const *text) {
 }
 
 void Renderer::draw_text(char const *text, struct TextArgs const args) {
+    context.text_size = args.size;
     flush_transform(this);
     auto const &owned=CanvasBatch::texts().emplace_back(text);
     uint32_t const fill=MIX(args.fill,context.color_filter,context.amount);
@@ -401,11 +427,25 @@ void Renderer::draw_text(char const *text, struct TextArgs const args) {
 }
 
 float Renderer::get_text_size(char const *text) {
+    std::string key(reinterpret_cast<char const *>(&context.text_size), sizeof(context.text_size));
+    key += text;
+    auto found = text_metrics.find(key);
+    if (found != text_metrics.end()) {
+        found->second.used = ++metric_clock;
+        return found->second.width;
+    }
     flush_transform(this);
     CanvasBatch::flush();
-    return EM_ASM_DOUBLE({
+    float width = EM_ASM_DOUBLE({
         return Module.ctxs[$0].measureText(Module.TextDecoder.decode(HEAPU8.subarray($1, $1+$2)),0,0).width;
     }, id, text, std::strlen(text));
+    if (text_metrics.size() >= 2048) {
+        auto oldest = std::min_element(text_metrics.begin(), text_metrics.end(),
+            [](auto const &a, auto const &b) { return a.second.used < b.second.used; });
+        text_metrics.erase(oldest);
+    }
+    text_metrics.emplace(std::move(key), TextMetric{width, ++metric_clock});
+    return width;
 }
 
 //precalculated ascii for standard Ubuntu font, only serves as an approximation (will fail for certain scripts)

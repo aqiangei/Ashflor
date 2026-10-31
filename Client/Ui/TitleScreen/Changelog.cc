@@ -43,6 +43,22 @@ static Element *make_entries(std::initializer_list<std::pair<char const *, char 
 
 static Element *make_changelog_contents() {
     Element *elt = new Ui::VContainer({
+        make_date("2026年11月1日", "November 1st 2026"),
+        make_entries({
+            {"二级地图按原比例等比放大铺满 36000²（不拉伸/不镜像）；窄走廊蚀宽一格，减少卡墙与丢路；传送门 hub 对齐",
+             "L2 florr maps fit-scaled into 36000² (aspect kept); 1-tile corridors eroded wider; hubs/portals retargeted"},
+            {"花园地面贴图：接入 florr 草地 SVG；chunk 未烘焙时不再半屏变扁平色",
+             "Garden ground: stamp florr grass SVGs; no more half-screen flat fill while chunks bake"},
+            {"穿墙：CCD 采样上限提高；地形容量加大，避免拆墙丢件",
+             "Wall tunneling: higher CCD sample cap; larger terrain budget so walls are not dropped"},
+            {"首页右上角增加 Live 控制台入口（与留言板同排）；进入标题屏闪烁提示：可发花瓣 / 刷怪",
+             "Title top-right Live console next to Feedback; blink tip on enter: give petals / spawn mobs"},
+            {"暂停菜单与设置页也可打开控制台",
+             "Pause menu and Settings can open the Live console too"},
+            {"左下角「重置测试」已移除（假人仍自动重置）；左右功能弹窗互斥缩回；瓢虫不再方块化",
+             "Removed Reset Test button; left/right panels mutually collapse; ladybug no longer boxed"},
+        }),
+        make_divider(),
         make_date("2026年10月29日", "October 29th 2026"),
         make_entries({
             {"二级地图按 florr 原图 1:1 接入：原出生点、原刷怪带，去掉中心广场挖空与稀有度同心环",

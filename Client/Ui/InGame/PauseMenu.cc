@@ -147,6 +147,12 @@ Element *Ui::make_pause_menu() {
             }),
             [](Element *, uint8_t e){ if (e == Ui::kClick) DOM::open_feedback_board(); }, nullptr,
             { .fill = Chrome::kBtnMoss, .line_width = 0, .round_radius = Chrome::kRadius }),
+        new Ui::Button(btn_w, btn_h,
+            new Ui::DynamicText(section, [](){
+                return I18n::use_chinese ? std::string{"Live 控制台"} : std::string{"Live console"};
+            }),
+            [](Element *, uint8_t e){ if (e == Ui::kClick) DOM::open_live_console(); }, nullptr,
+            { .fill = Chrome::kBtnBronze, .line_width = 0, .round_radius = Chrome::kRadius }),
         new Ui::DynamicText(hint, [](){ return I18n::tr(I18n::kEscHint); }, {
             .fill = Chrome::kBody,
             .h_justify = Style::Left

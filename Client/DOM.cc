@@ -221,6 +221,21 @@ void DOM::open_feedback_board() {
     }, Game::account_logged_in ? Game::username.c_str() : "");
 }
 
+void DOM::open_live_console() {
+    EM_ASM({
+        try {
+            if (window.name === "ashflor-live") window.name = "";
+            var url = "/live";
+            if (Module.liveWindow && !Module.liveWindow.closed) {
+                try { Module.liveWindow.location.replace(url); } catch (e) {}
+            } else {
+                Module.liveWindow = window.open(url, "ashflor-live");
+            }
+            if (Module.liveWindow) Module.liveWindow.focus();
+        } catch (e) {}
+    });
+}
+
 extern "C" EMSCRIPTEN_KEEPALIVE void ashflor_feedback_post(char *text) {
     Game::post_feedback(text ? text : "");
     std::free(text);

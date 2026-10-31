@@ -5,6 +5,7 @@
 #include <Helpers/Math.hh>
 
 #include <cstring>
+#include <algorithm>
 
 // florr_clone enemyGrid: NaN/huge radius → whole-grid loops / 100% CPU hang.
 static float const kMaxMobRadius = 4096.f;
@@ -72,6 +73,7 @@ void SpatialHash::_push_cell(uint32_t cx, uint32_t cy, EntityID id) {
     if (cell.count == 0)
         active.push_back((cx << 16) | cy);
     if (cell.count >= CELL_ENTITY_CAP) {
+        cells_overflowed = true;
         DEBUG_ONLY(assert(!"SpatialHash cell overflow");)
         return;
     }
@@ -91,6 +93,7 @@ void SpatialHash::refresh(uint32_t _width, uint32_t _height) {
     }
     active.clear();
     big.clear();
+    cells_overflowed = false;
     if (++big_gen == 0) {
         std::memset(big_stamp, 0, sizeof(big_stamp));
         big_gen = 1;
@@ -137,6 +140,19 @@ static void _pair_cell(Simulation *sim, SpatialHashCollideFn on_collide,
 }
 
 void SpatialHash::collide(SpatialHashCollideFn on_collide) {
+    // Large bodies already occupy every cell of their AABB. Reuse those
+    // cells for big/big candidates instead of testing every big in the map
+    // against every other big (quadratic even when they are far apart).
+    std::array<uint32_t, ENTITY_CAP> big_order{};
+    std::array<uint32_t, ENTITY_CAP> seen{};
+    std::vector<uint32_t> oversized;
+    std::vector<uint32_t> candidates;
+    for (uint32_t k = 0; k < big.size(); ++k) {
+        big_order[big[k].id] = k;
+        if (simulation->ent_exists(big[k])
+            && simulation->get_ent(big[k]).get_radius() > kMaxMobRadius)
+            oversized.push_back(k);
+    }
     // Small × small — only cells that received inserts this tick.
     for (uint32_t ai = 0; ai < active.size(); ++ai) {
         uint32_t const key = active[ai];
@@ -176,7 +192,37 @@ void SpatialHash::collide(SpatialHashCollideFn on_collide) {
         for (uint32_t x = sx; x <= ex; ++x)
             for (uint32_t y = sy; y <= ey; ++y)
                 _pair_cell(simulation, on_collide, big_id, cells[x][y]);
-        for (uint32_t j = k + 1; j < big.size(); ++j)
+        candidates.clear();
+        _fat_range(b.get_x(), b.get_y(), b.get_radius(), sx, sy, ex, ey);
+        size_t scan_work = 0;
+        for (uint32_t x = sx; x <= ex; ++x)
+            for (uint32_t y = sy; y <= ey; ++y) scan_work += cells[x][y].count;
+        if (cells_overflowed || b.get_radius() > kMaxMobRadius
+            || scan_work >= (big.size() - k) / 2) {
+            // In a dense pile, scanning duplicate fat-cell entries and sorting
+            // costs more than the original contiguous loop. Also retain this
+            // path for clamped radii or dropped cell entries.
+            for (uint32_t j = k + 1; j < big.size(); ++j)
+                _pair(simulation, on_collide, big_id, big[j]);
+            continue;
+        }
+        auto add_candidate = [&](uint32_t j) {
+            if (j <= k || seen[j] == k + 1) return;
+            seen[j] = k + 1;
+            candidates.push_back(j);
+        };
+        for (uint32_t x = sx; x <= ex; ++x)
+            for (uint32_t y = sy; y <= ey; ++y) {
+                auto const &cell = cells[x][y];
+                for (uint32_t i = 0; i < cell.count; ++i)
+                    if (_is_big(cell.entities[i]))
+                        add_candidate(big_order[cell.entities[i].id]);
+            }
+        for (uint32_t j : oversized) add_candidate(j);
+        // Keep the old callback order: collision effects and random draws
+        // must not depend on which grid cell first exposed a candidate.
+        std::sort(candidates.begin(), candidates.end());
+        for (uint32_t j : candidates)
             _pair(simulation, on_collide, big_id, big[j]);
     }
 }

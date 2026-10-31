@@ -177,13 +177,20 @@ void flowing_bands(Renderer &r, uint8_t mid,
     uint32_t color = 0;
     float opacity = .25f;
     switch (mid) {
-    case MapID::kGarden: color = 0xff8FC777; break;
-    case MapID::kDesert: color = 0xffE6BE79; opacity = .34f; break;
+    case MapID::kGarden:
+    case MapID::kPrimeGarden: color = 0xff8FC777; break;
+    case MapID::kDesert:
+    case MapID::kPrimeDesert:
+    case MapID::kPyramid: color = 0xffE6BE79; opacity = .34f; break;
     case MapID::kPolar: color = 0xffD4E5ED; opacity = .52f; break;
-    case MapID::kJungle: color = 0xff659A5D; opacity = .31f; break;
+    case MapID::kJungle:
+    case MapID::kWildwood: color = 0xff659A5D; opacity = .31f; break;
     case MapID::kAntNest:
-    case MapID::kAntHell: color = 0xffA77E58; opacity = .24f; break;
-    case MapID::kVolcano: color = 0xff373645; opacity = .28f; break;
+    case MapID::kAntHell:
+    case MapID::kSewers: color = 0xffA77E58; opacity = .24f; break;
+    case MapID::kVolcano:
+    case MapID::kFactory:
+    case MapID::kHel: color = 0xff373645; opacity = .28f; break;
     default: return;
     }
     float x0 = left - 140.f, x1 = right + 140.f;
@@ -225,7 +232,7 @@ void organic(Renderer &r, uint8_t mid, float left, float top, float right, float
         float x = (gx + .5f) * step + signed_unit(gx, gy, 201) * 67.f;
         float y = (gy + .5f) * step + signed_unit(gx, gy, 202) * 67.f;
         float v = unit(gx, gy, 203);
-        if (mid == MapID::kGarden) {
+        if (mid == MapID::kGarden || mid == MapID::kPrimeGarden) {
             for (int i=0; i<3; ++i) {
                 float px=x-60.f+i*47.f, py=y+35.f+signed_unit(gx+i,gy,204)*20.f;
                 r.set_stroke(0xff69AD64); r.set_line_width(2.6f);
@@ -252,7 +259,7 @@ void organic(Renderer &r, uint8_t mid, float left, float top, float right, float
                 // Fallen leaf litter (deterministic, no collision)
                 leaf(r, x + 40.f, y - 28.f, 14.f, 5.5f, 0xff8FC777, 0xffB2CE85);
             }
-        } else if (mid == MapID::kDesert) {
+        } else if (mid == MapID::kDesert || mid == MapID::kPrimeDesert || mid == MapID::kPyramid) {
             sweep(r,x,y,155.f,18.f,0xffF9E7BA,5.f);
             sweep(r,x+12.f,y+22.f,116.f,13.f,0xffD5AD72,2.5f);
             if(v>.55f) sweep(r,x-30.f,y+42.f,65.f,6.f,0xffD5AD72,2.f);
@@ -260,11 +267,11 @@ void organic(Renderer &r, uint8_t mid, float left, float top, float right, float
             // Soft blue frost only — pure white streaks strobe on pale snow.
             sweep(r,x,y+20.f,150.f,13.f,0xffC1DBE7,3.f);
             sweep(r,x-18.f,y+33.f,86.f,7.f,0xffD4E5ED,2.f);
-        } else if (mid == MapID::kJungle) {
+        } else if (mid == MapID::kJungle || mid == MapID::kWildwood) {
             leaf(r,x-30.f,y+13.f,29.f,11.f,0xff659A5D,0xffB2CE85);
             leaf(r,x-8.f,y+5.f,22.f,9.f,0xff5D9D64,0xffB2CE85);
             if(v>.6f) leaf(r,x+47.f,y-18.f,20.f,8.f,0xffA88759,0xffD5C37C);
-        } else if ((mid == MapID::kAntHell || mid == MapID::kAntNest)) {
+        } else if ((mid == MapID::kAntHell || mid == MapID::kAntNest || mid == MapID::kSewers)) {
             sweep(r,x,y,142.f,13.f,0xffE0BF92,3.3f);
             sweep(r,x+9.f,y+25.f,105.f,9.f,0xff8A5E43,3.f);
             r.set_stroke(0xffD9C09B); r.set_line_width(2.f);
@@ -311,6 +318,7 @@ void sparse_landmarks(Renderer &r, uint8_t mid,
         float s = .85f + unit(gx, gy, 0x51e1u) * .35f;
         switch (mid) {
         case MapID::kGarden:
+        case MapID::kPrimeGarden:
             // Flower ring cairn
             r.set_fill(0xff6DAD58);
             for (int i = 0; i < 5; ++i) {
@@ -324,6 +332,8 @@ void sparse_landmarks(Renderer &r, uint8_t mid,
             r.begin_path(); r.arc(x, y, 6.f * s); r.fill();
             break;
         case MapID::kDesert:
+        case MapID::kPrimeDesert:
+        case MapID::kPyramid:
             r.set_fill(0xffC89B56);
             r.begin_path();
             r.move_to(x - 22 * s, y + 10 * s);
@@ -335,6 +345,7 @@ void sparse_landmarks(Renderer &r, uint8_t mid,
             r.begin_path(); r.ellipse(x + 28 * s, y + 6 * s, 7 * s, 16 * s); r.fill();
             break;
         case MapID::kOcean:
+        case MapID::kPrimeOcean:
             r.set_fill(0xff4CC9F0);
             r.begin_path(); r.arc(x, y, 14.f * s); r.fill();
             r.set_stroke(0xffFFE0EA); r.set_line_width(2.5f);
@@ -347,11 +358,13 @@ void sparse_landmarks(Renderer &r, uint8_t mid,
             r.line_to(x - 16 * s, y + 10 * s); r.close_path(); r.fill();
             break;
         case MapID::kJungle:
+        case MapID::kWildwood:
             leaf(r, x, y, 36.f * s, 14.f * s, 0xff40916C, 0xff95D5B2);
             leaf(r, x + 14 * s, y - 8 * s, 28.f * s, 11.f * s, 0xff2D6A4F, 0xff95D5B2);
             break;
         case MapID::kAntNest:
-    case MapID::kAntHell:
+        case MapID::kSewers:
+        case MapID::kAntHell:
             r.set_fill(0xff704A35);
             r.begin_path(); r.ellipse(x, y, 22 * s, 14 * s); r.fill();
             r.set_fill(0xffC9A477);
@@ -395,6 +408,7 @@ void map_fine_litter(Renderer &r, uint8_t mid,
         uint32_t kind = hash(gx, gy, salt + 3) % 3u;
         switch (mid) {
         case MapID::kGarden:
+        case MapID::kPrimeGarden:
             if (kind == 0) {
                 r.set_fill(0xffC9D9A8);
                 r.begin_path(); r.ellipse(x, y, 3.5f, 2.4f); r.fill();
@@ -412,6 +426,8 @@ void map_fine_litter(Renderer &r, uint8_t mid,
             }
             break;
         case MapID::kDesert:
+        case MapID::kPrimeDesert:
+        case MapID::kPyramid:
             if (kind == 0) {
                 r.set_fill(0xffD5AD72);
                 r.begin_path(); r.ellipse(x, y, 4.f, 2.2f); r.fill();
@@ -457,7 +473,8 @@ void map_fine_litter(Renderer &r, uint8_t mid,
 
 void TerrainPattern::draw(Renderer &r, uint8_t map_id,
                           float left, float top, float right, float bottom) {
-    if (map_id == MapID::kOcean) ocean(r,left,top,right,bottom);
+    if (map_id == MapID::kOcean || map_id == MapID::kPrimeOcean)
+        ocean(r,left,top,right,bottom);
     else if (map_id == MapID::kRoyalCapital) royal(r,left,top,right,bottom);
     else organic(r,map_id,left,top,right,bottom);
     sparse_landmarks(r, map_id, left, top, right, bottom);
@@ -484,21 +501,26 @@ void TerrainPattern::draw_wall(Renderer &r, TerrainFeature const &f, uint8_t map
         float s=.75f+unit((int)i,(int)seed,0x75a3u)*.6f;
         switch(map_id) {
         case MapID::kGarden:
+        case MapID::kPrimeGarden:
             leaf(r,x,y,43.f*s,17.f*s,0xff4E914C,0xff85C96D);
             if ((i&3u)==0u) leaf(r,x+16.f,y-8.f,28.f*s,10.f*s,
                                    0xff5A9E53,0xff85C96D);
             break;
         case MapID::kJungle:
+        case MapID::kWildwood:
             leaf(r,x,y,81.f*s,27.f*s,0xff315F42,0xff5D9D64);
             if ((i&1u)==0u) leaf(r,x+18.f,y+10.f,58.f*s,20.f*s,
                                    0xff214B36,0xff75C9A6);
             break;
         case MapID::kDesert:
+        case MapID::kPrimeDesert:
+        case MapID::kPyramid:
             ribbon(r,x,y,118.f*s,46.f*s,0xffB77B4C);
             sweep(r,x,y-12.f,100.f*s,9.f,0xffE8AD69,3.f);
             sweep(r,x+5.f,y+8.f,76.f*s,6.f,0xff98643E,3.f);
             break;
         case MapID::kOcean:
+        case MapID::kPrimeOcean:
             ribbon(r,x,y,66.f*s,38.f*s,0xff327F98);
             sweep(r,x,y-5.f,48.f*s,8.f,0xff83C8C8,3.f);
             if ((i%5u)==0u) {
@@ -516,7 +538,8 @@ void TerrainPattern::draw_wall(Renderer &r, TerrainFeature const &f, uint8_t map
             sweep(r,x,y-19*s,42*s,3.f,0xffA5DDEA,3.f);
             break;
         case MapID::kAntNest:
-    case MapID::kAntHell:
+        case MapID::kSewers:
+        case MapID::kAntHell:
             ribbon(r,x,y,110.f*s,44.f*s,0xff704A35);
             sweep(r,x,y-10.f,91.f*s,7.f,0xffB4865E,3.f);
             sweep(r,x+7.f,y+11.f,83.f*s,6.f,0xff8A5E43,5.f);

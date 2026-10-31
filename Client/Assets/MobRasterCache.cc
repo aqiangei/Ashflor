@@ -90,6 +90,13 @@ uint8_t try_draw(MobID::T id, MobRenderAttributes const &attrs, Renderer &dest) 
     if (id >= MobID::kNumMobs) return 0;
     // Tall wooden cross + soft shadow — square bake used to show as a plate.
     if (id == MobID::kTrainingDummy) return 0;
+    // Ladybug spots are per-entity seed + clip fills; Super+ bake occasionally
+    // blitted as an opaque square plate ("方块瓢虫") when cache/alpha hiccuped.
+    // Prefer live FlorrArt PNG / procedural path every frame.
+    if (id == MobID::kLadybug || id == MobID::kDarkLadybug
+        || id == MobID::kMassiveLadybug || id == MobID::kShinyLadybug
+        || id == MobID::kJungleLadybug)
+        return 0;
     // Continuous layered rotation needs the live phase, not a looping pose.
     if (id == MobID::kSandstorm) return 0;
     // Centipede antennae / segment overhang clip in the fixed bake half-extent;

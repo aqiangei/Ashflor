@@ -102,6 +102,8 @@ extern "C" {
     }
 
     void loop(double d, float width, float height) {
+        if (Game::renderer.width != width || Game::renderer.height != height)
+            Game::renderer.context.text_size = 0;
         Game::renderer.width = width;
         Game::renderer.height = height;
         Game::tick(d);

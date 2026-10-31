@@ -17,6 +17,7 @@ namespace DOM {
     void update_text(char const *, std::string const &, uint32_t);
     void open_page(char const *);
     void open_feedback_board();
+    void open_live_console();
     void feedback_result(uint8_t result, uint32_t id);
     void feedback_resolve_result(uint8_t result, uint32_t id, uint8_t resolved);
     void open_qq_group();

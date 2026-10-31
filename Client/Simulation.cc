@@ -15,6 +15,7 @@
 namespace {
 double motion_last_snapshot = 0, motion_lateness = 0;
 double motion_delay = 75, motion_delay_frame = -1;
+float motion_ease = 0.15f;
 float estimate_max_hp(Entity const &ent) {
     if (ent.has_component(kMob)) {
         MobID::T mid = ent.get_mob_id();
@@ -66,16 +67,13 @@ void Entity::record_motion_sample(double now) {
 }
 
 void Entity::tick_lerp(float amt) {
-    // rrolf-style: snappier local flower + camera (less input lag); keep the
-    // global curve for everyone else so remote entities don't jitter.
-    float phys_amt = amt;
-    float cam_amt = amt;
-    if (Game::alive()) {
-        if (id == Game::player_id && has_component(kFlower) && !has_component(kMob))
-            phys_amt = 1.f - powf(1.f - 0.62f, Ui::dt * 60.f / 1000.f);
-        if (id == Game::camera_id)
-            cam_amt = 1.f - powf(1.f - 0.62f, Ui::dt * 60.f / 1000.f);
-    }
+    // Like the reference client, ease world positions and camera with one time
+    // constant. Closing 62% of the gap per frame reaches each snapshot too
+    // soon and makes a 20 Hz stream look like stop/start movement at 60 Hz.
+    // Petals must follow the same curve as their flower, or a moving flower
+    // visibly falls behind the center of its own petal ring.
+    float phys_amt = motion_ease;
+    float cam_amt = motion_ease;
     if (has_component(kPhysics)) {
         float prev_x = x;
         float prev_y = y;
@@ -209,6 +207,8 @@ void Entity::tick_lerp(float amt) {
 }
 
 void Simulation::on_tick() {
+    // Compute once per frame, not once per entity. UI/HP retain their own ease.
+    motion_ease = 1.f - powf(1.f - 0.15f, Ui::dt * 60.f / 1000.f);
     for_each_entity([](Simulation *sim, Entity &ent) {
         ent.tick_lerp(Ui::lerp_amount);
     });

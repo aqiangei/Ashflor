@@ -55,6 +55,8 @@ float Map::terrain_hash(uint32_t seed, uint32_t i) {
 }
 
 static float jagged_amp(TerrainFeature const &f) {
+    // param < 0 → sharp tile edges (florr .tmj AABB walls stay rectangular).
+    if (f.param < 0.f) return 0.f;
     if (f.param > 0.f && f.shape != TerrainShape::kRiver && f.shape != TerrainShape::kSpiral)
         return f.param;
     if (f.kind == TerrainKind::kHill) return 0.14f;
@@ -873,9 +875,11 @@ void Map::ccd_move_circle(uint8_t map_id, float &x, float &y, float ox, float oy
         float dist = std::sqrt(dx * dx + dy * dy);
         if (!(dist > 0.5f) || dist != dist) break;
 
+        // Keep sample spacing ≤ step. Cap used to be 24 — knockback / bubble
+        // yeets across thin florr tile remnants (~80–256) and tunneled walls.
         int steps = (int) std::ceil(dist / step);
         if (steps < 1) steps = 1;
-        if (steps > 24) steps = 24;
+        if (steps > 128) steps = 128;
         float px = cur_x, py = cur_y;
         uint8_t hit = 0;
         for (int i = 1; i <= steps; ++i) {

@@ -1,6 +1,7 @@
 #include <Client/MapChunkCache.hh>
 #include <Client/ThemeMaterial.hh>
 #include <Client/TerrainPattern.hh>
+#include <Client/Assets/FlorrTerrain.hh>
 
 #include <Client/Render/Renderer.hh>
 #include <Client/Input.hh>
@@ -241,6 +242,8 @@ void paint_static(Renderer &renderer, uint8_t mid, uint32_t difficulty,
         renderer.set_fill(col);
         renderer.fill_rect(def.left, def.top, def.right - def.left, def.bottom - def.top);
     }
+    // Soft florr grass/dirt SVG stamps (no-op until /florr-art tiles warm).
+    FlorrTerrain::paint_ground(renderer, mid, leftX, topY, rightX, bottomY);
     TerrainPattern::draw(renderer, mid, leftX, topY, rightX, bottomY);
 
     MapTerrain const &terrain = map_terrain(mid);
@@ -266,22 +269,13 @@ void paint_static(Renderer &renderer, uint8_t mid, uint32_t difficulty,
         return n;
     };
 
-    auto feature_center_on_channel = [&](TerrainFeature const &f) -> uint8_t {
-        float cx, cy;
-        feature_center(f, cx, cy);
-        for (TerrainFeature const &ch : terrain) {
-            if (ch.kind != TerrainKind::kChannel) continue;
-            if (Map::point_in_feature(ch, cx, cy)) return 1;
-        }
-        return 0;
-    };
+    // Draw every intersecting blocker. Channels paint over their true outline
+    // in pass 2c; a center hit or 85% coverage must not hide the remaining wall.
 
     // --- Pass 2a: terrain fills (hills / water) — florr_clone fill-before-edge ---
     for (TerrainFeature const &f : terrain) {
         if (f.kind == TerrainKind::kChannel || !feature_intersects(f, leftX, topY, rightX, bottomY))
             continue;
-        // Skip blockers whose center sits on an artery (overlap residue)
-        if (feature_center_on_channel(f)) continue;
         uint8_t smooth = (f.kind == TerrainKind::kWater || f.shape == TerrainShape::kRiver) ? 1 : 0;
         if (f.kind == TerrainKind::kHill) {
             renderer.set_fill(tm.wall_deep);
@@ -333,7 +327,6 @@ void paint_static(Renderer &renderer, uint8_t mid, uint32_t difficulty,
     for (TerrainFeature const &f : terrain) {
         if (f.kind == TerrainKind::kChannel || !feature_intersects(f, leftX, topY, rightX, bottomY))
             continue;
-        if (feature_center_on_channel(f)) continue;
         uint8_t smooth = (f.kind == TerrainKind::kWater || f.shape == TerrainShape::kRiver) ? 1 : 0;
         if (f.kind != TerrainKind::kHill) continue;
         renderer.set_stroke(tm.wall_outline);
@@ -392,12 +385,20 @@ void MapChunkCache::draw(Renderer &target, uint8_t map_id, uint32_t difficulty,
     // Difficulty change: fog is baked into zone fills; NEVER clear() here
     // (emptied every chunk → whole-viewport flash when level crosses
     // LEVELS_PER_EXTRA_SLOT). Keep old canvases blit-able; rebake lazily.
+    FlorrTerrain::ensure_preload();
+    static uint8_t tiles_were_ready = 0;
+    uint8_t const tiles_now = FlorrTerrain::tiles_ready();
     if (map_id != cached_map) {
         clear();
         cached_map = map_id;
         cached_difficulty = difficulty;
+        tiles_were_ready = tiles_now;
     } else if (difficulty != cached_difficulty) {
         cached_difficulty = difficulty;
+    } else if (tiles_now && !tiles_were_ready) {
+        // Chunks baked before grass SVGs loaded were flat fills — rebake once.
+        chunks.clear();
+        tiles_were_ready = tiles_now;
     }
     ++frame;
 
@@ -435,7 +436,10 @@ void MapChunkCache::draw(Renderer &target, uint8_t map_id, uint32_t difficulty,
     if (paint_r <= paint_l || paint_b <= paint_t) return;
 
     size_t const limit = mobile ? 48u : 96u;
-    size_t bake_budget = mobile ? 1u : 2u;
+    // Zoomed-out views need faster fill or the right half stays flat theme fill.
+    size_t const visible = (size_t)(x1 - x0 + 1) * (size_t)(y1 - y0 + 1);
+    size_t bake_budget = mobile ? 2u : 4u;
+    if (visible > 24u) bake_budget = mobile ? 3u : 6u;
     size_t baked = 0;
     size_t missing = 0;
 
@@ -480,15 +484,15 @@ void MapChunkCache::draw(Renderer &target, uint8_t map_id, uint32_t difficulty,
         }
     }
 
-    // Many holes: one viewport paint_static (zone/terrain loops once) instead of
-    // N per-tile paints — that N× cost made the spawn circle hitch every frame
-    // until the cache filled. Keep baking above so later frames blit.
-    if (missing > 1u) {
+    // Any holes: paint the whole viewport once so half-screen flat seams never
+    // show (old path only did this for missing>1, leaving one-hole blit gaps).
+    // Keep baking above so later frames can blit.
+    if (missing > 0u) {
         paint_static(target, map_id, difficulty, paint_l, paint_t, paint_r, paint_b);
         return;
     }
 
-    // Steady: blit existing canvases (stale fog OK); hole-fill at most one miss.
+    // Steady: blit existing canvases (stale fog OK).
     for (int y = y0; y <= y1; ++y) {
         for (int x = x0; x <= x1; ++x) {
             auto it = std::find_if(chunks.begin(), chunks.end(), [=](Chunk const &c) {
@@ -496,8 +500,6 @@ void MapChunkCache::draw(Renderer &target, uint8_t map_id, uint32_t difficulty,
             });
             float const cx0 = (float)(x * kChunkSize);
             float const cy0 = (float)(y * kChunkSize);
-            float const cx1 = cx0 + (float)kChunkSize;
-            float const cy1 = cy0 + (float)kChunkSize;
             if (it != chunks.end() && it->canvas) {
                 RenderContext tile_context(&target);
                 float const raster_scale = (float)kRasterSize / kChunkSize;
@@ -505,13 +507,6 @@ void MapChunkCache::draw(Renderer &target, uint8_t map_id, uint32_t difficulty,
                 target.draw_image_at(*it->canvas,
                                      cx0 * raster_scale - (float)kChunkPad,
                                      cy0 * raster_scale - (float)kChunkPad);
-            } else {
-                float hl = std::max(cx0, paint_l);
-                float ht = std::max(cy0, paint_t);
-                float hr = std::min(cx1, paint_r);
-                float hb = std::min(cy1, paint_b);
-                if (hr > hl && hb > ht)
-                    paint_static(target, map_id, difficulty, hl, ht, hr, hb);
             }
         }
     }

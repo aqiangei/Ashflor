@@ -17,6 +17,9 @@ public:
     float clip_y;
     float clip_w;
     float clip_h;
+    // Canvas font is saved/restored with the drawing state. Zero is the
+    // browser's initial 10px sans-serif, distinct from our 800-weight font.
+    float text_size = 0;
     RenderContext();
     RenderContext(Renderer *);
     RenderContext(RenderContext const &) = delete;

@@ -50,10 +50,18 @@ namespace Map {
         }
     }
 
-    inline void florr_extent(uint8_t map_id, float &w, float &h) {
+    // Playable florr AABB inside the square arena (letterbox outside is framed).
+    inline void florr_extent(uint8_t map_id, float &x0, float &y0, float &x1, float &y1) {
         switch (map_id) {
 #include <Shared/FlorrTmjExtents.inc>
         }
+    }
+    // Legacy: size only (origin may be non-zero after fit-centering).
+    inline void florr_extent(uint8_t map_id, float &w, float &h) {
+        float x0 = 0.f, y0 = 0.f, x1 = (float)ARENA_WIDTH, y1 = (float)ARENA_HEIGHT;
+        florr_extent(map_id, x0, y0, x1, y1);
+        w = x1 - x0;
+        h = y1 - y0;
     }
 
     // Soft pad around respawn: sparse hub fill + blocks high-diff spawns.

@@ -43,6 +43,12 @@ namespace Ui {
             panel_open = Panel::kNone;
             return;
         }
+        // Top-left info panels and bottom-left X/Z/C/V drawers are mutually
+        // exclusive — opening one must retract the other (player report).
+        if (Game::game_panel != Game::kPanelNone)
+            Game::close_game_panel();
+        if (Game::pause_menu_open)
+            Game::pause_menu_open = 0;
         panel_open = panel;
         Element *pg = nullptr;
         switch (panel) {

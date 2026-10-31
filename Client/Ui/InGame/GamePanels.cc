@@ -1836,13 +1836,11 @@ static Element *make_craft_material_grid() {
 Element *Ui::make_game_side_buttons() {
     // Vertical column against left wall (bottom) — shared 24×24 HUD glyphs.
     // Size bumped further on mobile by Button::apply_mobile_touch_size (44→64).
+    // No "重置测试" here: showing it only near dummies reflowed this column every
+    // frame at the range edge (buttons jump / flash). Dummy stats still auto-reset
+    // after 3s idle and on loadout change.
     float const gap = Input::is_mobile ? 10.f : 6.f;
     Element *elt = new Ui::VContainer({
-        new Ui::Button(90, 44,
-            new Ui::DynamicText(13, [](){ return I18n::use_chinese ? "重置测试" : "Reset Test"; }),
-            [](Element *, uint8_t event){ if (event == Ui::kClick) Game::reset_training(); }, nullptr,
-            { .fill = Chrome::kBtnMoss, .line_width = 0, .round_radius = Chrome::kRadius,
-              .should_render = [](){ return Game::near_training_dummies(); } }),
         new Ui::Button(48, 48,
             make_hud_icon(hud_icon_inventory, 28.f),
             on_inventory_btn, inventory_active,

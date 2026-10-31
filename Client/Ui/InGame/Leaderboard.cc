@@ -131,7 +131,7 @@ void LeaderboardBoard::on_render(Renderer &ctx) {
     Element::on_render(ctx);
 
     // Ask the server for a fresh board while the panel is open
-    if (Game::timestamp - last_request_at > 3.0) {
+    if (Game::timestamp - last_request_at >= 3000.0) {
         last_request_at = Game::timestamp;
         Game::request_leaderboard_board();
     }

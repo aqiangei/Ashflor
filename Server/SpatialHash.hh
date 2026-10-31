@@ -43,6 +43,7 @@ class SpatialHash {
     // r > GRID_SIZE/2: fat-inserted into cells (for query) and collided
     // separately so every pair fires exactly once.
     std::vector<EntityID> big;
+    bool cells_overflowed = false;
     uint32_t width;
     uint32_t height;
 

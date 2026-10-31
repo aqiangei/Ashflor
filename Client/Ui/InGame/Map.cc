@@ -17,6 +17,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstdio>
 #include <format>
 #include <memory>
 #include <string>
@@ -131,27 +132,32 @@ void Minimap::on_render(Renderer &ctx) {
             (void)static_minimap(mid, width, height, true);
         ctx.draw_image_at(static_minimap(mid, width, height, show_levels), 0.f, 0.f);
 
-        // Field portals for this map (Shared MAP_PORTALS — same table as server transfer).
+        // Field portals — larger diamond + destination name (always labeled).
         {
-            float const pr = Game::minimap_expanded ? 6.5f : 5.2f;
-            float const name_sz = Game::minimap_expanded ? 10.f : 8.5f;
+            float const pr = Game::minimap_expanded ? 9.5f : 7.8f;
+            float const name_sz = Game::minimap_expanded ? 13.f : 11.f;
             for (MapPortalDef const &p : MAP_PORTALS) {
                 if (p.from_map != mid) continue;
                 if (p.to_map >= MapID::kNumMaps || !map_is_open(p.to_map)) continue;
                 float px = (p.x - left) * sx;
                 float py = (p.y - top) * sy;
-                // Diamond gate marker — cyan so it reads on rarity rings + terrain
-                ctx.set_fill(0xeeffffff);
+                // Soft halo
+                ctx.set_fill(0x662ee6c8);
                 ctx.begin_path();
-                ctx.move_to(px, py - pr - 1.5f);
-                ctx.line_to(px + pr + 1.5f, py);
-                ctx.line_to(px, py + pr + 1.5f);
-                ctx.line_to(px - pr - 1.5f, py);
+                ctx.arc(px, py, pr + 4.5f);
+                ctx.fill();
+                // Diamond gate marker — cyan so it reads on rarity rings + terrain
+                ctx.set_fill(0xffffffff);
+                ctx.begin_path();
+                ctx.move_to(px, py - pr - 2.2f);
+                ctx.line_to(px + pr + 2.2f, py);
+                ctx.line_to(px, py + pr + 2.2f);
+                ctx.line_to(px - pr - 2.2f, py);
                 ctx.close_path();
                 ctx.fill();
                 ctx.set_fill(0xff2ee6c8);
                 ctx.set_stroke(0xff0a5a52);
-                ctx.set_line_width(1.4f);
+                ctx.set_line_width(1.8f);
                 ctx.begin_path();
                 ctx.move_to(px, py - pr);
                 ctx.line_to(px + pr, py);
@@ -163,17 +169,23 @@ void Minimap::on_render(Renderer &ctx) {
                 // Inner dot
                 ctx.set_fill(0xfff0fffc);
                 ctx.begin_path();
-                ctx.arc(px, py, pr * 0.28f);
+                ctx.arc(px, py, pr * 0.32f);
                 ctx.fill();
-                // Destination map name under the diamond
+                // Destination map name under the diamond (with stroke for contrast)
                 {
                     RenderContext label(&ctx);
-                    ctx.translate(px, py + pr + 9.f);
-                    ctx.draw_text(I18n::map_name(p.to_map), {
-                        .fill = 0xffd8fff8,
-                        .stroke = 0,
+                    char buf[80];
+                    char const *dest = I18n::map_name(p.to_map);
+                    if (I18n::use_chinese)
+                        std::snprintf(buf, sizeof(buf), "→%s", dest);
+                    else
+                        std::snprintf(buf, sizeof(buf), "→%s", dest);
+                    ctx.translate(px, py + pr + name_sz * 0.85f);
+                    ctx.draw_text(buf, {
+                        .fill = 0xfff0fffc,
+                        .stroke = 0xff062e2a,
                         .size = name_sz,
-                        .stroke_scale = 0
+                        .stroke_scale = 0.22f
                     });
                 }
             }

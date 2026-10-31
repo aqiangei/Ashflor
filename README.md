@@ -10,9 +10,9 @@
 | | |
 |--|--|
 | 游戏 | [ashflor.com](https://ashflor.com/) |
-| Live 控制台 | [/live](https://ashflor.com/live) — 在线 / Boss / 排行 / 小地图；可发公告、发瓣、刷怪（可选鉴权） |
+| Live 控制台 | [/live](https://ashflor.com/live) — 在线 / Boss / 排行 / 小地图；可发公告、发瓣、刷怪（可选鉴权）。游戏内首页右上角「控制台」同入口 |
 | 图鉴 | [/codex](https://ashflor.com/codex) — 花瓣、怪物、机制与数值 |
-| 留言板 | [/feedback.html](https://ashflor.com/feedback.html) — 公开留言；同页展示修复进度 |
+| 留言板 | [/feedback.html](https://ashflor.com/feedback.html) — 公开留言；同页展示修复进度。游戏内首页右上角「给作者留言」 |
 
 ## 相对上游做了什么
 

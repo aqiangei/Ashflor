@@ -928,6 +928,10 @@ void resolve_terrain_overlaps(MapTerrain &t, uint8_t clear_spawn_plaza = 1) {
             StaticArray<TerrainFeature, 48> next;
             for (uint32_t i = 0; i < rects.size(); ++i) {
                 TerrainFeature const &r = rects[i];
+                if (ch.shape == TerrainShape::kAABB) {
+                    emit_aabb_minus_rect(next, r, ch.left, ch.top, ch.right, ch.bottom);
+                    continue;
+                }
                 float c0, c1;
                 uint8_t axis = 0;
                 if (!channel_cut_band(ch, r.left, r.top, r.right, r.bottom, c0, c1, axis)) {
@@ -1020,22 +1024,28 @@ void build_zones_florr(MapZones &zones, uint8_t map_id) {
     }
 }
 
-// Wall off unused arena outside the 1:1 tmj extent (no enlarge / no hub-center).
+// Wall off unused arena outside the fit-scaled tmj extent (letterbox / pillarbox).
 void frame_florr_extent(MapTerrain &t, ThemePalette const &p, uint8_t map_id) {
-    float mw = (float)ARENA_WIDTH, mh = (float)ARENA_HEIGHT;
-    Map::florr_extent(map_id, mw, mh);
+    float x0 = 0.f, y0 = 0.f, x1 = (float)ARENA_WIDTH, y1 = (float)ARENA_HEIGHT;
+    Map::florr_extent(map_id, x0, y0, x1, y1);
     float W = (float)ARENA_WIDTH, H = (float)ARENA_HEIGHT;
-    if (mw + 8.f < W)
-        hill_box(t, p, 9, mw, 0, W, H);
-    if (mh + 8.f < H)
-        hill_box(t, p, 10, 0, mh, mw, H);
+    // Four-side frame so centered layouts keep the void impassable.
+    if (y0 > 8.f)
+        hill_box(t, p, 8, 0, 0, W, y0);           // top strip
+    if (y1 + 8.f < H)
+        hill_box(t, p, 9, 0, y1, W, H);           // bottom strip
+    if (x0 > 8.f)
+        hill_box(t, p, 10, 0, y0, x0, y1);        // left (between top/bottom)
+    if (x1 + 8.f < W)
+        hill_box(t, p, 11, x1, y0, W, y1);        // right
 }
 
 // Tiny walkable pad at florr hub (not a center plaza dig).
 void clear_hub_pad(MapTerrain &t, ThemePalette const &p, uint8_t map_id) {
     float hx = MAP_SPAWN_X, hy = MAP_SPAWN_Y;
     Map::hub_xy(map_id, hx, hy);
-    float r = 380.f;
+    // Keep small — large pads erased authored maze walls around florr spawns.
+    float r = 220.f;
     push_feat(t, TerrainKind::kChannel, TerrainShape::kAABB, 0,
               hx - r, hy - r, hx + r, hy + r, p.channel, 249, 0.f);
 }
@@ -1045,18 +1055,29 @@ void clear_hub_pad(MapTerrain &t, ThemePalette const &p, uint8_t map_id) {
 void clear_portal_pads(MapTerrain &t, ThemePalette const &p, uint8_t map_id) {
     float hx = MAP_SPAWN_X, hy = MAP_SPAWN_Y;
     Map::hub_xy(map_id, hx, hy);
+    uint8_t const florr = Map::is_florr_layout(map_id) ? 1 : 0;
     for (MapPortalDef const &portal : MAP_PORTALS) {
         if (portal.from_map != map_id) continue;
-        float r = portal.radius + 520.f;
+        // Florr L2 hubs already place exits at hub±PORTAL_HUB_OFF — a 520 pad
+        // carved ~400 wall tiles near spawn (walls ≠ minimap / 穿墙 gaps).
+        float r = portal.radius + (florr ? 160.f : 520.f);
         push_feat(t, TerrainKind::kChannel, TerrainShape::kAABB, 0,
                   portal.x - r, portal.y - r, portal.x + r, portal.y + r,
                   p.channel, 250, 0.f);
-        float hw = 220.f;
+        float dx = portal.x - hx, dy = portal.y - hy;
+        // Hub-adjacent florr gates need no spoke; long L1 spokes still carve.
+        if (florr && dx * dx + dy * dy < 900.f * 900.f) continue;
+        float hw = florr ? 140.f : 220.f;
         float x0 = hx, y0 = hy, x1 = portal.x, y1 = portal.y;
-        float minx = std::min(x0, x1) - hw, maxx = std::max(x0, x1) + hw;
-        float miny = std::min(y0, y1) - hw, maxy = std::max(y0, y1) + hw;
+        // A diagonal's bounding box is an entire quadrant, not a corridor.
+        // Use two narrow legs; cardinal gates naturally collapse to one leg.
         push_feat(t, TerrainKind::kChannel, TerrainShape::kAABB, 0,
-                  minx, miny, maxx, maxy, p.channel, 251, 0.f);
+                  std::min(x0, x1) - hw, y0 - hw,
+                  std::max(x0, x1) + hw, y0 + hw, p.channel, 251, 0.f);
+        if (std::fabs(y1 - y0) > hw)
+            push_feat(t, TerrainKind::kChannel, TerrainShape::kAABB, 0,
+                      x1 - hw, std::min(y0, y1) - hw,
+                      x1 + hw, std::max(y0, y1) + hw, p.channel, 251, 0.f);
     }
 }
 
@@ -1642,7 +1663,7 @@ void generate_one(uint8_t map_id) {
     float cy = H * 0.5f;
 
     if (Map::is_florr_layout(map_id)) {
-        // florr .tmj 1:1 — no rarity onion, no center plaza dig, no arena enlarge.
+        // florr .tmj fit-scaled (aspect preserved, centered) — no rarity onion / plaza dig.
         build_zones_florr(zones, map_id);
         gen_florr_tmj(terrain, pal, map_id);
         frame_florr_extent(terrain, pal, map_id);

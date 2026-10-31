@@ -746,9 +746,76 @@ static Element *make_labeled_qq_button() {
     }, 0, 4, { .h_justify = Style::Center, .v_justify = Style::Top });
 }
 
+// Title-screen tip: blink Live console ~12s each time the player lands on the
+// home screen. Do NOT persist "seen" in localStorage — that made the tip vanish
+// forever after one visit ("控制台没闪烁").
+static uint8_t live_tip_clicked = 0;
+static uint8_t live_tip_on_title = 0;
+static double live_tip_start = 0;
+
+static bool live_tip_showing() {
+    uint8_t const on_title = Game::should_render_title_ui()
+        && Game::auth_panel == 0
+        && Ui::panel_open == Ui::Panel::kNone;
+    if (on_title && !live_tip_on_title) {
+        // Fresh title visit — restart the blink window.
+        live_tip_start = Game::timestamp;
+        live_tip_clicked = 0;
+    }
+    live_tip_on_title = on_title;
+    if (!on_title || live_tip_clicked) return false;
+    if (live_tip_start <= 0) live_tip_start = Game::timestamp;
+    if (Game::timestamp - live_tip_start > 12000) return false;
+    return true;
+}
+
+static void open_live_console_btn(Element *, uint8_t e) {
+    if (e != Ui::kClick) return;
+    live_tip_clicked = 1;
+    DOM::open_live_console();
+}
+
+static Element *make_live_console_button() {
+    return new Ui::VContainer({
+        new Ui::Button(46, 46,
+            new Ui::StaticIcon([](Element *, Renderer &ctx){
+                // Monitor + bars — Live ops console
+                ctx.set_stroke(0xffffffff); ctx.set_line_width(2.5f);
+                ctx.begin_path(); ctx.round_rect(-14, -11, 28, 18, 3); ctx.stroke();
+                ctx.begin_path();
+                ctx.move_to(-5, 9); ctx.line_to(5, 9);
+                ctx.line_to(7, 13); ctx.line_to(-7, 13); ctx.close_path();
+                ctx.stroke();
+                ctx.begin_path();
+                ctx.move_to(-9, 3); ctx.line_to(-9, -5);
+                ctx.move_to(-3, 3); ctx.line_to(-3, -7);
+                ctx.move_to(3, 3); ctx.line_to(3, -3);
+                ctx.move_to(9, 3); ctx.line_to(9, -6);
+                ctx.stroke();
+            }, 32, 32),
+            open_live_console_btn,
+            nullptr, soft_btn(Chrome::kBtnBronze)),
+        new Ui::DynamicText(11, [](){
+            return I18n::use_chinese ? std::string{"控制台"} : std::string{"Console"};
+        }, { .fill = 0xffe8e8e8 })
+    }, 0, 4, {
+        .animate = [](Element *elt, Renderer &ctx){
+            if (!live_tip_showing()) return;
+            float pulse = 0.88f + 0.12f * std::sin((float) Game::timestamp * 0.014f);
+            ctx.scale(pulse);
+            float blink = 0.55f + 0.45f * (0.5f + 0.5f * std::sin((float) Game::timestamp * 0.018f));
+            ctx.set_global_alpha(blink);
+            (void) elt;
+        },
+        .h_justify = Style::Center,
+        .v_justify = Style::Top
+    });
+}
+
 Element *Ui::make_github_link_button() {
-    // Right: this fork. Left of it: upstream gardn. Far left: QQ group.
-    Element *elt = new Ui::HContainer({
+    // Far left of the cluster: Live console + tip; then feedback / QQ / repos.
+    Element *buttons = new Ui::HContainer({
+        make_live_console_button(),
         new Ui::VContainer({
             new Ui::Button(46, 46,
                 new Ui::StaticIcon([](Element *, Renderer &ctx){
@@ -770,6 +837,28 @@ Element *Ui::make_github_link_button() {
             "本仓库", "ashflor", open_ashflor_repo, Chrome::kBtnIron
         )
     }, 10, 10, {
+        .h_justify = Style::Right,
+        .v_justify = Style::Top
+    });
+
+    Element *tip = new Ui::DynamicText(12, [](){
+        return I18n::use_chinese
+            ? std::string{"右上角可进控制台 · 发花瓣 / 刷怪"}
+            : std::string{"Top-right Live console · give petals / spawn"};
+    }, {
+        .fill = Chrome::kGold,
+        .animate = [](Element *elt, Renderer &ctx){
+            float a = (float) elt->animation;
+            ctx.scale(a);
+            float blink = 0.45f + 0.55f * (0.5f + 0.5f * std::sin((float) Game::timestamp * 0.016f));
+            ctx.set_global_alpha(blink * a);
+        },
+        .should_render = [](){ return live_tip_showing(); },
+        .h_justify = Style::Right,
+        .v_justify = Style::Top
+    });
+
+    Element *elt = new Ui::VContainer({ tip, buttons }, 0, 6, {
         .animate = [](Element *elt, Renderer &ctx){
             ctx.scale((float) elt->animation);
             // Portrait phones give community links a second row below menus.

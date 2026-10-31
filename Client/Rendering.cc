@@ -1,6 +1,7 @@
 #include <Client/Game.hh>
 
 #include <Client/Input.hh>
+#include <Client/I18n.hh>
 #include <Client/MapChunkCache.hh>
 #include <Client/Particle.hh>
 #include <Client/ThemeMaterial.hh>
@@ -18,6 +19,7 @@
 #include <Helpers/Math.hh>
 
 #include <cmath>
+#include <cstdio>
 
 #ifndef M_PI
 #define M_PI 3.14159265358979323846
@@ -119,6 +121,76 @@ void Game::render_game() {
                                 leftX, topY, rightX, bottomY, Input::is_mobile);
             draw_animated_water(renderer, mid, leftX, topY, rightX, bottomY,
                                 Game::timestamp);
+
+            // Field portals — large cyan gate + destination name (same MAP_PORTALS as transfer).
+            {
+                float const pulse = 0.5f + 0.5f * std::sin((float)Game::timestamp * 0.0045f);
+                for (MapPortalDef const &p : MAP_PORTALS) {
+                    if (p.from_map != mid) continue;
+                    if (p.to_map >= MapID::kNumMaps || !map_is_open(p.to_map)) continue;
+                    float r = std::max(p.radius, 280.f) * 1.15f;
+                    if (p.x + r < leftX || p.x - r > rightX
+                        || p.y + r < topY || p.y - r > bottomY) continue;
+                    float glow = 0.35f + 0.25f * pulse;
+                    // Outer soft disc
+                    renderer.set_global_alpha(glow * 0.45f);
+                    renderer.set_fill(0xff2ee6c8);
+                    renderer.begin_path();
+                    renderer.arc(p.x, p.y, r * 1.35f);
+                    renderer.fill();
+                    // Ring
+                    renderer.set_global_alpha(0.55f + 0.35f * pulse);
+                    renderer.set_stroke(0xff0a5a52);
+                    renderer.set_line_width(22.f);
+                    renderer.begin_path();
+                    renderer.arc(p.x, p.y, r);
+                    renderer.stroke();
+                    renderer.set_stroke(0xff2ee6c8);
+                    renderer.set_line_width(14.f);
+                    renderer.begin_path();
+                    renderer.arc(p.x, p.y, r);
+                    renderer.stroke();
+                    // Inner diamond
+                    float d = r * 0.38f;
+                    renderer.set_global_alpha(0.9f);
+                    renderer.set_fill(0xfff0fffc);
+                    renderer.begin_path();
+                    renderer.move_to(p.x, p.y - d);
+                    renderer.line_to(p.x + d, p.y);
+                    renderer.line_to(p.x, p.y + d);
+                    renderer.line_to(p.x - d, p.y);
+                    renderer.close_path();
+                    renderer.fill();
+                    renderer.set_fill(0xff2ee6c8);
+                    float d2 = d * 0.72f;
+                    renderer.begin_path();
+                    renderer.move_to(p.x, p.y - d2);
+                    renderer.line_to(p.x + d2, p.y);
+                    renderer.line_to(p.x, p.y + d2);
+                    renderer.line_to(p.x - d2, p.y);
+                    renderer.close_path();
+                    renderer.fill();
+                    // Destination label above gate
+                    {
+                        RenderContext label(&renderer);
+                        char buf[96];
+                        char const *dest = I18n::map_name(p.to_map);
+                        if (I18n::use_chinese)
+                            std::snprintf(buf, sizeof(buf), "传送 · %s", dest);
+                        else
+                            std::snprintf(buf, sizeof(buf), "Portal · %s", dest);
+                        renderer.set_global_alpha(1.f);
+                        renderer.translate(p.x, p.y - r - 70.f);
+                        renderer.draw_text(buf, {
+                            .fill = 0xfff0fffc,
+                            .stroke = 0xff0a3a36,
+                            .size = 56.f,
+                            .stroke_scale = 0.18f
+                        });
+                    }
+                    renderer.set_global_alpha(1.f);
+                }
+            }
         }
     }
     // Spin-rate hint ring around self while adjusting (Q/E hold or drag wheel)

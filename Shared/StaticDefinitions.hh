@@ -27,8 +27,10 @@ inline uint32_t const MAX_DIFFICULTY = 8;
 inline uint32_t const MAX_DROPS_PER_MOB = 12;
 // Concept maps need many specialty Zone AABBs + large terrain pieces
 inline uint32_t const MAX_ZONES_PER_MAP = 64;
-// Corridor/gate/ford channel paint + pocket bridges need headroom past legacy 192.
-inline uint32_t const MAX_TERRAIN_PER_MAP = 560;
+// Florr tmj hills (~400) + portal/hub channel punches split AABBs heavily.
+// 560 silently dropped wall remnants → walkable gaps vs drawn/minimap walls
+// (繁花园 / 蚁穴 "墙壁与地图不符" / occasional 穿墙). Keep headroom past splits.
+inline uint32_t const MAX_TERRAIN_PER_MAP = 1536;
 inline uint32_t const TERRAIN_OUTLINE_MAX = 72;
 
 namespace MapID {

@@ -880,107 +880,107 @@ inline std::array const MAP_PORTALS = std::to_array<MapPortalDef>({
     // ---- L1 edge gates (ashflor own layouts; edges are walkable) ----
     // Garden east → Royal Capital
     { MapID::kGarden, MapID::kRoyalCapital,
-      ARENA_WIDTH * 0.88f, ARENA_HEIGHT * 0.50f, 220.f,
+      ARENA_WIDTH * 0.88f, ARENA_HEIGHT * 0.50f, 320.f,
       MAP_SPAWN_X, MAP_SPAWN_Y },
     // Garden north → Prime Garden (L2 florr hub)
     { MapID::kGarden, MapID::kPrimeGarden,
-      ARENA_WIDTH * 0.50f, ARENA_HEIGHT * 0.18f, 220.f,
-      10638.f, 30151.f },
+      ARENA_WIDTH * 0.50f, ARENA_HEIGHT * 0.18f, 320.f,
+      11687.5f, 33125.f },
     // Garden south → Sewers (L2 florr hub)
     { MapID::kGarden, MapID::kSewers,
-      ARENA_WIDTH * 0.50f, ARENA_HEIGHT * 0.86f, 220.f,
-      2433.f, 29233.f },
+      ARENA_WIDTH * 0.50f, ARENA_HEIGHT * 0.86f, 320.f,
+      2673.3f, 32116.7f },
     // Garden NE → Ant Nest (L2)
     { MapID::kGarden, MapID::kAntNest,
-      ARENA_WIDTH * 0.82f, ARENA_HEIGHT * 0.22f, 220.f,
+      ARENA_WIDTH * 0.82f, ARENA_HEIGHT * 0.22f, 320.f,
       MAP_SPAWN_X, MAP_SPAWN_Y },
     // Garden SE → Ant Hell (L2 florr hub)
     { MapID::kGarden, MapID::kAntHell,
-      ARENA_WIDTH * 0.82f, ARENA_HEIGHT * 0.78f, 220.f,
-      15616.f, 14272.f },
+      ARENA_WIDTH * 0.82f, ARENA_HEIGHT * 0.78f, 320.f,
+      17156.2f, 15679.7f },
     // Desert west → Royal Capital
     { MapID::kDesert, MapID::kRoyalCapital,
-      ARENA_WIDTH * 0.12f, ARENA_HEIGHT * 0.50f, 220.f,
+      ARENA_WIDTH * 0.12f, ARENA_HEIGHT * 0.50f, 320.f,
       MAP_SPAWN_X, MAP_SPAWN_Y },
     // Desert east → Prime Desert (L2 florr hub)
     { MapID::kDesert, MapID::kPrimeDesert,
-      ARENA_WIDTH * 0.88f, ARENA_HEIGHT * 0.50f, 220.f,
-      2176.f, 1081.f },
+      ARENA_WIDTH * 0.88f, ARENA_HEIGHT * 0.50f, 320.f,
+      2833.3f, 1407.4f },
     // Ocean west → Royal Capital
     { MapID::kOcean, MapID::kRoyalCapital,
-      ARENA_WIDTH * 0.12f, ARENA_HEIGHT * 0.50f, 220.f,
+      ARENA_WIDTH * 0.12f, ARENA_HEIGHT * 0.50f, 320.f,
       MAP_SPAWN_X, MAP_SPAWN_Y },
     // Ocean east → Prime Ocean (L2 florr hub)
     { MapID::kOcean, MapID::kPrimeOcean,
-      ARENA_WIDTH * 0.88f, ARENA_HEIGHT * 0.50f, 220.f,
-      13489.f, 12889.f },
+      ARENA_WIDTH * 0.88f, ARENA_HEIGHT * 0.50f, 320.f,
+      17564.4f, 16782.2f },
     // Jungle west → Wildwood (L2 florr hub)
     { MapID::kJungle, MapID::kWildwood,
-      ARENA_WIDTH * 0.12f, ARENA_HEIGHT * 0.50f, 220.f,
-      2183.f, 1942.f },
+      ARENA_WIDTH * 0.12f, ARENA_HEIGHT * 0.50f, 320.f,
+      2646.8f, 2353.9f },
     // Royal gates
     { MapID::kRoyalCapital, MapID::kGarden,
-      ARENA_WIDTH * 0.10f, ARENA_HEIGHT * 0.50f, 240.f,
+      ARENA_WIDTH * 0.10f, ARENA_HEIGHT * 0.50f, 360.f,
       MAP_SPAWN_X, MAP_SPAWN_Y },
     { MapID::kRoyalCapital, MapID::kDesert,
-      ARENA_WIDTH * 0.90f, ARENA_HEIGHT * 0.50f, 240.f,
+      ARENA_WIDTH * 0.90f, ARENA_HEIGHT * 0.50f, 360.f,
       MAP_SPAWN_X, MAP_SPAWN_Y },
     { MapID::kRoyalCapital, MapID::kOcean,
-      ARENA_WIDTH * 0.50f, ARENA_HEIGHT * 0.90f, 240.f,
+      ARENA_WIDTH * 0.50f, ARENA_HEIGHT * 0.90f, 360.f,
       MAP_SPAWN_X, MAP_SPAWN_Y },
     { MapID::kRoyalCapital, MapID::kVolcano,
-      ARENA_WIDTH * 0.50f, ARENA_HEIGHT * 0.10f, 240.f,
+      ARENA_WIDTH * 0.50f, ARENA_HEIGHT * 0.10f, 360.f,
       MAP_SPAWN_X, MAP_SPAWN_Y },
     { MapID::kVolcano, MapID::kRoyalCapital,
-      ARENA_WIDTH * 0.50f, ARENA_HEIGHT * 0.90f, 240.f,
+      ARENA_WIDTH * 0.50f, ARENA_HEIGHT * 0.90f, 360.f,
       MAP_SPAWN_X, MAP_SPAWN_Y },
 
     // ---- L2/L3 hub gates (coords = florr player_spawns ± PORTAL_HUB_OFF) ----
     // Ant Nest (ashflor layout — arena hub)
     { MapID::kAntNest, MapID::kGarden,
-      MAP_SPAWN_X - PORTAL_HUB_OFF, MAP_SPAWN_Y, 240.f,
+      MAP_SPAWN_X - PORTAL_HUB_OFF, MAP_SPAWN_Y, 360.f,
       MAP_SPAWN_X, MAP_SPAWN_Y },
-    // Ant Hell hub 15616,14272 → Garden
+    // Ant Hell hub 17156,15680 → Garden
     { MapID::kAntHell, MapID::kGarden,
-      15056.f, 14272.f, 240.f,
+      17156.2f - PORTAL_HUB_OFF, 15679.7f, 360.f,
       MAP_SPAWN_X, MAP_SPAWN_Y },
-    // Wildwood hub 2183,1942 → Jungle
+    // Wildwood hub 2647,2354 → Jungle
     { MapID::kWildwood, MapID::kJungle,
-      2743.f, 1942.f, 240.f,
+      2646.8f + PORTAL_HUB_OFF, 2353.9f, 360.f,
       MAP_SPAWN_X, MAP_SPAWN_Y },
-    // Sewers hub 2433,29233 → Garden
+    // Sewers hub 2673,32117 → Garden
     { MapID::kSewers, MapID::kGarden,
-      2433.f, 28673.f, 240.f,
+      2673.3f, 32116.7f - PORTAL_HUB_OFF, 360.f,
       MAP_SPAWN_X, MAP_SPAWN_Y },
-    // Prime Garden hub 10638,30151 → Garden (south)
+    // Prime Garden hub 11688,33125 → Garden (south)
     { MapID::kPrimeGarden, MapID::kGarden,
-      10638.f, 30711.f, 240.f,
+      11687.5f, 33125.f + PORTAL_HUB_OFF, 360.f,
       MAP_SPAWN_X, MAP_SPAWN_Y },
-    // Prime Desert hub 2176,1081 → Desert
+    // Prime Desert hub 2833,1407 → Desert
     { MapID::kPrimeDesert, MapID::kDesert,
-      1616.f, 1081.f, 240.f,
+      2833.3f - PORTAL_HUB_OFF, 1407.4f, 360.f,
       MAP_SPAWN_X, MAP_SPAWN_Y },
-    // Prime Ocean hub 13489,12889 → Ocean
+    // Prime Ocean hub 17564,16782 → Ocean
     { MapID::kPrimeOcean, MapID::kOcean,
-      12929.f, 12889.f, 240.f,
+      17564.4f - PORTAL_HUB_OFF, 16782.2f, 360.f,
       MAP_SPAWN_X, MAP_SPAWN_Y },
     // L3 from Prime Garden hub
     { MapID::kPrimeGarden, MapID::kFactory,
-      10078.f, 30151.f, 220.f,
+      11687.5f - PORTAL_HUB_OFF, 33125.f, 320.f,
       MAP_SPAWN_X, MAP_SPAWN_Y },
     { MapID::kPrimeGarden, MapID::kPyramid,
-      11198.f, 30151.f, 220.f,
+      11687.5f + PORTAL_HUB_OFF, 33125.f, 320.f,
       MAP_SPAWN_X, MAP_SPAWN_Y },
     // L3 returns → Prime Garden hub
     { MapID::kFactory, MapID::kPrimeGarden,
-      MAP_SPAWN_X + PORTAL_HUB_OFF, MAP_SPAWN_Y, 240.f,
-      10638.f, 30151.f },
+      MAP_SPAWN_X + PORTAL_HUB_OFF, MAP_SPAWN_Y, 360.f,
+      11687.5f, 33125.f },
     { MapID::kPyramid, MapID::kPrimeGarden,
-      MAP_SPAWN_X - PORTAL_HUB_OFF, MAP_SPAWN_Y, 240.f,
-      10638.f, 30151.f },
-    // Hel exit hub 1329,1964
+      MAP_SPAWN_X - PORTAL_HUB_OFF, MAP_SPAWN_Y, 360.f,
+      11687.5f, 33125.f },
+    // Hel exit hub 2920,4316
     { MapID::kHel, MapID::kGarden,
-      1329.f, 1404.f, 240.f,
+      2919.9f, 4316.3f - PORTAL_HUB_OFF, 360.f,
       MAP_SPAWN_X, MAP_SPAWN_Y },
 });
 
