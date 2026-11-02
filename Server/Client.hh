@@ -105,7 +105,7 @@ public:
     uint32_t corpse_ttl = 0;
     uint32_t revive_progress = 0;
     EntityID corpse_id = NULL_ENTITY;
-    // Solo/party: death site for Continue respawn (kept after corpse TTL expires)
+    // Solo/party: death site for Continue in-place respawn (kept after corpse TTL)
     uint8_t has_death_pos = 0;
     float death_x = 0;
     float death_y = 0;

@@ -76,6 +76,13 @@ void client_tick_bonus(Client *client) {
         client->offline_bonus_seconds -= offline;
         changed = daily + offline > 0;
     }
+    // Empty bank → force OFF so the client switch cannot stick "on" forever.
+    if (client->bonus_enabled
+        && client->daily_bonus_seconds == 0
+        && client->offline_bonus_seconds == 0) {
+        client->bonus_enabled = 0;
+        changed = true;
+    }
     if (changed && (client->last_bonus_sync == 0 || now - client->last_bonus_sync >= 5)) {
         send_boost_update(client);
         client->last_bonus_sync = now;
@@ -713,9 +720,11 @@ void Client::on_message(WebSocket *ws, std::string_view message, uint64_t code) 
                 client->send_packet(writer.packet, writer.at - writer.packet);
                 break;
             }
-            // Continue after death: L1 near death site; L2+ always that map's hub.
+            // Continue after death: always near the death site on that map
+            // (L1 and L2+). Dark Mark still forces Hel hub via hel_pending +
+            // death_map mismatch above; title entry without a death site uses
+            // player_spawn (map hub) below.
             uint8_t near_death = client->has_death_pos && client->death_map_id == map_id;
-            if (near_death && map_tier(map_id) >= 2) near_death = 0;
             float near_x = client->death_x;
             float near_y = client->death_y;
             client->has_death_pos = 0;
@@ -864,11 +873,16 @@ void Client::on_message(WebSocket *ws, std::string_view message, uint64_t code) 
             if (client->check_invalid(validator.validate_uint8())) return;
             uint8_t on = reader.read<uint8_t>() ? 1 : 0;
             if (client->account_name.empty()) break;
+            // Cannot arm an empty bonus bank — echo OFF so the UI unsticks.
+            if (on && client->daily_bonus_seconds == 0
+                && client->offline_bonus_seconds == 0)
+                on = 0;
             client->bonus_enabled = on;
             // Don't burn the pause gap after turning back on.
             client->last_bonus_tick = (uint64_t)std::chrono::duration_cast<std::chrono::seconds>(
                 std::chrono::system_clock::now().time_since_epoch()).count();
             send_boost_update(client);
+            client->last_bonus_sync = client->last_bonus_tick;
             break;
         }
         case Serverbound::kTalentSpend: {

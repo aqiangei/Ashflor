@@ -361,7 +361,14 @@ void Game::on_message(uint8_t *ptr, uint32_t len) {
         case Clientbound::kBoostUpdate: {
             daily_bonus_seconds = reader.read<uint32_t>();
             offline_bonus_seconds = reader.read<uint32_t>();
-            bonus_enabled = reader.read<uint8_t>() ? 1 : 0;
+            uint8_t server_on = reader.read<uint8_t>() ? 1 : 0;
+            // Fresh local toggle wins over in-flight timer ticks that still
+            // carry the previous enabled bit (that made the switch "stuck").
+            if (bonus_toggle_at <= 0 || timestamp - bonus_toggle_at > 1.25
+                || server_on == bonus_enabled) {
+                bonus_enabled = server_on;
+                bonus_toggle_at = 0;
+            }
             bonus_synced_at = timestamp;
             break;
         }
@@ -1109,12 +1116,23 @@ void Game::deposit_bank_petal(uint8_t static_pos) {
 }
 
 void Game::set_bonus_enabled(uint8_t on) {
-    bonus_enabled = on ? 1 : 0;
+    on = on ? 1 : 0;
+    if (on && daily_bonus_seconds == 0 && offline_bonus_seconds == 0)
+        on = 0; // empty bank — refuse so the button cannot look armed forever
+    bonus_enabled = on;
+    bonus_toggle_at = timestamp > 0 ? timestamp : 1;
     if (!socket.ready || !account_logged_in) return;
     Writer writer(static_cast<uint8_t *>(OUTGOING_PACKET));
     writer.write<uint8_t>(Serverbound::kBoostToggle);
     writer.write<uint8_t>(bonus_enabled);
     socket.send(writer.packet, writer.at - writer.packet);
+}
+
+void Game::maybe_auto_enable_bonus() {
+    if (!bonus_auto || !account_logged_in || !socket.ready) return;
+    if (bonus_enabled) return;
+    if (daily_bonus_seconds == 0 && offline_bonus_seconds == 0) return;
+    set_bonus_enabled(1);
 }
 
 uint8_t Game::cycle_next_loadout_preset() {

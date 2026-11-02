@@ -59,7 +59,9 @@ namespace Game {
     uint32_t daily_bonus_seconds = 0;
     uint32_t offline_bonus_seconds = 0;
     uint8_t bonus_enabled = 0; // off until the player toggles it on
+    uint8_t bonus_auto = 0; // re-arm on spawn when bank has time
     double bonus_synced_at = 0;
+    double bonus_toggle_at = 0;
     uint64_t session_token = 0;
     uint8_t pending_auto_login = 0;
     uint8_t spawn_after_auth = 0;
@@ -403,6 +405,7 @@ void Game::reset() {
     offline_bonus_seconds = 0;
     bonus_enabled = 0;
     bonus_synced_at = 0;
+    bonus_toggle_at = 0;
     pending_auto_login = 0;
     spawn_after_auth = 0;
     // Keep kick notice across reconnect so it shows where wrong-password does.
@@ -1158,6 +1161,13 @@ void Game::tick(double time) {
     double a = Ui::window_width / 1920;
     double b = Ui::window_height / 1080;
     Ui::scale = std::max(a, b);
+    {
+        static uint8_t was_alive = 0;
+        uint8_t now_alive = alive();
+        if (now_alive && !was_alive)
+            maybe_auto_enable_bonus();
+        was_alive = now_alive;
+    }
     if (alive()) {
         // Soft-leave must keep on_game_screen=0 until flower despawns; otherwise
         // death UI appears and Enter/"Continue" looks like an instant revive.

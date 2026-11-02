@@ -18,6 +18,7 @@
 #include <Client/I18n.hh>
 #include <Client/Input.hh>
 #include <Client/StaticData.hh>
+#include <Client/Storage.hh>
 
 #include <Helpers/Bits.hh>
 #include <Helpers/Math.hh>
@@ -491,7 +492,8 @@ static Element *make_drawer(std::vector<Element *> children, uint8_t panel_id) {
                         || panel_id == Game::kPanelPresets
                         || panel_id == Game::kPanelCraft
                         || panel_id == Game::kPanelSpecial
-                        || panel_id == Game::kPanelShop)
+                        || panel_id == Game::kPanelShop
+                        || panel_id == Game::kPanelBoost)
                         && Game::on_game_screen))
                 && Game::should_render_game_ui();
         },
@@ -3032,12 +3034,19 @@ static uint32_t visible_bonus_seconds(bool daily) {
     return daily ? today : banked;
 }
 
-class BonusToggleButton final : public Ui::ToggleButton {
+static uint8_t bonus_bank_empty() {
+    return visible_bonus_seconds(true) == 0 && visible_bonus_seconds(false) == 0;
+}
+
+class BonusAutoToggle final : public Ui::ToggleButton {
 public:
-    BonusToggleButton() : ToggleButton(Input::is_mobile ? 48.f : 44.f, &Game::bonus_enabled) {}
+    BonusAutoToggle() : ToggleButton(Input::is_mobile ? 44.f : 40.f, &Game::bonus_auto) {}
     void on_event(uint8_t event) override {
         ToggleButton::on_event(event);
-        if (event == kClick) Game::set_bonus_enabled(Game::bonus_enabled);
+        if (event != kClick) return;
+        Storage::set();
+        // Turning auto on while already in a match arms immediately if banked.
+        if (Game::bonus_auto) Game::maybe_auto_enable_bonus();
     }
 };
 
@@ -3049,6 +3058,8 @@ Element *Ui::make_boost_panel() {
     float const clock_sz = mobile ? 32.f : 36.f;
     float const label_sz = mobile ? 17.f : 18.f;
     float const hint_sz = mobile ? 14.f : 15.f;
+    float const act_w = mobile ? 300.f : 340.f;
+    float const act_h = mobile ? 52.f : 48.f;
     Element *elt = make_drawer({
         new Ui::Element(panel_w, 1),
         new Ui::HFlexContainer(
@@ -3060,16 +3071,27 @@ Element *Ui::make_boost_panel() {
                 [](Element *, uint8_t e){ if (e == Ui::kClick) Game::close_game_panel(); },
                 nullptr, { .fill = Chrome::kBtnDanger, .round_radius = 6 }),
             16, 14),
-        new Ui::HContainer({
-            new BonusToggleButton(),
-            new Ui::DynamicText(mobile ? 20.f : 22.f, [](){
-                if (!Game::account_logged_in)
-                    return I18n::use_chinese ? "登录后可开关" : "Sign in to toggle";
-                return Game::bonus_enabled
-                    ? (I18n::use_chinese ? "加成已开启" : "Bonus ON")
-                    : (I18n::use_chinese ? "加成已关闭" : "Bonus OFF");
-            }, { .fill = Chrome::kTitle })
-        }, 0, 14, { .h_justify = Style::Left }),
+        new Ui::DynamicText(hint_sz + 1.f, []() -> std::string {
+            if (!Game::account_logged_in)
+                return I18n::use_chinese
+                    ? "登录后可领取每日首小时三倍掉落"
+                    : "Sign in to earn the first-hour triple drop bonus";
+            if (Game::bonus_enabled) {
+                uint32_t left = visible_bonus_seconds(true) + visible_bonus_seconds(false);
+                if (I18n::use_chinese)
+                    return std::format("加成生效中 · 剩余约 {:02}:{:02}:{:02}",
+                        left / 3600, (left / 60) % 60, left % 60);
+                return std::format("Bonus active · ~{:02}:{:02}:{:02} left",
+                    left / 3600, (left / 60) % 60, left % 60);
+            }
+            if (bonus_bank_empty())
+                return I18n::use_chinese
+                    ? "今日额度已用完 · 离线可继续攒时"
+                    : "Bank empty · earn more while offline";
+            return I18n::use_chinese
+                ? "点击下方「激活」消耗时间并三倍掉落"
+                : "Press Activate to burn time and triple drops";
+        }, { .fill = Chrome::kTitle, .h_justify = Style::Left }),
         new Ui::VContainer({
             new Ui::DynamicText(label_sz, [](){ return I18n::use_chinese ? "每日加成" : "Daily bonus"; },
                 { .fill = Chrome::kTitle, .h_justify = Style::Left }),
@@ -3088,17 +3110,42 @@ Element *Ui::make_boost_panel() {
                 return I18n::use_chinese ? "离线 10 分钟积 1 分钟 · 最多存 6 小时" : "10 minutes away earns 1 minute · cap 6 hours";
             }, { .fill = Chrome::kBody, .h_justify = Style::Left })
         }, card_pad, 10, { .fill = 0xff73c77a, .round_radius = 10, .h_justify = Style::Left }),
-        new Ui::DynamicText(hint_sz + 1.f, [](){
-            if (!Game::account_logged_in)
-                return I18n::use_chinese ? "登录账号后获得加成" : "Sign in to earn bonus time";
-            return Game::bonus_enabled
+        new Ui::Button(act_w, act_h,
+            new Ui::DynamicText(mobile ? 22.f : 20.f, [](){
+                if (!Game::account_logged_in)
+                    return I18n::use_chinese ? "请先登录" : "Sign in first";
+                if (Game::bonus_enabled)
+                    return I18n::use_chinese ? "关闭加成" : "Deactivate";
+                if (bonus_bank_empty())
+                    return I18n::use_chinese ? "暂无可用时间" : "No bonus time";
+                return I18n::use_chinese ? "激活" : "Activate";
+            }, { .fill = Chrome::kTitle }),
+            [](Element *, uint8_t e){
+                if (e != Ui::kClick) return;
+                if (!Game::account_logged_in) return;
+                Game::set_bonus_enabled(Game::bonus_enabled ? 0 : 1);
+            },
+            [](){
+                // Dim when empty bank and currently off (cannot arm).
+                return !Game::account_logged_in
+                    || (!Game::bonus_enabled && bonus_bank_empty());
+            },
+            { .fill = 0xff4a9a58, .round_radius = 8 }),
+        new Ui::HContainer({
+            new BonusAutoToggle(),
+            new Ui::DynamicText(mobile ? 17.f : 16.f, [](){
+                return I18n::use_chinese ? "自动激活" : "Activate automatically";
+            }, { .fill = Chrome::kTitle })
+        }, 0, 12, { .h_justify = Style::Left }),
+        new Ui::DynamicText(hint_sz, [](){
+            return Game::bonus_auto
                 ? (I18n::use_chinese
-                    ? "开启中：消耗时间并三倍掉落（先每日后离线）"
-                    : "ON: burns time and triples drops (daily then offline)")
+                    ? "进局时若仍有额度会自动开启"
+                    : "Arms itself on spawn while time remains")
                 : (I18n::use_chinese
-                    ? "已关闭：不消耗时间，也不会三倍掉落"
-                    : "OFF: timers pause and drops stay normal");
-        }, { .fill = Chrome::kTitle, .h_justify = Style::Left })
+                    ? "关闭后需手动点「激活」"
+                    : "Off: press Activate each life");
+        }, { .fill = Chrome::kBody, .h_justify = Style::Left })
     }, Game::kPanelBoost);
     elt->style.fill = 0xff5db56e;
     elt->style.line_width = Chrome::kRim;

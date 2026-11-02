@@ -112,8 +112,9 @@ namespace Ui {
     Element *make_bag_drag_ghost();
     // True while a bag tap/drag is in progress (blocks scroll + outside-close)
     uint8_t bag_gesture_busy();
-    // Soft bag press that should become an equip drag (toward loadout / left panel)
-    // rather than list scroll — ScrollContainer must not cancel these.
+    // Soft bag press that should become an equip drag (left panel / loadout bar /
+    // near bag bottom toward the bar) rather than list scroll. Mid-list vertical
+    // swipes on filled cells stay scrollable — ScrollContainer must not cancel those.
     uint8_t bag_gesture_wants_equip(float x, float y);
     // True only after a petal/bag press has moved past slop (real drag).
     // Soft presses still allow ScrollContainer to take over for scrolling.

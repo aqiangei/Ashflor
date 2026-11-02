@@ -199,7 +199,8 @@ public:
     X(21, Game::show_debug) \
     X(23, Game::show_hitboxes) \
     X(24, Game::show_low_rarity_drops) \
-    X(26, Game::perf_mode)
+    X(26, Game::perf_mode) \
+    X(27, Game::bonus_auto)
 
 #define X(ct, name) static auto checker_##ct = MutationObserver(name);
 STORED
@@ -276,8 +277,8 @@ void Storage::retrieve() {
                 Input::disable_auto_party = BitMath::at(b2, 1);
                 Game::show_hitboxes = BitMath::at(b2, 2);
                 Game::show_low_rarity_drops = BitMath::at(b2, 3);
-                // bit6 marks a user-chosen perf_mode (bit4). Old bit5 saves from the
-                // brief "default on" ship are ignored so everyone stays sharp unless opted in.
+                Game::bonus_auto = BitMath::at(b2, 5);
+                // bit6 marks a user-chosen perf_mode (bit4).
                 if (BitMath::at(b2, 6))
                     Game::perf_mode = BitMath::at(b2, 4);
             }
@@ -617,6 +618,7 @@ void Storage::set() {
             | ((Game::show_hitboxes ? 1 : 0) << 2)
             | ((Game::show_low_rarity_drops ? 1 : 0) << 3)
             | ((Game::perf_mode ? 1 : 0) << 4)
+            | ((Game::bonus_auto ? 1 : 0) << 5)
             | (1 << 6)
         );
         StorageProtocol::store("settings", writer.at - writer.base);

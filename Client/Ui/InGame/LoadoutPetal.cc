@@ -440,15 +440,13 @@ uint8_t Ui::bag_gesture_wants_equip(float x, float y) {
     if (Ui::loadout_bar_hit(x, y)) return 1;
     // Left the inventory drawer — equip drag, not list scroll.
     if (!Ui::loadout_drag_over_bag(x, y)) return 1;
-    // Still inside the bag: any clear downward swipe toward the loadout bar
-    // (drawer sits above it) is an equip drag — do not let ScrollContainer cancel.
-    float dy = y - bag_gesture_y;
-    float dx = x - bag_gesture_x;
-    float slop = Input::pointer_slop() * 0.45f;
-    if (dy >= slop && dy >= std::fabs(dx) * 0.65f)
-        return 1;
+    // Still inside the bag: prefer list scroll on filled cells. Only treat as
+    // equip when the finger is already near the bottom edge and moving toward
+    // the loadout bar — a mid-list downward swipe must keep scrolling.
     Element *panel = Ui::game_panel_roots[Game::kPanelInventory];
     if (panel == nullptr || !panel->visible) return 0;
+    float dy = y - bag_gesture_y;
+    float slop = Input::pointer_slop() * 0.45f;
     float bag_bottom = panel->screen_y + panel->height * Ui::scale * 0.5f;
     float edge = 140.f * Ui::scale;
     if (dy >= slop && y >= bag_bottom - edge)

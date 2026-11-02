@@ -244,8 +244,11 @@ namespace Game {
     extern uint32_t daily_bonus_seconds;
     extern uint32_t offline_bonus_seconds;
     extern uint8_t bonus_enabled; // 1 = burn timers + triple drops
+    extern uint8_t bonus_auto; // 1 = re-arm on spawn when bank has time
     extern double bonus_synced_at;
+    extern double bonus_toggle_at; // ignore stale enabled echoes briefly
     void set_bonus_enabled(uint8_t on);
+    void maybe_auto_enable_bonus(); // call when flower becomes alive
 
     // Guest local progress (browser localStorage)
     extern uint8_t guest_save_valid;

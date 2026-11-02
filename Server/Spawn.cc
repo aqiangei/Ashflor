@@ -450,7 +450,7 @@ static void _finish_player_spawn(Simulation *sim, Entity &camera, Entity &player
 
 void player_spawn(Simulation *sim, Entity &camera, Entity &player) {
     // Hub spawn: first map entry / Continue without a death site.
-    // Death Continue uses player_spawn_at near death (Client.cc); party revive / portals too.
+    // Death Continue uses player_spawn_at at the death site (Client.cc); party revive / portals too.
     float hx = MAP_SPAWN_X, hy = MAP_SPAWN_Y;
     Map::hub_xy(sim->map_id, hx, hy);
     float spawn_x = hx + (frand() - 0.5f) * 240.f;

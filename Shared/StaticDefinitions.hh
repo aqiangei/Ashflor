@@ -104,7 +104,7 @@ inline uint8_t clamp_to_open_map(uint8_t map_id) {
     return MapID::kGarden;
 }
 
-// L1 = title biomes; L2+ = portal-only hubs (death Continue → same map hub).
+// L1 = title biomes; L2+ = portal-only maps (death Continue → near death site).
 inline uint8_t map_tier(uint8_t map_id) {
     switch (map_id) {
         case MapID::kFactory:
