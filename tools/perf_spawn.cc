@@ -38,7 +38,8 @@ int main() {
                     unsigned seed = 20261023u + static_cast<unsigned>(total);
                     std::srand(seed);
                     float clearance = MOB_DATA[spawn.id].radius.get_single(frand())
-                        * MOB_RADIUS_MULTIPLIER * mob_rarity_radius_mult(MOB_DATA[spawn.id].rarity) + 8.f;
+                        * MOB_RADIUS_MULTIPLIER
+                        * mob_spawn_radius_mult(MOB_DATA[spawn.id].rarity, MOB_DATA[spawn.id].rarity) + 8.f;
                     std::srand(seed);
                     auto before = std::chrono::steady_clock::now();
                     bool ok = Map::sample_spawn_point(sim.get(), zi, spawn.id, x, y, MOB_DATA[spawn.id].rarity);

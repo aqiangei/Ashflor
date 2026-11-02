@@ -16,6 +16,7 @@
 #include <cstdint>
 #include <memory>
 #include <vector>
+#include <emscripten.h>
 
 #ifndef M_PI
 #define M_PI 3.14159265358979323846
@@ -39,6 +40,14 @@ std::vector<Chunk> chunks;
 uint8_t cached_map = 255;
 uint32_t cached_difficulty = 0xffffffffu;
 uint64_t frame = 0;
+// A detailed overview covers cold chunks while they warm. Reuse its pixels
+// instead of regenerating the whole viewport on every cache-miss frame.
+struct Overview {
+    int x0 = -1, y0 = -1, x1 = -1, y1 = -1;
+    uint32_t difficulty = 0xffffffffu;
+    float left = 0, top = 0, scale = 1;
+    std::unique_ptr<Renderer> canvas;
+} overview;
 bool feature_intersects(TerrainFeature const &f, float left, float top, float right, float bottom) {
     float x0, y0, x1, y1;
     if (f.shape == TerrainShape::kAABB) {
@@ -375,6 +384,7 @@ void render_chunk(Chunk &chunk, uint8_t map_id, uint32_t difficulty) {
 
 void MapChunkCache::clear() {
     chunks.clear();
+    overview = {};
     cached_map = 255;
     cached_difficulty = 0xffffffffu;
 }
@@ -398,6 +408,7 @@ void MapChunkCache::draw(Renderer &target, uint8_t map_id, uint32_t difficulty,
     } else if (tiles_now && !tiles_were_ready) {
         // Chunks baked before grass SVGs loaded were flat fills — rebake once.
         chunks.clear();
+        overview = {};
         tiles_were_ready = tiles_now;
     }
     ++frame;
@@ -415,6 +426,7 @@ void MapChunkCache::draw(Renderer &target, uint8_t map_id, uint32_t difficulty,
     // Retain the larger tier until zoom changes substantially (hysteresis).
     if (tile > kChunkSize || (tile < kChunkSize && tiles_needed(tile) < view_budget / 2)) {
         chunks.clear();
+        overview = {};
         kChunkSize = tile;
     }
 
@@ -437,11 +449,53 @@ void MapChunkCache::draw(Renderer &target, uint8_t map_id, uint32_t difficulty,
 
     size_t const limit = mobile ? 48u : 96u;
     // Zoomed-out views need faster fill or the right half stays flat theme fill.
-    size_t const visible = (size_t)(x1 - x0 + 1) * (size_t)(y1 - y0 + 1);
     size_t bake_budget = mobile ? 2u : 4u;
-    if (visible > 24u) bake_budget = mobile ? 3u : 6u;
     size_t baked = 0;
     size_t missing = 0;
+    // Protect the entire visible set before allocating: an old visible tile
+    // later in scan order must not be evicted to make room for a new one.
+    for (Chunk &c : chunks)
+        if (c.x >= x0 && c.x <= x1 && c.y >= y0 && c.y <= y1) c.used = frame;
+
+    size_t const missing_before = [&]() {
+        size_t n = 0;
+        for (int y = y0; y <= y1; ++y) for (int x = x0; x <= x1; ++x)
+            if (std::none_of(chunks.begin(), chunks.end(), [=](Chunk const &c) {
+                return c.x == x && c.y == y;
+            })) ++n;
+        return n;
+    }();
+    bool const overview_valid = overview.canvas && overview.x0 == x0 && overview.y0 == y0
+        && overview.x1 == x1 && overview.y1 == y1 && overview.difficulty == difficulty;
+    auto draw_overview = [&]() {
+        RenderContext c(&target);
+        target.scale(1.f / overview.scale);
+        target.draw_image_at(*overview.canvas, overview.left * overview.scale,
+                             overview.top * overview.scale);
+    };
+    if (missing_before > bake_budget && !overview_valid) {
+        overview.x0 = x0; overview.y0 = y0; overview.x1 = x1; overview.y1 = y1;
+        overview.difficulty = difficulty;
+        overview.left = (float)(x0 * kChunkSize);
+        overview.top = (float)(y0 * kChunkSize);
+        float r = std::min((float)((x1 + 1) * kChunkSize), (float)ARENA_WIDTH);
+        float b = std::min((float)((y1 + 1) * kChunkSize), (float)ARENA_HEIGHT);
+        // At most 16 MiB of temporary pixels; the regular sharp chunks replace
+        // this overview as they finish. Artwork and geometry stay identical.
+        overview.scale = std::min(1.f, 2048.f / std::max(r - overview.left, b - overview.top));
+        if (!overview.canvas) overview.canvas = std::make_unique<Renderer>();
+        Renderer &raster = *overview.canvas;
+        raster.set_dimensions(std::ceil((r - overview.left) * overview.scale),
+                              std::ceil((b - overview.top) * overview.scale));
+        raster.reset(); raster.clear();
+        raster.scale(overview.scale);
+        raster.translate(-overview.left, -overview.top);
+        paint_static(raster, map_id, difficulty, overview.left, overview.top, r, b);
+        draw_overview();
+        return; // Do not add chunk bakes to this cold frame's work.
+    }
+    if (overview_valid) bake_budget = mobile ? 1u : 2u;
+    double const bake_start = emscripten_get_now();
 
     // Prefer refreshing existing canvases (stale fog) over allocating holes so
     // a difficulty-band change never leaves an empty frame.
@@ -452,14 +506,16 @@ void MapChunkCache::draw(Renderer &target, uint8_t map_id, uint32_t difficulty,
             });
             if (it != chunks.end()) {
                 it->used = frame;
-                if (it->baked_difficulty != difficulty && baked < bake_budget) {
+                if (!missing_before && it->baked_difficulty != difficulty && baked < bake_budget
+                    && (!baked || emscripten_get_now() - bake_start < 3.0)) {
                     render_chunk(*it, map_id, difficulty);
                     ++baked;
                 }
                 continue;
             }
             ++missing;
-            if (baked >= bake_budget) continue;
+            if (overview_valid && (baked >= bake_budget
+                || (baked && emscripten_get_now() - bake_start >= 3.0))) continue;
             if (chunks.size() == limit) {
                 it = std::min_element(chunks.begin(), chunks.end(), [](Chunk const &a, Chunk const &b) {
                     return a.used < b.used;
@@ -484,13 +540,13 @@ void MapChunkCache::draw(Renderer &target, uint8_t map_id, uint32_t difficulty,
         }
     }
 
-    // Any holes: paint the whole viewport once so half-screen flat seams never
-    // show (old path only did this for missing>1, leaving one-hole blit gaps).
-    // Keep baking above so later frames can blit.
+    // Cover all holes with one cached overview until every visible chunk is
+    // ready. Keeping one layer also avoids a moving sharp/soft seam.
     if (missing > 0u) {
-        paint_static(target, map_id, difficulty, paint_l, paint_t, paint_r, paint_b);
+        draw_overview();
         return;
     }
+    overview = {}; // Warm views need only the regular LRU chunk canvases.
 
     // Steady: blit existing canvases (stale fog OK).
     for (int y = y0; y <= y1; ++y) {

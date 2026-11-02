@@ -1,11 +1,12 @@
 {
   "name": "Ashflor",
   "summary": "开源 florr.io 风格多地图服：花园/沙漠/海洋/雪原/丛林/蚁穴/火山/王城；花瓣合成与唯一无限升级、公会组队、Boss 锚点与全服播报；八域探索与指引精灵；原生 uWS 服务端。",
-  "updated_at": "2026-11-01",
-  "cache_v": "21843",
-  "wasm_stamp": "887D4B2789CDAD5EE40A6821E31FE8A8",
-  "art_stamp": "1B964DE1053ABE1CC2A0756E26AAB27A",
+  "updated_at": "2026-11-03",
+  "cache_v": "21845",
+  "wasm_stamp": "65341C9E937F48FBDFFE2D766A7BDBE8",
+  "art_stamp": "DEED1B32269B44ADC2A0756E26AAB27A",
   "highlights": [
+    "性能：地图缺块复用缓存并分帧补齐；优化地形碰撞重复查询与服务端 Release 编译。",
     "性能：Canvas 批量绘图、怪物自适应快照插值、合并本地存档写入、加载与重连优化；保留地图与怪物细节。",
     "性能：Canvas 批量绘图、怪物自适应快照插值、合并本地存档写入、加载与重连优化；保留地图与怪物细节。",
     "唯一等级：按英文名归位到当前 Unique ID，防枚举漂移丢 Lv；UI/战斗同路。",

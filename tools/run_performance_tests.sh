@@ -13,7 +13,7 @@ shared=(Shared/MapGen.cc Shared/StaticData.cc Helpers/Math.cc)
 "$out/terrain" | tee "$out/terrain.log"
 "$compiler" "${opts[@]}" -DSERVERSIDE=1 tools/perf_spawn.cc "${shared[@]}" \
     Shared/Simulation.cc Shared/Entity.cc Shared/EntityDef.cc Shared/Arena.cc \
-    Shared/Binary.cc Helpers/Vector.cc Helpers/UTF8.cc Server/SpatialHashCanonical.cc \
+    Shared/Binary.cc Helpers/Vector.cc Helpers/UTF8.cc Server/SpatialHashCanonical.cc Server/PetalTracker.cc \
     -o "$out/spawn" 2> "$out/spawn-build.log"
 "$out/spawn" | tee "$out/spawn.log"
 "$compiler" "${opts[@]}" -DCLIENTSIDE=1 tools/perf_particles.cc \
@@ -22,8 +22,9 @@ shared=(Shared/MapGen.cc Shared/StaticData.cc Helpers/Math.cc)
 "$out/particles" | tee "$out/particles.log"
 "$compiler" "${opts[@]}" -DSERVERSIDE=1 -DWASM_SERVER=1 tools/perf_collision.cc \
     Shared/Entity.cc Shared/EntityDef.cc Shared/Simulation.cc Shared/Arena.cc \
-    Shared/Recipe.cc Shared/StaticData.cc Server/SpatialHashCanonical.cc Server/PetalTracker.cc \
-    Helpers/Vector.cc Helpers/Math.cc -o "$out/collision" 2> "$out/collision-build.log"
+    Shared/Recipe.cc Shared/StaticData.cc Shared/Map.cc Shared/MapGen.cc Shared/Craft.cc \
+    Server/SpatialHashCanonical.cc Server/PetalTracker.cc Server/TrainingDummy.cc \
+    Helpers/Vector.cc Helpers/Math.cc Helpers/UTF8.cc -o "$out/collision" 2> "$out/collision-build.log"
 "$out/collision" | tee "$out/collision.log"
 "$compiler" "${opts[@]}" -DSERVERSIDE=1 tools/perf_network_view.cc \
     Shared/Binary.cc Shared/EntityDef.cc Helpers/Math.cc \

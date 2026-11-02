@@ -1,4 +1,7 @@
 #include <Server/Client.hh>
+#ifndef WASM_SERVER
+#include <WebSocket.h>
+#endif
 #include <Server/DevCheats.hh>
 
 #include <Server/AccountStore.hh>

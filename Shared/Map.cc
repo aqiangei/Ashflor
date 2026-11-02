@@ -210,6 +210,7 @@ static float dist2_point_seg(float px, float py, float ax, float ay, float bx, f
 namespace {
 struct PathSegment {
     float ax, ay, bx, by, tx, ty, hw[2];
+    float left, top, right, bottom;
 };
 struct CachedPath {
     TerrainFeature source{};
@@ -246,6 +247,8 @@ CachedPath const &cached_path(TerrainFeature const &f) {
         float t = (float)i / (float)path.count;
         if (f.shape == TerrainShape::kSpiral) Map::spiral_center_at(f, t, s.bx, s.by);
         else Map::river_center_at(f, t, s.bx, s.by);
+        s.left = std::min(ax, s.bx); s.right = std::max(ax, s.bx);
+        s.top = std::min(ay, s.by); s.bottom = std::max(ay, s.by);
         s.tx = s.bx - ax; s.ty = s.by - ay;
         float len = std::sqrt(s.tx * s.tx + s.ty * s.ty);
         if (len < 1e-3f) { s.tx = 1.f; s.ty = 0.f; }
@@ -269,27 +272,34 @@ static void closest_on_path(TerrainFeature const &f, float x, float y,
     hw = base_hw;
     nx = 1.f; ny = 0.f;
     dist = 0.f;
+    PathSegment const *nearest = nullptr;
 
     for (uint32_t i = 0; i < path.count; ++i) {
         PathSegment const &s = path.segments[i];
+        // Distance to a segment's box is a lower bound. Leave generous float
+        // slack so pruning cannot change the winning segment at a seam/tie.
+        float bx = std::max(std::max(s.left - x, x - s.right), 0.f);
+        float by = std::max(std::max(s.top - y, y - s.bottom), 0.f);
+        if (bx * bx + by * by > best_d2 + std::max(1.f, best_d2 * 0.00001f)) continue;
         float pqx = 0.f, pqy = 0.f;
         float d2 = dist2_point_seg(x, y, s.ax, s.ay, s.bx, s.by, pqx, pqy);
         if (d2 < best_d2) {
             best_d2 = d2;
             qx = pqx; qy = pqy;
-            float tx = s.tx, ty = s.ty;
-            // Bank scale matches terrain_outline (+n = side 0, -n = side 1)
-            float nnx = -ty, nny = tx;
-            float rx = x - pqx, ry = y - pqy;
-            float cross = tx * ry - ty * rx;
-            uint8_t side = cross >= 0.f ? 0 : 1;
-            hw = s.hw[side];
-            // Push normal: from centerline toward the query (stable for eject).
-            float rlen = std::sqrt(rx * rx + ry * ry);
-            if (rlen > 1e-3f) { nx = rx / rlen; ny = ry / rlen; }
-            else if (side == 0) { nx = nnx; ny = nny; }
-            else { nx = -nnx; ny = -nny; }
+            nearest = &s;
         }
+    }
+    // Only the winning segment needs a bank width and normal. Computing and
+    // normalising these for every successively closer segment dominated CCD.
+    if (nearest) {
+        float tx = nearest->tx, ty = nearest->ty;
+        float rx = x - qx, ry = y - qy;
+        uint8_t side = tx * ry - ty * rx >= 0.f ? 0 : 1;
+        hw = nearest->hw[side];
+        float rlen = std::sqrt(rx * rx + ry * ry);
+        if (rlen > 1e-3f) { nx = rx / rlen; ny = ry / rlen; }
+        else if (side == 0) { nx = -ty; ny = tx; }
+        else { nx = ty; ny = -tx; }
     }
     dist = std::sqrt(best_d2);
 }
@@ -299,14 +309,42 @@ static float aabb_jagged_amp(TerrainFeature const &f) {
     return jagged_amp(f) * std::min(w, h) * 0.5f;
 }
 
+namespace {
+struct CachedBox {
+    TerrainFeature source{};
+    std::array<float, 64> xs, ys;
+    uint32_t count = 0;
+};
+std::unordered_map<TerrainFeature const *, CachedBox> box_cache;
+
+CachedBox const &cached_box(TerrainFeature const &f) {
+    auto it = box_cache.find(&f);
+    if (it != box_cache.end()) {
+        auto const &s = it->second.source;
+        if (s.left == f.left && s.top == f.top && s.right == f.right && s.bottom == f.bottom
+            && s.shape == f.shape && s.kind == f.kind && s.seed == f.seed && s.param == f.param)
+            return it->second;
+    } else {
+        if (box_cache.size() >= MapID::kNumMaps * MAX_TERRAIN_PER_MAP)
+            box_cache.erase(box_cache.begin());
+        it = box_cache.emplace(&f, CachedBox{}).first;
+    }
+    auto &box = it->second;
+    box.source = f;
+    box.count = Map::terrain_outline(f, box.xs.data(), box.ys.data(), 64);
+    return box;
+}
+}
+
 static uint8_t point_in_jagged_box(TerrainFeature const &f, float x, float y) {
     // Jagged edges only protrude outward — smooth interior is always inside
     if (x >= f.left && x <= f.right && y >= f.top && y <= f.bottom) return 1;
     float amp = aabb_jagged_amp(f);
     if (x < f.left - amp || x > f.right + amp || y < f.top - amp || y > f.bottom + amp)
         return 0;
-    float xs[64], ys[64];
-    uint32_t n = Map::terrain_outline(f, xs, ys, 64);
+    auto const &box = cached_box(f);
+    auto const *xs = box.xs.data(), *ys = box.ys.data();
+    uint32_t n = box.count;
     return point_in_polygon(xs, ys, n, x, y);
 }
 
@@ -320,8 +358,9 @@ static uint8_t circle_hits_jagged_box(TerrainFeature const &f, float x, float y,
     if (x < f.left - amp - radius || x > f.right + amp + radius
         || y < f.top - amp - radius || y > f.bottom + amp + radius)
         return 0;
-    float xs[64], ys[64];
-    uint32_t n = Map::terrain_outline(f, xs, ys, 64);
+    auto const &box = cached_box(f);
+    auto const *xs = box.xs.data(), *ys = box.ys.data();
+    uint32_t n = box.count;
     if (n < 3) return 0;
     if (point_in_polygon(xs, ys, n, x, y)) return 1;
     float r2 = radius * radius;
@@ -398,6 +437,9 @@ struct TerrainIndex {
     std::array<std::vector<uint16_t>, kTerrainCols * kTerrainRows> cells;
     std::array<uint32_t, MAX_TERRAIN_PER_MAP> seen{};
     uint32_t generation = 0;
+    bool query_valid = false;
+    float query_x = 0, query_y = 0, query_radius = 0;
+    uint8_t query_result = 0;
 };
 std::array<TerrainIndex, MapID::kNumMaps> terrain_indices;
 
@@ -421,6 +463,7 @@ TerrainIndex &terrain_index(uint8_t map_id, MapTerrain const &terrain) {
                 index.cells[cy * kTerrainCols + cx].push_back(i);
     }
     index.feature_count = terrain.size();
+    index.query_valid = false;
     return index;
 }
 } // namespace
@@ -428,6 +471,16 @@ TerrainIndex &terrain_index(uint8_t map_id, MapTerrain const &terrain) {
 uint8_t Map::circle_hits_impassable(uint8_t map_id, float x, float y, float radius) {
     MapTerrain const &terrain = map_terrain(map_id);
     TerrainIndex &index = terrain_index(map_id, terrain);
+    // CCD, penetration resolution and Motion's final guard ask the same exact
+    // endpoint repeatedly. Terrain is static; reuse that answer, not a rounded
+    // spatial approximation. Rebuilding the index invalidates it during MapGen.
+    if (index.query_valid && index.query_x == x && index.query_y == y
+        && index.query_radius == radius) return index.query_result;
+    auto result = [&](uint8_t hit) {
+        index.query_x = x; index.query_y = y; index.query_radius = radius;
+        index.query_result = hit; index.query_valid = true;
+        return hit;
+    };
     if (++index.generation == 0) {
         index.seen.fill(0);
         index.generation = 1;
@@ -449,14 +502,14 @@ uint8_t Map::circle_hits_impassable(uint8_t map_id, float x, float y, float radi
     for (uint16_t i : candidates) {
         TerrainFeature const &f = terrain[i];
         if (f.kind != TerrainKind::kChannel) continue;
-        if (circle_hits_feature(f, x, y, radius)) return 0;
+        if (circle_hits_feature(f, x, y, radius)) return result(0);
     }
     for (uint16_t i : candidates) {
         TerrainFeature const &f = terrain[i];
         if (!(f.flags & TerrainFlags::kImpassable)) continue;
-        if (circle_hits_feature(f, x, y, radius)) return 1;
+        if (circle_hits_feature(f, x, y, radius)) return result(1);
     }
-    return 0;
+    return result(0);
 }
 
 static uint8_t push_out_path(TerrainFeature const &f, float &x, float &y, float radius) {
@@ -562,8 +615,9 @@ static uint8_t push_out_jagged_box(TerrainFeature const &f, float &x, float &y, 
     if (x < f.left - amp - radius || x > f.right + amp + radius
         || y < f.top - amp - radius || y > f.bottom + amp + radius)
         return 0;
-    float xs[64], ys[64];
-    uint32_t n = Map::terrain_outline(f, xs, ys, 64);
+    auto const &box = cached_box(f);
+    auto const *xs = box.xs.data(), *ys = box.ys.data();
+    uint32_t n = box.count;
     if (n < 3) return 0;
     uint8_t inside = point_in_polygon(xs, ys, n, x, y);
     float best_d2 = 1e12f;

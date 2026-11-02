@@ -19,8 +19,8 @@ public:
     WebSocketServer();
 };
 #else
-#include <App.h>
-typedef uWS::App WebSocketServer;
+namespace uWS { template<bool SSL> struct TemplatedApp; }
+typedef uWS::TemplatedApp<false> WebSocketServer;
 #endif
 
 namespace Server {

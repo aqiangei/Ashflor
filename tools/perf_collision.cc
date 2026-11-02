@@ -20,6 +20,7 @@ static unsigned damage_calls = 0;
 static unsigned checks = 0;
 static bool players = false;
 bool is_player_faction(Simulation *, Entity const &) { return players; }
+bool player_faction_pvp(Simulation *, Entity const &, Entity const &) { return false; }
 void inflict_damage(Simulation *, EntityID const, EntityID const, float, uint8_t) {
     ++damage_calls;
 }
@@ -91,7 +92,7 @@ int main() {
     check(b.speed_ratio == 1.f, "web does not slow petals");
     for (Components component : {kMob, kPetal, kDrop, kWeb}) {
         reset(a, kDrop, 0, 0, team); reset(b, component, 0, 0, enemy);
-        check(!_should_interact(a, b) && !_should_interact(b, a), "non-flower drop pair rejected");
+        check(!_should_interact(sim.get(), a, b) && !_should_interact(sim.get(), b, a), "non-flower drop pair rejected");
         on_collide(sim.get(), a, b);
         check(no_motion(a) && no_motion(b) && a.speed_ratio == 1.f && b.speed_ratio == 1.f,
               "non-flower drop collision is inert");
@@ -100,14 +101,14 @@ int main() {
     a.add_component(kHealth); // living flower — corpses (no Health) must not pick up
     a.set_parent(camera.id); a.set_loadout_count(1);
     b.set_drop_id(PetalID::kBasic); b.set_drop_count(1);
-    check(_should_interact(a, b) && _should_interact(b, a), "drop-flower pair accepted both orders");
+    check(_should_interact(sim.get(), a, b) && _should_interact(sim.get(), b, a), "drop-flower pair accepted both orders");
     on_collide(sim.get(), b, a);
     check(b.pending_delete && collector.craft_bank[PetalID::kBasic] == 1
           && a.get_loadout_ids(0) == PetalID::kNone && a.get_loadout_ids(1) == PetalID::kNone,
           "owned loot enters stacks without equipping empty slots");
     reset(a, kFlower, 0, 0, team); reset(b, kDrop, 5, 0, camera.id);
     a.set_parent(camera.id);
-    check(!_should_interact(a, b), "corpse flower without Health rejects drops");
+    check(!_should_interact(sim.get(), a, b), "corpse flower without Health rejects drops");
     reset(a, kFlower, 0, 0, team); reset(b, kDrop, 5, 0, enemy);
     a.add_component(kHealth);
     a.set_parent(camera.id); a.set_loadout_count(1);
@@ -123,26 +124,23 @@ int main() {
 
     reset(a, kPetal, 0, 0, team); reset(b, kPetal, 0, 0, enemy);
     a.set_petal_id(PetalID::kMeteor); b.set_petal_id(PetalID::kMeteor);
-    check(!_should_interact(a, b), "planted meteors can overlap");
+    check(!_should_interact(sim.get(), a, b), "planted meteors can overlap");
     reset(a, kFlower, 0, 0, team);
-    check(!_should_interact(a, b) && !_should_interact(b, a), "players pass meteors");
+    check(!_should_interact(sim.get(), a, b) && !_should_interact(sim.get(), b, a), "players pass meteors");
     reset(b, kFlower, 5, 0, enemy);
     a.add_component(kHealth); b.add_component(kHealth);
     players = true;
     unsigned before = damage_calls;
     on_collide(sim.get(), a, b);
-    // Soft-block: cancel_movement may add velocity to keep bodies from nesting;
-    // still no contact damage, and collision_velocity must separate.
-    check(damage_calls == before
-          && a.collision_velocity.x < 0.f && b.collision_velocity.x > 0.f,
-          "player collision keeps soft push without PvP damage or knockback");
-    // Shallow overlap still gets a separation floor (no slow sink-through).
+    // Ordinary player flowers now pass through each other. Corruption/PvP is
+    // outside this fixture; keep damage and physical response disabled here.
+    check(damage_calls == before && no_motion(a) && no_motion(b),
+          "ordinary players pass through without contact damage or knockback");
     reset(a, kFlower, 0, 0, team); reset(b, kFlower, 19.5f, 0, enemy);
     a.add_component(kHealth); b.add_component(kHealth);
     a.mass = b.mass = 1.f;
     on_collide(sim.get(), a, b);
-    check(a.collision_velocity.x < -1.f && b.collision_velocity.x > 1.f,
-          "shallow player overlap still soft-blocks with separation floor");
+    check(no_motion(a) && no_motion(b), "shallow player overlap also passes through");
     players = false;
 
     // Regression for sqrt underflow: a nonzero direction can have zero length.

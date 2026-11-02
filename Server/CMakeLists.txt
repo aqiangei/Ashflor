@@ -3,6 +3,7 @@ cmake_minimum_required(VERSION 3.16)
 if(WASM_SERVER)
     set(CMAKE_SYSTEM_NAME Generic)
 endif()
+
 project(gardn-server)
 
 include_directories(..)
@@ -126,9 +127,13 @@ else()
     target_include_directories(gardn-server PRIVATE ${CMAKE_SOURCE_DIR}/uWebSockets/uSockets/src)
     # Link archive by path (avoids -l: name quirks); uSockets must be built WITHOUT -flto
     # when using clang++ (GCC LTO bitcode will not resolve).
-    set(USOCKETS_A "${CMAKE_SOURCE_DIR}/uWebSockets/uSockets/uSockets.a")
+    set(USOCKETS_A "${CMAKE_SOURCE_DIR}/uWebSockets/uSockets/uSockets.a" CACHE FILEPATH
+        "Native uSockets archive, built with WITH_LTO=0")
     target_link_libraries(gardn-server "${USOCKETS_A}" uv z pthread dl)
     if(CMAKE_HOST_WIN32)
         target_link_libraries(gardn-server ws2_32)
     endif()
 endif()
+
+include(../Helpers/ReleaseOptimization.cmake)
+ashflor_optimize_release(gardn-server)

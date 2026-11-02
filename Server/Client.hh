@@ -15,7 +15,7 @@
 #ifdef WASM_SERVER
 class WebSocket;
 #else
-#include <App.h>
+namespace uWS { template<bool SSL, bool isServer, typename UserData> struct WebSocket; }
 class Client;
 typedef uWS::WebSocket<false, true, Client> WebSocket;
 #endif

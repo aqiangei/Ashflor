@@ -2,6 +2,7 @@
 #include <Server/Server.hh>
 
 #include <iostream>
+#include <ctime>
 
 int main() {
     std::cout << "Diagnostics: {\n";
