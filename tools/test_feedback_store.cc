@@ -110,6 +110,18 @@ int main() {
     assert(post("New","compatible save") == kFeedbackPosted);
     auto current = FeedbackStore::page_json(); FeedbackStore::load(); assert(FeedbackStore::page_json() == current);
 
+    fixture("multiline-roundtrip");
+    assert(post("Alice", "[来自 https://ashflor.com]\n多行留言：\"引号\"与\\路径\n第二行") == kFeedbackPosted);
+    auto multiline = FeedbackStore::page_json();
+    FeedbackStore::load(); assert(FeedbackStore::page_json() == multiline);
+
+    fixture("unclosed-legacy");
+    write("feedback.dat", "1 1792799000000 \"Bad\" \"unterminated\n"
+                          "2 1792799000000 \"Good\" \"kept\"\n");
+    FeedbackStore::load();
+    assert(FeedbackStore::page_json().find("Good") != std::string::npos);
+    assert(FeedbackStore::page_json().find("Bad") == std::string::npos);
+
     fixture("pagination");
     for(int i=0;i<35;++i){assert(post("Player"+std::to_string(i),"message "+std::to_string(i)) == kFeedbackPosted);advance(61000);}
     auto latest = FeedbackStore::page_json(), older = FeedbackStore::page_json(6);

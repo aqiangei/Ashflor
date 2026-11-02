@@ -19,6 +19,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <fstream>
+#include <functional>
 #include <iostream>
 #include <memory>
 #include <sstream>
@@ -115,7 +116,8 @@ static std::string json_raw_field(std::string const &j, char const *key) {
         std::string out;
         while (p < j.size() && j[p] != '"') {
             if (j[p] == '\\' && p + 1 < j.size()) {
-                out += j[p + 1];
+                char escaped = j[p + 1];
+                out += escaped == 'n' ? '\n' : escaped == 'r' ? '\r' : escaped == 't' ? '\t' : escaped;
                 p += 2;
                 continue;
             }
@@ -352,11 +354,12 @@ uWS::App Server::server = uWS::App()
     res->writeHeader("Access-Control-Allow-Headers", "Content-Type");
     res->end();
 })
-.post("/api/feedback", [](auto *res, auto * /*req*/) {
+.post("/api/feedback", [](auto *res, auto *req) {
+    std::string source = ClientAddress::resolve(res->getRemoteAddressAsText(), req->getHeader("x-forwarded-for"));
     auto body = std::make_shared<std::string>();
     auto done = std::make_shared<uint8_t>(0);
     res->onAborted([done]() { *done = 1; });
-    res->onData([res, body, done](std::string_view chunk, bool isLast) {
+    res->onData([res, body, done, source](std::string_view chunk, bool isLast) {
         if (*done) return;
         body->append(chunk.data(), chunk.size());
         if (body->size() > 2048) {
@@ -370,8 +373,20 @@ uWS::App Server::server = uWS::App()
         std::string action = json_raw_field(j, "action");
         if (action.empty()) action = "set_handled";
         std::string key = json_raw_field(j, "key");
+        if (action == "guest_post") {
+            uint32_t id = 0;
+            std::string display = json_raw_field(j, "name");
+            if (display.size() > 200 || display.find_first_of("\r\n") != std::string::npos) display.clear();
+            auto result = FeedbackStore::post((display.empty() ? "游客" : display + "（游戏昵称）") + "-" + std::to_string(std::hash<std::string>{}(ClientAddress::quota_key(source))), json_raw_field(j, "text"), id, source);
+            send_json(res, 200, "{\"ok\":" + std::string(result == 0 ? "true" : "false") + ",\"result\":" + std::to_string(result) + "}");
+            return;
+        }
         if (action == "auth") {
             send_json(res, 200, FeedbackStore::auth_json(key));
+            return;
+        }
+        if (action == "delete") {
+            send_json(res, 200, FeedbackStore::delete_json((uint32_t) json_int(j, "id", 0), key));
             return;
         }
         if (action != "set_handled") {

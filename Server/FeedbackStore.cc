@@ -156,7 +156,17 @@ bool parse_line(std::string const &line, Entry &e, uint32_t previous) {
     }
     return true;
 }
-// Best-effort: keep valid prefix/lines so one corrupt row cannot wipe the board.
+bool quoted_record_open(std::string const &text) {
+    bool quoted = false, escaped = false;
+    for (char c : text) {
+        if (escaped) { escaped = false; continue; }
+        if (quoted && c == '\\') { escaped = true; continue; }
+        if (c == '"') quoted = !quoted;
+    }
+    return quoted;
+}
+// std::quoted preserves literal newlines in text. Read a bounded logical record
+// before judging it corrupt, while keeping later rows recoverable on failure.
 bool parse(std::string const &raw, std::deque<Entry> &out) {
     out.clear();
     if (raw.empty()) return true;
@@ -168,7 +178,26 @@ bool parse(std::string const &raw, std::deque<Entry> &out) {
         if (!line.empty() && line.back() == '\r') line.pop_back();
         if (line.empty()) continue;
         Entry e{};
-        if (!parse_line(line, e, previous)) {
+        bool valid = parse_line(line, e, previous);
+        if (!valid && quoted_record_open(line)) {
+            auto const next_line = in.tellg();
+            std::string record = line, continuation;
+            while (record.size() <= 4096 && std::getline(in, continuation)) {
+                if (!continuation.empty() && continuation.back() == '\r') continuation.pop_back();
+                if (record.size() + 1 + continuation.size() > 4096) break;
+                record += '\n';
+                record += continuation;
+                if (!quoted_record_open(record)) {
+                    valid = parse_line(record, e, previous);
+                    break;
+                }
+            }
+            if (!valid && next_line != std::streampos(-1)) {
+                in.clear();
+                in.seekg(next_line); // Skip only the corrupt first line.
+            }
+        }
+        if (!valid) {
             ++bad;
             continue;
         }
@@ -290,7 +319,7 @@ uint8_t FeedbackStore::post(std::string const &author, std::string const &text, 
     for (auto it = entries.rbegin(); it != entries.rend(); ++it) {
         bool same_user = account_key(it->author) == account, same_ip = it->source != 0 && it->source == network;
         uint64_t age = now >= it->timestamp ? now - it->timestamp : 0;
-        if (same_user && age < minute) return kFeedbackTooFast;
+
         if (age >= day) continue;
         ++all24;
         if (age < minute) ++all1;
@@ -369,6 +398,23 @@ std::string FeedbackStore::set_handled_json(uint32_t id, uint8_t handled, std::s
     snapshot(now_ms());
     return "{\"ok\":true,\"msg\":\"已更新\",\"id\":" + std::to_string(id)
         + ",\"handled\":" + (handled ? "1" : "0") + '}';
+}
+
+std::string FeedbackStore::delete_json(uint32_t id, std::string const &key) {
+    if (key != kModKey) return "{\"ok\":false,\"msg\":\"密钥错误\"}";
+    if (!writable) return "{\"ok\":false,\"msg\":\"留言板不可写\"}";
+    auto it = std::find_if(entries.begin(), entries.end(), [id](auto const &e) { return e.id == id; });
+    if (it == entries.end()) return "{\"ok\":false,\"msg\":\"留言不存在\"}";
+    auto previous = entries;
+    entries.erase(it);
+    std::string data = serialize();
+    if (!write_atomic(backup, last_saved.empty() ? data : last_saved) || !write_atomic(file, data)) {
+        entries = std::move(previous);
+        return "{\"ok\":false,\"msg\":\"保存失败\"}";
+    }
+    last_saved = std::move(data);
+    snapshot(now_ms());
+    return "{\"ok\":true}";
 }
 
 uint8_t FeedbackStore::set_resolved(std::string const &author, uint32_t id, uint8_t resolved) {

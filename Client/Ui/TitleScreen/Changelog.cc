@@ -43,6 +43,12 @@ static Element *make_entries(std::initializer_list<std::pair<char const *, char 
 
 static Element *make_changelog_contents() {
     Element *elt = new Ui::VContainer({
+        make_date("2026年11月2日", "November 2nd 2026"),
+        make_entries({
+            {"留言板自动附上跳转来源网址（如 florrclone / ashflor），便于区分反馈出处",
+             "Feedback board tags each post with jump-from origin (florrclone / ashflor)"},
+        }),
+        make_divider(),
         make_date("2026年11月1日", "November 1st 2026"),
         make_entries({
             {"二级地图按原比例等比放大铺满 36000²（不拉伸/不镜像）；窄走廊蚀宽一格，减少卡墙与丢路；传送门 hub 对齐",
