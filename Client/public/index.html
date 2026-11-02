@@ -5,7 +5,7 @@
         <meta http-equiv="Cache-Control" content="no-cache">
         <script>
             // Bumped by deploy-update.ps1 with cacheV. Start wasm fetch ASAP (before CSS/DOM).
-            window.__ASHFLOR_CACHE_V = '21845';
+            window.__ASHFLOR_CACHE_V = '21846';
             (function (v) {
                 try {
                     var href = 'gardn-client.wasm?v=' + v;
@@ -448,6 +448,8 @@
                 cursor: pointer;
             }
         </style>
+        <link rel="stylesheet" href="clone-announcement.css?v=20261103-1">
+        <script defer src="clone-announcement.js?v=20261103-1"></script>
         <meta name="viewport" content="user-scalable=no, width=device-width, height=device-height, initial-scale=1, shrink-to-fit=no, viewport-fit=cover">
         <meta name="mobile-web-app-capable" content="yes">
         <meta name="apple-mobile-web-app-capable" content="yes">
@@ -559,10 +561,39 @@
     <div id="font-loader" style="font-family: 'Noto Sans SC', 'Microsoft YaHei', sans-serif; font-weight: 800;">加载中 你好 hello!</div>
     <div id="ashflor-connecting" aria-hidden="true"><span class="label">连接中</span><span class="dots" aria-hidden="true"><span>.</span><span>.</span><span>.</span></span></div>
     <canvas id="canvas" width="0" height="0"></canvas>
+    <aside id="clone-entry" aria-label="开源 Florr Clone 跳转入口">
+        <div class="clone-click-hint">新按钮 · 点击这里 <span class="clone-point-arrow" aria-hidden="true">↓</span></div>
+        <a id="clone-entry-link" href="http://154.219.105.161:8088/" target="_blank" rel="noopener noreferrer">
+            开源 Florr Clone ↗<small>开局 20s · 30 倍掉落</small>
+        </a>
+        <button id="clone-announcement-reopen" type="button" aria-haspopup="dialog">查看公告</button>
+    </aside>
+    <dialog id="clone-announcement" aria-labelledby="clone-announcement-title" aria-describedby="clone-announcement-copy clone-announcement-url">
+        <header class="clone-poster-header">
+            <span class="clone-poster-label">ASHFLOR · 新入口公告</span>
+            <button id="clone-announcement-close" type="button" aria-label="关闭公告">×</button>
+        </header>
+        <div class="clone-poster-content">
+            <div class="clone-poster-intro">
+                <p class="clone-poster-eyebrow">新增一键跳转，想玩就直接过去！</p>
+                <h1 id="clone-announcement-title">开源 Florr Clone</h1>
+                <div class="clone-offers">
+                    <div class="clone-offer"><span class="clone-offer-label">开局</span><strong>20<span>s</span></strong></div>
+                    <div class="clone-offer"><span class="clone-offer-label">掉落</span><strong>30<span>倍</span></strong></div>
+                </div>
+            </div>
+            <div class="clone-poster-launch">
+                <p id="clone-announcement-copy">我们加了一个跳转按钮，<br>点击即可前往开源 Florr Clone：</p>
+                <a id="clone-announcement-url" href="http://154.219.105.161:8088/" target="_blank" rel="noopener noreferrer">http://154.219.105.161:8088/</a>
+                <div class="clone-click-hint">就是下面这个按钮 <span class="clone-point-arrow" aria-hidden="true">↓</span></div>
+                <a class="clone-jump" href="http://154.219.105.161:8088/" target="_blank" rel="noopener noreferrer">前往开源 Florr Clone <span aria-hidden="true">↗</span></a>
+            </div>
+        </div>
+    </dialog>
     <script>
         document.addEventListener("DOMContentLoaded", () => {
             // Prefer head stamp; deploy bumps both __ASHFLOR_CACHE_V and this fallback.
-            var cacheV = (window.__ASHFLOR_CACHE_V || '21845');
+            var cacheV = (window.__ASHFLOR_CACHE_V || '21846');
             var hidden = false;
             var loadingEl = document.getElementById("loading");
             var brandEl = document.getElementById("loading-brand");
