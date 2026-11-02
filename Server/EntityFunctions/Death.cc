@@ -154,6 +154,15 @@ static void _alloc_drops(Simulation *sim, std::vector<PetalID::T> &success_drops
         if (piles[id] == 0) order.push_back(id);
         if (piles[id] < 65535) ++piles[id];
     }
+    float const drop_m = kill_drop_grant_mult();
+    if (drop_m > 1.01f) {
+        for (PetalID::T id : order) {
+            uint32_t q = (uint32_t)(piles[id] * drop_m + 0.5f);
+            if (q < 1) q = 1;
+            if (q > 65535) q = 65535;
+            piles[id] = (uint16_t) q;
+        }
+    }
     size_t n = order.size();
     for (size_t i = 0; i < n; ++i) {
         PetalID::T id = order[i];
@@ -587,7 +596,8 @@ void entity_on_death(Simulation *sim, Entity const &ent) {
                     if (ent.zone < zones.size())
                         diff = zones[ent.zone].difficulty;
                     coins = (uint32_t) (coins * zone_coin_mult(diff)
-                        * mob_spawn_xp_mult(mob_data.rarity, live_rarity) + 0.5f);
+                        * mob_spawn_xp_mult(mob_data.rarity, live_rarity)
+                        * kill_drop_grant_mult() + 0.5f);
                     if (is_boss_kill) coins = coins * 3u + 80u;
                     if (coins < 1) coins = 1;
                 }

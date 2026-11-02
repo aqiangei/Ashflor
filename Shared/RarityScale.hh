@@ -147,6 +147,9 @@ inline float mob_spawn_threat_mult(uint8_t base_rarity, uint8_t spawn_rarity) {
 // Applied at kill grant (Death::_add_mob_xp). Keep mild — combat HP is huge.
 inline float kill_xp_grant_mult() { return 12.f; }
 
+// Applied at kill loot (Death::_alloc_drops / coin piles). Quantity only.
+inline float kill_drop_grant_mult() { return 3.f; }
+
 // Soft XP/loot scale base→spawn. Do NOT reuse mob_spawn_threat_mult.
 inline float mob_spawn_xp_mult(uint8_t base_rarity, uint8_t spawn_rarity) {
     static float const k[RarityID::kNumRarities] = {
