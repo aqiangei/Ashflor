@@ -51,19 +51,19 @@ int main() {
     assert(post("Carol",emoji+"🌸","192.0.2.3") == kFeedbackInvalid);
 
     fixture("account-quota");
-    for(int i=0;i<3;++i){assert(post("Alice","message "+std::to_string(i)) == kFeedbackPosted);advance(61000);}
-    assert(post("Alice","fourth") == kFeedbackQuota);
-    FeedbackStore::load(); assert(post("Alice","restart fourth") == kFeedbackQuota);
+    for(int i=0;i<5;++i){assert(post("Alice","message "+std::to_string(i)) == kFeedbackPosted);advance(61000);}
+    assert(post("Alice","sixth") == kFeedbackQuota);
+    FeedbackStore::load(); assert(post("Alice","restart sixth") == kFeedbackQuota);
     advance(601000); assert(post("Alice","after window") == kFeedbackPosted);
 
     fixture("daily-quota");
-    for(int i=0;i<10;++i){assert(post("Alice","daily "+std::to_string(i)) == kFeedbackPosted);advance(661000);}
-    assert(post("Alice","eleventh") == kFeedbackQuota);
+    for(int i=0;i<15;++i){assert(post("Alice","daily "+std::to_string(i)) == kFeedbackPosted);advance(661000);}
+    assert(post("Alice","sixteenth") == kFeedbackQuota);
     FeedbackStore::load(); assert(post("Alice","daily after restart") == kFeedbackQuota);
     advance(86400001); assert(post("Alice","new day") == kFeedbackPosted);
 
     fixture("network-quota");
-    for(int i=0;i<10;++i){assert(post("User"+std::to_string(i),"ip "+std::to_string(i),"198.51.100.2") == kFeedbackPosted);advance(55000);}
+    for(int i=0;i<20;++i){assert(post("User"+std::to_string(i),"ip "+std::to_string(i),"198.51.100.2") == kFeedbackPosted);advance(28000);}
     FeedbackStore::load();
     assert(post("Sockpuppet","ip bypass","::ffff:198.51.100.2") == kFeedbackQuota);
     advance(2100); assert(post("Separate","other network","198.51.100.3") == kFeedbackPosted);
@@ -72,15 +72,15 @@ int main() {
     assert(post("B","same IPv6 content","2001:db8:1234:5::9999") == kFeedbackDuplicate);
 
     fixture("global-quota");
-    for(int i=0;i<6;++i){assert(post("User"+std::to_string(i),"global "+std::to_string(i),"203.0.113."+std::to_string(i+1)) == kFeedbackPosted);advance(2100);}
-    assert(post("Seventh","global limit","203.0.113.99") == kFeedbackBusy);
+    for(int i=0;i<15;++i){assert(post("User"+std::to_string(i),"global "+std::to_string(i),"203.0.113."+std::to_string(i+1)) == kFeedbackPosted);advance(2100);}
+    assert(post("Sixteenth","global limit","203.0.113.99") == kFeedbackBusy);
     FeedbackStore::load(); assert(post("AfterRestart","still global limit","203.0.113.100") == kFeedbackBusy);
 
     fixture("global-hour");
-    for(int i=0;i<60;++i){assert(post("User"+std::to_string(i),"hour "+std::to_string(i),"203.0.113."+std::to_string(i+1)) == kFeedbackPosted);advance(59000);}
+    for(int i=0;i<150;++i){assert(post("User"+std::to_string(i),"hour "+std::to_string(i),"203.0.113."+std::to_string(i+1)) == kFeedbackPosted);advance(23000);}
     FeedbackStore::load();assert(post("HourLimit","hour full","203.0.113.100") == kFeedbackBusy);
     fixture("global-day");
-    for(int i=0;i<200;++i){assert(post("User"+std::to_string(i),"day "+std::to_string(i),"203.0.113."+std::to_string(i+1)) == kFeedbackPosted);advance(61000);}
+    for(int i=0;i<500;++i){assert(post("User"+std::to_string(i),"day "+std::to_string(i),"203.0."+std::to_string(113+i/250)+"."+std::to_string(i%250+1)) == kFeedbackPosted);advance(165000);}
     FeedbackStore::load();assert(post("DayLimit","day full","203.0.113.250") == kFeedbackBusy);
 
     fixture("storage");
@@ -121,6 +121,99 @@ int main() {
     FeedbackStore::load();
     assert(FeedbackStore::page_json().find("Good") != std::string::npos);
     assert(FeedbackStore::page_json().find("Bad") == std::string::npos);
+
+    fixture("moderator-reply");
+    assert(post("aqa", "A display name cannot authorize replies") == kFeedbackPosted);
+    const auto reply_id = id;
+    const auto without_reply = FeedbackStore::page_json();
+    const auto failed = [](std::string const &result) {
+        return result.find("\"ok\":false") != std::string::npos;
+    };
+    assert(failed(FeedbackStore::set_reply_json(reply_id, "forged", "")));
+    assert(failed(FeedbackStore::set_reply_json(reply_id, "forged", "wrong")));
+    assert(failed(FeedbackStore::set_reply_json(reply_id, " ", "aqa")));
+    assert(failed(FeedbackStore::set_reply_json(reply_id, std::string(241, 'a'), "aqa")));
+    assert(failed(FeedbackStore::set_reply_json(reply_id + 1, "missing", "aqa")));
+    assert(FeedbackStore::page_json() == without_reply);
+    assert(!failed(FeedbackStore::set_reply_json(reply_id, "已修复：\"引号\"\n第二行", "aqa")));
+    const auto with_reply = FeedbackStore::page_json();
+    assert(with_reply.find("已修复") != std::string::npos);
+    FeedbackStore::load();
+    assert(FeedbackStore::page_json() == with_reply);
+    std::filesystem::create_directory("feedback.dat.tmp");
+    assert(failed(FeedbackStore::set_reply_json(reply_id, "failed edit", "aqa")));
+    assert(FeedbackStore::page_json() == with_reply);
+    std::filesystem::remove("feedback.dat.tmp");
+    assert(!failed(FeedbackStore::set_reply_json(reply_id, "已更新", "aqa")));
+    FeedbackStore::load();
+    assert(FeedbackStore::page_json().find("已更新") != std::string::npos);
+    assert(FeedbackStore::page_json().find("第二行") == std::string::npos);
+
+    fixture("private-inbox");
+    const std::string inbox_key(64, 'f');
+    assert(failed(FeedbackStore::post_private_json("Guest", "private message", "192.0.2.1")));
+    write("feedback-private.key", inbox_key + "\n");
+    FeedbackStore::load();
+    assert(!failed(FeedbackStore::post_private_json("Guest", "private <message>\nsecond line", "192.0.2.1")));
+    assert(FeedbackStore::page_json().find("private <message>") == std::string::npos);
+    for (auto const &key : {std::string(), std::string("aqa"), std::string(64, 'e')}) {
+        const auto denied = FeedbackStore::private_page_json(key);
+        assert(failed(denied) && denied.find("private <message>") == std::string::npos);
+    }
+    const auto inbox = FeedbackStore::private_page_json(inbox_key);
+    assert(!failed(inbox) && inbox.find("private <message>") != std::string::npos);
+    FeedbackStore::load();
+    assert(FeedbackStore::private_page_json(inbox_key) == inbox);
+    assert(failed(FeedbackStore::post_private_json("Another name", "retry", "192.0.2.1")));
+    advance(61000);
+    std::filesystem::create_directory("feedback-private.chat.dat.tmp");
+    assert(failed(FeedbackStore::post_private_json("Guest", "disk write failed", "192.0.2.1")));
+    assert(FeedbackStore::private_page_json(inbox_key) == inbox);
+
+    fixture("shared-operator-key");
+    const std::string operator_key = "9876543210";
+    write("feedback-operator.key", operator_key);
+    FeedbackStore::load();
+    assert(!failed(FeedbackStore::auth_json(operator_key)));
+    assert(!failed(FeedbackStore::private_page_json(operator_key)));
+    assert(failed(FeedbackStore::auth_json("aqa")));
+    assert(failed(FeedbackStore::private_page_json("aqa")));
+    for (int n = 0; n < 15; ++n)
+        assert(FeedbackStore::operator_attempt_allowed("192.0.2.1"));
+    assert(!FeedbackStore::operator_attempt_allowed("192.0.2.1"));
+    assert(FeedbackStore::operator_attempt_allowed("192.0.2.2"));
+    advance(61000);
+    assert(FeedbackStore::operator_attempt_allowed("192.0.2.1"));
+    assert(FeedbackStore::create_operator_session("wrong").empty());
+    const auto operator_session = FeedbackStore::create_operator_session(operator_key);
+    assert(operator_session.size() == 64 && operator_session != operator_key);
+    FeedbackStore::load();
+    assert(FeedbackStore::operator_session_key(operator_session) == operator_key);
+    assert(FeedbackStore::revoke_operator_session(operator_session));
+    FeedbackStore::load();
+    assert(FeedbackStore::operator_session_key(operator_session).empty());
+
+    fixture("private-conversation");
+    write("feedback-operator.key", operator_key);
+    write("feedback-private.dat", "1 1792799000000 \"Legacy\" \"legacy private message\" done:0 fix:0\n");
+    FeedbackStore::load();
+    const std::string sender_token = std::string(32, 'a') + std::string(64, 'b');
+    const std::string thread = sender_token.substr(0, 32);
+    const std::string different_token = std::string(96, 'c');
+    assert(!failed(FeedbackStore::post_private_json("Guest", "private question", "192.0.2.1", sender_token)));
+    assert(!failed(FeedbackStore::post_private_json("Other", "another chat", "192.0.2.2", different_token)));
+    assert(failed(FeedbackStore::reply_private_json(thread, "forged reply", "")));
+    assert(!failed(FeedbackStore::reply_private_json(thread, "aqa answer", operator_key)));
+    const auto chat = FeedbackStore::private_chat_json(sender_token, 0, "", false);
+    assert(chat.find("private question") != std::string::npos && chat.find("aqa answer") != std::string::npos);
+    assert(chat.find("another chat") == std::string::npos && chat.find(sender_token) == std::string::npos);
+    assert(failed(FeedbackStore::private_chat_json(thread + std::string(64, 'c'), 0, "", false)));
+    assert(failed(FeedbackStore::private_chat_json(thread, 0, "wrong", true)));
+    assert(FeedbackStore::private_chat_json(thread, 0, operator_key, true) == chat);
+    assert(FeedbackStore::private_page_json(operator_key).find("legacy private message") != std::string::npos);
+    assert(FeedbackStore::page_json().find("private question") == std::string::npos);
+    FeedbackStore::load();
+    assert(FeedbackStore::private_chat_json(sender_token, 0, "", false) == chat);
 
     fixture("pagination");
     for(int i=0;i<35;++i){assert(post("Player"+std::to_string(i),"message "+std::to_string(i)) == kFeedbackPosted);advance(61000);}

@@ -43,10 +43,43 @@ extern "C" {
     EMSCRIPTEN_KEEPALIVE char *feedback_page_json(unsigned before) {
         return heap_strdup_std(FeedbackStore::page_json(before));
     }
+    EMSCRIPTEN_KEEPALIVE char *feedback_private_send(char const *name, char const *text,
+                                                     char const *peer, char const *forwarded,
+                                                     char const *thread) {
+        return heap_strdup_std(FeedbackStore::post_private_json(name, text,
+            ClientAddress::resolve(peer, forwarded), thread));
+    }
+    EMSCRIPTEN_KEEPALIVE char *feedback_private_inbox(char const *key, unsigned before) {
+        return heap_strdup_std(FeedbackStore::private_page_json(key, before));
+    }
+    EMSCRIPTEN_KEEPALIVE char *feedback_private_chat(char const *thread, unsigned before,
+                                                     char const *key, int operator_view) {
+        return heap_strdup_std(FeedbackStore::private_chat_json(thread, before, key, operator_view));
+    }
+    EMSCRIPTEN_KEEPALIVE char *feedback_private_reply(char const *thread, char const *text,
+                                                      char const *key) {
+        return heap_strdup_std(FeedbackStore::reply_private_json(thread, text, key));
+    }
+    EMSCRIPTEN_KEEPALIVE int feedback_operator_attempt(char const *peer, char const *forwarded) {
+        return FeedbackStore::operator_attempt_allowed(ClientAddress::resolve(peer, forwarded));
+    }
+    EMSCRIPTEN_KEEPALIVE char *feedback_operator_login(char const *key) {
+        return heap_strdup_std(FeedbackStore::create_operator_session(key));
+    }
+    EMSCRIPTEN_KEEPALIVE char *feedback_operator_session(char const *token) {
+        return heap_strdup_std(FeedbackStore::operator_session_key(token));
+    }
+    EMSCRIPTEN_KEEPALIVE int feedback_operator_logout(char const *token) {
+        return FeedbackStore::revoke_operator_session(token);
+    }
     EMSCRIPTEN_KEEPALIVE char *feedback_set_handled_json(unsigned id, unsigned handled,
                                                          char const *key) {
         return heap_strdup_std(FeedbackStore::set_handled_json(
             id, handled ? 1 : 0, key ? std::string(key) : std::string()));
+    }
+    EMSCRIPTEN_KEEPALIVE char *feedback_set_reply_json(unsigned id, char const *reply,
+                                                       char const *key) {
+        return heap_strdup_std(FeedbackStore::set_reply_json(id, reply ? reply : "", key ? key : ""));
     }
     EMSCRIPTEN_KEEPALIVE char *feedback_auth_json(char const *key) {
         return heap_strdup_std(FeedbackStore::auth_json(
@@ -253,24 +286,94 @@ WebSocketServer::WebSocketServer() {
                     let raw = "";
                     req.on("data", c => { raw += c; if (raw.length > 2048) req.destroy(); });
                     req.on("end", () => {
-                        let id = 0, handled = 0, key = "", action = "set_handled";
+                        let id = 0, handled = 0, key = "", reply = "", action = "set_handled", data;
                         try {
                             const j = JSON.parse(raw || "{}");
+                            data = j;
                             action = typeof j.action === "string" && j.action ? j.action : "set_handled";
                             id = Number(j.id) || 0;
                             handled = j.handled ? 1 : 0;
                             key = typeof j.key === "string" ? j.key : "";
+                            reply = typeof j.reply === "string" ? j.reply : "";
                         } catch (e) {
                             sendJson(400, "{\"ok\":false,\"msg\":\"bad json\"}");
                             return;
                         }
-                        const kPtr = cstr(key);
+                        const prefix = "__Host-ashflor-feedback=";
+                        const flags = "; Path=/; Secure; HttpOnly; SameSite=Strict; Max-Age=";
+                        const fetchSite = req.headers["sec-fetch-site"];
+                        const sameOrigin = (!fetchSite || fetchSite === "same-origin") &&
+                            String(req.headers["content-type"] || "").startsWith("application/json");
+                        const cookie = sameOrigin && String(req.headers.cookie || "").split(";")
+                            .map(s => s.trim()).find(s => s.startsWith(prefix));
+                        const tokenPtr = cstr(cookie ? cookie.slice(prefix.length) : "");
+                        let sessionKey;
                         try {
-                            if (action === "auth")
-                                sendJson(200, fromWasm(_feedback_auth_json(kPtr)));
+                            if (action === "operator_logout") {
+                                const ok = _feedback_operator_logout(tokenPtr);
+                                if (ok) res.setHeader("Set-Cookie", prefix + flags + "0");
+                                sendJson(ok ? 200 : 503, ok ? "{\"ok\":true}" : "{\"ok\":false}");
+                                return;
+                            }
+                            sessionKey = fromWasm(_feedback_operator_session(tokenPtr));
+                        } finally { _free(tokenPtr); }
+                        if (action === "operator_status") {
+                            sendJson(200, sessionKey ? "{\"ok\":true}" : "{\"ok\":false}");
+                            return;
+                        }
+                        if (action !== "auth" && sessionKey) key = sessionKey;
+                        if ((action === "auth" || !sessionKey) && action !== "private_send" && action !== "private_chat") {
+                            const peer = cstr(req.socket.remoteAddress || "");
+                            const forwarded = cstr(req.headers["x-forwarded-for"] || "");
+                            let allowed;
+                            try { allowed = _feedback_operator_attempt(peer, forwarded); }
+                            finally { _free(peer); _free(forwarded); }
+                            if (!allowed) {
+                                sendJson(429, "{\"ok\":false,\"msg\":\"验证操作过于频繁，请一分钟后再试\"}");
+                                return;
+                            }
+                        }
+                        const kPtr = cstr(key.includes(String.fromCharCode(0)) ? "" : key);
+                        try {
+                            if (action === "auth") {
+                                const token = fromWasm(_feedback_operator_login(kPtr));
+                                if (token) {
+                                    res.setHeader("Set-Cookie", prefix + token + flags + "2592000");
+                                    sendJson(200, "{\"ok\":true,\"remembered\":true}");
+                                } else sendJson(200, fromWasm(_feedback_auth_json(kPtr)));
+                            }
+                            else if (action === "private_inbox")
+                                sendJson(200, fromWasm(_feedback_private_inbox(kPtr, Number(data.before) || 0)));
+                            else if (action === "private_chat" || action === "private_admin_chat" || action === "private_reply") {
+                                const args = [data.thread, data.text]
+                                    .map(s => cstr(typeof s === "string" && !s.includes(String.fromCharCode(0)) ? s : ""));
+                                try {
+                                    const result = action === "private_reply" ? _feedback_private_reply(args[0], args[1], kPtr)
+                                        : _feedback_private_chat(args[0], Number(data.before) || 0, kPtr, action === "private_admin_chat" ? 1 : 0);
+                                    sendJson(200, fromWasm(result));
+                                } finally { args.forEach(ptr => _free(ptr)); }
+                            }
+                            else if (action === "private_send") {
+                                if (typeof data.thread !== "string" || !data.thread || data.thread.includes(String.fromCharCode(0))) {
+                                    sendJson(200, "{\"ok\":false,\"msg\":\"请刷新留言板，再从「与 aqa 私聊」发送消息。\"}");
+                                    return;
+                                }
+                                const args = [data.name, data.text, req.socket.remoteAddress, req.headers["x-forwarded-for"], data.thread]
+                                    .map(s => cstr(typeof s === "string" && !s.includes(String.fromCharCode(0)) ? s : ""));
+                                try { sendJson(200, fromWasm(_feedback_private_send(...args))); }
+                                finally { args.forEach(ptr => _free(ptr)); }
+                            }
                             else if (action === "set_handled")
                                 sendJson(200, fromWasm(_feedback_set_handled_json(id, handled, kPtr)));
-                            else
+                            else if (action === "set_reply") {
+                                // C strings cannot carry embedded NUL characters.
+                                const replyPtr = cstr(reply.includes(String.fromCharCode(0)) ? "" : reply);
+                                try {
+                                    sendJson(200, fromWasm(_feedback_set_reply_json(id, replyPtr, kPtr)));
+                                } finally {
+                                    _free(replyPtr);
+                                }
+                            } else
                                 sendJson(400, "{\"ok\":false,\"msg\":\"unknown action\"}");
                         } finally {
                             _free(kPtr);

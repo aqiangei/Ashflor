@@ -77,7 +77,9 @@ static std::string map_static_path(std::string_view url) {
     if (path == "/favicon.ico") return "favicon-32.png";
     // Strip leading slash; reject traversal
     if (path[0] == '/') path.erase(0, 1);
-    if (path.find("..") != std::string::npos) return {};
+    if (path.empty() || path.front() == '/' || path.find("..") != std::string::npos ||
+        path.find("feedback-private.") != std::string::npos ||
+        path.find("feedback-operator.") != std::string::npos) return {};
     return path;
 }
 
@@ -95,12 +97,29 @@ static char const *http_status(int code) {
     }
 }
 
-static void send_json(uWS::HttpResponse<false> *res, int code, std::string const &body) {
+static void send_json(uWS::HttpResponse<false> *res, int code, std::string const &body,
+                      std::string const &cookie = {}) {
     res->writeStatus(http_status(code));
     res->writeHeader("Content-Type", "application/json; charset=utf-8");
     res->writeHeader("Cache-Control", "no-store");
+    if (!cookie.empty()) res->writeHeader("Set-Cookie", cookie);
     res->writeHeader("Access-Control-Allow-Origin", "*");
     res->end(body);
+}
+
+static constexpr char feedback_cookie[] = "__Host-ashflor-feedback=";
+static constexpr char feedback_cookie_flags[] = "; Path=/; Secure; HttpOnly; SameSite=Strict; Max-Age=";
+
+static std::string feedback_session(std::string_view header) {
+    std::istringstream cookies{std::string(header)};
+    for (std::string field; std::getline(cookies, field, ';');) {
+        const auto at = field.find_first_not_of(" \t");
+        if (at == std::string::npos) continue;
+        const auto cookie = std::string_view(field).substr(at);
+        if (cookie.starts_with(feedback_cookie))
+            return std::string(cookie.substr(sizeof feedback_cookie - 1));
+    }
+    return {};
 }
 
 // Minimal flat-JSON helpers (admin body only; no nested objects).
@@ -356,10 +375,14 @@ uWS::App Server::server = uWS::App()
 })
 .post("/api/feedback", [](auto *res, auto *req) {
     std::string source = ClientAddress::resolve(res->getRemoteAddressAsText(), req->getHeader("x-forwarded-for"));
+    const auto fetch_site = req->getHeader("sec-fetch-site");
+    const bool same_origin = (fetch_site.empty() || fetch_site == "same-origin") &&
+        req->getHeader("content-type").starts_with("application/json");
+    std::string session = same_origin ? feedback_session(req->getHeader("cookie")) : std::string();
     auto body = std::make_shared<std::string>();
     auto done = std::make_shared<uint8_t>(0);
     res->onAborted([done]() { *done = 1; });
-    res->onData([res, body, done, source](std::string_view chunk, bool isLast) {
+    res->onData([res, body, done, source, session](std::string_view chunk, bool isLast) {
         if (*done) return;
         body->append(chunk.data(), chunk.size());
         if (body->size() > 2048) {
@@ -373,6 +396,52 @@ uWS::App Server::server = uWS::App()
         std::string action = json_raw_field(j, "action");
         if (action.empty()) action = "set_handled";
         std::string key = json_raw_field(j, "key");
+        const std::string session_key = FeedbackStore::operator_session_key(session);
+        if (action == "operator_status") {
+            send_json(res, 200, session_key.empty() ? "{\"ok\":false}" : "{\"ok\":true}");
+            return;
+        }
+        if (action == "operator_logout") {
+            if (!FeedbackStore::revoke_operator_session(session)) {
+                send_json(res, 503, "{\"ok\":false,\"msg\":\"退出失败，请稍后重试\"}");
+                return;
+            }
+            send_json(res, 200, "{\"ok\":true}", std::string(feedback_cookie) + feedback_cookie_flags + "0");
+            return;
+        }
+        if (action != "auth" && !session_key.empty()) key = session_key;
+        if ((action == "auth" || session_key.empty()) &&
+            action != "guest_post" && action != "private_send" && action != "private_chat" &&
+            !FeedbackStore::operator_attempt_allowed(source)) {
+            send_json(res, 429, "{\"ok\":false,\"msg\":\"验证操作过于频繁，请一分钟后再试\"}");
+            return;
+        }
+        if (action == "private_send") {
+            const std::string thread = json_raw_field(j, "thread");
+            if (thread.empty()) {
+                send_json(res, 200, "{\"ok\":false,\"msg\":\"请刷新留言板，再从「与 aqa 私聊」发送消息。\"}");
+                return;
+            }
+            send_json(res, 200, FeedbackStore::post_private_json(
+                json_raw_field(j, "name"), json_raw_field(j, "text"), source,
+                thread));
+            return;
+        }
+        if (action == "private_chat" || action == "private_admin_chat") {
+            send_json(res, 200, FeedbackStore::private_chat_json(json_raw_field(j, "thread"),
+                (uint32_t) json_int(j, "before", 0), key, action == "private_admin_chat"));
+            return;
+        }
+        if (action == "private_reply") {
+            send_json(res, 200, FeedbackStore::reply_private_json(
+                json_raw_field(j, "thread"), json_raw_field(j, "text"), key));
+            return;
+        }
+        if (action == "private_inbox") {
+            send_json(res, 200, FeedbackStore::private_page_json(
+                key, (uint32_t) json_int(j, "before", 0)));
+            return;
+        }
         if (action == "guest_post") {
             uint32_t id = 0;
             std::string display = json_raw_field(j, "name");
@@ -382,7 +451,16 @@ uWS::App Server::server = uWS::App()
             return;
         }
         if (action == "auth") {
-            send_json(res, 200, FeedbackStore::auth_json(key));
+            const std::string token = FeedbackStore::create_operator_session(key);
+            if (!token.empty()) {
+                send_json(res, 200, "{\"ok\":true,\"remembered\":true}",
+                    std::string(feedback_cookie) + token + feedback_cookie_flags + "2592000");
+            } else send_json(res, 200, FeedbackStore::auth_json(key));
+            return;
+        }
+        if (action == "set_reply") {
+            send_json(res, 200, FeedbackStore::set_reply_json(
+                (uint32_t) json_int(j, "id", 0), json_raw_field(j, "reply"), key));
             return;
         }
         if (action == "delete") {

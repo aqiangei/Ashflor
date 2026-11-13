@@ -12,28 +12,77 @@
 .progress-panel{margin:24px 0 0}.progress-head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:14px}.progress-head h2{margin:0}.progress-meta{font-size:12px;color:#7d886f;line-height:1.6;text-align:right}.progress-stats{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:14px}.progress-stat{font-size:12px;font-weight:650;padding:5px 10px;border-radius:999px;background:#eef2e0;color:#4a5d42;border:1px solid #d5ddc0}.progress-stat.done{background:#dcecc8;border-color:#8fb56a;color:#2f5a28}.progress-day{border-top:1px solid #e2e6d2;padding-top:14px;margin-top:14px}.progress-day:first-of-type{border-top:0;padding-top:0;margin-top:0}.progress-day-head{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:10px}.progress-day-head button{font-size:12px;padding:6px 10px;background:transparent;border:1px solid #c5d0ad;border-radius:999px;color:#4a5d42}.progress-day h3{margin:0;font-size:15px;color:#42603b}.progress-list{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:6px;overflow:auto}.progress-day.today .progress-list{max-height:min(62vh,640px)}.progress-day:not(.today) .progress-list{max-height:280px}.progress-list li{font-size:13px;line-height:1.55;padding:8px 10px;border-radius:10px;background:#fffef7;border:1px solid #e4e9d4;border-left:3px solid #6fa05a;overflow-wrap:anywhere;scroll-margin:72px;transition:background .2s,border-color .2s,box-shadow .2s}.progress-list li .note{display:block;margin-top:4px;font-size:11px;color:#7d886f;line-height:1.5}.progress-list li.flash{animation:prog-flash 1.8s ease-out}.progress-empty{font-size:13px;color:#7b886d;padding:8px 0}.progress-err{font-size:13px;color:#a24f37}@keyframes prog-flash{0%{background:#fff1a3;border-color:#d4b23a;box-shadow:0 0 0 3px rgba(212,178,58,.4)}55%{background:#fff8d0;border-color:#c9b056;box-shadow:0 0 0 2px rgba(212,178,58,.2)}100%{background:#fffef7;border-color:#e4e9d4;box-shadow:none}}.message{cursor:pointer;border-radius:12px;transition:background .15s}.message:hover{background:#f7f9ee}.message.has-progress .author::after{content:" · 可跳转进度";font-weight:550;color:#6fa05a;font-size:11px}
 @media(max-width:700px){main{padding:20px 16px 36px}header{padding-bottom:18px}.layout{grid-template-columns:1fr;gap:20px}.composer{position:static}.panel{padding:20px}.intro{margin-top:8px}textarea{min-height:130px}.intro p{font-size:14px}.messages-scroll{max-height:min(55vh,520px)}.progress-day.today .progress-list{max-height:min(55vh,520px)}.progress-day:not(.today) .progress-list{max-height:220px}.progress-meta{text-align:left}}
 .message .source-note{display:block;text-align:right;font-size:11px;color:#8c9584;margin-top:10px;overflow-wrap:anywhere}.delete-message{color:#a24f37}
+.developer-reply{margin-top:12px;padding:10px 12px;background:#eaf1db;border-left:3px solid #84ad57;border-radius:8px}
+.developer-reply strong{font-size:13px;color:#42603b}
+.developer-reply time{margin-left:8px;font-size:12px;color:#5d7054}
+.message .developer-reply p{margin-top:4px}
+.reply-editor{margin-top:12px}
+.reply-editor textarea{min-height:90px}
+.reply-editor .status{min-height:0;margin:6px 0}
+.private-dialog{border:1px solid #d9dfc4;border-radius:16px;padding:22px 24px;background:#fffcf0;color:#344734;width:min(510px,calc(100vw - 32px));max-height:85vh;overflow:auto}
+.private-dialog::backdrop{background:rgba(30,40,28,.35)}
+.private-dialog input{width:100%;border:1px solid #c9d4b5;border-radius:10px;padding:9px;font:inherit;margin-bottom:12px;background:#fffef7}
+.private-dialog textarea{min-height:105px}
+.private-dialog h3{margin:0 0 12px}
+.private-dialog .status{min-height:0;margin:8px 0}
+.chat-log{display:flex;flex-direction:column;gap:10px;overflow:auto;max-height:min(38vh,390px);min-height:110px;padding:12px;border:1px solid #d9dfc4;border-radius:12px;background:#f5f6eb;overscroll-behavior:contain}
+.chat-bubble{align-self:flex-start;max-width:88%;padding:8px 12px;border-radius:12px;background:#fffdf4;border:1px solid #d9dfc4}
+.chat-bubble.mine{align-self:flex-end;background:#dcebcf;border-color:#c7d9b8}
+.chat-bubble p{margin:4px 0 0;white-space:pre-wrap;overflow-wrap:anywhere}
+.chat-top{margin:0 auto 8px}
+.chat-top[hidden],.inbox-thread[hidden]{display:none}
+.inbox-list{max-height:45vh;overflow:auto;overscroll-behavior:contain}
+.inbox-item{display:block;width:100%;text-align:left;margin:7px 0;padding:9px 12px}
+.inbox-item small{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:400}
+.chat-name-row{margin-top:12px}
+.board-search,.board-pages{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin:12px 0}
+.board-search input{flex:1 1 160px;min-width:0;padding:10px;border:1px solid #c9d4b5;border-radius:10px;font:inherit;background:#fffef7}
+.board-pages{justify-content:space-between}.board-pages button{padding:8px 12px}.board-pages span{font-size:13px}
+
+main{max-width:1360px}.layout{grid-template-columns:300px minmax(0,1fr);gap:22px}.board-panel{min-width:0}.messages-scroll{max-height:none;overflow:visible}.message,.message:first-child,.message:last-child{padding:18px 20px;margin:12px 0;border:1px solid #e0e5ce;background:#fffef8}.message.handled{opacity:1}.message .author::after{display:none}.message .meta{font-size:13px}.message .author{font-size:16px}.message .row-actions{margin-top:14px}.reward-banner{margin:0 0 22px;padding:17px 20px;border:1px solid #d3ae58;border-left:5px solid #a96a16;border-radius:14px;background:#fff1c8;color:#553a0c}.reward-banner strong{display:block;font-size:19px;margin-bottom:6px}.reward-banner p{margin:0;line-height:1.55}.reward-row{display:flex;gap:9px 16px;flex-wrap:wrap;align-items:center;margin-top:12px;padding:10px 12px;border-radius:9px;background:#f2f3e7;color:#3d5336;font-size:14px}.reward-row[data-state="adopted"],.reward-row[data-state="granted"]{background:#e8f2d9}.reward-row[data-state="declined"]{background:#f2efe8;color:#666158}.reward-item{font-weight:650}.board-filters{display:flex;gap:8px;align-items:center;flex-wrap:wrap}#feedback-kind,#board-kind{font:inherit;color:inherit;background:#fffef7;border:1px solid #c9d4b5;border-radius:9px;padding:8px 10px}#feedback-kind{margin:0 0 13px;width:100%}.type-label{font-weight:650;color:#43654a}.board-filters button[aria-pressed="true"]{background:#41683a;color:#fff}.board-help{margin:7px 0;color:#52664a;font-size:13px}.board-help[hidden]{display:none}.board-panel h2{font-size:22px}.message .source-note{text-align:left}
+@media(max-width:740px){.layout{grid-template-columns:1fr}.panel{padding:14px}.board-panel{padding:12px}.message,.message:first-child,.message:last-child{padding:13px}.reward-banner{padding:12px 14px}.board-search button{padding:9px 12px}}
 </style>
 <main>
   <header><span class="brand">ASHFLOR · 灰烬</span><button type="button" id="back">返回游戏 ↗</button></header>
   <section class="intro"><span class="eyebrow">一起让花园变得更好</span><h1>给作者留言</h1><p>遇到的问题、游玩的建议，或者想说的话，都可以留在这里。</p></section>
+  <aside class="reward-banner" aria-label="留言奖励">
+    <strong>反馈被采纳并实际改进，送 1 个随机永久超凡</strong>
+    <p>发出留言后可查看本条预抽中的花瓣。通过审核的奖励将在下次更新时自动发到对应游戏账号。纯问答与未采纳的建议不计入。</p>
+  </aside>
   <div class="layout">
     <section class="panel composer" aria-labelledby="compose-title">
       <h2 id="compose-title">写一条留言</h2>
       <div class="identity" id="identity">无需登录即可作为游客留言</div>
-      <form id="form"><label for="message">留言内容</label><textarea id="message" placeholder="例如：发生了什么、在哪里遇到，或你希望增加的玩法……" aria-describedby="public-note count" required></textarea><div class="count" id="count">0 / 240 字</div><button class="send" id="send" disabled>发布留言</button></form>
+      <form id="form"><label for="feedback-kind">留言类型</label><select id="feedback-kind"><option value="suggestion">建议或问题反馈</option><option value="question">提问</option></select><label for="message">留言内容</label><textarea id="message" placeholder="例如：发生了什么、在哪里遇到，或你希望增加的玩法……" aria-describedby="public-note count" required></textarea><div class="count" id="count">0 / 240 字</div><button class="send" id="send" disabled>发布留言</button></form>
       <p id="status" class="status" role="status" aria-live="polite"></p>
       <p class="small public" id="public-note">这是公开留言板，所有玩家都可以看见。请勿留下密码、手机号等个人信息。</p>
+      <button class="refresh" id="private-open" type="button">与 aqa 私聊</button>
     </section>
-    <section class="panel" aria-labelledby="messages-title">
+    <section class="panel board-panel" aria-labelledby="messages-title">
       <div class="list-head">
         <h2 id="messages-title">玩家留言</h2>
         <div class="list-actions">
           <button class="mod-btn" id="modAuth" type="button">权限验证</button>
+          <button class="refresh" id="inbox-open" type="button">私信收件箱</button>
           <button class="refresh" id="refresh" type="button">刷新</button>
         </div>
       </div>
+      <div class="board-filters" aria-label="留言范围">
+        <button id="board-all" type="button" aria-pressed="true">全部留言</button>
+        <button id="board-mine" type="button" aria-pressed="false">我的留言</button><select id="board-kind" aria-label="按留言类型筛选"><option value="">所有类型</option><option value="suggestion">建议或问题反馈</option><option value="question">提问</option></select>
+      </div>
+      <p id="board-help" class="board-help" hidden>显示此浏览器发出的留言，以及当前游戏登录身份可匹配的留言。</p>
+      <form class="board-search" id="board-search">
+        <input type="search" id="board-query" aria-label="搜索全部留言" placeholder="搜索编号、玩家、内容或回复" maxlength="120">
+        <button type="submit" id="board-find">搜索</button>
+        <button type="button" id="board-clear" hidden>清除</button>
+      </form>
       <div id="messages" class="messages-scroll" aria-live="polite"><p class="empty">正在加载留言……</p></div>
-      <button id="older" class="older" type="button" hidden>查看更早的留言</button>
+      <nav class="board-pages" aria-label="留言分页">
+        <button id="newer" type="button" disabled>上一页</button>
+        <span id="board-page" role="status"></span>
+        <button id="older" type="button" disabled>下一页</button>
+      </nav>
     </section>
   </div>
   <section class="panel progress-panel" aria-labelledby="progress-title">
@@ -44,36 +93,142 @@
     <div class="progress-stats" id="progressStats"></div>
     <div id="progressBody"><p class="progress-empty">加载进度中…</p></div>
   </section>
-  <footer>每次留言间隔 60 秒 · 每账号 10 分钟最多 3 条、每天最多 10 条 · 重复内容不会重复发布<br>留言自动备份至异地服务器<br><a href="https://qm.qq.com/q/E0OG9CLIg" target="_blank" rel="noopener noreferrer">加入 QQ 交流群 · 227990150</a></footer>
+  <footer>每次留言至少间隔 2 秒 · 每账号 10 分钟最多 5 条、每天最多 15 条 · 重复内容不会重复发布<br>留言自动备份至异地服务器<br><a href="https://qm.qq.com/q/E0OG9CLIg" target="_blank" rel="noopener noreferrer">加入 QQ 交流群 · 227990150</a></footer>
 </main>
 <dialog id="auth-dialog">
   <h3>管理员验证</h3>
   <p>输入密钥后可切换留言的处理状态。密钥仅保存在本机会话中。</p>
   <form method="dialog" id="auth-form">
     <input type="password" id="auth-key" autocomplete="current-password" placeholder="密钥" required>
+    <p id="auth-status" role="status"></p>
     <div class="dlg-actions">
       <button type="button" id="auth-cancel" value="cancel">取消</button>
       <button type="submit" id="auth-ok" value="ok" class="send" style="width:auto;box-shadow:none">确认</button>
     </div>
   </form>
 </dialog>
+<dialog class="private-dialog" id="private-dialog" aria-labelledby="private-title">
+  <h3 id="private-title">与 aqa 私聊</h3>
+  <p class="small">只有你和 aqa 可以查看。请用同一浏览器查看回复。</p>
+  <button class="toggle chat-top" id="private-older" type="button" hidden>加载更早消息</button>
+  <div id="private-messages" class="chat-log" role="log" aria-label="与 aqa 的私聊"></div>
+  <form id="private-form">
+    <label class="chat-name-row" for="private-name">署名（可选）</label>
+    <input id="private-name" maxlength="50" placeholder="游客">
+    <label for="private-text">消息（最多 240 字）</label>
+    <textarea id="private-text" rows="2" required></textarea>
+    <div class="row-actions">
+      <button type="submit" id="private-send">发送</button>
+      <button type="button" id="private-close">关闭</button>
+    </div>
+    <p class="status" role="status" id="private-status"></p>
+  </form>
+</dialog>
+<dialog class="private-dialog" id="inbox-dialog" aria-labelledby="inbox-title">
+  <h3 id="inbox-title">aqa 的私信收件箱</h3>
+  <div class="row-actions">
+    <button type="button" id="inbox-back" hidden>返回会话列表</button>
+    <button type="button" id="inbox-refresh">刷新</button>
+    <button type="button" id="inbox-close">关闭</button>
+  </div>
+  <p class="status" role="status" id="inbox-status"></p>
+  <div id="inbox-list-panel">
+    <div class="inbox-list" id="inbox-messages"></div>
+    <button class="older" type="button" id="inbox-older" hidden>查看更早的私信</button>
+  </div>
+  <section class="inbox-thread" id="inbox-thread" hidden>
+    <h4 id="inbox-thread-name"></h4>
+    <p id="inbox-legacy-note" class="small" hidden>这条私信发于私聊上线前。对方刷新留言板，从「与 aqa 私聊」再发一条消息后，就可以在新会话里回复。</p>
+    <button class="toggle chat-top" id="inbox-chat-older" type="button" hidden>加载更早消息</button>
+    <div id="inbox-chat" class="chat-log" role="log" aria-label="私聊消息"></div>
+    <form id="inbox-reply-form">
+      <label class="chat-name-row" for="inbox-reply-text">回复（最多 240 字）</label>
+      <textarea id="inbox-reply-text" rows="2" required></textarea>
+      <div class="row-actions"><button type="submit" id="inbox-reply">发送回复</button></div>
+    </form>
+  </section>
+</dialog>
 <script>
 (() => {
   'use strict';
   // Force named-tab reloads off stale layouts; keep ?from= across bust.
-  if (!/[?&]v=prog5(?:&|$)/.test(location.search)) {
+  if (!/[?&]v=rewards4(?:&|$)/.test(location.search)) {
     const params = new URLSearchParams(location.search);
-    params.set('v', 'prog5');
+    params.set('v', 'rewards4');
     location.replace('/feedback.html?' + params.toString() + location.hash);
     return;
   }
   const $ = id => document.getElementById(id);
   const input = $('message'), status = $('status'), send = $('send');
   const authDlg = $('auth-dialog'), authKey = $('auth-key');
-  let user = '', pending = false, resolvePending = null, next = 0, busy = false, timer, resolveTimer, modKey = '';
+  let user = '', pending = false, resolvePending = null, busy = false, timer, resolveTimer, modKey = '';
   try { modKey = sessionStorage.getItem('ashflor-feedback-mod') || ''; } catch (_) {}
   const date = new Intl.DateTimeFormat('zh-CN', { timeZone:'Asia/Shanghai', dateStyle:'short', timeStyle:'short' });
   try { input.value = localStorage.getItem('ashflor-feedback-draft') || ''; } catch (_) {}
+  const rewardStart = Date.parse('2026-11-09T00:00:00+08:00');
+  // The ID and creation time make the same draw reproducible across refreshes and devices.
+  const rewardPool = [['basic','基础'],['rose','玫瑰'],['leaf','叶子'],['rock','石头'],['pollen','花粉'],['iris','鸢尾'],['dahlia','大丽花'],['wing','翅膀'],['light','光'],['bubble','泡泡'],['stinger','刺针']];
+  const rewardReview = {"273":{"state":"question","kind":"question"},"274":{"state":"question","kind":"question"},"275":{"state":"declined"},"280":{"state":"question","kind":"question"},"282":{"state":"question","kind":"question"},"285":{"state":"question","kind":"question"},"300":{"state":"question","kind":"question"},"306":{"state":"adopted"},"308":{"state":"adopted"},"309":{"state":"declined"},"315":{"state":"declined"},"324":{"state":"question","kind":"question"},"326":{"state":"declined"},"330":{"state":"declined"},"334":{"state":"adopted"},"364":{"state":"question","kind":"question"}};
+  let mineOnly = false;
+  let browserPosts = [];
+  try { browserPosts = JSON.parse(localStorage.getItem('ashflor-own-feedback-v1') || '[]'); } catch (_) {}
+  if (!Array.isArray(browserPosts)) browserPosts = [];
+  const kindTags = {suggestion:'[建议]',question:'[提问]'};
+  function feedbackBody(raw) {
+    return raw.replace(/^\[来自 https?:\/\/[^\]]+\](?:\r?\n|n)?/, '');
+  }
+  function feedbackKind(row) {
+    const body = feedbackBody(row.text || '');
+    if (body.startsWith(kindTags.question)) return 'question';
+    if (body.startsWith(kindTags.suggestion)) return 'suggestion';
+    if (rewardReview[row.id]?.kind === 'question') return 'question';
+    if (/建议|希望|bug|修复|增加|改为|不显示|卡墙|进不去/i.test(body)) return 'suggestion';
+    return /[？?]|(?:^|[。\n])(?:怎么|咋|为什么|何时|哪里|when\b|how\b)|吗[。！!]?$/i.test(body) ? 'question' : 'suggestion';
+  }
+  const ownFingerprint = row => row.id + ':' + row.timestamp;
+  function ownRow(row) {
+    return (!!user && sameUser(user, row.author)) || browserPosts.includes(ownFingerprint(row));
+  }
+  function rewardDraw(row) {
+    let hash = 2166136261;
+    for (const char of 'ashflor-nov09-permanent-v1:' + ownFingerprint(row)) {
+      hash = Math.imul(hash ^ char.charCodeAt(0), 16777619);
+    }
+    return rewardPool[(hash >>> 0) % rewardPool.length][1];
+  }
+  function paintRewards() {
+    for (const box of document.querySelectorAll('.reward-row')) {
+      const review = rewardReview[box.dataset.reviewId] || {};
+      const state = review.state || (box.dataset.kind === 'question' ? 'question' : 'pending');
+      box.dataset.state = state;
+      box.firstChild.textContent = ({question:'提问 · 已登记',pending:'待审核',adopted:'已采纳',declined:'未采纳',granted:'已采纳 · 已发放'})[state] || '待审核';
+      const draw = box.dataset.draw;
+      box.lastChild.textContent = state === 'granted' && review.petal
+        ? '已到账 · 永久超凡 ' + review.petal
+        : (state === 'declined' || state === 'question') ? '本条无赠礼'
+        : draw ? (state === 'adopted' ? '待下次更新发放 · ' : '预抽赠礼 · ') + '永久超凡 ' + draw : '';
+    }
+  }
+  async function showPublished(body, started, id) {
+    try {
+      const page = await fetchBoardPage(0);
+      const found = page.entries.filter(row => id ? row.id === id :
+        row.timestamp >= started - 5000 && row.text === body &&
+        (user ? sameUser(user, row.author) : sourceName
+          ? row.author.startsWith(sourceName + '（游戏昵称）-') : /^游客-\d+$/.test(row.author)));
+      if (found.length === 1) {
+        const row = found[0];
+        browserPosts = [...new Set([...browserPosts, ownFingerprint(row)])];
+        try { localStorage.setItem('ashflor-own-feedback-v1', JSON.stringify(browserPosts)); } catch (_) {}
+        notify('留言 #' + row.id + ' 已发布。' + (feedbackKind(row) === 'question' ? '可在「我的留言」查看回复。' :
+          '预抽赠礼为永久超凡「' + rewardDraw(row) + '」，采纳并更新后发放。'));
+        boardQuery = '#' + row.id;
+        $('board-query').value = boardQuery;
+        boardPage = 0;
+      }
+    } catch (_) {}
+    load();
+  }
   const sameUser = (a, b) => (a || '').toLowerCase() === (b || '').toLowerCase();
 
   function normalizeFrom(raw) {
@@ -118,7 +273,7 @@
 
   function update() {
     const n = [...input.value].length;
-    const max = maxBodyChars();
+    const max = maxBodyChars() - 5;
     $('count').textContent = n + ' / ' + max + ' 字';
     send.disabled = pending || !input.value.trim() || n > max;
   }
@@ -131,7 +286,96 @@
     $('modAuth').classList.toggle('on', on);
     $('modAuth').textContent = on ? '已验证 · 退出' : '权限验证';
     document.querySelectorAll('.delete-message').forEach(btn => { btn.hidden = !on; });
+    document.querySelectorAll('.reply-message').forEach(btn => { btn.hidden = !on; });
+    if (!on) document.querySelectorAll('.reply-editor').forEach(editor => { editor.hidden = true; });
+    if (!on && inboxDialog.open) inboxDialog.close();
     document.querySelectorAll('.toggle-handled').forEach(btn => { btn.disabled = !on; });
+  }
+  function developerReply(entry, item) {
+    const reply = document.createElement('div');
+    reply.className = 'developer-reply';
+    const author = document.createElement('strong');
+    author.textContent = 'aqa回复';
+    const time = document.createElement('time');
+    const body = document.createElement('p');
+    reply.append(author, time, body);
+
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'toggle reply-message';
+    button.hidden = !modKey;
+    const editor = document.createElement('form');
+    editor.className = 'reply-editor';
+    editor.hidden = true;
+    const label = document.createElement('label');
+    const field = document.createElement('textarea');
+    field.id = 'reply-' + entry.id;
+    field.rows = 3;
+    label.htmlFor = field.id;
+    label.textContent = '公开回复（最多 240 字）';
+    const save = document.createElement('button');
+    save.type = 'submit';
+    save.className = 'toggle';
+    save.textContent = '保存回复';
+    const cancel = document.createElement('button');
+    cancel.type = 'button';
+    cancel.className = 'toggle';
+    cancel.textContent = '取消';
+    const status = document.createElement('div');
+    status.className = 'status error';
+    status.setAttribute('role', 'status');
+    const actions = document.createElement('div');
+    actions.className = 'row-actions';
+    actions.append(save, cancel);
+    editor.append(label, field, actions, status);
+
+    function showReply(text, timestamp) {
+      reply.hidden = !text;
+      body.textContent = text;
+      const when = Number(timestamp) > 0 ? formatEntryTime(timestamp) : null;
+      time.textContent = when?.iso ? when.label : '时间未记录';
+      if (when?.iso) time.dateTime = when.iso;
+      else time.removeAttribute('datetime');
+      button.textContent = text ? '编辑回复' : '回复';
+    }
+    showReply(typeof entry.reply === 'string' ? entry.reply : '', entry.replyTimestamp);
+    button.addEventListener('click', () => {
+      if (!modKey) return;
+      editor.hidden = false;
+      field.value = body.textContent;
+      status.textContent = '';
+      field.focus();
+    });
+    cancel.addEventListener('click', () => { editor.hidden = true; button.focus(); });
+    editor.addEventListener('submit', async event => {
+      event.preventDefault();
+      if (!modKey || save.disabled) return;
+      const text = field.value.trim();
+      if (!text || [...text].length > 240) {
+        status.textContent = '请输入 1 至 240 字。';
+        return;
+      }
+      save.disabled = cancel.disabled = field.disabled = button.disabled = true;
+      status.textContent = '';
+      try {
+        const response = await fetch('/api/feedback', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'set_reply', id: entry.id, reply: text, key: modKey })
+        });
+        const result = await response.json();
+        if (!response.ok || !result.ok) throw Error(result.msg || '保存回复失败');
+        showReply(result.reply, result.replyTimestamp);
+        editor.hidden = true;
+        if (modKey && item.isConnected) button.focus();
+        notify('回复已保存。');
+      } catch (error) {
+        status.textContent = error.message || '保存回复失败，请重试。';
+      } finally {
+        save.disabled = cancel.disabled = field.disabled = button.disabled = false;
+      }
+    });
+    return { reply, editor, button };
   }
   function setHandledUi(item, handled) {
     item.classList.toggle('handled', !!handled);
@@ -231,6 +475,274 @@
       return { iso: '', label: '—' };
     }
   }
+  async function privateRequest(payload) {
+    if (!window.isSecureContext) throw Error('请从 HTTPS 留言板使用私信。');
+    const response = await fetch('/api/feedback', {
+      method: 'POST',
+      cache: 'no-store',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+    const result = await response.json().catch(() => null);
+    if (!response.ok || !result?.ok) throw Error(result?.msg || '私信暂不可用，请稍后重试。');
+    return result;
+  }
+  function privateMessage(entry, mine) {
+    const item = document.createElement('article');
+    item.className = mine === undefined ? 'message' : 'chat-bubble' + (mine ? ' mine' : '');
+    const meta = document.createElement('div');
+    meta.className = 'meta';
+    const name = document.createElement('strong');
+    name.textContent = entry.author || '游客';
+    const time = document.createElement('time');
+    const when = formatEntryTime(entry.timestamp);
+    time.textContent = when.label;
+    if (when.iso) time.dateTime = when.iso;
+    meta.append(name, time);
+    const text = document.createElement('p');
+    text.textContent = entry.text;
+    item.append(meta, text);
+    return item;
+  }
+  function conversation(list, older, status, isMine) {
+    const rows = new Map();
+    let cursor = 0, generation = 0, fetchPage = null, loading = false;
+    function paint(prepend = false, forceBottom = false) {
+      const height = list.scrollHeight, top = list.scrollTop;
+      const sticky = forceBottom || height - top - list.clientHeight < 30;
+      const messages = [...rows.values()].sort((a, b) => a.id - b.id);
+      list.replaceChildren(...messages.map(entry => privateMessage(entry, isMine(entry))));
+      if (!messages.length) {
+        const empty = document.createElement('p');
+        empty.className = 'small';
+        empty.textContent = '还没有消息。';
+        list.append(empty);
+      }
+      list.scrollTop = prepend ? top + list.scrollHeight - height : (sticky ? list.scrollHeight : top);
+    }
+    async function refresh({ earlier = false, silent = false } = {}) {
+      if (!fetchPage || loading || (earlier && !cursor)) return;
+      const version = generation;
+      loading = older.disabled = true;
+      if (!silent) status.textContent = '正在读取消息……';
+      try {
+        const result = await fetchPage(earlier ? cursor : 0);
+        if (version !== generation) return;
+        const empty = !rows.size;
+        const changed = result.entries.some(entry => !rows.has(entry.id));
+        for (const entry of result.entries) rows.set(entry.id, entry);
+        if (earlier || empty) cursor = result.next_before || 0;
+        older.hidden = !cursor;
+        if (changed || !list.childElementCount) paint(earlier, empty);
+        if (!silent) status.textContent = '';
+      } catch (error) {
+        if (version === generation && !silent) status.textContent = error.message;
+      } finally {
+        if (version === generation) loading = older.disabled = false;
+      }
+    }
+    function stop() {
+      ++generation;
+      fetchPage = null;
+      loading = false;
+      cursor = 0;
+      rows.clear();
+      older.disabled = false;
+      older.hidden = true;
+      list.replaceChildren();
+    }
+    older.onclick = () => refresh({ earlier: true });
+    return {
+      start(loader) { stop(); fetchPage = loader; refresh(); },
+      stop,
+      refresh,
+      append(entry) { if (fetchPage) { rows.set(entry.id, entry); paint(false, true); } }
+    };
+  }
+  const privateDialog = $('private-dialog'), inboxDialog = $('inbox-dialog');
+  const guestChat = conversation($('private-messages'), $('private-older'), $('private-status'), e => !e.fromAqa);
+  const operatorChat = conversation($('inbox-chat'), $('inbox-chat-older'), $('inbox-status'), e => e.fromAqa);
+  const threadStorage = 'ashflor-private-thread-v1';
+  let guestThread = '';
+  function browserThread() {
+    if (guestThread) return guestThread;
+    try { guestThread = localStorage.getItem(threadStorage) || ''; } catch (_) {}
+    if (!/^[0-9a-f]{96}$/.test(guestThread)) {
+      guestThread = Array.from(crypto.getRandomValues(new Uint8Array(48)), b => b.toString(16).padStart(2, '0')).join('');
+      try { localStorage.setItem(threadStorage, guestThread); } catch (_) {}
+    }
+    return guestThread;
+  }
+  $('private-open').onclick = () => {
+    if (!$('private-name').value) $('private-name').value = sourceName || user;
+    privateDialog.showModal();
+    const thread = browserThread();
+    guestChat.start(before => privateRequest({ action: 'private_chat', thread, before }));
+  };
+  $('private-close').onclick = () => privateDialog.close();
+  privateDialog.addEventListener('close', () => guestChat.stop());
+  function validMessage(text) { return text && [...text].length <= 240; }
+  $('private-form').addEventListener('submit', async event => {
+    event.preventDefault();
+    const button = $('private-send'), status = $('private-status'), field = $('private-text');
+    if (button.disabled) return;
+    const text = field.value.trim(), name = $('private-name').value.trim() || '游客';
+    if (!validMessage(text)) {
+      status.textContent = '请输入 1 至 240 字。';
+      return;
+    }
+    button.disabled = field.disabled = true;
+    status.textContent = '正在发送……';
+    try {
+      const result = await privateRequest({ action: 'private_send', name, text, thread: browserThread() });
+      field.value = '';
+      if (privateDialog.open) guestChat.append(result.message);
+      status.textContent = '已发送。';
+    } catch (error) {
+      status.textContent = error.message || '发送失败，内容已保留。';
+    } finally {
+      button.disabled = field.disabled = false;
+    }
+  });
+  let inboxBefore = 0, inboxGeneration = 0, inboxThread = '', inboxLoading = false;
+  let inboxLoadedOlder = false;
+  const inboxEntries = new Map();
+  let openInboxAfterAuth = false;
+  function showInboxList() {
+    inboxThread = '';
+    operatorChat.stop();
+    $('inbox-thread').hidden = true;
+    $('inbox-back').hidden = true;
+    $('inbox-refresh').hidden = false;
+    $('inbox-list-panel').hidden = false;
+  }
+  function openInboxThread(entry) {
+    const author = entry.author || '游客';
+    inboxThread = entry.thread || '';
+    $('inbox-thread-name').textContent = inboxThread ? '与 ' + author + ' 的私聊' : author + ' 的旧私信';
+    $('inbox-list-panel').hidden = true;
+    $('inbox-thread').hidden = false;
+    $('inbox-back').hidden = false;
+    $('inbox-refresh').hidden = !inboxThread;
+    $('inbox-legacy-note').hidden = !!inboxThread;
+    $('inbox-reply-form').hidden = !inboxThread;
+    $('inbox-status').textContent = '';
+    $('inbox-reply-text').value = '';
+    if (!inboxThread) {
+      operatorChat.stop();
+      $('inbox-chat').append(privateMessage(entry, false));
+      return;
+    }
+    const thread = inboxThread;
+    operatorChat.start(before => privateRequest({ action: 'private_admin_chat', key: modKey, thread, before }));
+  }
+  async function readInbox(before = 0, { silent = false } = {}) {
+    if (inboxLoading || !modKey) return;
+    const generation = inboxGeneration;
+    inboxLoading = $('inbox-older').disabled = true;
+    const status = $('inbox-status'), list = $('inbox-messages');
+    if (!silent) status.textContent = '正在读取会话……';
+    try {
+      const result = await privateRequest({ action: 'private_inbox', key: modKey, before });
+      if (generation !== inboxGeneration || !inboxDialog.open ||
+          $('inbox-list-panel').hidden) return;
+      const changed = result.entries.some(entry => {
+        const previous = inboxEntries.get(entry.thread || entry.id);
+        return !previous || previous.id < entry.id;
+      });
+      for (const entry of result.entries) {
+        const key = entry.thread || entry.id;
+        const previous = inboxEntries.get(key);
+        if (!previous || previous.id < entry.id) inboxEntries.set(key, entry);
+      }
+      if (before) inboxLoadedOlder = true;
+      if (before || !inboxLoadedOlder) inboxBefore = result.next_before || 0;
+      $('inbox-older').hidden = !inboxBefore;
+      if (changed || !list.childElementCount) {
+        const buttons = [...inboxEntries.values()].sort((a, b) => b.id - a.id).map(entry => {
+          const button = document.createElement('button');
+          button.type = 'button';
+          button.className = 'inbox-item';
+          button.textContent = (entry.author || '游客') +
+            (entry.thread ? (entry.fromAqa ? ' · aqa 已回复' : ' · 玩家来信') : ' · 查看旧私信');
+          const preview = document.createElement('small');
+          preview.textContent = (entry.fromAqa ? 'aqa：' : '') + entry.text;
+          button.append(preview);
+          button.onclick = () => openInboxThread(entry);
+          return button;
+        });
+        list.replaceChildren(...buttons);
+      }
+      status.textContent = list.childElementCount ? '' : '暂无私聊。';
+    } catch (error) {
+      if (generation === inboxGeneration && !$('inbox-list-panel').hidden)
+        status.textContent = error.message;
+    } finally {
+      if (generation === inboxGeneration) inboxLoading = $('inbox-older').disabled = false;
+    }
+  }
+  function openInbox() {
+    if (!modKey) {
+      openInboxAfterAuth = true;
+      authKey.value = '';
+      $('auth-status').textContent = '';
+      authDlg.showModal();
+      authKey.focus();
+      return;
+    }
+    showInboxList();
+    inboxDialog.showModal();
+    readInbox();
+  }
+  $('inbox-open').onclick = openInbox;
+  $('inbox-close').onclick = () => inboxDialog.close();
+  $('inbox-back').onclick = () => { showInboxList(); readInbox(); };
+  $('inbox-refresh').onclick = () => inboxThread ? operatorChat.refresh() : readInbox();
+  $('inbox-older').onclick = () => { if (inboxBefore) readInbox(inboxBefore); };
+  inboxDialog.addEventListener('close', () => {
+    ++inboxGeneration;
+    showInboxList();
+    inboxBefore = 0;
+    inboxLoading = inboxLoadedOlder = false;
+    inboxEntries.clear();
+    $('inbox-messages').replaceChildren();
+    $('inbox-reply-text').value = '';
+    $('inbox-status').textContent = '';
+    $('inbox-older').disabled = false;
+    $('inbox-older').hidden = true;
+  });
+  $('inbox-reply-form').addEventListener('submit', async event => {
+    event.preventDefault();
+    const button = $('inbox-reply'), field = $('inbox-reply-text'), status = $('inbox-status');
+    const thread = inboxThread, text = field.value.trim(), generation = inboxGeneration;
+    if (!thread || !modKey || button.disabled) return;
+    if (!validMessage(text)) {
+      status.textContent = '请输入 1 至 240 字。';
+      return;
+    }
+    button.disabled = field.disabled = true;
+    status.textContent = '正在回复……';
+    try {
+      const result = await privateRequest({ action: 'private_reply', key: modKey, thread, text });
+      if (generation !== inboxGeneration || thread !== inboxThread) return;
+      field.value = '';
+      operatorChat.append(result.message);
+      status.textContent = '已回复。';
+    } catch (error) {
+      if (generation === inboxGeneration && thread === inboxThread) status.textContent = error.message;
+    } finally {
+      button.disabled = field.disabled = false;
+    }
+  });
+  function refreshOpenPrivateViews() {
+    if (document.hidden) return;
+    if (privateDialog.open) guestChat.refresh({ silent: true });
+    if (!inboxDialog.open || !modKey) return;
+    if (inboxThread) operatorChat.refresh({ silent: true });
+    else if (!$('inbox-list-panel').hidden) readInbox(0, { silent: true });
+  }
+  setInterval(refreshOpenPrivateViews, 5000);
+  document.addEventListener('visibilitychange', refreshOpenPrivateViews);
   function markCopied(btn) {
     if (!btn) return;
     btn.classList.add('ok');
@@ -303,7 +815,8 @@
       const authorName = typeof e.author === 'string' ? e.author : '';
       const rawBody = typeof e.text === 'string' ? e.text : '';
       const sourceMatch = rawBody.match(/^\[来自 (https?:\/\/[^\]]+)\](?:\r?\n|n)?/);
-      const body = sourceMatch ? rawBody.slice(sourceMatch[0].length) : rawBody;
+      const body = feedbackBody(rawBody).replace(/^\[(?:建议|提问)\]\r?\n/, '');
+      const kind = feedbackKind(e);
       const mine = !!user && sameUser(user, authorName);
       const item = document.createElement('article');
       item.className = 'message'
@@ -313,7 +826,7 @@
       item.addEventListener('click', (ev) => {
         // Ignore clicks on buttons / interactive controls inside the card.
         if (ev.target.closest('button, a, input, textarea, select, label')) return;
-        const li = findProgressLi(body);
+        const li = findProgressLi(body, item.dataset.id);
         if (!li) {
           notify('这条留言暂无对应的修复进度条目。', true);
           return;
@@ -326,6 +839,9 @@
       author.className = 'author';
       const displayName = authorName.replace(/（游戏昵称）-\d+$/, '').replace(/^游客-\d+$/, '游客');
       author.textContent = displayName || '匿名';
+      const type = document.createElement('span');
+      type.className = 'type-label';
+      type.textContent = kind === 'question' ? '提问' : '建议或问题反馈';
       const when = formatEntryTime(e.timestamp);
       const time = document.createElement('time');
       if (when.iso) time.dateTime = when.iso;
@@ -336,6 +852,16 @@
       actions.className = 'row-actions';
 
       actions.append(makeCopyBtn(displayName, body, when.label));
+      const progress = document.createElement('button');
+      progress.type = 'button';
+      progress.className = 'toggle progress-link';
+      progress.textContent = '修复进度';
+      progress.hidden = true;
+      progress.addEventListener('click', () => {
+        const match = findProgressLi(body, item.dataset.id);
+        if (match) jumpToProgress(match);
+      });
+      actions.append(progress);
 
       const badgeR = document.createElement('span');
       badgeR.className = 'badge badge-resolved fix' + (resolved ? ' done' : '');
@@ -387,42 +913,104 @@
       const right = document.createElement('div');
       right.className = 'meta-right';
       right.append(time);
-      meta.append(author, right);
-      item.append(meta, text, actions);
+      meta.append(author, type, right);
+      const response = developerReply(e, item);
+      actions.append(response.button);
+      const reward = document.createElement('div');
+      reward.className = 'reward-row';
+      reward.dataset.reviewId = String(e.id);
+      reward.dataset.kind = kind;
+      reward.dataset.draw = e.timestamp >= rewardStart ? rewardDraw(e) : '';
+      reward.append(document.createElement('strong'), document.createElement('span'));
+      reward.lastChild.className = 'reward-item';
+      item.append(meta, text, reward, response.reply, actions, response.editor);
       if(sourceMatch){ const source=document.createElement('small'); source.className='source-note'; source.textContent='来源：'+normalizeFrom(sourceMatch[1]); item.append(source); }
       $('messages').append(item);
     }
     syncAuthUi();
+    paintRewards();
     markMessagesWithProgress();
   }
-  async function load(append=false) {
+  const boardPageSize = 30;
+  let boardPage = 0, nextCursor = 0, boardQuery = '', searchResults = [];
+  const boardCursors = [0];
+  let submitted = null;
+
+  async function fetchBoardPage(before) {
+    const response = await fetch('/api/feedback' + (before ? '?before=' + before : ''), {
+      cache: 'no-store', signal: AbortSignal.timeout(12000)
+    });
+    if (!response.ok) throw Error('http');
+    const data = await response.json();
+    if (!data.ok || !Array.isArray(data.entries)) throw Error('api');
+    return data;
+  }
+
+  function updateBoardControls() {
+    $('refresh').disabled = $('board-find').disabled = $('board-clear').disabled = busy;
+    $('board-kind').disabled = $('board-all').disabled = $('board-mine').disabled = busy;
+    $('newer').disabled = busy || boardPage === 0;
+    $('older').disabled = busy || ((boardQuery || mineOnly || $('board-kind').value)
+      ? (boardPage + 1) * boardPageSize >= searchResults.length : !nextCursor);
+    $('board-clear').hidden = !boardQuery;
+    $('board-page').textContent = busy ? (boardQuery ? '正在搜索全部留言…' : '正在加载…') :
+      (boardQuery || mineOnly || $('board-kind').value) ? '第 ' + (boardPage + 1) + ' / ' + Math.max(1, Math.ceil(searchResults.length / boardPageSize)) + ' 页 · ' + searchResults.length + ' 条结果' :
+      '第 ' + (boardPage + 1) + ' 页';
+  }
+
+  async function load() {
     if (busy) return;
     busy = true;
-    $('refresh').disabled = $('older').disabled = true;
+    updateBoardControls();
     try {
-      const r = await fetch('/api/feedback' + (append ? '?before=' + next : ''), { cache: 'no-store' });
-      if (!r.ok) throw Error('http');
-      const data = await r.json();
-      if (!data.ok) throw Error('api');
-      render(data.entries, append);
-      next = data.next_before;
-      $('older').hidden = !next;
-    } catch (_) {
-      if (!append) {
-        const box = $('messages');
-        box.replaceChildren();
-        const p = document.createElement('p');
-        p.className = 'empty';
-        p.textContent = '留言加载失败，请点击刷新重试。';
-        box.append(p);
-        $('older').hidden = true;
+      let entries;
+      if (boardQuery || mineOnly || $('board-kind').value) {
+        const normalize = value => String(value ?? '').normalize('NFKC').toLocaleLowerCase();
+        const terms = normalize(boardQuery).split(/\s+/).filter(Boolean);
+        const id = boardQuery.match(/^#(\d+)$/)?.[1];
+        const results = [];
+        let cursor = 0;
+        do {
+          const data = await fetchBoardPage(cursor);
+          for (const row of data.entries) {
+            if (mineOnly && !ownRow(row)) continue;
+            if ($('board-kind').value && feedbackKind(row) !== $('board-kind').value) continue;
+            const searchable = normalize([row.id, row.author, row.text, row.reply].join(' '));
+            if (id ? String(row.id) === id : terms.every(term => searchable.includes(term))) results.push(row);
+          }
+          if (data.next_before && cursor && data.next_before >= cursor) throw Error('invalid cursor');
+          cursor = data.next_before;
+        } while (cursor);
+        searchResults = results;
+        boardPage = Math.min(boardPage, Math.max(0, Math.ceil(results.length / boardPageSize) - 1));
+        entries = results.slice(boardPage * boardPageSize, (boardPage + 1) * boardPageSize);
+      } else {
+        const data = await fetchBoardPage(boardCursors[boardPage]);
+        entries = data.entries;
+        nextCursor = data.next_before;
+        boardCursors[boardPage + 1] = nextCursor;
       }
-      notify('留言暂时加载失败，请点击刷新重试。', true);
+      render(entries, false);
+      if ((boardQuery || mineOnly || $('board-kind').value) && entries.length === 0) $('messages').firstElementChild.textContent = mineOnly ? '没有找到你的留言。从游戏登录后打开留言板可查看同账号的旧留言。' : '没有找到匹配的留言。';
+      $('messages').scrollTop = 0;
+    } catch (_) {
+      notify('留言加载失败，请点击刷新重试。', true);
+      if (!$('messages').querySelector('.message')) $('messages').textContent = '留言加载失败，请点击刷新重试。';
     } finally {
       busy = false;
-      $('refresh').disabled = $('older').disabled = false;
+      updateBoardControls();
     }
   }
+
+  function turnBoardPage(step) {
+    if (busy || (step < 0 ? $('newer').disabled : $('older').disabled)) return;
+    boardPage += step;
+    if (!boardQuery) return load();
+    render(searchResults.slice(boardPage * boardPageSize, (boardPage + 1) * boardPageSize), false);
+    $('messages').scrollTop = 0;
+    updateBoardControls();
+  }
+
   window.addEventListener('message', event => {
     if (event.origin !== location.origin || event.source !== window.opener || !event.data) return;
     const d = event.data;
@@ -448,7 +1036,8 @@
         input.value = '';
         try { localStorage.removeItem('ashflor-feedback-draft'); } catch (_) {}
         notify('留言已发布，谢谢你的反馈。');
-        load();
+        if (submitted) showPublished(submitted.body, submitted.started, d.id);
+        else load();
       } else {
         notify(({
           1: '请先在游戏中登录，再打开留言板。',
@@ -456,8 +1045,8 @@
           3: '留言太快了，请两秒后再试。',
           4: '暂时无法保存，请稍后重试。',
           5: '这条内容近期已经发布过，请勿重复留言。',
-          6: '账号或当前网络的留言次数已达限额，请稍后再试。',
-          7: '留言板暂时繁忙，请稍后再试。'
+          6: '留言次数已达限额，草稿已保留，请稍后重试。',
+          7: '留言板暂时繁忙，草稿已保留，请稍后重试。'
         })[d.result] || '留言未发布，请稍后重试。', true);
       }
       update();
@@ -490,28 +1079,33 @@
     event.preventDefault();
     if (send.disabled) return;
     const body = input.value.trim();
-    const max = maxBodyChars();
+    const max = maxBodyChars() - 5;
     if ([...body].length > max) {
       notify('留言过长，请删减到 ' + max + ' 字以内（已预留来源标识）。', true);
       return;
     }
+    try { localStorage.setItem('ashflor-feedback-draft', input.value); } catch (_) {}
     pending = true;
     input.disabled = true;
     update();
     notify('正在发布……');
+    submitted = {body:composePostText(kindTags[$('feedback-kind').value] + '\n' + body),started:Date.now()};
     if (!user || !window.opener || window.opener.closed) {
-      fetch('/api/feedback', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({action:'guest_post', name:sourceName, text:composePostText(body)}) })
+      fetch('/api/feedback', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({action:'guest_post', name:sourceName, text:submitted.body}) })
         .then(r => { if (!r.ok) throw Error(); return r.json(); })
         .then(d => {
-          if (!d.ok) { notify(({2:'请输入有效的留言。',3:'留言太快，请两秒后再试。',5:'请勿重复留言。',6:'留言次数已达限额。',7:'留言板繁忙，请稍后再试。'})[d.result] || '保存失败，请稍后重试。', true); return; }
+          if (!d.ok) { notify(({2:'请输入有效的留言。',3:'留言太快，请两秒后再试。',5:'请勿重复留言。',6:'留言次数已达限额，草稿已保留。',7:'留言板繁忙，草稿已保留，请稍后重试。'})[d.result] || '保存失败，请稍后重试。', true); return; }
+          if (d.result !== 0) throw Error('missing post acknowledgement');
           input.value = '';
           try { localStorage.removeItem('ashflor-feedback-draft'); } catch (_) {}
-          notify('留言已发布，谢谢你的反馈。'); load();
+          notify('留言已发布，谢谢你的反馈。');
+          if (submitted) showPublished(submitted.body, submitted.started, d.id);
+          else load();
         }).catch(() => notify('发送失败，草稿已保留，请稍后重试。', true))
         .finally(() => { pending=false; input.disabled=false; update(); });
       return;
     }
-    window.opener.postMessage({ kind: 'ashflor-feedback-post', text: composePostText(body) }, location.origin);
+    window.opener.postMessage({ kind: 'ashflor-feedback-post', text: submitted.body }, location.origin);
     timer = setTimeout(() => {
       pending = false;
       input.disabled = false;
@@ -519,19 +1113,24 @@
       notify('暂未收到发布结果，请先刷新留言列表确认。草稿已保留。', true);
     }, 15000);
   });
-  $('modAuth').onclick = () => {
+  $('modAuth').onclick = async () => {
     if (modKey) {
+      try { await privateRequest({ action: 'operator_logout' }); }
+      catch (error) { notify(error.message, true); return; }
       modKey = '';
       try { sessionStorage.removeItem('ashflor-feedback-mod'); } catch (_) {}
       syncAuthUi();
       notify('已退出管理权限。');
       return;
     }
+    openInboxAfterAuth = false;
     authKey.value = '';
+    $('auth-status').textContent = '';
     authDlg.showModal();
     authKey.focus();
   };
   $('auth-cancel').onclick = () => authDlg.close();
+  authDlg.addEventListener('close', () => { openInboxAfterAuth = false; authKey.value = ''; });
   $('auth-form').addEventListener('submit', event => {
     event.preventDefault();
     const key = authKey.value.trim();
@@ -542,17 +1141,23 @@
       body: JSON.stringify({ action: 'auth', key })
     }).then(r => r.json()).then(data => {
       if (!data || !data.ok) {
-        notify((data && data.msg) || '密钥错误', true);
+        $('auth-status').textContent = (data && data.msg) || '密钥错误';
         authKey.select();
         return;
       }
-      modKey = key;
-      try { sessionStorage.setItem('ashflor-feedback-mod', key); } catch (_) {}
+      modKey = data.remembered ? '@cookie' : key;
+      try {
+        if (data.remembered) sessionStorage.removeItem('ashflor-feedback-mod');
+        else sessionStorage.setItem('ashflor-feedback-mod', key);
+      } catch (_) {}
+      const showInbox = openInboxAfterAuth && authDlg.open;
+      openInboxAfterAuth = false;
       authDlg.close();
       syncAuthUi();
-      notify('权限已验证，可切换留言处理状态。');
+      notify('权限已验证，可处理留言和查看私聊。');
+      if (showInbox) openInbox();
     }).catch(() => {
-      notify('验证请求失败，请稍后重试。', true);
+      $('auth-status').textContent = '验证请求失败，请稍后重试。';
     });
   });
   $('back').onclick = () => {
@@ -584,10 +1189,15 @@
       .replace(/[\s\u3000·•,，.。!！?？:：;；"'“”‘’、/\\|_\-—–]+/g, '')
       .toLowerCase();
   }
-  function findProgressLi(bodyText) {
+  function findProgressLi(bodyText, feedbackId) {
+    const items = document.querySelectorAll('#progressBody .progress-list li[data-match]');
+    if (feedbackId) {
+      for (const item of items) {
+        if ((item.dataset.feedbackIds || '').split(' ').includes(feedbackId)) return item;
+      }
+    }
     const needle = normMatch(bodyText);
     if (!needle || needle.length < 4) return null;
-    const items = document.querySelectorAll('#progressBody .progress-list li[data-match]');
     let best = null;
     let bestScore = 0;
     for (const li of items) {
@@ -640,7 +1250,9 @@
   function markMessagesWithProgress() {
     document.querySelectorAll('#messages .message').forEach(item => {
       const p = item.querySelector('p');
-      const hit = findProgressLi(p ? p.textContent : '');
+      const hit = findProgressLi(p ? p.textContent : '', item.dataset.id);
+      const progress = item.querySelector('.progress-link');
+      if (progress) progress.hidden = !hit;
       item.classList.toggle('has-progress', !!hit);
       if (hit) item.title = '点击跳到对应修复进度';
       else item.removeAttribute('title');
@@ -675,8 +1287,10 @@
       const head = document.createElement('div');
       head.className = 'progress-day-head';
       const h3 = document.createElement('h3');
-      const nDone = (d.done && d.done.length) || 0;
-      h3.textContent = (d.label || d.date || '') + ` · 已修 ${nDone}`;
+      const done = Array.isArray(d.done) ? d.done : [];
+      const active = Array.isArray(d.open) ? d.open.filter(item => item.publicProgress === true) : [];
+      h3.textContent = (d.label || d.date || '') + ` · 已修 ${done.length}` +
+        (active.length ? ` · 验收中 ${active.length}` : '');
       head.append(h3);
       let listWrap = null;
       if (idx > 0) {
@@ -696,8 +1310,7 @@
       listWrap.className = 'progress-body';
       if (idx > 0) listWrap.setAttribute('hidden', '');
 
-      const list = Array.isArray(d.done) ? d.done : [];
-      if (!list.length) {
+      if (!done.length && !active.length) {
         const p = document.createElement('p');
         p.className = 'progress-empty';
         p.textContent = '这一天暂无勾选项';
@@ -705,19 +1318,22 @@
       } else {
         const ul = document.createElement('ul');
         ul.className = 'progress-list';
-        list.forEach(it => {
+        const appendItem = (it, inReview) => {
           const li = document.createElement('li');
           const text = it.text || '';
           li.dataset.match = normMatch(text);
+          if (Array.isArray(it.feedbackIds)) li.dataset.feedbackIds = it.feedbackIds.join(' ');
           li.append(document.createTextNode(text));
-          if (it.note) {
+          if (inReview || it.note) {
             const n = document.createElement('span');
             n.className = 'note';
-            n.textContent = it.note;
+            n.textContent = inReview ? '验收中 · ' + (it.note || '等待验证') : it.note;
             li.append(n);
           }
           ul.append(li);
-        });
+        };
+        done.forEach(it => appendItem(it, false));
+        active.forEach(it => appendItem(it, true));
         listWrap.append(ul);
       }
       wrap.append(listWrap);
@@ -741,11 +1357,48 @@
     }
   }
 
+  function selectMine(value) {
+    if (busy) return;
+    mineOnly = value;
+    $('board-mine').setAttribute('aria-pressed', String(value));
+    $('board-all').setAttribute('aria-pressed', String(!value));
+    $('board-help').hidden = !value;
+    boardQuery = '';
+    $('board-query').value = '';
+    boardPage = 0;
+    load();
+  }
+  $('board-kind').onchange = () => { boardPage = 0; load(); };
+  $('board-all').onclick = () => selectMine(false);
+  $('board-mine').onclick = () => selectMine(true);
   $('refresh').onclick = () => { load(); loadProgress(); };
-  $('older').onclick = () => load(true);
+  $('newer').onclick = () => turnBoardPage(-1);
+  $('older').onclick = () => turnBoardPage(1);
+  $('board-search').onsubmit = event => {
+    event.preventDefault();
+    if (busy) return;
+    boardQuery = $('board-query').value.trim();
+    boardPage = 0;
+    load();
+  };
+  $('board-clear').onclick = () => {
+    $('board-query').value = '';
+    boardQuery = '';
+    boardPage = 0;
+    load();
+  };
   if (window.opener) window.opener.postMessage({ kind: 'ashflor-feedback-ready' }, location.origin);
   update();
   syncAuthUi();
+  if (window.isSecureContext) {
+    const authButton = $('modAuth'), inboxButton = $('inbox-open');
+    authButton.disabled = inboxButton.disabled = true;
+    privateRequest({ action: 'operator_status' }).then(() => {
+      modKey = '@cookie';
+      try { sessionStorage.removeItem('ashflor-feedback-mod'); } catch (_) {}
+      syncAuthUi();
+    }).catch(() => {}).finally(() => { authButton.disabled = inboxButton.disabled = false; });
+  }
   load();
   loadProgress();
   setInterval(loadProgress, 30000);
