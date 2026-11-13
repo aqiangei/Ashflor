@@ -11,8 +11,20 @@ namespace FeedbackStore {
     std::string page_json(uint32_t before = 0);
     // Moderation: key must match hardcoded ops secret. Returns JSON {ok,msg,id,handled}.
     std::string set_handled_json(uint32_t id, uint8_t handled, std::string const &key);
+    std::string set_reply_json(uint32_t id, std::string const &text, std::string const &key);
     std::string delete_json(uint32_t id, std::string const &key);
     std::string auth_json(std::string const &key);
+    bool operator_attempt_allowed(std::string const &source);
+    std::string create_operator_session(std::string const &key);
+    std::string operator_session_key(std::string const &token);
+    bool revoke_operator_session(std::string const &token);
+    std::string post_private_json(std::string const &name, std::string const &text,
+                                  std::string const &source, std::string const &thread = {});
+    std::string private_page_json(std::string const &key, uint32_t before = 0);
+    std::string private_chat_json(std::string const &thread, uint32_t before,
+                                  std::string const &key, bool operator_view);
+    std::string reply_private_json(std::string const &thread, std::string const &text,
+                                  std::string const &key);
     // Author marks whether their issue is resolved (authenticated account name).
     uint8_t set_resolved(std::string const &author, uint32_t id, uint8_t resolved);
 #ifdef ASHFLOR_FEEDBACK_TEST
